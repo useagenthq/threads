@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Final, Literal
 from threads.log import ToolSpec
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.history import CallState, call_state
-from threads.loop.model import Found, NotFound
+from threads.loop.model import Found, NotFound, looked_up
 from threads.loop.results import As, result_draft, text_ref
 from threads.loop.runtime import Failed, Halt, Parked, Runtime, fence, lost
 from threads.loop.tools import Invocation, NotSent, Output, Uncertain
@@ -158,7 +158,7 @@ async def _reconcile(
     stale = await fence(rt)
     if stale is not None:
         return stale
-    match await rt.tools.lookup(inv):
+    match await looked_up(rt.tools.lookup(inv)):
         case Found(value=text):
             ref = await text_ref(rt, text)
             data: dict[str, JsonValue] = {

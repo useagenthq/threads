@@ -11,6 +11,7 @@ import {
   principalKey,
   type RunResult,
   type Store,
+  StoreError,
   type ThreadId,
   tenantStore,
 } from "@threads/core/host";
@@ -43,6 +44,13 @@ export class HostContext {
   readonly #pending = new Map<string, number>();
   /** A run's in-process result, by run_id, for a halt the log can't show. */
   readonly results: Map<string, RunResult<Json>> = new Map();
+  /**
+   * Told when a run of this process meets a store outage: the host watches the thread, so its
+   * recovery runs it on with backoff. Unset, the outage is logged like any failure.
+   */
+  onStoreOutage:
+    | ((tenant: string, thread: Thread, error: StoreError) => void)
+    | undefined;
   readonly #stop = new AbortController();
   /** Aborted once the host stops: every run and every send not yet settled gives up on it. */
   readonly stopping: AbortSignal = this.#stop.signal;
@@ -99,15 +107,36 @@ export class HostContext {
    * Runs the branch until idle or parked, after any execution this process already has on it.
    * The log decides what runs: the inputs are already durable.
    */
-  resume(
+  async resume(
     hosted: HostedAgent,
     tenant: string,
     principal: Principal,
-    thread: { readonly id: ThreadId; readonly branch: BranchId },
+    thread: Thread,
     runId?: string,
   ): Promise<RunResult<Json> | undefined> {
-    return this.#queued(thread.branch, async () => {
-      if (this.stopping.aborted) return undefined;
+    const ran = await this.attempt(hosted, tenant, principal, thread, runId);
+    if (ran.kind === "threw") {
+      if (ran.error instanceof StoreError && this.onStoreOutage !== undefined)
+        this.onStoreOutage(tenant, thread, ran.error);
+      else
+        console.error(
+          `threads host: run on ${thread.branch} failed`,
+          ran.error,
+        );
+    }
+    return ran.kind === "ran" ? ran.result : undefined;
+  }
+
+  /** `resume` without its failure log: how the run ended, for recovery to judge. */
+  attempt(
+    hosted: HostedAgent,
+    tenant: string,
+    principal: Principal,
+    thread: Thread,
+    runId?: string,
+  ): Promise<Attempt> {
+    return this.#queued(thread.branch, async (): Promise<Attempt> => {
+      if (this.stopping.aborted) return { kind: "stopped" };
       const store = this.storeFor(tenant);
       try {
         // A reply begun before a crash is reconciled through the channel's lookup first: the
@@ -124,14 +153,21 @@ export class HostContext {
           [],
         );
         const json = asJson(result);
-        if (runId !== undefined) this.results.set(runId, json);
+        // A run that lost the branch is no answer: the run holding it answers from the log.
+        const lost =
+          json.status === "failed" && json.error.code === "branch_busy";
+        if (runId !== undefined && !lost) this.results.set(runId, json);
         await this.#reply(tenant, thread);
-        return json;
+        return { kind: "ran", result: json };
       } catch (error) {
-        console.error(`threads host: run on ${thread.branch} failed`, error);
-        return undefined;
+        return { kind: "threw", error };
       }
     });
+  }
+
+  /** Whether this process has a job queued or running on the branch. */
+  busy(branch: BranchId): boolean {
+    return this.#pending.has(branch);
   }
 
   /** The thread's missing replies, issued after any job this process has on its branch. */
@@ -160,34 +196,6 @@ export class HostContext {
     })();
     this.#lanes.set(branch, next);
     return next;
-  }
-
-  /**
-   * A pass over a channel thread no job of this process is on: a turn left open with no run
-   * (a crash, or a lease lost to another host) runs on from the log, then the thread's missing
-   * replies are issued. "busy" when it must be looked at again on a later tick. It never waits
-   * on a run: a live one replies as it ends, and a slow one must not hold up other threads or
-   * stop().
-   */
-  async recover(
-    tenant: string,
-    thread: { readonly id: ThreadId; readonly branch: BranchId },
-  ): Promise<"done" | "busy"> {
-    if (this.#pending.has(thread.branch)) return "busy";
-    const { log } = await this.open(tenant);
-    const read = log.read(thread.branch);
-    if (!read.ok) return "done";
-    const { fold } = read.value;
-    if (!fold.turnOpen || fold.parked.length > 0)
-      return this.replies(tenant, thread);
-    const events = knownEvents(read.value);
-    const hosted = this.agentOf(events);
-    const who = events.findLast((e) => e.type === "user_input")?.actor
-      .principal;
-    if (hosted === undefined || who === undefined) return "done";
-    // The run issues its replies as it ends; a later tick confirms the turn closed.
-    void this.resume(hosted, tenant, who, thread);
-    return "busy";
   }
 
   async #reply(
@@ -258,6 +266,14 @@ export class HostContext {
     return openStore(this.storeFor(tenant));
   }
 }
+
+type Thread = { readonly id: ThreadId; readonly branch: BranchId };
+
+/** How one run of this process ended: its result, what it threw, or the host was stopping. */
+export type Attempt =
+  | { readonly kind: "ran"; readonly result: RunResult<Json> }
+  | { readonly kind: "threw"; readonly error: unknown }
+  | { readonly kind: "stopped" };
 
 /** A pin never changes in place: continuing a thread needs the config it started with. */
 export async function samePin(

@@ -42,8 +42,9 @@ export function spawn(
   role: string,
   where: string,
   env: Record<string, string> = {},
+  script: string = WORKER,
 ): Worker {
-  const proc = Bun.spawn([process.execPath, WORKER, role, where], {
+  const proc = Bun.spawn([process.execPath, script, role, where], {
     env: { ...process.env, ...env },
     stdout: "pipe",
     // Kept per worker so a drill can assert its hosts logged no failure.

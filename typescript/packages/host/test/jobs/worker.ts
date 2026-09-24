@@ -56,14 +56,14 @@ const SETTLE_MS = 20_000;
 const Row = z.record(z.string(), z.unknown());
 
 /** A scripted point: blocks the whole process, event loop included, like a stalled host. */
-function reached(point: string, where: string): void {
+export function reached(point: string, where: string): void {
   if (process.env["DRILL_STOP_AT"] !== point) return;
   writeSync(1, `at ${point}\n`);
   while (!existsSync(join(where, "release"))) Bun.sleepSync(10);
 }
 
 /** One durable line: a recorded send must survive this process being killed. */
-function record(where: string, file: string, row: object): void {
+export function record(where: string, file: string, row: object): void {
   const fd = openSync(join(where, file), "a");
   try {
     writeSync(fd, `${JSON.stringify({ ...row, pid: process.pid })}\n`);
@@ -205,7 +205,7 @@ function scripted(where: string, answers: number): Model {
   };
 }
 
-async function until(probe: () => Promise<boolean>): Promise<void> {
+export async function until(probe: () => Promise<boolean>): Promise<void> {
   const deadline = Date.now() + SETTLE_MS;
   while (!(await probe())) {
     if (Date.now() > deadline) throw new Error("the drill never settled");

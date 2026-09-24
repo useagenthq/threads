@@ -11,12 +11,15 @@ memory: the hash is computed as the bytes arrive.
 import hashlib
 import os
 import tempfile
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Protocol
 
 from threads.log import ParseError
 from threads.log.digest import sha256_hex
 from threads.result import Err, Ok
+from threads.store.worker import StoreError
 
 
 class ArtifactSink(Protocol):
@@ -79,14 +82,17 @@ class FileArtifacts:
             data = self.path(sha256).read_bytes()
         except FileNotFoundError:
             return _missing(sha256)
+        except OSError as error:
+            raise StoreError(str(error)) from error
         if sha256_hex(data) != sha256:
             return Err(ParseError("artifact_corrupt", f"artifact {sha256} fails its hash"))
         return Ok(data)
 
     def sink(self) -> ArtifactSink:
-        # mkdir(parents=True) would give the parents the umask's mode, not 0700.
-        self._root.mkdir(mode=0o700, exist_ok=True)
-        return _FileSink(self, self._root)
+        with _disk():
+            # mkdir(parents=True) would give the parents the umask's mode, not 0700.
+            self._root.mkdir(mode=0o700, exist_ok=True)
+            return _FileSink(self, self._root)
 
     def path(self, sha256: str) -> Path:
         return self._root / "sha256" / sha256[:2] / sha256
@@ -104,10 +110,15 @@ class _FileSink:
         self._hash = hashlib.sha256()
 
     def write(self, chunk: bytes) -> None:
-        self._file.write(chunk)
+        with _disk():
+            self._file.write(chunk)
         self._hash.update(chunk)
 
     def commit(self) -> str:
+        with _disk():
+            return self._commit()
+
+    def _commit(self) -> str:
         sha = self._hash.hexdigest()
         path = self._store.path(sha)
         try:
@@ -132,6 +143,15 @@ class _FileSink:
 
 
 type ArtifactStore = MemoryArtifacts | FileArtifacts
+
+
+@contextmanager
+def _disk() -> Generator[None]:
+    """The file system's errors under the artifacts, raised as the store's outage."""
+    try:
+        yield
+    except OSError as error:
+        raise StoreError(str(error)) from error
 
 
 def _missing(sha256: str) -> Err[ParseError]:

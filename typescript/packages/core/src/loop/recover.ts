@@ -1,10 +1,13 @@
 import { assertNever } from "../assert-never";
 import { type EventOf, effectKey } from "../fold/state";
+import { ok } from "../result";
 import { draft, RECOVERY } from "./drafts";
+import { lookedUp } from "./lookup";
 import { settleRequested } from "./manual";
 import type { Session } from "./session";
 import { resolvedResult, settleUnknown } from "./settle";
 import { recordOutput } from "./spill";
+import { cancelRequested } from "./turn";
 import type { Halt } from "./types";
 
 // the recovery classifier, run once a new lease is taken and before anything
@@ -13,8 +16,9 @@ import type { Halt } from "./types";
 
 export async function recover(s: Session): Promise<Halt | undefined> {
   // An open turn with nothing in doubt and nothing pending ends interrupted, unless no
-  // model_request follows its last user_input or steer: that input is unsent, so the loop sends it.
-  // A requested compaction's side request is cut before the input, so it never sent it.
+  // model_request follows its last user_input or steer (that input is unsent, so the loop sends
+  // it) or a cancel is durable in it (the loop carries the cancel out). A requested compaction's
+  // side request is cut before the input, so it never sent it.
   const { fold } = s;
   const last = s.events.findLastIndex(
     (e) => e.type === "user_input" || e.type === "steer",
@@ -29,7 +33,8 @@ export async function recover(s: Session): Promise<Halt | undefined> {
     answered &&
     fold.awaiting.size === 0 &&
     fold.pending.size === 0 &&
-    fold.parked.length === 0
+    fold.parked.length === 0 &&
+    !cancelOpen(s)
   )
     return s.append({
       type: "turn_completed",
@@ -49,6 +54,18 @@ export async function recover(s: Session): Promise<Halt | undefined> {
   return settleRequested(s);
 }
 
+/** A cancel_requested in the open turn that no cancelled has answered yet. */
+function cancelOpen(s: Session): boolean {
+  const cancel = cancelRequested(s.events);
+  return (
+    cancel !== undefined &&
+    !s.events.some(
+      (e) =>
+        e.type === "cancelled" && e.data.request_event_id === cancel.event_id,
+    )
+  );
+}
+
 /** ask the adapter first; only a final answer settles the attempt. */
 async function recoverRequest(
   s: Session,
@@ -57,10 +74,14 @@ async function recoverRequest(
   const model = s.fold.model && s.config.models(s.fold.model);
   const fenced = s.fence();
   if (fenced !== undefined) return fenced;
+  const lookup = model?.info.lookup === "none" ? undefined : model?.lookup;
   const looked =
-    model?.lookup === undefined || model.info.lookup === "none"
+    lookup === undefined
       ? undefined
-      : await model.lookup(`${s.branchId}:${requestId}`, s.modelContext());
+      : await lookedUp(
+          () => lookup(`${s.branchId}:${requestId}`, s.modelContext()),
+          (reason) => ok({ status: "unknown", reason }),
+        );
   // The fence refused at the lookup's real send point: this writer lost its lease.
   if (looked?.ok === false)
     return { code: "branch_busy", message: looked.error.message };

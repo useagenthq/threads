@@ -1,5 +1,5 @@
-import { Database } from "bun:sqlite";
-import type { SqliteDriver } from "./driver";
+import { Database, SQLiteError } from "bun:sqlite";
+import { outage, type SqliteDriver, StoreError } from "./driver";
 
 /**
  * A SqliteDriver on `bun:sqlite`: WAL, synchronous=FULL, and full fsync (acted on only by
@@ -7,6 +7,10 @@ import type { SqliteDriver } from "./driver";
  * in-memory store for tests with the same code path.
  */
 export function openBunSqlite(path: string): SqliteDriver {
+  return guarded(() => open(path));
+}
+
+function open(path: string): SqliteDriver {
   const db = new Database(path, { create: true, strict: true });
   // Other processes may share the file: a write meeting theirs waits, never fails SQLITE_BUSY.
   db.exec("PRAGMA busy_timeout = 5000");
@@ -18,17 +22,33 @@ export function openBunSqlite(path: string): SqliteDriver {
   db.exec("PRAGMA checkpoint_fullfsync = ON");
   return {
     exec: (sql) => {
-      db.exec(sql);
+      guarded(() => db.exec(sql));
     },
     run: (sql, params) => {
-      db.query(sql).run(...params);
+      guarded(() => db.query(sql).run(...params));
     },
-    all: (sql, params) => db.query(sql).all(...params),
-    transaction: (fn) => db.transaction(fn).immediate(),
+    all: (sql, params) => guarded(() => db.query(sql).all(...params)),
+    // The body's own errors pass through; only SQLite's become StoreError.
+    transaction: (fn) => guarded(() => db.transaction(fn).immediate()),
     close: () => {
-      db.close();
+      guarded(() => db.close());
     },
   };
+}
+
+/** SQLite's outages, raised as StoreError: what a host may try again later. A bug stays itself. */
+function guarded<T>(run: () => T): T {
+  try {
+    return run();
+  } catch (error) {
+    if (
+      error instanceof SQLiteError &&
+      typeof error.code === "string" &&
+      outage(error.code)
+    )
+      throw new StoreError(error.message, { cause: error });
+    throw error;
+  }
 }
 
 const WAL_TRIES = 500;

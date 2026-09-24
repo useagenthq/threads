@@ -23,7 +23,7 @@ from threads.loop.runtime import Failed, Runtime, WriterContext, epoch_model, fe
 from threads.redaction import SecretInProviderOutputError
 from threads.reduce.handlers import to_json
 from threads.result import Err
-from threads.store import Draft
+from threads.store import Draft, StoreError
 
 type Purpose = Literal["turn", "compaction"]
 
@@ -140,7 +140,8 @@ async def _collect(rt: Runtime, model: Model, req: ModelRequest) -> Outcome:
                     return chunk
                 case _:
                     pass
-    except AssertionError:
+    except (AssertionError, StoreError):
+        # A broken invariant, or the store's outage: the request stays open, for recovery.
         raise
     except SecretInProviderOutputError:
         return Leaked()

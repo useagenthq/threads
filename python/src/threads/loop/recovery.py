@@ -18,9 +18,9 @@ from threads.log import EventId, ModelRequestEvent, SteerEvent, UserInputEvent
 from threads.loop import calls, effects
 from threads.loop.attempt import response_drafts
 from threads.loop.drafts import draft
-from threads.loop.history import CallState, call_state
+from threads.loop.history import CallState, call_state, open_cancel
 from threads.loop.manual import settle_requested
-from threads.loop.model import Found, NotFound
+from threads.loop.model import Found, NotFound, looked_up
 from threads.loop.runtime import Halt, Runtime, WriterContext, epoch_model, fence, lost
 from threads.result import Err
 
@@ -51,9 +51,12 @@ async def recover(rt: Runtime) -> Halt | None:
 
 def _open_turn_to_close(rt: Runtime) -> bool:
     """An open turn with nothing pending closes as interrupted, unless none of its input was sent
-    yet (no model_request after its last user_input or steer): the run then continues it."""
+    yet (no model_request after its last user_input or steer) or a cancel is durable in it: the
+    run then continues it, or carries the cancel out."""
     fold = rt.fold
     if not fold.in_turn or fold.pending or fold.open_requests or fold.parked:
+        return False
+    if open_cancel(rt.events) is not None:
         return False
     inputs = [i for i, e in enumerate(rt.events) if isinstance(e, UserInputEvent | SteerEvent)]
     start = inputs[-1] if inputs else 0
@@ -74,7 +77,9 @@ async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
         stale = await fence(rt)
         if stale is not None:
             return stale
-        match await model.lookup(f"{rt.writer.branch_id}:{request_id}", WriterContext(rt)):
+        match await looked_up(
+            model.lookup(f"{rt.writer.branch_id}:{request_id}", WriterContext(rt))
+        ):
             case Found(value=response) if response.provider_request_id is not None:
                 # A found response without the provider's id can't be recorded: it stays unknown.
                 found = response_drafts(rt, request_id, response, response.provider_request_id)

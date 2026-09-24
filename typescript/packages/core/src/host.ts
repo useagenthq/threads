@@ -50,6 +50,7 @@ export {
   type SqlValue,
   type Writer,
 } from "./store";
+export { StoreError } from "./store/driver";
 export { uuidv7 } from "./store/encode";
 export { deleteTenant, deleteThread, sweepArtifacts } from "./store/retention";
 export { parseRows } from "./store/tables";

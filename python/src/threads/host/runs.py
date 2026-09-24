@@ -33,7 +33,7 @@ from threads.log import (
 )
 from threads.result import Ok
 from threads.secrets import resolve
-from threads.store import SqliteStore
+from threads.store import SqliteStore, StoreError
 from threads.thread import tree
 from threads.thread.authority import Checked
 from threads.thread.handle import Thread
@@ -91,6 +91,8 @@ class Runner:
         self._generation = 0
         """Bumped by each stop: work a caller began before it never launches a run after it."""
         self.on_end: Callable[[Store, ThreadId], None] | None = None
+        self.on_store_error: Callable[[Thread, RunTask], None] | None = None
+        """Called when a run here meets a store outage: the host's recovery runs it on."""
         """Called when a run of a thread ends here: the channel intake drains what waited."""
         self.last: dict[BranchId, Failed] = {}
         """Each branch's latest failure in this process: a run that failed with nothing in the
@@ -161,8 +163,16 @@ class Runner:
         return Checked(() if bound is None else bound.definition.approvers)
 
     def running(self, branch: BranchId) -> bool:
+        return self.live(branch) is not None
+
+    def live(self, branch: BranchId) -> RunTask | None:
+        """The branch's run in flight here, if any."""
         task = self._tasks.get(branch)
-        return task is not None and not task.done()
+        return None if task is None or task.done() else task
+
+    def tenant_of(self, store: Store) -> str | None:
+        """The tenant whose view of the host store `store` is."""
+        return next((t for t, s in self._stores.items() if s is store), None)
 
     def launch(  # noqa: PLR0913 - one run and how it came
         self,
@@ -197,6 +207,8 @@ class Runner:
         current = self._tasks.get(branch)
         if current is None or current.done():
             self._tasks[branch] = task
+            # An earlier run's failure is not this run's answer.
+            self.last.pop(branch, None)
         self._live.add(task)
         task.add_done_callback(lambda done: self._ended(thread, done))
         return task
@@ -275,15 +287,20 @@ class Runner:
     def _ended(self, thread: Thread, task: RunTask) -> None:
         branch = thread.branch
         self._live.discard(task)
-        if self._tasks.get(branch) is task:
+        # A run launched since (this callback may run after it) owns the branch's answer now.
+        current = self._tasks.get(branch) is task
+        if current:
             del self._tasks[branch]
-        if not task.cancelled() and task.exception() is None:
+        if current and not task.cancelled() and task.exception() is None:
             result = task.result()
-            if isinstance(result, Failed):
+            # A run that lost the branch is no answer: the run holding it answers from the log.
+            if isinstance(result, Failed) and result.error.code != "branch_busy":
                 self.last[branch] = result
         self.wake(branch)
         if task.cancelled():
             return
+        if isinstance(task.exception(), StoreError) and self.on_store_error is not None:
+            self.on_store_error(thread, task)
         if branch in self._again:
             self._again.discard(branch)
             # Bound to this generation: a stop before it launches leaves it nothing to start.

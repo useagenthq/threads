@@ -6,7 +6,7 @@ from threads.store.lines import Draft
 from threads.store.sql import LOCAL_TENANT
 from threads.store.sqlite import ForkRequest, SqliteStore
 from threads.store.verify import Segment, StoredEvent, VerifiedLog, verify_export
-from threads.store.worker import Clock
+from threads.store.worker import Clock, StoreError
 from threads.store.writer import Writer
 
 __all__ = [
@@ -19,6 +19,7 @@ __all__ = [
     "MemoryArtifacts",
     "Segment",
     "SqliteStore",
+    "StoreError",
     "StoredEvent",
     "VerifiedLog",
     "Writer",

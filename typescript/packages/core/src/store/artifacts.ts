@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { sha256Hex } from "../hash";
 import { err, ok, type Result } from "../result";
 import { type LogError, logError } from "../verify/error";
+import { StoreError } from "./driver";
 
 /**
  * Content-addressed bytes. `put` returns once the bytes are durable, so an
@@ -83,16 +84,39 @@ export function memoryArtifacts(): ArtifactStore {
 export function fileArtifacts(root: string): ArtifactStore {
   const path = (sha256: string): string =>
     join(root, "sha256", sha256.slice(0, 2), sha256);
-  const sink = (): ArtifactSink => fileSink(root, path);
+  const sink = (): ArtifactSink => {
+    const s = disk(() => fileSink(root, path));
+    return {
+      write: (chunk) => disk(() => s.write(chunk)),
+      finish: () => disk(() => s.finish()),
+      abort: () => disk(() => s.abort()),
+    };
+  };
   return {
     put: (bytes) => {
       const s = sink();
       s.write(bytes);
       return s.finish().sha256;
     },
-    get: (sha256) => verified(sha256, readArtifact(path(sha256))),
+    // A missing or changed artifact stays a value; a disk that fails is the store's outage.
+    get: (sha256) =>
+      verified(
+        sha256,
+        disk(() => readArtifact(path(sha256))),
+      ),
     sink,
   };
+}
+
+/** The file system's errors under the artifacts, raised as the store's outage. */
+function disk<T>(run: () => T): T {
+  try {
+    return run();
+  } catch (error) {
+    if (error instanceof Error && "syscall" in error)
+      throw new StoreError(error.message, { cause: error });
+    throw error;
+  }
 }
 
 /**

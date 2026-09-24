@@ -21,6 +21,7 @@ from threads.agents.store import Store, open_store
 from threads.host import start, stream
 from threads.host.channel import Challenged, ChannelAdapter, RawRequest, RawResponse
 from threads.host.intake import ChannelIntake
+from threads.host.reopen import Reopening
 from threads.host.runs import Runner, RunTask
 from threads.host.schedules import Schedule, Scheduler
 from threads.host.stream import Message
@@ -112,6 +113,8 @@ class Host:
             self._ticking = asyncio.get_running_loop().create_task(self._tick())
 
     async def _tick(self) -> None:
+        reopening = Reopening(self._runner)
+        self._runner.on_store_error = reopening.watch
         try:
             sq = await open_store(self._runner.store(LOCAL_TENANT))
             waiting = await sq.tables.unconsumed_threads()
@@ -124,9 +127,11 @@ class Host:
                     run = await self._runner.redeliver(self._runner.store(tenant), thread)
                     if run is not None:
                         _RECOVERY[self][1].append(run)
+            # ponytail: API runs are found at start only; a live peer's crash waits for a restart.
+            _RECOVERY[self][1].extend(await reopening.first(await sq.tables.unfinished_runs()))
         finally:
             _RECOVERY[self][0].set()
-        await self._scheduler.run()
+        await asyncio.gather(self._scheduler.run(), reopening.run())
 
     async def stop(self) -> None:
         """Aborts first: every run and follow-on resume is cancelled and none starts, so no
@@ -135,13 +140,17 @@ class Host:
         it settles. Then it drains intake in flight. There is no deadline: a tool that ignores
         cancellation is waited on, since returning while it can act would break the fence.
         Deadlines belong at the tool or provider boundary."""
-        if self._ticking is not None:
-            self._ticking.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._ticking
-            self._ticking = None
-        await self._runner.stop()
-        await self._intake.drain()
+        ticking, self._ticking = self._ticking, None
+        try:
+            if ticking is not None:
+                ticking.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await ticking
+        finally:
+            # A tick that failed (a store error in its first pass) is raised only after the
+            # runs are ended and intake is drained.
+            await self._runner.stop()
+            await self._intake.drain()
 
     async def __aenter__(self) -> Self:
         await self.ready()
@@ -223,10 +232,10 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
 
 async def recovered(served: Host) -> None:
     """After the recovery pass the latest `ready()` began has finished and the runs it started
-    to redeliver replies have ended, with each follow-on resume one of them queued, so a test
-    asserts what recovery did or didn't do without sleeping. Python recovers once per start
-    (each start, including a restart of the same host), not on a timer as TS does, so there is
-    no later pass to wait for. Internal: not exported."""
+    to redeliver replies or reopen API runs have ended, with each follow-on resume one of them
+    queued, so a test asserts what recovery did or didn't do without sleeping. It covers that
+    first pass only: an API run another lease refused then is looked at again each second
+    (`Reopening.run`), which this doesn't wait for. Internal: not exported."""
     done, runs, runner = _RECOVERY[served]
     await done.wait()
     for run in runs:
