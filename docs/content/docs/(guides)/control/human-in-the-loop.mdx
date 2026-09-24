@@ -15,7 +15,8 @@ A parked run has stopped and is waiting for someone. Nothing is lost and nothing
 - `reason`: why it stopped.
   - `awaiting_approval`: a tool call needs approval under your [permissions](/docs/control/permissions).
   - `effect_unknown`: a side effect may or may not have happened (for example, the process crashed mid-call) and threads can't tell on its own. See [Durability](/docs/production/durability).
-- `pending`: what it waits on, each with a `kind` and an `id`. `approval` (a challenge id), `effect` (an effect key) or `child` (a [subagent's](/docs/multi-agent/subagents) thread id, when the wait is inside a subagent).
+  - `awaiting_input`: the agent asked the user a question with `ask_user`. See [Answer a question](#answer-a-question).
+- `pending`: what it waits on, each with a `kind` and an `id`. `approval` (a challenge id), `effect` (an effect key), `input` (the question's call id) or `child` (a [subagent's](/docs/multi-agent/subagents) thread id, when the wait is inside a subagent).
 
 ## Get a thread handle
 
@@ -132,6 +133,15 @@ The remembered rule must be one of the challenge's `suggested_rules`.
 <Callout type="idea">
   Behind the [host](/docs/host/overview), you don't continue the thread yourself: after an approval through the HTTP API or a channel's approval buttons, the host picks the thread back up on its own. See [HTTP API + SSE](/docs/host/http-api).
 </Callout>
+
+## Answer a question
+
+An agent served by the [host](/docs/host/overview) from a Slack, WhatsApp or GitHub conversation, or started through the [HTTP API](/docs/host/http-api), can ask the person who started the run a question with the built-in `ask_user` tool. Runs you start yourself with `run()`, scheduled runs and subagents don't get the tool.
+
+- **In a conversation**, the host posts the question, with its choices numbered, and that person's next message in the conversation is the answer. Anyone else's message waits for the next turn.
+- **Over HTTP**, answer with `POST /v1/threads/{thread_id}/questions/{call_id}/answer`, or `thread.answer(callId, text, principal)` in code.
+
+When the question lists options, only one of them is accepted: its text (case and surrounding spaces don't matter) or its number, or several separated by commas when the question allows more than one. Anything else is refused with `invalid_answer`, and in a conversation the host replies with the choices again. A question nobody answers closes after 24 hours with the result `no answer`, and the agent carries on.
 
 ## Settle an uncertain side effect
 

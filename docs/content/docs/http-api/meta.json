@@ -13,6 +13,7 @@
     "fork",
     "list-approvals",
     "decide-approval",
+    "answer-question",
     "resolve-parked",
     "cancel",
     "set-model",

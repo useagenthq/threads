@@ -50,7 +50,7 @@ ONLY_IN: dict[Member, str] = {
 }
 
 # HTTP routes left out for the same reason, by operationId.
-NOT_BUILT_ROUTES = frozenset({"answerQuestion"})
+NOT_BUILT_ROUTES: frozenset[str] = frozenset()
 
 # Titles of the generated HTTP pages, by operationId.
 SUMMARIES = {
@@ -62,6 +62,7 @@ SUMMARIES = {
     "fork": "Fork a thread",
     "listApprovals": "List pending approvals",
     "decideApproval": "Approve or deny",
+    "answerQuestion": "Answer a question",
     "resolveParked": "Resolve a parked action",
     "cancel": "Cancel a thread",
     "setModel": "Change the model",

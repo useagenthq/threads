@@ -319,7 +319,7 @@ async def deny(
 
 ### answer
 
-Answers an open ask_user question, recorded as that call's result, then resumes the branch. No built-in tool asks questions yet.
+Answers an open ask_user question, recorded as that call's result, then resumes the branch. An unanswered question closes after 24 hours with the error result no answer.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -347,14 +347,14 @@ async def answer(
 </Field>
 
 <Field name="answer" type={"string | readonly string[]"} required>
-  The answer text, or the chosen options as a list (joined with newlines).
+  The answer text, or the chosen options as a list. With options, each must be an option or its 1-based number (literal text only when an option is itself a number), compared after trimming whitespace and lowercasing ASCII letters; a multi_select reply may also separate choices with commas or line breaks. The recorded answer is each chosen option's offered spelling, joined with newlines in first-reply order. Anything else is invalid_answer, with the options in its message; without options any non-blank text is accepted.
 </Field>
 
 <Field name="principal" type={"Principal"} required>
   Who answers; it must be the principal whose input started the turn, else forbidden.
 </Field>
 
-**Returns an error value** with one of these codes: `forbidden`, `no_open_question`, `branch_busy`.
+**Returns an error value** with one of these codes: `forbidden`, `no_open_question`, `invalid_answer`, `branch_busy`.
 
 ### resolveParked / resolve_parked
 

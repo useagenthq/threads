@@ -169,6 +169,33 @@ def render(
   A log event to reply with: a turn's final model_response or an open approval card. Return one op per message to send, or none.
 </Field>
 
+### renderText / render_text
+
+Outbound ops for a plain message the host writes itself: an open ask_user question with its choices, or the correction after a reply that matched none of them.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+renderText(text: string): readonly JsonObject[]
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def render_text(
+    text: str,
+) -> Sequence[JsonObject]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="text" type={"string"} required>
+  The message text, never empty.
+</Field>
+
 ### perform
 
 Sends one op to the provider and says what is known about delivery. Answer definite_not_sent only when you can prove nothing reached the provider; any doubt is outcome_unknown, which the host reconciles instead of re-sending.

@@ -101,7 +101,7 @@ def agent(
 </Field>
 
 <Field name="tools" type={"readonly (Tool | McpServer)[]"} default={"[]"}>
-  App tools and MCP servers. Built-in tools come from the sandbox and the options below.
+  App tools and MCP servers. Built-in tools come from the sandbox and the options below; todo_write is always pinned, and ask_user only for runs a host starts from a channel conversation or an authenticated HTTP API call (not agent.run(), schedule runs or subagents), so a thread started one way continues only the same way.
 </Field>
 
 <Field name="extensions" type={"readonly Extension[]"} default={"[]"}>

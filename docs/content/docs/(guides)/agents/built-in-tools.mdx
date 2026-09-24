@@ -45,6 +45,7 @@ coder = agent(
 |---|---|---|
 | `read_tool_result` | Always | Reads back long tool output that was trimmed from the conversation |
 | `todo_write` | Always | The agent's own task list. Read it with the thread's `todos()` |
+| `ask_user` | Runs the host starts for a person: a channel conversation or an HTTP API call | Asks that person a question and waits for the reply. See [Answer a question](/docs/control/human-in-the-loop#answer-a-question) |
 | `bash`, `read`, `write`, `edit`, `ls`, `glob`, `grep`, `notebook_edit` | `sandbox` | Run inside the [sandbox](/docs/sandboxes/overview), never on your machine |
 | `web_fetch` | `web: { fetch: true }` | Runs on the host. Private and internal addresses are blocked |
 | `web_search` | `web: { search: exa(key) }` | Backends: [`exa`](/docs/reference/functions/exa), [`brave`](/docs/reference/functions/brave), [`tavily`](/docs/reference/functions/tavily). Each takes a `secret()` |
