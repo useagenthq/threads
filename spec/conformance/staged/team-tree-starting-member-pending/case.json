@@ -1,0 +1,15 @@
+{
+  "name": "team-tree-starting-member-pending",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "researcher-1 is in the starting window (a row, no branch, no notification in the lead's log): cost and usage walks count it zero as pending, and complete stays true since it has made no model request.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "lead",
+      "team"
+    ]
+  }
+}

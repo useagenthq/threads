@@ -1,7 +1,7 @@
 import type { KnownEvent } from "../log";
 import type { Violation } from "./violation";
 
-// Teams and background wakes (semantic rules 31-45) are in the schema before either runtime
+// Teams (semantic rules 33-45) are in the schema before either runtime
 // reduces them. Until the Teams build implements those rules, a reader refuses a log with any of
 // their events, or any team form of an existing event, as it refuses a critical event it doesn't
 // know: it never reduces one as ordinary work.
@@ -15,7 +15,6 @@ const TEAM_EVENTS: ReadonlySet<string> = new Set([
   "monitor_set",
   "wait_started",
   "wait_finished",
-  "woken",
   "message_sent",
   "message_received",
   "mail_refused",
@@ -58,6 +57,6 @@ export function checkNotYetTeam(e: KnownEvent): Violation {
     ? undefined
     : {
         code: "unsupported_critical_event",
-        message: `${form} is not reduced by this version: the Teams build implements semantic rules 31-45`,
+        message: `${form} is not reduced by this version: the Teams build implements semantic rules 31 and 33-45`,
       };
 }

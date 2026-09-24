@@ -1,0 +1,9 @@
+{
+  "name": "legacy-late-result-in-another-runs-turn",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "A child of Alice's run reports while Bob's run has a turn open: its agent_finished and tool_result_late are ordinary input to that turn, with no woken (Gate 1 §2.7.3), as in every log written before woken existed.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -335,5 +335,12 @@
       }
     ],
     "pending_wakes": []
+  },
+  "tree": {
+    "counted": [
+      "lead",
+      "researcher-1"
+    ],
+    "pending": []
   }
 }

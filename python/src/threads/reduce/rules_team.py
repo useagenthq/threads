@@ -1,4 +1,4 @@
-"""Teams and background wakes (semantic rules 31-45) are in the schema before either runtime
+"""Teams (semantic rules 31 and 33-45) are in the schema before either runtime
 reduces them. Until the Teams build implements those rules, a reader refuses a log with any of
 their events, or any team form of an existing event, as it refuses a critical event it doesn't
 know: it never reduces one as ordinary work."""
@@ -27,7 +27,6 @@ _TEAM_EVENTS = frozenset(
         "monitor_set",
         "wait_started",
         "wait_finished",
-        "woken",
         "message_sent",
         "message_received",
         "mail_refused",
@@ -72,5 +71,7 @@ def not_yet(event: Event) -> ParseError | None:
     form = _team_form(event)
     if form is None:
         return None
-    message = f"{form} is not reduced by this version: the Teams build implements rules 31-45"
+    message = (
+        f"{form} is not reduced by this version: the Teams build implements rules 31 and 33-45"
+    )
     return reject(event, message, "unsupported_critical_event")

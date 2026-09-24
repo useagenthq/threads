@@ -1,9 +1,0 @@
-{
-  "name": "legacy-wake-in-the-late-result-append",
-  "family": "agents_teams",
-  "kind": "reduce",
-  "description": "Two background children run; the first ends while the lead has no open turn and no cancel barrier. One append records its agent_finished, its tool_result_late and a woken naming it, and woken opens the lead's next turn (in_turn). The second child still runs, so its pending_wakes row stays. subagent-background-notify is a log written before woken existed: it stays idle, never woken retroactively.",
-  "clock": {
-    "now": 1790000060000
-  }
-}

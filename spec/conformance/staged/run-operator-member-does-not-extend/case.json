@@ -1,0 +1,9 @@
+{
+  "name": "run-operator-member-does-not-extend",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "After the run answers, mail of an operator request (a member the operator started) opens another lead turn. That turn belongs to the operator's request, so the run is completed with its own answer while the other turn runs.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

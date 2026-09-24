@@ -1,9 +1,0 @@
-{
-  "name": "woken-cause-not-late-result-rejected",
-  "family": "agents_teams",
-  "kind": "reduce",
-  "description": "Rule 32: woken names a cause that is not a tool_result_late.",
-  "clock": {
-    "now": 1790000060000
-  }
-}

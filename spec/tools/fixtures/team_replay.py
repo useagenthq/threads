@@ -1,16 +1,13 @@
 # pyright: strict
-"""Staged replay cases for background wakes and teams (spec/schema/README.md, "Teams"): a legacy
-late result with its woken in one append, a member's settlement waking the idle lead, and a
-receipt that differs from its sender's mail."""
+"""Staged replay cases (spec/schema/README.md, "Teams"): the pending_wakes row a legacy wake leaves,
+a member's settlement waking the idle lead, and a receipt that differs from its sender's mail."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import eid, text, tokens
-from .log import Log
-from .pieces import answer, call, reduce_case, reject, result, started, user
-from .projections import children
+from .common import eid, text
+from .pieces import reduce_case, user
 from .team_index import pending_wakes
 from .team_pieces import (
     LEAD,
@@ -22,12 +19,13 @@ from .team_pieces import (
     at,
     body,
     envelope,
+    failed,
     lead_log,
     provenance,
     team_log,
 )
-from .team_steps import FAM, host, idle, materialize, received, start, tool, write_team
-from .teams import catalog_specs
+from .team_steps import FAM, idle, materialize, received, start, tool, write_team
+from .wakes import one_append_log
 
 if TYPE_CHECKING:
     import pathlib
@@ -39,113 +37,25 @@ KIDS = ("0192a000-0000-7000-8000-0000000000c9", "0192a000-0000-7000-8000-0000000
 
 
 def build(root: pathlib.Path) -> None:
-    _legacy_wake(root)
-    _grouped_wakes(root, one_woken=False)
-    _grouped_wakes(root, one_woken=True)
+    _pending_row(root)
+    _tree(root, notified=False)
+    _tree(root, notified=True)
     _settle(root)
     _receipt_mismatch(root)
 
 
-def _spawn(log: Log, cid: str, kid: str) -> None:
-    spawn: Obj = {"agent": "scanner", "prompt": "Do your part.", "background": True}
-    call(log, "spawn_agent", spawn, cid)
-    spawned: Obj = {
-        "call_id": cid,
-        "child_thread_id": kid,
-        "agent_name": "scanner",
-        "mode": "background",
-        "isolation": "none",
-    }
-    log.add("agent_spawned", spawned)
-    result(log, cid, "scanner started in the background", origin="deferred")
-
-
-def _legacy_wake(root: pathlib.Path) -> None:
-    log = Log()
-    started(log, catalog_specs(("spawn_agent",)))
-    user(log, "Scan the dependencies and the licenses in the background.")
-    _spawn(log, "call_1", KIDS[0])
-    _spawn(log, "call_2", KIDS[1])
-    answer(log, "Both scans are running.")
-    finished: Obj = {"child_thread_id": KIDS[0], "status": "completed", "usage": tokens(40, 8)}
-    log.add("agent_finished", finished)
-    late: Obj = {
-        "call_id": "call_1",
-        "is_error": False,
-        "completeness": "complete",
-        "preview": "No vulnerable dependencies.",
-    }
-    cause = log.add("tool_result_late", late)
-    host(log, "woken", {"causes": [cause["event_id"]]})
+def _pending_row(root: pathlib.Path) -> None:
+    log = one_append_log()
     reduce_case(
         root,
         (
-            "legacy-wake-in-the-late-result-append",
+            "legacy-wake-pending-row",
             FAM,
-            "Two background children run; the first ends while the lead has no open turn and no "
-            "cancel barrier. One append records its agent_finished, its tool_result_late and a "
-            "woken naming it, and woken opens the lead's next turn (in_turn). The second child "
-            "still runs, so its pending_wakes row stays. subagent-background-notify is a log "
-            "written before woken existed: it stays idle, never woken retroactively.",
+            "legacy-wake-in-the-late-result-append's log: the child that finished leaves no "
+            "pending_wakes row, and the one still running keeps its row.",
         ),
         log,
-        {"children": children(log), "pending_wakes": pending_wakes([log])},
-    )
-
-
-def _late(log: Log, cid: str, kid: str) -> Obj:
-    """A background child's end: its agent_finished and its call's late result."""
-    finished: Obj = {"child_thread_id": kid, "status": "completed", "usage": tokens(40, 8)}
-    log.add("agent_finished", finished)
-    late: Obj = {"call_id": cid, "is_error": False, "completeness": "complete", "preview": "Done."}
-    return log.add("tool_result_late", late)
-
-
-def _grouped_wakes(root: pathlib.Path, *, one_woken: bool) -> None:
-    """Alice's run and then Bob's each start a background child; both end at one boundary."""
-    log = Log()
-    started(log, catalog_specs(("spawn_agent",)))
-    user(log, "Scan the dependencies in the background.")
-    _spawn(log, "call_1", KIDS[0])
-    answer(log, "Alice's scan is running.")
-    log.add(
-        "user_input", {"source": "api", "text": "Scan the licenses."}, actor="user", principal=BOB
-    )
-    _spawn(log, "call_2", KIDS[1])
-    answer(log, "Bob's scan is running.")
-    if one_woken:
-        causes = [
-            _late(log, "call_1", KIDS[0])["event_id"],
-            _late(log, "call_2", KIDS[1])["event_id"],
-        ]
-        host(log, "woken", {"causes": causes})
-        reject(
-            root,
-            (
-                "woken-mixed-runs-rejected",
-                FAM,
-                "Rule 32: one woken names late results of two runs (Alice's and Bob's): a wake "
-                "turn has one principal and one root request.",
-            ),
-            log,
-        )
-        return
-    host(log, "woken", {"causes": [_late(log, "call_1", KIDS[0])["event_id"]]})
-    answer(log, "Alice's scan is clean.")
-    cause = _late(log, "call_2", KIDS[1])
-    log.add("woken", {"causes": [cause["event_id"]]}, actor="host", principal=BOB)
-    reduce_case(
-        root,
-        (
-            "legacy-wakes-grouped-by-run",
-            FAM,
-            "Two background children of two runs (Alice's, then Bob's) end at one boundary. "
-            "Their results are recorded by run, in spawn order: Alice's child's end and a woken "
-            "with her principal open one turn; only after it ends are Bob's child's end and his "
-            "woken recorded, opening the next turn. Nothing of Bob's enters Alice's turn.",
-        ),
-        log,
-        {"children": children(log), "pending_wakes": pending_wakes([log])},
+        {"pending_wakes": pending_wakes([log])},
     )
 
 
@@ -204,4 +114,42 @@ def _receipt_mismatch(root: pathlib.Path) -> None:
         "receipt, in the researcher's log.",
         {"lead": lead, "researcher": member, "team": team_log()},
         {"code": "invalid_transition", "seq": forged["seq"], "log": "researcher"},
+    )
+
+
+def _tree(root: pathlib.Path, *, notified: bool) -> None:
+    """The lead started researcher-1, whose branch doesn't exist: the starting window, or, once
+    the lead received its task notification, a corrupt tree."""
+    lead = lead_log()
+    root_event = text(user(lead, "Research batteries.")["event_id"])
+    started_id, _ = start(lead, root_event, RESEARCHER, "c1")
+    idle(lead, LEAD, "Started the researcher.")
+    logs = {"lead": lead, "team": team_log()}
+    if not notified:
+        write_team(
+            root,
+            "team-tree-starting-member-pending",
+            "researcher-1 is in the starting window (a row, no branch, no notification in the "
+            "lead's log): cost and usage walks count it zero as pending, and complete stays true "
+            "since it has made no model request.",
+            logs,
+        )
+        return
+    ended = failed(RESEARCHER, "pin_unavailable")
+    notice = envelope(
+        f"{MEMBER_BRANCH}:{eid(9, MEMBER_BRANCH)}",
+        "member_ended",
+        Route(RESEARCHER, "lead", provenance(root_event)),
+        at(eid(8, MEMBER_BRANCH), MEMBER_THREAD),
+        monitor_id=f"{LEAD_BRANCH}:{started_id}:task",
+        result=ended,
+    )
+    received(lead, notice)
+    write_team(
+        root,
+        "team-tree-missing-branch-after-notice-rejected",
+        "The lead received researcher-1's task notification, so its branch must exist, but no "
+        "log has it: the tree walk is log_corrupt.",
+        logs,
+        {"code": "log_corrupt", "log": "lead"},
     )

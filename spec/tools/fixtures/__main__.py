@@ -35,8 +35,10 @@ from . import (
     outputs,
     policy,
     recovery,
+    ref_team,
     renders,
     rules,
+    run_cases,
     skills,
     structure,
     styles,
@@ -51,6 +53,7 @@ from . import (
     thread_methods,
     tool_groups,
     tool_inputs,
+    wakes,
 )
 from .common import CASES, STAGED, sha
 from .integrity import FOREIGN_WRITER
@@ -89,6 +92,7 @@ FAMILIES = (
     skills,
     thread_methods,
     styles,
+    wakes,
 )
 
 
@@ -119,7 +123,7 @@ def _build_staged(out: pathlib.Path) -> None:
     """Cases for an approved spec whose build hasn't landed: generated and checked like the
     corpus, but no runner reads them until the build moves each family into FAMILIES."""
     out.mkdir()
-    for family in (team_rules, team_bindings, team_replay, team_rebind, team_operator):
+    for family in (team_rules, team_bindings, team_replay, team_rebind, team_operator, run_cases):
         family.build(out)
 
 
@@ -179,7 +183,7 @@ def main() -> int:
         _generate(out)
         staged = pathlib.Path(tmp) / "staged"
         _build_staged(staged)
-        problems = coverage.check(out)
+        problems = coverage.check(out) + ref_team.ref_check(out, staged)
         if sys.argv[1:] == ["--check"]:
             problems += tool_inputs.check() + tool_groups.check() + team_wire.check()
         for p in problems:

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import ALICE, eid, text
-from .pieces import answer, reject, user
+from .common import ALICE, eid, obj
+from .pieces import reject, user
 from .team_pieces import (
     DEADLINE,
     LEAD,
@@ -47,7 +47,8 @@ def _mail(mail_id: str, principal: Obj = ALICE, text_: str = "Prices fell.") -> 
 
 def _receive(log: Log, env: Obj, mail_id: str | None = None) -> Obj:
     data: Obj = {"mail_id": mail_id or env["mail_id"], "envelope": env}
-    return log.add("message_received", data, actor="host", principal=ALICE)
+    sender = obj(obj(env["provenance"])["principal"])  # the receipt acts for its provenance
+    return log.add("message_received", data, actor="host", principal=sender)
 
 
 def _member(log_first_input: bool = True) -> Log:
@@ -81,23 +82,6 @@ def _mail_cases() -> list[tuple[str, str, Log]]:
         (
             "team-receipt-mail-id-mismatch-rejected",
             "Rule 31: a receipt's mail_id is not its envelope's.",
-            log,
-        )
-    )
-
-    log = lead_log()
-    user(log, "Start the research.")
-    log.add("woken", {"causes": [text(log.events[-1]["event_id"])]}, actor="host", principal=ALICE)
-    out.append(("woken-with-open-turn-rejected", "Rule 32: woken while a turn is open.", log))
-
-    log = lead_log()
-    first = user(log, "Start the research.")
-    answer(log, "Started.")
-    log.add("woken", {"causes": [text(first["event_id"])]}, actor="host", principal=ALICE)
-    out.append(
-        (
-            "woken-cause-not-late-result-rejected",
-            "Rule 32: woken names a cause that is not a tool_result_late.",
             log,
         )
     )

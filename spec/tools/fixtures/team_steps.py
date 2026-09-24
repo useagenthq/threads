@@ -25,6 +25,7 @@ from .team_pieces import (
     member_log,
     provenance,
 )
+from .tree_walk import tree
 
 if TYPE_CHECKING:
     import pathlib
@@ -133,6 +134,7 @@ def write_team(
             "outcome": "ok",
             "states": {label: reduce(log, NOW) for label, log in logs.items()},
             "index": team_index(list(logs.values())),
+            "tree": tree(list(logs.values())),
         }
     )
     (d / "case.json").write_text(dump(meta))

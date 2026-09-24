@@ -1295,8 +1295,9 @@
         "type": "object"
       },
       "events_AskId": {
-        "$ref": "#/components/schemas/events_NonEmpty",
-        "description": "The MailId of the ask."
+        "description": "The MailId of the ask.",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[A-Za-z0-9_.-]{1,128}$",
+        "type": "string"
       },
       "events_AudioPart": {
         "additionalProperties": false,
@@ -2567,8 +2568,9 @@
         "type": "object"
       },
       "events_MailId": {
-        "$ref": "#/components/schemas/events_NonEmpty",
-        "description": "<sender branch_id>:<call_id or request_id> for mail a call sends; <sender branch_id>:<event_id of the message_sent> for mail the runtime sends (notifications, bounces, lead-close cancels)."
+        "description": "<sender branch_id>:<call_id or request_id> for mail a call sends; <sender branch_id>:<event_id of the message_sent> for mail the runtime sends (notifications, bounces, lead-close cancels).",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[A-Za-z0-9_.-]{1,128}$",
+        "type": "string"
       },
       "events_MailSender": {
         "description": "The sending member, or the operator request. Written by the fenced writer; never an actor.",
@@ -2692,8 +2694,9 @@
         "type": "object"
       },
       "events_MonitorId": {
-        "$ref": "#/components/schemas/events_NonEmpty",
-        "description": "<watcher branch_id>:<event_id of the registering event>:<target name>; the target name is task for a start's task monitor. Derived, never generated."
+        "description": "<watcher branch_id>:<event_id of the registering event>:<target name>; the target name is task for a start's task monitor. Derived, never generated.",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[a-z][a-z0-9_]{0,63}(-[1-9][0-9]*)?$",
+        "type": "string"
       },
       "events_Name": {
         "pattern": "^[a-z][a-z0-9_]{0,63}$",
@@ -3565,8 +3568,9 @@
         "type": "string"
       },
       "events_WaitId": {
-        "$ref": "#/components/schemas/events_NonEmpty",
-        "description": "<waiter branch_id>:<call_id or request_id>."
+        "description": "<waiter branch_id>:<call_id or request_id>.",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[A-Za-z0-9_.-]{1,128}$",
+        "type": "string"
       },
       "events_ev_agent_finished": {
         "description": "The child's one terminal result (F7.5). Exactly once per agent_spawned.",
@@ -5504,8 +5508,21 @@
                 "description": "An operator request's key."
               },
               "rule": {
-                "$ref": "#/components/schemas/events_Int",
-                "description": "message_policy: the index of the matching rule."
+                "additionalProperties": false,
+                "description": "message_policy: the matching rule, by its from and to agents (unique per host), so a reordered policy still names it.",
+                "properties": {
+                  "from": {
+                    "$ref": "#/components/schemas/events_Name"
+                  },
+                  "to": {
+                    "$ref": "#/components/schemas/events_Name"
+                  }
+                },
+                "required": [
+                  "from",
+                  "to"
+                ],
+                "type": "object"
               },
               "source": {
                 "description": "team: what the team grants (members send, ask, wait and monitor one another; the lead starts; a starter cancels). message_policy: a rule. default: default deny.",

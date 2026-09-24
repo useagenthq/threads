@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ActorWithPrincipal, Principal } from "../common";
 import { type EventDef, event, eventWithActor } from "../envelope";
 import { AskId, CallId, MailId, RequestId } from "../ids";
-import { Int, NonEmpty, Sha256 } from "../primitives";
+import { Name, NonEmpty, Sha256 } from "../primitives";
 import { type Ruled, withRule } from "../rules";
 import {
   BounceCode,
@@ -186,7 +186,7 @@ export const MessagePolicyDecidedData: Ruled<
     op: EnumOf<typeof POLICY_OPS>;
     decision: EnumOf<typeof DECISIONS>;
     source: EnumOf<typeof POLICY_SOURCES>;
-    rule: Opt<typeof Int>;
+    rule: Opt<Strict<{ from: typeof Name; to: typeof Name }>>;
     target: typeof NonEmpty;
     call_id: Opt<typeof CallId>;
     request_id: Opt<typeof RequestId>;
@@ -201,9 +201,12 @@ export const MessagePolicyDecidedData: Ruled<
       .describe(
         "team: what the team grants (members send, ask, wait and monitor one another; the lead starts; a starter cancels). message_policy: a rule. default: default deny.",
       ),
-    rule: Int.describe(
-      "message_policy: the index of the matching rule.",
-    ).optional(),
+    rule: z
+      .strictObject({ from: Name, to: Name })
+      .describe(
+        "message_policy: the matching rule, by its from and to agents (unique per host), so a reordered policy still names it.",
+      )
+      .optional(),
     target: NonEmpty.describe("The agent (start) or member name."),
     call_id: CallId.describe("A model call's request key.").optional(),
     request_id: RequestId.describe("An operator request's key.").optional(),

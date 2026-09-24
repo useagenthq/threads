@@ -460,6 +460,29 @@
         "index": {
           "description": "team: the team tables of spec/schema/store.sql rebuilt from the logs alone (the replay rule), each sorted by its primary key. JSON columns hold their parsed values; mail's claim columns are left out (they rebuild as null).",
           "$ref": "#/$defs/TeamIndex"
+        },
+        "tree": {
+          "description": "team: the lead's tree as cost and usage walk it (spec/schema/README.md, \"Tree walks with teams\"): members counted (a branch exists, or the lead) and pending (the starting window, counted zero).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "counted",
+            "pending"
+          ],
+          "properties": {
+            "counted": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "pending": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
         }
       },
       "allOf": [
@@ -1195,6 +1218,38 @@
               "child_thread_id": {
                 "type": "string"
               }
+            }
+          }
+        },
+        "run": {
+          "description": "The log's last run (its latest user_input), per spec/schema/README.md \"Run completion\": its status and the event of the answer run() returns.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "output_event_id"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "running",
+                "parked",
+                "completed",
+                "failed",
+                "cancelled",
+                "budget_exhausted",
+                "handed_off"
+              ]
+            },
+            "output_event_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           }
         }

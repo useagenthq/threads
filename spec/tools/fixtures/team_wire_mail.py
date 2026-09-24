@@ -7,6 +7,7 @@ from .common import ALICE, sha
 from .team_pieces import (
     LEAD_BRANCH,
     LOG_THREAD,
+    MEMBER_BRANCH,
     REQUEST,
     RESEARCHER,
     body,
@@ -132,6 +133,19 @@ MAIL_CASES: tuple[tuple[str, str, bool], ...] = (
         True,
     ),
     (
+        "mail_refused naming a mail id that is not <branch_id>:<key>",
+        line("mail_refused", {"mail_id": "m:c9", "code": "member_ended"}),
+        False,
+    ),
+    (
+        "message_policy_decided naming its rule by index",
+        line(
+            "message_policy_decided",
+            {**POLICY, "source": "message_policy", "rule": 0, "request_id": REQUEST},
+        ),
+        False,
+    ),
+    (
         "message_sent ask bounce without the ended member's result",
         sent(mail("bounce", RESEARCHER, "lead", code="member_ended", ask_id=f"{LEAD_BRANCH}:c1")),
         False,
@@ -171,7 +185,10 @@ MAIL_CASES: tuple[tuple[str, str, bool], ...] = (
         "ask_closed answered",
         line(
             "ask_closed",
-            {"ask_id": f"{LEAD_BRANCH}:c1", "outcome": {"status": "answered", "reply": "m:c9"}},
+            {
+                "ask_id": f"{LEAD_BRANCH}:c1",
+                "outcome": {"status": "answered", "reply": f"{MEMBER_BRANCH}:c9"},
+            },
         ),
         True,
     ),
@@ -254,7 +271,12 @@ MAIL_CASES: tuple[tuple[str, str, bool], ...] = (
         "message_policy_decided by a rule",
         line(
             "message_policy_decided",
-            {**POLICY, "source": "message_policy", "rule": 0, "request_id": REQUEST},
+            {
+                **POLICY,
+                "source": "message_policy",
+                "rule": {"from": "lead", "to": "researcher"},
+                "request_id": REQUEST,
+            },
         ),
         True,
     ),

@@ -15,7 +15,7 @@ A union discriminated by `status`.
 </Field>
 
 <Field name="output" type={"Output"} required>
-  The final answer: the last reply's text, or in TypeScript the value parsed by the agent's output schema when it has one.
+  The final answer: the text of the run's last lead turn (after the last wake, when members or background subagents reported), or in TypeScript the value parsed by the agent's output schema when it has one. Earlier answers stay in the thread's timeline.
 </Field>
 
 <Field name="thread" type={"Thread"} required>
@@ -25,7 +25,7 @@ A union discriminated by `status`.
 ### parked
 
 <Field name="status" type={"\"parked\""} required>
-  "parked": the run is waiting on a person, such as an approval or an effect whose outcome is unknown; pending lists what it waits on. Answer them with the Thread methods to let it continue.
+  "parked": the run is waiting on a person, such as an approval or an effect whose outcome is unknown, or on a member it started that parked; pending lists what it waits on. Answer them with the Thread methods to let it continue.
 </Field>
 
 <Field name="reason" type={"ParkedEvent.data.reason"} required>

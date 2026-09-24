@@ -1,8 +1,0 @@
-{
-  "outcome": "error",
-  "error": {
-    "code": "invalid_transition",
-    "seq": 3
-  },
-  "appended": []
-}

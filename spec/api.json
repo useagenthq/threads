@@ -297,7 +297,7 @@
           "default": [],
           "doc": "Agents this one may hand the conversation to, pinned as policy.handoffs."
         },
-        {"name": "team", "kind": "option", "type": {"array": {"$ref": "#/types/Agent", "args": [{"prim": "unknown"}, {"prim": "unknown"}]}}, "required": false, "doc": "Agents this one may start as team members, with the start, send, ask, reply, wait, monitor and cancel tools. Passing it, even as [], makes agent() return a TeamAgent whose run() result carries team, the Team handle; [] is a team no model can grow (start is refused unknown_agent). A member whose definition lists handoffs is refused at setup (handoff_in_team). Omitted: no team, a plain Agent."},
+        {"name": "team", "kind": "option", "type": {"array": {"$ref": "#/types/Agent", "args": [{"prim": "unknown"}, {"prim": "unknown"}]}}, "required": false, "doc": "Agents this one may start as team members, with the start, send, ask, reply, wait, monitor and cancel tools. Passing it, even as [], makes agent() return a TeamAgent whose run() result carries team, the Team handle; [] is a team no model can grow (start is refused unknown_agent). A member whose definition lists handoffs is refused at setup (handoff_in_team), and so is an own tool named start, send, ask, reply, wait, monitor or cancel (duplicate_name). Omitted: no team, a plain Agent."},
         {"name": "team_limits", "kind": "option", "type": {"object": {"concurrent": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false, "default": 4, "doc": "Most members running at once; a start past it is refused concurrency_cap. Default 4."}, "mailbox": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/PosInt"}, "required": false, "default": 100, "doc": "Most pending mails per member; a send past it is refused mailbox_full. Default 100."}}}, "required": false, "default_doc": "{concurrent: 4, mailbox: 100}", "doc": "The team's limits. Omitted: 4 running members and 100 pending mails per member."},
         {
           "name": "fallback",
@@ -856,7 +856,7 @@
           "required": false,
           "doc": "Maps an HTTP API request to a principal, or null for 401. Omitted: every /v1 route answers 401; channel webhooks still work."
         },
-        {"name": "message_policy", "kind": "option", "type": {"array": {"$ref": "#/types/MessagePolicyRule"}}, "required": false, "default": [], "doc": "Rules that let one host agent start, send to, ask, monitor or cancel another beyond what a team grants (wait is decided as monitor). Default []: everything else is denied. Every decision is logged as message_policy_decided."}
+        {"name": "message_policy", "kind": "option", "type": {"array": {"$ref": "#/types/MessagePolicyRule"}}, "required": false, "default": [], "doc": "Rules that let one host agent start, send to, ask, monitor or cancel another beyond what a team grants (wait is decided as monitor). Each (from, to) pair appears once (a repeat is refused at setup with duplicate_name), so a logged decision names its rule by from and to. Default []: everything else is denied. Every decision is logged as message_policy_decided."}
       ],
       "returns": {"$ref": "#/types/Host"}
     },
@@ -1010,7 +1010,7 @@
         "run": {
           "ts": "run",
           "py": "run",
-          "doc": "Run one input to a terminal result. Needs no server.",
+          "doc": "Run one input to a terminal result. Needs no server. The run spans its input turn and every later turn of the same request: when the agent starts background subagents or team members, run() waits until each has reported and the lead has reacted (a wake turn), so it returns later and runs more turns; members an operator or an earlier run started never extend it (spec/schema/README.md, Run completion).",
           "async": true,
           "params": [
             {
@@ -1181,14 +1181,14 @@
         {
           "object": {
             "status": {"type": {"literal": "completed"}, "required": true, "doc": "\"completed\": the run finished, and output holds its final answer."},
-            "output": {"type": {"generic": "Output"}, "required": true, "doc": "The final answer: the last reply's text, or in TypeScript the value parsed by the agent's output schema when it has one."},
+            "output": {"type": {"generic": "Output"}, "required": true, "doc": "The final answer: the text of the run's last lead turn (after the last wake, when members or background subagents reported), or in TypeScript the value parsed by the agent's output schema when it has one. Earlier answers stay in the thread's timeline."},
             "thread": {"type": {"$ref": "#/types/Thread"}, "required": true}
           },
           "casing": "api"
         },
         {
           "object": {
-            "status": {"type": {"literal": "parked"}, "required": true, "doc": "\"parked\": the run is waiting on a person, such as an approval or an effect whose outcome is unknown; pending lists what it waits on. Answer them with the Thread methods to let it continue."},
+            "status": {"type": {"literal": "parked"}, "required": true, "doc": "\"parked\": the run is waiting on a person, such as an approval or an effect whose outcome is unknown, or on a member it started that parked; pending lists what it waits on. Answer them with the Thread methods to let it continue."},
             "reason": {
               "type": {"$ref": "urn:threads:schema:events:v1#/$defs/ev_parked/properties/data/properties/reason"},
               "required": true
@@ -1276,7 +1276,7 @@
         "run": {
           "ts": "run",
           "py": "run",
-          "doc": "Run one input to a terminal result, as Agent.run does; the result also carries the team.",
+          "doc": "Run one input as Agent.run does: it returns once the lead has reacted to every member this run started, and the result also carries the team.",
           "async": true,
           "params": [
             {
@@ -1539,7 +1539,7 @@
                 "generic": "Output"
               },
               "required": true,
-              "doc": "The final answer: the last reply's text, or in TypeScript the value parsed by the agent's output schema when it has one."
+              "doc": "The final answer: the text of the run's last lead turn (after the last wake, when members or background subagents reported), or in TypeScript the value parsed by the agent's output schema when it has one. Earlier answers stay in the thread's timeline."
             },
             "thread": {
               "type": {
@@ -1564,7 +1564,7 @@
                 "literal": "parked"
               },
               "required": true,
-              "doc": "\"parked\": the run is waiting on a person, such as an approval or an effect whose outcome is unknown; pending lists what it waits on. Answer them with the Thread methods to let it continue."
+              "doc": "\"parked\": the run is waiting on a person, such as an approval or an effect whose outcome is unknown, or on a member it started that parked; pending lists what it waits on. Answer them with the Thread methods to let it continue."
             },
             "reason": {
               "type": {
@@ -2171,7 +2171,7 @@
         "cost": {
           "ts": "cost",
           "py": "cost",
-          "doc": "What this thread spent, in nano-units of its pinned currency (USD for agent()), with a conservative upper bound; null when its pinned policy has no currency or no model list (a pinned currency with an unpriced model gives an incomplete cost instead). With tree: true it also counts every subagent at any depth, each from its own log, in the root's currency (else the first priced subagent's); null when no readable thread in the tree has a currency, which means unknown, never zero, even when a subagent's log is missing. complete and bounded become false when some spend can't be counted: a thread priced in another currency, or an unpriced thread that called a model. A subagent with no log counts nothing but makes the total incomplete and unbounded, since nothing proves it spent nothing. Errors: a subagent's read error; log_corrupt when a finished subagent's log is missing (except a cancel's record of a child it never created: cancelled, usage unknown), a subagent doesn't name the spawn that started it, or the tree names a thread twice; cost_overflow past 2^53-1 nanos. Messages name the path of child thread ids.",
+          "doc": "What this thread spent, in nano-units of its pinned currency (USD for agent()), with a conservative upper bound; null when its pinned policy has no currency or no model list (a pinned currency with an unpriced model gives an incomplete cost instead). With tree: true it also counts every subagent at any depth, each from its own log, in the root's currency (else the first priced subagent's); null when no readable thread in the tree has a currency, which means unknown, never zero, even when a subagent's log is missing. complete and bounded become false when some spend can't be counted: a thread priced in another currency, or an unpriced thread that called a model. A subagent with no log counts nothing but makes the total incomplete and unbounded, since nothing proves it spent nothing. Errors: a subagent's read error; log_corrupt when a finished subagent's log is missing (except a cancel's record of a child it never created: cancelled, usage unknown), a subagent doesn't name the spawn that started it, or the tree names a thread twice; cost_overflow past 2^53-1 nanos. Messages name the path of child thread ids. With a team, tree: true also walks every member the lead started, model- or operator-started and nested teams too; a member still starting counts zero and leaves complete true (it has made no model request), and a member whose branch is missing after its starter received its task notification, or whose parent is not the lead's member_started or thread_started, is log_corrupt (spec/schema/README.md, Tree walks with teams).",
           "async": true,
           "params": [
             {

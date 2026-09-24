@@ -1,0 +1,7 @@
+{
+  "outcome": "error",
+  "error": {
+    "code": "log_corrupt",
+    "log": "lead"
+  }
+}

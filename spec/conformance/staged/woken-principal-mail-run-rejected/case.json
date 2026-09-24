@@ -1,0 +1,9 @@
+{
+  "name": "woken-principal-mail-run-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 45: after Bob's run, a researcher's message of Alice's operator request opens the lead's turn, which starts a background child; its woken names Bob (the latest user_input), not Alice, whose request opened the spawning turn. woken-principal-mail-run is the same log with Alice.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

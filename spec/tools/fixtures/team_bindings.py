@@ -46,10 +46,10 @@ def build(root: pathlib.Path) -> None:
     reduce_case(
         root,
         (
-            "woken-principal-spawning-run",
+            "woken-principal-mail-run",
             FAM,
-            "Rule 45's positive twin: the woken names Alice, whose request the mail that opened "
-            "the spawning turn belongs to. The wake opens the lead's next turn.",
+            "Rule 45's accepted twin: the woken names Alice, whose request the mail that opened "
+            "the spawning turn belongs to, although the latest user_input is Bob's.",
         ),
         _woken_by_mail(ALICE),
         {"pending_wakes": []},
@@ -158,11 +158,11 @@ def _cases() -> list[tuple[str, str, Log]]:
     )
     out.append(
         (
-            "woken-principal-not-spawning-run-rejected",
-            "Rule 45: a researcher's message (Alice's request) opens the lead's turn, which starts "
-            "a background child; its late result's woken names Bob, not the spawning run's Alice. "
-            "woken-principal-spawning-run is the same log with Alice: the woken is the first "
-            "event that breaks a rule.",
+            "woken-principal-mail-run-rejected",
+            "Rule 45: after Bob's run, a researcher's message of Alice's operator request opens "
+            "the lead's turn, which starts a background child; its woken names Bob (the latest "
+            "user_input), not Alice, whose request opened the spawning turn. "
+            "woken-principal-mail-run is the same log with Alice.",
             _woken_by_mail(BOB),
         )
     )
@@ -170,16 +170,20 @@ def _cases() -> list[tuple[str, str, Log]]:
 
 
 def _woken_by_mail(principal: Obj) -> Log:
-    """Alice's run asks a researcher, whose answer (mail of Alice's request) opens the lead's
-    next turn; that turn starts a background child. Its late result's woken names `principal`."""
+    """Bob's run comes first. Then mail of Alice's operator request (a researcher she started)
+    opens the lead's next turn, which starts a background child. Its late result's woken names
+    `principal`: Alice is right, and Bob (the latest user_input) is what a naive reader picks."""
     log = lead_log(("spawn_agent", *TEAM_TOOLS))
-    root = text(user(log, "Have the researcher find what to scan.")["event_id"])
-    answer(log, "Asked the researcher.")
+    bob: Obj = {"source": "api", "text": "What is on the list today?"}
+    log.add("user_input", bob, actor="user", principal=BOB)
+    answer(log, "Nothing yet.")
+    request = eid(2, LOG_BRANCH)
+    alice = provenance(request, thread=LOG_THREAD)
     note = envelope(
         f"{MEMBER_BRANCH}:c1",
         "message",
-        Route(RESEARCHER, "lead", provenance(root)),
-        at(root),
+        Route(RESEARCHER, "lead", alice),
+        at(request, LOG_THREAD),
         body=body("Scan the dependencies."),
     )
     log.add(

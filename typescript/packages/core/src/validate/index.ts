@@ -28,6 +28,7 @@ import {
   checkSettings,
 } from "./turns";
 import type { Violation } from "./violation";
+import { checkWoken } from "./wake";
 
 /**
  * The semantic rules that need earlier events (spec/schema/README.md, "Semantic rules" 6-13
@@ -139,6 +140,8 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "team_task_created":
     case "context_preflight_blocked":
       return undefined;
+    case "woken":
+      return checkWoken(fold, e);
     case "team_opened":
     case "member_started":
     case "member_idle":
@@ -147,7 +150,6 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "monitor_set":
     case "wait_started":
     case "wait_finished":
-    case "woken":
     case "message_sent":
     case "message_received":
     case "mail_refused":

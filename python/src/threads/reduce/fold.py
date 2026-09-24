@@ -43,6 +43,28 @@ class Task:
     owner: str | None = None
 
 
+type PrincipalKey = tuple[str, str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class Run:
+    """The principal and root request of the turn opener that started a run."""
+
+    principal: PrincipalKey
+    root: EventId
+
+
+@dataclass(slots=True)
+class Wake:
+    run: Run | None = None
+    """The run of the open (or last) turn."""
+    spawn_runs: dict[CallId, Run] = field(default_factory=dict[CallId, Run])
+    """The run that spawned each background spawn_agent call."""
+    trailing: dict[EventId, CallId] = field(default_factory=dict[EventId, CallId])
+    """tool_result_late ids (to call ids) since the last event that was neither a late result
+    nor an agent_finished: the late results of one append."""
+
+
 @dataclass(slots=True)
 class Fold:
     now: int
@@ -99,6 +121,8 @@ class Fold:
     input_tokens: int = 0
     output_tokens: int = 0
     unknown_responses: int = 0
+    wake: Wake = field(default_factory=Wake)
+    """Background wake bookkeeping (rules_wake)."""
 
 
 def policy(fold: Fold) -> Policy | None:

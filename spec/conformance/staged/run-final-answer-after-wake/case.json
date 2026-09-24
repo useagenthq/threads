@@ -1,0 +1,9 @@
+{
+  "name": "run-final-answer-after-wake",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "The member's settlement wakes the lead, whose wake turn answers again: the run is completed with the last lead turn's answer; the first stays in the timeline.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

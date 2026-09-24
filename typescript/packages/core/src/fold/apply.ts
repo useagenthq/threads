@@ -10,6 +10,7 @@ import {
   responseText,
   sameAddress,
 } from "./state";
+import { applyWake } from "./wake";
 
 /** Advances the fold past one event that already passed validate_next. */
 export function apply(fold: Fold, line: EventLine): void {
@@ -20,6 +21,7 @@ export function apply(fold: Fold, line: EventLine): void {
   // The restore slot is open for one event only.
   fold.restoreStyle = undefined;
   if (line.kind === "event") applyKnown(fold, line.event);
+  if (line.kind === "event") applyWake(fold, line.event);
   fold.boundaries[event.seq] =
     fold.pending.size === 0 && fold.awaiting.size === 0;
 }
