@@ -23,6 +23,7 @@ function mcp(options: {
   tools?: { allow?: readonly string[]; deny?: readonly string[] };
   effect?: EffectClass;
   defer?: boolean;
+  dedupWindowMs?: PosInt;
 }): McpServer
 ```
 
@@ -42,6 +43,7 @@ def mcp(
     tools: {allow?: Sequence[str], deny?: Sequence[str]} | None = None,
     effect: EffectClass = "unguarded",
     defer: bool = False,
+    dedup_window_ms: PosInt | None = None,
 ) -> McpServer
 ```
 
@@ -91,7 +93,11 @@ def mcp(
 </Field>
 
 <Field name="effect" type={"EffectClass"} default={"unguarded"}>
-  The effect class every tool from this server is pinned with. Use read_only for a server whose tools change nothing; the default unguarded means an uncertain call parks and is never retried. idempotent is refused in Python and needs a dedup window in TypeScript.
+  The effect class every tool from this server is pinned with. Use read_only for a server whose tools change nothing; the default unguarded means an uncertain call parks and is never retried. idempotent needs dedup_window_ms.
+</Field>
+
+<Field name="dedupWindowMs / dedup_window_ms" type={"PosInt"}>
+  Milliseconds within which the server dedups a repeated call that carries the same effect key (sent as the call's _meta threads/effect_key). Required exactly when effect is idempotent; giving it with any other effect is a setup error invalid_config. Omitted: no dedup window (effect is not idempotent).
 </Field>
 
 <Field name="defer" type={"boolean"} default={"false"}>

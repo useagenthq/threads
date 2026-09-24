@@ -137,7 +137,7 @@ Running a stdio server inside the sandbox (`runs: "sandbox"`) is not supported y
 </Field>
 
 <Callout>
-`effect: "idempotent"` with `dedupWindowMs` is TypeScript only. Python refuses `idempotent` for MCP servers.
+`effect: "idempotent"` needs `dedupWindowMs` (`dedup_window_ms` in Python): each call then carries its effect key in `_meta` as `threads/effect_key`, for the server to dedup on.
 </Callout>
 
 ## When servers connect

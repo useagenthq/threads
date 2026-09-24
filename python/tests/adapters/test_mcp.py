@@ -3,6 +3,7 @@ namespaced, checked tools; calls on the effect path; typed setup errors; the fen
 transport; credentials only in the host's own requests."""
 
 import asyncio
+import json
 import sys
 from collections.abc import Sequence
 from dataclasses import replace
@@ -10,6 +11,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from mcp.server.fastmcp import FastMCP
 from mcp.shared.exceptions import McpError
 from mcp.types import ErrorData
 from mcp_kit import SEEN_HEADERS, TracedAsgi, server
@@ -155,12 +157,55 @@ def test_a_server_error_is_untrusted_reference_and_a_timeout_is_uncertain(
     asyncio.run(main())
 
 
-def test_an_idempotent_server_is_a_config_error_until_a_dedup_window_is_declared() -> None:
-    # spec/api.json's mcp() has no dedup_window_ms and the call carries no effect key, so an
-    # idempotent claim could never be honored.
-    with pytest.raises(ConfigError, match="idempotent") as raised:
-        mcp(name="pay", url="http://pay.test/mcp", effect="idempotent")
-    assert raised.value.code == "invalid_config"
+def test_idempotent_needs_a_dedup_window_exactly_as_in_typescript() -> None:
+    for options in (
+        {"effect": "idempotent"},
+        {"dedup_window_ms": 60_000},
+        {"effect": "unguarded", "dedup_window_ms": 60_000},
+    ):
+        with pytest.raises(ConfigError, match="dedup_window_ms") as raised:
+            mcp(name="pay", url="http://pay.test/mcp", **options)  # pyright: ignore[reportArgumentType] - each bad pair
+        assert raised.value.code == "invalid_config"
+
+
+class _Bodies(TracedAsgi):
+    """Also keeps each request body, to read the call's _meta."""
+
+    def __init__(self, app: FastMCP) -> None:
+        super().__init__(app)
+        self.bodies: list[bytes] = []
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        self.bodies.append(await request.aread())
+        return await super().handle_async_request(request)
+
+
+def test_an_idempotent_server_is_pinned_with_its_window_and_sent_the_effect_key() -> None:
+    app = server()
+    asgi = _Bodies(app)
+
+    async def main() -> None:
+        async with app.session_manager.run():
+            kit = mcp(
+                name="kit",
+                url="http://127.0.0.1:8000/mcp",
+                effect="idempotent",
+                dedup_window_ms=60_000,
+            )
+            kit = replace(kit, http=asgi)
+            script = [use("mcp__kit__echo", {"text": "hi"}), text("Done.")]
+            bot = agent(model=scripted_model({"responses": script}), tools=[kit], permissions=ALLOW)
+            result = await bot.run("say hi", store=sqlite(":memory:"))
+            assert isinstance(result, Completed), result
+            got = await events(result.thread)
+            started = next(e for e in got if isinstance(e, ThreadStartedEvent))
+            echo = next(t for t in started.data.tools if t.name == "mcp__kit__echo")
+            assert (echo.effect_class, echo.dedup_window_ms) == ("idempotent", 60_000)
+            key = f"{result.thread.branch}:call_1"
+            calls = [json.loads(b) for b in asgi.bodies if b"tools/call" in b]
+            assert calls[0]["params"]["_meta"] == {"threads/effect_key": key}
+
+    asyncio.run(main())
 
 
 def _refused(request: httpx.Request) -> httpx.Response:

@@ -31,6 +31,8 @@ CALL_TIMEOUT: float = 120
 an HTTP status is never read as a JSON-RPC code (spec/schema/README.md, Server-originated
 text)."""
 REQUEST_TIMEOUT: Final = -32001
+EFFECT_KEY: Final = "threads/effect_key"
+"""The _meta key an idempotent server reads the call's effect key from (as in TypeScript)."""
 READ_RESOURCE: Final = "read_resource"
 READ_RESOURCE_SCHEMA: Final[dict[str, JsonValue]] = {
     "type": "object",
@@ -55,16 +57,19 @@ class McpTool:
     """mcp__<server>__read_resource: reads a resource by URI."""
     defer: bool = False
     """mcp(defer=True): the model sees only the name and description until tool_search."""
+    window: int | None = None
+    """An idempotent server's dedup window: pinned, and each call is sent its effect key."""
 
     def spec(self) -> ToolSpec:
-        return ToolSpec.model_validate(
-            {
-                "name": self.name,
-                "description": self.description,
-                "input_schema": self.input_schema,
-                "effect_class": self.effect,
-            }
-        )
+        pinned: dict[str, JsonValue] = {
+            "name": self.name,
+            "description": self.description,
+            "input_schema": self.input_schema,
+            "effect_class": self.effect,
+        }
+        if self.window is not None:
+            pinned["dedup_window_ms"] = self.window
+        return ToolSpec.model_validate(pinned)
 
     def invalid(self, input: JsonObject) -> str | None:
         try:
@@ -79,7 +84,12 @@ class McpTool:
                 read = await self.session.read_resource(AnyUrl(str(input["uri"])))
                 return _contents(self.name, read)
             async with asyncio.timeout(CALL_TIMEOUT):
-                result = await self.session.call_tool(self.remote, dict(input))
+                # An idempotent server dedups on the key, as in TypeScript (threads/effect_key).
+                if self.window is not None and ctx.effect_key is not None:
+                    meta = {EFFECT_KEY: ctx.effect_key}
+                    result = await self.session.call_tool(self.remote, dict(input), meta=meta)
+                else:
+                    result = await self.session.call_tool(self.remote, dict(input))
         except McpError as error:
             return self._answered(error)
         except TimeoutError:

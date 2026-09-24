@@ -59,6 +59,8 @@ class McpOptions(TypedDict, total=False):
     defer: bool
     """True: the model sees only the server's tool names, listed in tool_search's description,
     until tool_search loads them."""
+    dedup_window_ms: int
+    """Required exactly when effect is idempotent: the server dedups on the effect key within it."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +81,8 @@ class McpServer:
     defer: bool = False
     """The model sees only the server's tool names, listed in tool_search's description, until
     tool_search loads them."""
+    dedup_window_ms: int | None = None
+    """With effect idempotent: pinned on each tool, and each call carries its effect key."""
 
     def connect(self, fence: Fence) -> AbstractAsyncContextManager[Sequence[McpTool]]:
         """The server's pinned tools for one run, live until the context exits."""
@@ -190,7 +194,16 @@ class McpServer:
             message = f"MCP tool {tool.name}: invalid input schema: {error}"
             raise ConfigError("invalid_config", message) from error
         description = tool.description or tool.title or tool.name
-        return McpTool(name, tool.name, description, schema, self.effect, session, defer=self.defer)
+        return McpTool(
+            name,
+            tool.name,
+            description,
+            schema,
+            self.effect,
+            session,
+            window=self.dedup_window_ms,
+            defer=self.defer,
+        )
 
 
 def _client(
@@ -262,10 +275,10 @@ def mcp(**options: Unpack[McpOptions]) -> McpServer:
     if options.get("runs", "host") == "sandbox":
         # ponytail: in-sandbox stdio servers aren't built; host-spawned is the default.
         raise ConfigError("capability_missing", f"MCP server {name}: runs='sandbox'")
-    if options.get("effect") == "idempotent":
-        # ponytail: no dedup window option and no effect key on the call yet, so the claim
-        # couldn't be honored; add both (api.json first) when a server dedups on a key.
-        raise ConfigError("invalid_config", f"MCP server {name}: effect='idempotent'")
+    window = options.get("dedup_window_ms")
+    if (options.get("effect") == "idempotent") != (window is not None):
+        message = "dedup_window_ms is required exactly when effect is idempotent"
+        raise ConfigError("invalid_config", f"MCP server {name}: {message}")
     filters = options.get("tools", {})
     allow = filters.get("allow")
     return McpServer(
@@ -279,4 +292,5 @@ def mcp(**options: Unpack[McpOptions]) -> McpServer:
         frozenset(filters.get("deny", ())),
         options.get("effect", "unguarded"),
         defer=options.get("defer", False),
+        dedup_window_ms=window,
     )
