@@ -105,6 +105,11 @@ export function openai(model: string, options: OpenAIOptions = {}): Model {
     hosted_tools: hosted.map((t) => String(t["type"])),
     // store is false, so nothing is retrievable afterwards.
     lookup: "none",
+    // OpenAI caches automatically: 24 hours with extended retention, else the documented
+    // in-memory lower bound of 5 minutes.
+    cache: {
+      ttl_ms: params["prompt_cache_retention"] === "24h" ? 86_400_000 : 300_000,
+    },
   };
   const apiKey = credential(
     "openai",

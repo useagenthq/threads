@@ -16,7 +16,10 @@ describe("anthropic hosted tools", () => {
       { type: "web_fetch_20250910", name: "web_fetch" },
     ];
     const { info } = anthropic("claude-sonnet-5", { ...options, hostedTools });
-    expect(info.adapter.settings).toEqual({ hosted_tools: hostedTools });
+    expect(info.adapter.settings).toEqual({
+      hosted_tools: hostedTools,
+      prompt_cache: "5m",
+    });
     expect(info.hosted_tools).toEqual(["web_search", "web_fetch"]);
   });
 

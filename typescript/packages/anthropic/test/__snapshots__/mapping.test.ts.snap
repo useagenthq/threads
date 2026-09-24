@@ -3,6 +3,9 @@
 exports[`golden: Render v1 conformance cases → Messages API request render-user-image-input 1`] = `
 {
   "body": {
+    "cache_control": {
+      "type": "ephemeral",
+    },
     "max_tokens": 1024,
     "messages": [
       {
@@ -25,7 +28,15 @@ exports[`golden: Render v1 conformance cases → Messages API request render-use
     ],
     "model": "claude-sonnet-5",
     "stream": true,
-    "system": "You are a helpful agent.",
+    "system": [
+      {
+        "cache_control": {
+          "type": "ephemeral",
+        },
+        "text": "You are a helpful agent.",
+        "type": "text",
+      },
+    ],
     "temperature": 0,
     "tools": [
       {
@@ -48,12 +59,16 @@ exports[`golden: Render v1 conformance cases → Messages API request render-use
   },
   "documents": [],
   "ok": true,
+  "ttl": "5m",
 }
 `;
 
 exports[`golden: Render v1 conformance cases → Messages API request render-screenshot-tool-result 1`] = `
 {
   "body": {
+    "cache_control": {
+      "type": "ephemeral",
+    },
     "max_tokens": 1024,
     "messages": [
       {
@@ -107,7 +122,15 @@ exports[`golden: Render v1 conformance cases → Messages API request render-scr
     ],
     "model": "claude-sonnet-5",
     "stream": true,
-    "system": "You are a helpful agent.",
+    "system": [
+      {
+        "cache_control": {
+          "type": "ephemeral",
+        },
+        "text": "You are a helpful agent.",
+        "type": "text",
+      },
+    ],
     "temperature": 0,
     "tools": [
       {
@@ -124,12 +147,16 @@ exports[`golden: Render v1 conformance cases → Messages API request render-scr
   },
   "documents": [],
   "ok": true,
+  "ttl": "5m",
 }
 `;
 
 exports[`golden: Render v1 conformance cases → Messages API request render-deferred-tool-loaded 1`] = `
 {
   "body": {
+    "cache_control": {
+      "type": "ephemeral",
+    },
     "max_tokens": 1024,
     "messages": [
       {
@@ -173,7 +200,15 @@ exports[`golden: Render v1 conformance cases → Messages API request render-def
     ],
     "model": "claude-sonnet-5",
     "stream": true,
-    "system": "You are a helpful agent.",
+    "system": [
+      {
+        "cache_control": {
+          "type": "ephemeral",
+        },
+        "text": "You are a helpful agent.",
+        "type": "text",
+      },
+    ],
     "temperature": 0,
     "tools": [
       {
@@ -228,12 +263,16 @@ exports[`golden: Render v1 conformance cases → Messages API request render-def
   },
   "documents": [],
   "ok": true,
+  "ttl": "5m",
 }
 `;
 
 exports[`golden: Render v1 conformance cases → Messages API request render-tool-results-cleared 1`] = `
 {
   "body": {
+    "cache_control": {
+      "type": "ephemeral",
+    },
     "max_tokens": 1024,
     "messages": [
       {
@@ -346,7 +385,15 @@ TOKEN=[redacted]
     ],
     "model": "claude-sonnet-5",
     "stream": true,
-    "system": "You are a helpful agent.",
+    "system": [
+      {
+        "cache_control": {
+          "type": "ephemeral",
+        },
+        "text": "You are a helpful agent.",
+        "type": "text",
+      },
+    ],
     "temperature": 0,
     "tools": [
       {
@@ -369,6 +416,7 @@ TOKEN=[redacted]
   },
   "documents": [],
   "ok": true,
+  "ttl": "5m",
 }
 `;
 

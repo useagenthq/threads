@@ -39,6 +39,11 @@ export type ModelInfo = {
   readonly hosted_tools?: readonly string[];
   /** Response lookup by client request id. */
   readonly lookup: LookupCapability;
+  /**
+   * How long the provider keeps prompt-cache entries: a TTL, "none" when it never caches,
+   * absent when unknown. The default context.cache_ttl_ms comes from it.
+   */
+  readonly cache?: { readonly ttl_ms: number } | "none";
 };
 
 /** One attempt: the client request id `<branch_id>:<model_request event_id>` and the Render v1 bytes. */

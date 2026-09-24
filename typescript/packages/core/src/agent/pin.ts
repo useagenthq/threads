@@ -21,6 +21,7 @@ import { builtins, type Capabilities, type Egress } from "../tools";
 import { frameworkSpec } from "../tools/framework";
 import { requireCapabilities } from "../tools/gated";
 import { unchecked } from "../validate/json-schema";
+import { agreedCacheTtl } from "./cache-ttl";
 import { checkEnforceable } from "./enforceable";
 import { ConfigError } from "./errors";
 import { type Extension, hookNames } from "./extension";
@@ -300,7 +301,7 @@ function policy(o: PinOptions): Policy {
     ...(models.some((m) => m.price !== undefined) ? { currency: "USD" } : {}),
     permissions: { ...DEFAULT_PERMISSIONS, ...o.permissions },
     retry: { ...RETRY_DEFAULTS, ...o.retry },
-    context: { ...CONTEXT_DEFAULTS, ...o.context },
+    context: { ...CONTEXT_DEFAULTS, ...cacheTtl(o), ...o.context },
     ...(o.fallback.length === 0
       ? {}
       : {
@@ -324,6 +325,13 @@ function policy(o: PinOptions): Policy {
       ? {}
       : { output: outputPolicy(o.output, o.outputRetries) }),
   };
+}
+
+/** The models' agreed cache lifetime, checked only when the agent leaves cache_ttl_ms unset. */
+function cacheTtl(o: PinOptions): { readonly cache_ttl_ms?: number } {
+  if (o.context.cache_ttl_ms !== undefined) return {};
+  const ttl = agreedCacheTtl([o.model, ...o.fallback]);
+  return ttl === undefined ? {} : { cache_ttl_ms: ttl };
 }
 
 /** Every output style has a name and a text: an empty one could never be switched to. */

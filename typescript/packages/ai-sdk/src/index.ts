@@ -87,6 +87,12 @@ export type AiSdkOptions = {
   /** "context_window" only when the provider bounds billed input by it; else unknown. */
   readonly inputBillingBound?: "context_window" | "none";
   readonly price?: ModelInfo["limits"]["price"];
+  /**
+   * How long the provider keeps prompt-cache entries, in ms, or "none" when it doesn't cache.
+   * threads can't see the provider behind an AI SDK model, so an agent using this model needs
+   * it or context.cache_ttl_ms.
+   */
+  readonly cacheTtlMs?: number | "none";
 };
 
 /** The send in progress, and how many provider requests went through the fenced fetch. */
@@ -106,6 +112,18 @@ function providerFetch(inner: Fetch): Fetch {
     sending.fetches += 1;
     return fencedFetch(sending.context, inner)(input, init);
   };
+}
+
+/** The declared cache lifetime; absent is unknown. A JavaScript caller may pass anything. */
+function cacheOf(given: unknown): Pick<ModelInfo, "cache"> {
+  if (given === undefined) return {};
+  if (given === "none") return { cache: "none" };
+  if (typeof given === "number" && Number.isSafeInteger(given) && given > 0)
+    return { cache: { ttl_ms: given } };
+  throw new ConfigError(
+    "invalid_config",
+    `aiSdk cacheTtlMs must be a positive whole number of milliseconds or "none", not ${JSON.stringify(given)}`,
+  );
 }
 
 export function aiSdk(options: AiSdkOptions): Model {
@@ -153,6 +171,7 @@ export function aiSdk(options: AiSdkOptions): Model {
     hosted_tools: [],
     // doStream has no retrieval by request id.
     lookup: "none",
+    ...cacheOf(options.cacheTtlMs),
   };
   // Set once a send streamed without any request through the fenced fetch: the factory built a
   // model on its own transport, so every later send is refused before anything leaves.

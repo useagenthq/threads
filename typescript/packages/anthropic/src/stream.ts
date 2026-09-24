@@ -2,6 +2,7 @@ import type { Json, ModelChunk, Usage } from "@threads/core/adapter";
 import { assertNever, JsonObject } from "@threads/core/adapter";
 import { z } from "zod";
 import { type BlockContext, blockParts } from "./blocks";
+import type { Ttl } from "./caching";
 
 // Messages API stream events → ModelChunks. Events are provider output, so each is parsed; an
 // event type this adapter doesn't know is skipped, as the API asks clients to do.
@@ -12,6 +13,12 @@ const ProviderUsage = z.object({
   output_tokens: Tokens,
   cache_read_input_tokens: Tokens,
   cache_creation_input_tokens: Tokens,
+  cache_creation: z
+    .object({
+      ephemeral_5m_input_tokens: Tokens,
+      ephemeral_1h_input_tokens: Tokens,
+    })
+    .nullish(),
   output_tokens_details: z.object({ thinking_tokens: z.int() }).nullish(),
 });
 type ProviderUsage = z.infer<typeof ProviderUsage>;
@@ -68,6 +75,7 @@ type Open = { block: { [key: string]: Json }; json: string };
 export async function* decode(
   events: AsyncIterable<unknown>,
   ctx: BlockContext,
+  ttl: Ttl | undefined,
 ): AsyncGenerator<ModelChunk, void, undefined> {
   const open = new Map<number, Open>();
   let usage: ProviderUsage = {};
@@ -97,7 +105,7 @@ export async function* decode(
         stop = stopOf(e.delta.stop_reason);
         break;
       case "message_stop":
-        yield { kind: "done", stop_reason: stop, usage: toUsage(usage) };
+        yield { kind: "done", stop_reason: stop, usage: toUsage(usage, ttl) };
         return;
       default:
         assertNever(e);
@@ -164,17 +172,32 @@ function merge(a: ProviderUsage, b: ProviderUsage): ProviderUsage {
       b.cache_read_input_tokens ?? a.cache_read_input_tokens,
     cache_creation_input_tokens:
       b.cache_creation_input_tokens ?? a.cache_creation_input_tokens,
+    cache_creation: b.cache_creation ?? a.cache_creation,
     output_tokens_details: b.output_tokens_details ?? a.output_tokens_details,
   };
 }
 
 /** Unknown is null, never 0. input_tokens already excludes cache. */
-function toUsage(u: ProviderUsage): Usage {
+function toUsage(u: ProviderUsage, ttl: Ttl | undefined): Usage {
   return {
     input_tokens: u.input_tokens ?? null,
     output_tokens: u.output_tokens ?? null,
     cache_read_tokens: u.cache_read_input_tokens ?? null,
-    cache_write_tokens: u.cache_creation_input_tokens ?? null,
+    cache_write_tokens: pricedWrites(u, ttl),
     reasoning_tokens: u.output_tokens_details?.thinking_tokens ?? null,
   };
+}
+
+/**
+ * Cache writes all billed at the pinned TTL's price, or null (unknown) when the provider reports
+ * any under the other TTL: a number priced at the wrong rate would understate the cost.
+ */
+function pricedWrites(u: ProviderUsage, ttl: Ttl | undefined): number | null {
+  const other =
+    ttl === "1h"
+      ? u.cache_creation?.ephemeral_5m_input_tokens
+      : ttl === "5m"
+        ? u.cache_creation?.ephemeral_1h_input_tokens
+        : undefined;
+  return (other ?? 0) > 0 ? null : (u.cache_creation_input_tokens ?? null);
 }

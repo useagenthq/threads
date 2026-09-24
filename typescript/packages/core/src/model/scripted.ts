@@ -83,6 +83,7 @@ const INFO: ModelInfo = {
   },
   accepts: ["text"],
   lookup: "none",
+  cache: "none",
 };
 
 /**

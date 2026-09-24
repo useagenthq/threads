@@ -27,10 +27,18 @@ import {
   staleEpoch,
 } from "@threads/core/adapter";
 
+import {
+  cacheInfo,
+  cachePrice,
+  type PromptCache,
+  promptCache,
+  refuseCacheControl,
+} from "./caching";
 import { toAnthropic } from "./request";
 import { decode } from "./stream";
 
 export type { JsonObject, Price } from "@threads/core/adapter";
+export type { PromptCache } from "./caching";
 
 // anthropic(): the Messages API through the official SDK, as a threads Model (spec/api.json).
 // threads owns every attempt, so SDK retries are off, and the request body is
@@ -45,6 +53,14 @@ export type AnthropicOptions = LimitOptions & {
   readonly price?: Price;
   /** Provider-executed tools (web search, web fetch), sent as recorded here. */
   readonly hostedTools?: readonly JsonObject[];
+  /**
+   * Prompt caching, pinned in line 0: the end of line 0 and the growing history are cached for
+   * this long. Defaults to "5m"; false sends no cache controls (and continues threads started
+   * before prompt caching existed).
+   */
+  readonly promptCache?: PromptCache;
+  /** Citations on every document in the request, pinned in line 0. Defaults to off. */
+  readonly citations?: boolean;
   /** Defaults to secret("ANTHROPIC_API_KEY"), resolved at setup. Never pinned or logged. */
   readonly apiKey?: string | Secret;
   readonly baseUrl?: string;
@@ -79,12 +95,21 @@ export function anthropic(
     );
   const hosted = options.hostedTools ?? [];
   checkHostedTools("anthropic", hosted, HOSTED_READ_ONLY);
+  refuseCacheControl(params, hosted);
+  const ttl = promptCache(options.promptCache, hosted);
+  const citations = options.citations === true;
+  if (citations) refuseStructuredOutput(params);
   const limits = modelLimits("anthropic", model, options);
+  const price = cachePrice(options.price, ttl);
   const info: ModelInfo = {
     model: { provider: "anthropic", name: model },
     adapter: {
       ...ADAPTER,
-      settings: hosted.length === 0 ? {} : { hosted_tools: [...hosted] },
+      settings: {
+        ...(hosted.length === 0 ? {} : { hosted_tools: [...hosted] }),
+        ...(ttl === undefined ? {} : { prompt_cache: ttl }),
+        ...(citations ? { citations: true } : {}),
+      },
     },
     params: { ...params, max_tokens: limits.max_tokens },
     limits: {
@@ -93,12 +118,13 @@ export function anthropic(
       context_window: limits.max_input_tokens,
       max_output_tokens: limits.max_output_tokens,
       input_billing_bound: "context_window",
-      ...(options.price === undefined ? {} : { price: options.price }),
+      ...(price === undefined ? {} : { price }),
     },
     accepts: ["text", "image_ref", "document_ref"],
     hosted_tools: hosted.map((t) => String(t["name"] ?? t["type"])),
     // The Messages API has no retrieval by client request id.
     lookup: "none",
+    cache: cacheInfo(ttl),
   };
   const apiKey = credential(
     "anthropic",
@@ -114,6 +140,22 @@ export function anthropic(
     send: (request, context, sendOptions) =>
       send(options, apiKey, request, context, sendOptions?.signal),
   };
+}
+
+/** The provider refuses citations with native structured output (output_config.format). */
+function refuseStructuredOutput(params: JsonObject): void {
+  const config = params["output_config"];
+  const format =
+    Object.hasOwn(params, "output_format") ||
+    (typeof config === "object" &&
+      config !== null &&
+      !Array.isArray(config) &&
+      Object.hasOwn(config, "format"));
+  if (format)
+    throw new ConfigError(
+      "invalid_config",
+      "anthropic citations can't be combined with structured output (output_format or output_config.format in params): drop one, or use agent output, which is unaffected",
+    );
 }
 
 async function* send(
@@ -148,7 +190,7 @@ async function* send(
       context,
       documents: mapped.documents,
     };
-    for await (const chunk of decode(events, ctx)) {
+    for await (const chunk of decode(events, ctx, mapped.ttl)) {
       yielded = true;
       yield chunk;
     }
