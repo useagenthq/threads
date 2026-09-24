@@ -99,7 +99,7 @@ async function pinsOf(
   const pins = new Map<string, EventDraft>();
   for (const key of new Set(rows.map((r) => r.agent))) {
     const hosted = pass.ctx.agents.get(key);
-    if (hosted !== undefined) pins.set(key, await pass.started(hosted));
+    if (hosted !== undefined) pins.set(key, (await pass.started(hosted)).event);
   }
   return pins;
 }

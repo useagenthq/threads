@@ -100,7 +100,7 @@ describe("a team lead behind the host", () => {
       throw new Error("agent() registers a host runner");
     // A pass pins the lead once and reuses the pin for every schedule of it.
     const store = sqlite(":memory:");
-    const started = await runner.started(store);
+    const started = (await runner.started()).event;
     const { log } = await openStore(store);
     const { db } = await storeConnection(store);
     for (const id of ["morning", "evening"])

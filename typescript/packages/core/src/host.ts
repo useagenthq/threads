@@ -1,6 +1,6 @@
 // @threads/core/host: what @threads/host builds on. Core never imports the host.
 
-export type { HostRunner } from "./agent/hosted";
+export type { HostRunner, NewThreadPin } from "./agent/hosted";
 export { hostRunner } from "./agent/registry";
 export {
   endedRun,

@@ -77,10 +77,13 @@ async function reserve(
     (at) => at > after,
   );
   if (due.length === 0) return;
+  // A due occurrence may open a new thread: its spec artifacts are durable before it is appended.
+  const pin = await pass.started(b.hosted);
+  await pin.put(pass.ctx.storeFor(tenant));
   reserveDue(
     db,
     log,
-    await pass.started(b.hosted),
+    pin.event,
     due.map((at) => ({
       schedule_id: id,
       occurrence_at: at,

@@ -201,11 +201,10 @@ async function branchFor(
     const branchId = BranchId.parse(uuidv7(log.now()));
     const made = log.createBranch(threadId, branchId);
     if (!made.ok) return fail("invalid_request", made.error.message);
-    return ok({
-      threadId,
-      branchId,
-      first: [await hosted.runner.started(store)],
-    });
+    const pin = await hosted.runner.started();
+    // The spec artifacts are durable before first, which names them, is appended.
+    await pin.put(store);
+    return ok({ threadId, branchId, first: [pin.event] });
   }
   const threadId = request.thread_id;
   const branchId = request.branch_id ?? mainOf(log, threadId);
@@ -218,7 +217,7 @@ async function branchFor(
     return fail("not_found", `no thread ${threadId}`);
   const read = log.read(branchId);
   if (!read.ok) return fail("branch_not_runnable", read.error.message);
-  if (!(await samePin(knownEvents(read.value), hosted, store)))
+  if (!(await samePin(knownEvents(read.value), hosted)))
     return fail(
       "invalid_request",
       `thread ${threadId} was not started with this agent's config`,

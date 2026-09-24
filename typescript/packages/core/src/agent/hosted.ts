@@ -13,12 +13,19 @@ import { leadStarted } from "./team/runtime";
 // own rows (an idempotency receipt, an inbox item) before the loop starts; and an execution
 // that takes whatever inputs the host already recorded, or none, to resume a parked branch.
 
-export type HostRunner = {
+/** A new thread's thread_started, and the spec artifacts it names. */
+export type NewThreadPin = {
+  readonly event: EventDraft;
   /**
-   * The pinned thread_started for a new thread of this agent, its deferred tools' spec artifacts
-   * already put in `store` (they must be durable before it is appended). Throws ConfigError.
+   * Puts the deferred tools' spec artifacts in `store`. Call it before appending `event`, and
+   * only then: a pin that is only compared writes nothing.
    */
-  readonly started: (store: Store) => Promise<EventDraft>;
+  readonly put: (store: Store) => Promise<void>;
+};
+
+export type HostRunner = {
+  /** The pinned thread_started for a new thread of this agent. Throws ConfigError. */
+  readonly started: () => Promise<NewThreadPin>;
   /** Runs the branch until idle or parked: `inputs` are appended in order, each once idle. */
   readonly execute: (
     plan: {
@@ -45,10 +52,12 @@ export function hosted<Deps, Output>(
 ): HostRunner {
   return {
     // A lead's first append, whoever makes it (a run, a channel, a schedule), opens its team.
-    started: async (store) => {
+    started: async () => {
       const pinned = await pinnedAfterSetup(def);
-      await putSpecs(store, pinned);
-      return leadStarted(def, pinned.started, Date.now());
+      return {
+        event: leadStarted(def, pinned.started, Date.now()),
+        put: (store) => putSpecs(store, pinned),
+      };
     },
     execute: (plan, inputs, hooks = {}) => execute(def, plan, inputs, hooks),
     approvers,

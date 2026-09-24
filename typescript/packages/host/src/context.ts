@@ -292,9 +292,18 @@ export type Attempt =
 export async function samePin(
   events: readonly KnownEvent[],
   hosted: HostedAgent,
-  store: Store,
 ): Promise<boolean> {
-  return pinMatches(events, await hosted.runner.started(store));
+  return pinMatches(events, (await hosted.runner.started()).event);
+}
+
+/** A new thread's thread_started, its spec artifacts put first: it is about to be appended. */
+export async function newPin(
+  hosted: HostedAgent,
+  store: Store,
+): Promise<EventDraft> {
+  const pin = await hosted.runner.started();
+  await pin.put(store);
+  return pin.event;
 }
 
 /**
