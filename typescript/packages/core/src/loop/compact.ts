@@ -4,13 +4,13 @@ import type { Outcome } from "../hooks/invoke";
 import type { EventId, KnownEvent } from "../log";
 import { refReader, render } from "../render";
 import type { EventDraft } from "../store";
-import { attempt } from "./attempt";
+import { type Attempted, attempt } from "./attempt";
 import { draft, HOST, type RECOVERY } from "./drafts";
 import { decision, defining, recorded, run } from "./hooks";
 import { contextPolicy, tokens } from "./policy";
 import { restoreDrafts, restoreHooks } from "./restore";
 import type { Session } from "./session";
-import { stepEvents } from "./turn";
+import { cancelRequested, stepEvents } from "./turn";
 import type { Halt } from "./types";
 
 // (clear old results) and L2 (summary compaction, then L3 restore), run on a
@@ -55,13 +55,7 @@ export async function compact(
   if (range === undefined) return failed(s, "still_over_threshold");
   const gated = await beforeCompact(s);
   if (gated !== undefined) return gated;
-  let got = await attempt(s, "compaction", 1);
-  if (got.kind === "rejected" && got.rejection.reason === "prompt_too_long") {
-    // The side request itself is too long: clear everything clearable and retry it once.
-    const fallback = clear(s, 0, "compaction_fallback");
-    if (fallback !== undefined) return { kind: "halt", halt: fallback };
-    got = await attempt(s, "compaction", 2);
-  }
+  const got = await sideRequest(s);
   switch (got.kind) {
     case "halt":
       return got;
@@ -89,6 +83,24 @@ export async function compact(
     default:
       return assertNever(got);
   }
+}
+
+/**
+ * The side request. If it is itself too long, everything clearable is cleared and it is retried
+ * once, unless a cancel landed meanwhile: nothing is sent after the barrier, so the rejection
+ * stands and the compaction fails.
+ */
+async function sideRequest(s: Session): Promise<Attempted> {
+  const got = await attempt(s, "compaction", 1);
+  if (
+    got.kind !== "rejected" ||
+    got.rejection.reason !== "prompt_too_long" ||
+    cancelRequested(s.events) !== undefined
+  )
+    return got;
+  const fallback = clear(s, 0, "compaction_fallback");
+  if (fallback !== undefined) return { kind: "halt", halt: fallback };
+  return attempt(s, "compaction", 2);
 }
 
 /** compaction_failed{summary}, naming the latest side request unless none was made for it. */

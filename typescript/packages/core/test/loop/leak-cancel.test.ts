@@ -1,13 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { scriptedModel } from "../../src";
 import { credential } from "../../src/agent/secret";
 import type { KnownEvent, Policy } from "../../src/log";
 import { type LoopConfig, resume } from "../../src/loop";
 import { CONTEXT_DEFAULTS } from "../../src/loop/policy";
-import type { Model } from "../../src/model";
-import { markTestKit } from "../../src/model/guard";
-import type { EventDraft, Writer } from "../../src/store";
+import type { Writer } from "../../src/store";
 import { ROOT, unwrap } from "../store/helpers";
+import { after, cancelAt } from "./cancel-kit";
 import { events, type Harness, harness, userInput } from "./harness";
 import { asked } from "./manual-kit";
 
@@ -15,42 +13,15 @@ import { asked } from "./manual-kit";
 // records its abandonment (and a requested compaction's failure), and the cancellation step
 // closes the turn as cancelled.
 
-const encoder = new TextEncoder();
+const say = (text: string, input: number) => ({
+  content: [{ type: "text", text }],
+  stop_reason: "end_turn",
+  usage: { input_tokens: input, output_tokens: 5 },
+});
 
-const cancel: EventDraft = {
-  type: "cancel_requested",
-  type_version: 1,
-  critical: true,
-  actor: {
-    kind: "user",
-    principal: { issuer: "api", tenant: "acme", subject: "operator" },
-  },
-  data: { scope: "turn" },
-};
-
-/** A test-kit model that asks for a cancel, then puts provider material holding `key`. */
-function leakyAfterCancel(key: string, writer: () => Writer): Model {
-  const model: Model = {
-    info: scriptedModel({ responses: [] }).info,
-    send: async function* (_request, context) {
-      unwrap(writer().append([cancel]));
-      await context.put(
-        encoder.encode(JSON.stringify({ encrypted: key })),
-        "application/json",
-      );
-      yield {
-        kind: "done",
-        stop_reason: "end_turn",
-        usage: { input_tokens: 10, output_tokens: 2 },
-      };
-    },
-  };
-  markTestKit(model);
-  return model;
-}
-
-const after = (log: readonly KnownEvent[], type: KnownEvent["type"]) =>
-  log.slice(log.findIndex((e) => e.type === type)).map((e) => e.type);
+/** One response, refused as leaked after the cancel (it is never recorded). */
+const leakyAfterCancel = (key: string, writer: () => Writer) =>
+  cancelAt([say("never recorded", 10)], 1, writer, key);
 
 describe("a cancel during a leaked response", () => {
   test("a turn request: abandoned, then the turn ends cancelled", async () => {
@@ -93,12 +64,6 @@ describe("a cancel during a leaked response", () => {
     ]);
     expect(log.at(-1)?.data).toEqual({ reason: "cancelled" });
   });
-});
-
-const say = (text: string, input: number) => ({
-  content: [{ type: "text", text }],
-  stop_reason: "end_turn",
-  usage: { input_tokens: input, output_tokens: 5 },
 });
 
 function policy(trigger: number): Policy {

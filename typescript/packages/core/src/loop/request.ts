@@ -19,7 +19,7 @@ import { retryPolicy } from "./policy";
 import { revert } from "./revert";
 import type { Session } from "./session";
 import { todoReminder } from "./todos";
-import { nextAttempt, stepEvents } from "./turn";
+import { cancelRequested, nextAttempt, stepEvents } from "./turn";
 import type { Halt } from "./types";
 
 // A turn request: one attempt and what its outcome requires (// L5). Counters come from the step's events, so a recovered run keeps them.
@@ -238,7 +238,10 @@ async function reactive(s: Session): Promise<Halt | undefined> {
     return endTurn(s, "context_exhausted");
   const done = await compact(s, "reactive");
   if (done.kind === "halt") return done.halt;
-  return done.kind === "compacted" || done.kind === "ended"
+  // With a cancel pending the loop steps again: the cancellation step closes the turn.
+  return done.kind === "compacted" ||
+    done.kind === "ended" ||
+    cancelRequested(s.events) !== undefined
     ? undefined
     : endTurn(s, "context_exhausted");
 }

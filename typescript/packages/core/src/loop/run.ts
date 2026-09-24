@@ -6,7 +6,7 @@ import { finish as record, runChild, spawnedFor } from "./agents/spawn";
 import { draft } from "./drafts";
 import { afterStep, finish } from "./lifecycle";
 import { runCalls } from "./parallel";
-import { endTurn, requestTurn } from "./request";
+import { requestTurn } from "./request";
 import { respond } from "./respond";
 import type { Session } from "./session";
 import { nextStep } from "./turn";
@@ -101,8 +101,9 @@ async function cancel(
     );
     if (stopped !== undefined) return stopped;
   }
-  return (
-    s.append(draft.cancelled({ request_event_id: request.event_id })) ??
-    endTurn(s, "cancelled")
+  // One batch: a lease lost between them can't leave the cancellation half recorded.
+  return s.append(
+    draft.cancelled({ request_event_id: request.event_id }),
+    draft.turnCompleted("cancelled"),
   );
 }
