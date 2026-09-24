@@ -288,6 +288,7 @@ export class TeamWorker {
           branchId: branch,
         },
         code,
+        tx.now,
       );
       return ok(batch.drafts);
     });

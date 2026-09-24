@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   agent,
   type Model,
+  openThread,
   type Principal,
   scriptedModel,
   sqlite,
@@ -11,8 +12,10 @@ import {
 } from "../../src";
 import { openStore } from "../../src/agent/sqlite";
 import { TeamWorker } from "../../src/agent/team/worker";
-import type { TeamId } from "../../src/log";
+import { BranchId, type TeamId } from "../../src/log";
 import { markTestKit } from "../../src/model/guard";
+import { memberRows } from "../../src/team/rows";
+import { unwrap } from "../store/helpers";
 import { assertTeamReplays } from "./kit";
 
 type Store = ReturnType<typeof sqlite>;
@@ -255,6 +258,76 @@ describe("lane 21D review regressions", () => {
     expect(
       receipts(await events(store, r.thread), "member_ended"),
     ).toHaveLength(1);
+    assertTeamReplays(await logOf(store), r.team.ref.id);
+  });
+
+  test("N5: a member whose definition changed with an effect in doubt parks on it, and ends once it is settled", async () => {
+    const store = sqlite(":memory:");
+    const operator = { issuer: "api", tenant: "local", subject: "operator" };
+    const r = await mailer("v1", [
+      start("c1", "researcher", "Mail bob."),
+      say("Started."),
+    ]).run("Go.", { store });
+    const log = await logOf(store);
+    const row = memberRows(log.driver, r.team.ref.id).find(
+      (m) => m.name === "researcher-1",
+    );
+    if (row?.branch_id == null) throw new Error("the member has a branch");
+    const member = unwrap(await openThread(store, row.thread_id));
+    const [pending] = await member.pendingApprovals();
+    if (pending === undefined) throw new Error("the member waits on approval");
+    unwrap(await member.approve(pending.challenge_id, operator));
+    // A process crashed right after the email's effect_begin was durable.
+    const crashed = unwrap(
+      log.acquire(BranchId.parse(row.branch_id), "crashed"),
+    );
+    unwrap(
+      crashed.append([
+        {
+          type: "effect_begin",
+          type_version: 1,
+          critical: true,
+          actor: { kind: "host" },
+          data: { call_id: "m1", attempt: 1 },
+        },
+      ]),
+    );
+    crashed.release();
+    // A deploy changed the researcher while the email may have been sent.
+    const again = await mailer("v2", [say("Unused.")]).run("Again.", {
+      store,
+      thread: r.thread,
+    });
+    expect(again.status).toBe("parked");
+    const after = await memberEvents(store, r.team.ref.id, "researcher-1");
+    expect(after.map((e) => e.type).slice(-2)).toEqual([
+      "effect_unknown",
+      "parked",
+    ]);
+    expect(after.some((e) => e.type === "member_ended")).toBe(false);
+    expect(after.some((e) => e.type === "tool_result")).toBe(false);
+    // A human settles it: the next run ends the member from the record, never re-sending.
+    unwrap(
+      await member.resolveParked(
+        `${row.branch_id}:m1`,
+        "assume_done",
+        operator,
+      ),
+    );
+    const third = await mailer("v2", [say("Noted."), say("Done.")]).run(
+      "Once more.",
+      { store, thread: r.thread },
+    );
+    expect(third.status).toBe("completed");
+    const settled = await memberEvents(store, r.team.ref.id, "researcher-1");
+    expect(settled.find((e) => e.type === "tool_result")?.data).toMatchObject({
+      call_id: "m1",
+      origin: "executed",
+    });
+    expect(await endedWith(store, r.team.ref.id)).toMatchObject({
+      status: "failed",
+      error: { code: "pin_mismatch" },
+    });
     assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
