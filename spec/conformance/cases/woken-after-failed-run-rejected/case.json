@@ -1,0 +1,9 @@
+{
+  "name": "woken-after-failed-run-rejected",
+  "family": "agents_teams",
+  "kind": "reduce",
+  "description": "Rule 32: the run's turn ended error while its child ran; the run has ended, so the child's late result wakes nothing.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1,7 +1,7 @@
 """Background children (F7.2): each runs beside the parent's loop and hands its end over; the
 loop records it at a step boundary, so a late result never lands inside a step. A result
-recorded while no turn is open, the thread is not cancelled and its log has not ended wakes the
-parent in the same append (spec/schema/README.md, "Background wakes"; rules 32 and 45)."""
+recorded while the wake condition holds (rule 32, `wake_bar`) wakes the parent in the same
+append (spec/schema/README.md, "Background wakes"; rules 32 and 45)."""
 
 import asyncio
 from collections.abc import Sequence
@@ -9,12 +9,19 @@ from dataclasses import dataclass, field, replace
 
 from pydantic import JsonValue
 
-from threads.log import AgentSpawnedEvent, CallId, ThreadId, UserInputEvent
+from threads.log import (
+    AgentSpawnedEvent,
+    MessageReceivedEvent,
+    ThreadId,
+    UserInputEvent,
+    WokenEvent,
+)
 from threads.loop.drafts import draft
 from threads.loop.runtime import Failed as HaltFailed
 from threads.loop.runtime import Halt, Runtime, lost
-from threads.reduce.fold import Fold, Run
+from threads.reduce.fold import Fold
 from threads.reduce.handlers import to_json
+from threads.reduce.rules_wake import wake_bar
 from threads.result import Err
 from threads.store import Draft
 from threads.store.lines import uuid7
@@ -47,25 +54,36 @@ class Background:
 
 async def settle(rt: Runtime, bg: Background) -> Halt | None:
     """Records the ended children this boundary may record, in one append. A child that could
-    not run halts this run; it is launched again on the next one."""
+    not run halts this run; it is launched again on the next one. An end leaves `bg.ended` only
+    once its append committed, so a refused append loses nothing."""
     for child, (_, end) in list(bg.ended.items()):
         if isinstance(end, HaltFailed):
             del bg.ended[child]
             return end
-    ready = _recordable(rt, bg)
+    ready = _recordable(rt.fold, bg)
     if not ready:
         return None
     drafts: list[Draft] = []
-    for spawned, (finished, late) in ready:
-        del bg.ended[spawned.data.child_thread_id]
+    for _, (finished, late) in ready:
         drafts.append(draft("agent_finished", finished))
         drafts.append(replace(draft("tool_result_late", late), event_id=uuid7(rt.clock())))
-    wake = _wake(rt, ready[0][0], [d.event_id for d in drafts if d.event_id is not None])
-    done = await rt.append(*drafts, *([] if wake is None else [wake]))
-    return lost(done.error) if isinstance(done, Err) else None
+    calls = [spawned.data.call_id for spawned, _ in ready]
+    causes = [d.event_id for d in drafts if d.event_id is not None]
+
+    def build(fold: Fold) -> Sequence[Draft]:
+        # Decided under the writer's lock, against the fold this append extends.
+        wake = _wake(fold, ready[0][0], calls, causes)
+        return drafts if wake is None else [*drafts, wake]
+
+    done = await rt.append_built(build)
+    if isinstance(done, Err):
+        return lost(done.error)
+    for spawned, _ in ready:
+        del bg.ended[spawned.data.child_thread_id]
+    return None
 
 
-def _recordable(rt: Runtime, bg: Background) -> list[tuple[AgentSpawnedEvent, Ended]]:
+def _recordable(fold: Fold, bg: Background) -> list[tuple[AgentSpawnedEvent, Ended]]:
     """The writer rule: results of one run at a time, in spawn order. A result of another run
     than the open turn's (or, with no turn open, than the first run to report) waits in
     `bg.ended` until no turn is open."""
@@ -73,39 +91,33 @@ def _recordable(rt: Runtime, bg: Background) -> list[tuple[AgentSpawnedEvent, En
         ((spawned, end) for spawned, end in bg.ended.values() if not isinstance(end, HaltFailed)),
         key=lambda item: item[0].seq,
     )
-    fold = rt.fold
     if not done:
         return []
     if not fold.in_turn and fold.cancelled:
         return done
-    runs = fold.wake.spawn_runs
-
-    def run_of(spawned: AgentSpawnedEvent) -> Run | None:
-        return runs.get(CallId(spawned.data.call_id))
-
-    target = fold.wake.run if fold.in_turn else run_of(done[0][0])
-    return [(spawned, end) for spawned, end in done if run_of(spawned) == target]
+    spawns = fold.team.spawns
+    target = fold.team.turn if fold.in_turn else spawns.get(done[0][0].data.call_id)
+    return [(s, end) for s, end in done if spawns.get(s.data.call_id) == target]
 
 
-def may_wake(fold: Fold) -> bool:
-    """Whether a late result recorded now also wakes the thread: no turn is open, the thread is
-    not cancelled and its log has not ended (no member_ended)."""
-    ended = any(e.type == "member_ended" for e in fold.events)
-    return not fold.in_turn and not fold.cancelled and not ended
-
-
-def _wake(rt: Runtime, spawned: AgentSpawnedEvent, causes: Sequence[str]) -> Draft | None:
-    """The woken for late results recorded while the thread may wake, acting for the principal
-    of the run that spawned the children."""
-    fold = rt.fold
-    if not may_wake(fold) or not causes:
+def _wake(
+    fold: Fold, spawned: AgentSpawnedEvent, calls: Sequence[str], causes: Sequence[str]
+) -> Draft | None:
+    """The woken for these late results, acting for the principal of the run that spawned the
+    children: its spawning turn's opener (a user_input, turn-opening mail or woken; mail joins a
+    turn only when it shares the turn's run, rule 34). None when the thread must not wake."""
+    if not causes or wake_bar(fold, calls) is not None:
         return None
-    run = fold.wake.spawn_runs.get(CallId(spawned.data.call_id))
+    at = fold.events.index(spawned) if spawned in fold.events else len(fold.events)
     opener = next(
-        (e for e in fold.events if run is not None and e.event_id == run.root),
+        (
+            e
+            for e in reversed(fold.events[:at])
+            if isinstance(e, UserInputEvent | WokenEvent | MessageReceivedEvent)
+        ),
         None,
     )
-    if not isinstance(opener, UserInputEvent):
+    if opener is None:
         return None
     actor: dict[str, JsonValue] = {"kind": "host", "principal": to_json(opener.actor.principal)}
     return Draft("woken", {"causes": list(causes)}, actor)

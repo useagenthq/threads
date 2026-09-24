@@ -32,8 +32,12 @@ export type TeamFold = {
   lastEnd: EventOf<"turn_completed">["data"]["reason"] | undefined;
   /** The run of the open turn (rule 34). */
   turn: TurnRun | undefined;
-  /** The run that spawned each background spawn_agent call: a woken turn's run (rule 34). */
+  /** The run that spawned each background spawn_agent call: a woken turn's run (rules 32, 34). */
   readonly spawns: Map<string, TurnRun>;
+  /** Runs (by runKey) with a turn that ended but end_turn: never woken again (rule 32). */
+  readonly endedRuns: Set<string>;
+  /** Background calls a thread or tree cancel request followed: never woken (rule 32). */
+  readonly barred: Set<string>;
   /** Mail received, refused or taken as a task (rule 31). */
   readonly mailDone: Set<string>;
   /** Asks this log received and has not replied to (rule 35). */
@@ -66,6 +70,8 @@ export function emptyTeam(): TeamFold {
     lastEnd: undefined,
     turn: undefined,
     spawns: new Map(),
+    endedRuns: new Set(),
+    barred: new Set(),
     mailDone: new Set(),
     asksIn: new Set(),
     asksOut: new Set(),
@@ -124,6 +130,20 @@ export function mailRun(env: MailEnvelope): TurnRun {
   };
 }
 
+/** One run: the same principal and root request (a task turn's, none, only matches none). */
+export function sameRun(a: TurnRun, b: TurnRun): boolean {
+  return (
+    a.principal === b.principal &&
+    a.root?.thread === b.root?.thread &&
+    a.root?.event === b.root?.event
+  );
+}
+
+/** A run as a set key. */
+export function runKey(run: TurnRun): string {
+  return JSON.stringify([run.principal, run.root?.thread, run.root?.event]);
+}
+
 /** Whether mail of `run` shares the open turn's run (rule 34). */
 export function joinsTurn(turn: TurnRun | undefined, run: TurnRun): boolean {
   if (turn === undefined || turn.principal !== run.principal) return false;
@@ -178,9 +198,19 @@ function applyTurn(fold: Fold, e: KnownEvent): void {
     const call =
       first === undefined ? undefined : fold.wake.trailingLate.get(first);
     team.turn = call === undefined ? undefined : team.spawns.get(call);
-  } else if (e.type === "turn_completed") {
+  } else applyRunEnds(team, e);
+}
+
+/** Background spawns, and what bars a run's wake (rule 32): a turn that ended otherwise, or a
+ * thread or tree cancel request after the spawn. */
+function applyRunEnds(team: TeamFold, e: KnownEvent): void {
+  if (e.type === "turn_completed") {
+    if (e.data.reason !== "end_turn" && team.turn !== undefined)
+      team.endedRuns.add(runKey(team.turn));
     team.turn = undefined;
     team.lastEnd = e.data.reason;
+  } else if (e.type === "cancel_requested" && e.data.scope !== "turn") {
+    for (const call of team.spawns.keys()) team.barred.add(call);
   } else if (
     e.type === "agent_spawned" &&
     e.data.mode === "background" &&
@@ -211,10 +241,6 @@ function received(fold: Fold, env: MailEnvelope): void {
     const run = mailRun(env);
     fold.turnOpen = true;
     team.turn = run;
-    fold.wake.run = {
-      principal: principalKey(env.provenance.principal),
-      root: env.provenance.root_request.event_id,
-    };
   }
   team.mailDone.add(env.mail_id);
   if (env.kind === "ask" && env.ask_id !== undefined)

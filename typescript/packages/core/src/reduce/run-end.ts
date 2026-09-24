@@ -25,6 +25,16 @@ export type RunEnd = {
   readonly at: number | undefined;
 };
 
+/** A run that ended some other way than completed: it is never woken again. */
+export function endedOtherwise(status: RunStatus): boolean {
+  return (
+    status === "failed" ||
+    status === "cancelled" ||
+    status === "budget_exhausted" ||
+    status === "handed_off"
+  );
+}
+
 /** A turn_completed reason other than end_turn: the status it ends the run with. */
 function endedAs(reason: string): RunStatus {
   if (reason === "cancelled" || reason === "budget_exhausted") return reason;
@@ -61,17 +71,24 @@ class Run {
           : this.#lateRuns.get(e.data.causes[0] ?? "");
     }
     this.#helpers(e);
-    if (e.type === "turn_completed") this.#turnEnd(events, i, e.data.reason);
-    else if (e.type === "parked") this.#parks.push(e.data.address);
-    else if (e.type === "resumed") {
-      const at = this.#parks.findIndex((p) => sameAddress(p, e.data.address));
-      if (at !== -1) this.#parks.splice(at, 1);
-    }
+    this.#control(events, i, e);
     // A late result and the woken naming it are one append: the end is never between them.
     const midAppend =
       e.type === "agent_finished" || e.type === "tool_result_late";
     if (!midAppend && this.decided === undefined && this.ended())
       this.decided = this.#completed(i);
+  }
+
+  /** Turn ends, parks and idle cancels. */
+  #control(events: readonly KnownEvent[], i: number, e: KnownEvent): void {
+    if (e.type === "cancel_requested") this.#idleCancel(e.data.scope, i);
+    else if (e.type === "turn_completed")
+      this.#turnEnd(events, i, e.data.reason);
+    else if (e.type === "parked") this.#parks.push(e.data.address);
+    else if (e.type === "resumed") {
+      const at = this.#parks.findIndex((p) => sameAddress(p, e.data.address));
+      if (at !== -1) this.#parks.splice(at, 1);
+    }
   }
 
   #helpers(e: KnownEvent): void {
@@ -86,6 +103,13 @@ class Run {
       const run = this.#spawned.get(e.data.call_id);
       if (run !== undefined) this.#lateRuns.set(e.event_id, run);
     }
+  }
+
+  /** A thread or tree cancel while no turn is open ends a run still waiting on its children. */
+  #idleCancel(scope: string, i: number): void {
+    const waiting = this.#answered !== undefined && !this.#open;
+    if (!waiting || scope === "turn" || this.decided !== undefined) return;
+    this.decided = { status: "cancelled", turn: [], at: i };
   }
 
   #turnEnd(events: readonly KnownEvent[], i: number, reason: string): void {

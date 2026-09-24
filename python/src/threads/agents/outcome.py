@@ -50,7 +50,11 @@ def _run_result(events: Sequence[Event], thread: Thread) -> RunResult[str]:
     """The ended run of the latest input: completed with the answer after its last wake, or
     the outcome of its turn that ended otherwise."""
     request = next(e for e in reversed(events) if isinstance(e, UserInputEvent))
-    turn = run_end(events, request.event_id).turn
+    end = run_end(events, request.event_id)
+    if end.status == "cancelled" and not end.turn:
+        # A cancel while the run waited on its children ends it outside any turn.
+        return Cancelled(thread)
+    turn = end.turn
     done = turn[-1] if turn else None
     if not isinstance(done, TurnCompletedEvent):
         raise AssertionError("an idle run ended its turn")

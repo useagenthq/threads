@@ -60,6 +60,7 @@ from . import (
     thread_methods,
     tool_groups,
     tool_inputs,
+    wake_bars,
     wakes,
 )
 from .common import CASES, STAGED, sha
@@ -99,6 +100,7 @@ FAMILIES = (
     skills,
     thread_methods,
     styles,
+    wake_bars,
     wakes,
     team_rules,
     team_bindings,
@@ -138,7 +140,6 @@ def _build(out: pathlib.Path) -> None:
 # Staged families, by the phase whose build moves them into FAMILIES: the Teams Phase 1 read side
 # (lanes 21A and 21B). Phase 0 (the legacy wake) moved legacy_run and legacy_wake_rows.
 STAGED_PHASE_1 = (
-    team_bindings.build_staged,
     team_cancel_rule.build,
     run_cases.build,
 )

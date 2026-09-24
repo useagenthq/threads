@@ -97,8 +97,10 @@ A background subagent's answer can arrive after the parent has already replied. 
 - **`run()` waits for them.** A run that starts background subagents returns only once each of them has reported and the parent has reacted. Its `output` is the parent's last answer, given after the last result came in. Earlier answers stay in the thread's timeline.
 - **It costs more turns.** Every wake is a model turn, counted against the parent's budgets and turn limit.
 - **The status can change after an answer.** If a wake turn fails or runs out of budget, the run returns `failed` or `budget_exhausted`, even though an earlier turn had answered.
+- **A run that ends another way returns at once.** If a turn fails, runs out of budget, is cancelled or hands off, `run()` returns right away and no wake turn runs. Subagents still running are finished and recorded later, by the next run of the thread or by a host, and never wake it.
 - **A result that arrives mid-turn** is just part of that turn: the parent sees it before its next model call, and no extra turn runs.
-- **After a cancel** a subagent's result is recorded, but the parent doesn't wake.
+- **Cancelling stops the waiting too.** Cancelling the thread while `run()` waits for its subagents ends the run `cancelled`: the subagents get the cancel as well, their results are recorded, and the parent doesn't wake.
+- **After a handoff** the parent never wakes. Its run returns `handed_off`, and a subagent it left running only records its result.
 - **Each wake belongs to the run that started the subagent.** Results from two different runs never share a wake turn, and a wake acts for the person whose run started the subagent.
 - **Under a host**, if the process dies while a background subagent runs, the next host start finishes that subagent and wakes the parent. A channel conversation then gets the wake turn's answer as a further reply.
 

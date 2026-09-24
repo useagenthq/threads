@@ -46,20 +46,8 @@ class Task:
 type PrincipalKey = tuple[str, str, str]
 
 
-@dataclass(frozen=True, slots=True)
-class Run:
-    """The principal and root request of the turn opener that started a run."""
-
-    principal: PrincipalKey
-    root: EventId
-
-
 @dataclass(slots=True)
 class Wake:
-    run: Run | None = None
-    """The run of the open (or last) turn."""
-    spawn_runs: dict[CallId, Run] = field(default_factory=dict[CallId, Run])
-    """The run that spawned each background spawn_agent call."""
     trailing: dict[EventId, CallId] = field(default_factory=dict[EventId, CallId])
     """tool_result_late ids (to call ids) since the last event that was neither a late result
     nor an agent_finished: the late results of one append."""
@@ -92,7 +80,12 @@ class Team:
     turn: TurnRun | None = None
     """The run of the open turn (rule 34)."""
     spawns: dict[str, TurnRun] = field(default_factory=dict[str, TurnRun])
-    """The run that spawned each background spawn_agent call: a woken turn's run (rule 34)."""
+    """The run that spawned each background spawn_agent call: a woken turn's run (rules 32,
+    34)."""
+    ended_runs: set[TurnRun] = field(default_factory=set[TurnRun])
+    """Runs with a turn that ended but end_turn: never woken again (rule 32)."""
+    barred: set[str] = field(default_factory=set[str])
+    """Background calls a thread or tree cancel request followed: never woken (rule 32)."""
     mail_done: set[str] = field(default_factory=set[str])
     """Mail received, refused or taken as a task (rule 31)."""
     asks_in: set[str] = field(default_factory=set[str])

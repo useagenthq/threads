@@ -1,4 +1,4 @@
-import type { Run } from "../../fold/wake";
+import { sameRun, type TurnRun } from "../../fold/team";
 import type { EventDraft } from "../../store";
 import type { Session } from "../session";
 import type { ChildEnd, Halt } from "../types";
@@ -16,8 +16,8 @@ type Ended = { readonly spawned: Spawned; readonly end: ChildEnd };
 type Done = { readonly spawned: Spawned; readonly end: ChildDone };
 type ChildDone = Exclude<ChildEnd, { status: "parked" }>;
 
-const sameRun = (a: Run | undefined, b: Run | undefined): boolean =>
-  a?.principal === b?.principal && a?.root === b?.root;
+const same = (a: TurnRun | undefined, b: TurnRun | undefined): boolean =>
+  a === undefined || b === undefined ? a === b : sameRun(a, b);
 
 /**
  * Records every child that ended since the last step and may be recorded now: a park, or
@@ -60,16 +60,16 @@ function recordable(s: Session): readonly Ended[] {
     return [{ spawned, end }];
   });
   const inOrder = ended.toSorted((a, b) => a.spawned.seq - b.spawned.seq);
-  const { turnOpen, cancelled, wake } = s.fold;
-  const runOf = (c: Ended): Run | undefined =>
-    wake.spawnRuns.get(c.spawned.data.call_id);
+  const { turnOpen, cancelled, team } = s.fold;
+  const runOf = (c: Ended): TurnRun | undefined =>
+    team.spawns.get(c.spawned.data.call_id);
   const first = inOrder.find((c) => c.end.status !== "parked");
-  const target = turnOpen ? wake.run : first && runOf(first);
+  const target = turnOpen ? team.turn : first && runOf(first);
   return inOrder.filter(
     (c) =>
       c.end.status === "parked" ||
       (!turnOpen && cancelled) ||
-      sameRun(runOf(c), target),
+      same(runOf(c), target),
   );
 }
 
@@ -84,8 +84,11 @@ function record(s: Session, ready: readonly Done[]): Halt | undefined {
       : [],
   );
   const [first] = ready;
+  const calls = ready.map((r) => r.spawned.data.call_id);
   const wake =
-    first === undefined ? undefined : wakeDraft(s, first.spawned, causes);
+    first === undefined
+      ? undefined
+      : wakeDraft(s, first.spawned, calls, causes);
   return s.append(...drafts, ...(wake === undefined ? [] : [wake]));
 }
 

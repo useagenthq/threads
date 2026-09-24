@@ -3,6 +3,7 @@ the team tools each advance their call on the log; background children run besid
 their ends are recorded at step boundaries (waking the idle lead), and the run waits for them
 before it gives its lease back."""
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Final
 
 from threads.agents import stops
@@ -12,13 +13,14 @@ from threads.agents.results import Parked
 from threads.agents.scope import Scope
 from threads.agents.spawn import busy, once, spawn, start_background
 from threads.agents.team import deliver, team_tool
-from threads.log import AgentSpawnedEvent, ParkAddress
+from threads.log import AgentSpawnedEvent, Event, ParkAddress, UserInputEvent
 from threads.loop import runtime
 from threads.loop.drafts import draft
 from threads.loop.drive import drive, parked
 from threads.loop.history import CallState, open_cancel
 from threads.loop.runtime import Halt, Idle, Runtime, lost
 from threads.reduce.handlers import to_json
+from threads.reduce.run_end import ended_otherwise, run_end
 from threads.result import Err
 from threads.tools import TEAM
 
@@ -101,11 +103,13 @@ class Agents[D]:
     async def finish(self, rt: Runtime, halt: Halt) -> Halt:
         """The run waits for its background children under this lease (spec/schema/README.md,
         "Run completion"): each end is recorded, and one recorded while no turn is open wakes
-        the lead for another turn. A parked run stops once nothing more is running; an end held
-        for another run waits for the next run. One that parked after the turn ended parks the
-        run too."""
+        the lead for another turn. A run whose end is decided otherwise (failed,
+        budget_exhausted, cancelled, handed_off) returns at once: its children still running are
+        stopped here and a later run or a host records them. A parked run stops once nothing
+        more is running; an end held for another run waits for the next run. One that parked
+        after the turn ended parks the run too."""
         bg = self._bg
-        while isinstance(halt, Idle | runtime.Parked):
+        while isinstance(halt, Idle | runtime.Parked) and not decided(rt.events):
             self._restart(rt)
             ends = isinstance(halt, Idle) and bool(bg.ended)
             if not ends and not bg.running:
@@ -113,6 +117,14 @@ class Agents[D]:
             if not ends:
                 await bg.next_end()
             halt = await drive(rt)
+        for task in bg.running.values():
+            task.cancel()
         if isinstance(halt, Idle) and rt.fold.parked:
             return parked(rt.events, rt.fold.parked)
         return halt
+
+
+def decided(events: Sequence[Event]) -> bool:
+    """The latest request's run ended some other way than completed: run() returns at once."""
+    request = next((e for e in reversed(events) if isinstance(e, UserInputEvent)), None)
+    return request is not None and ended_otherwise(run_end(events, request.event_id).status)

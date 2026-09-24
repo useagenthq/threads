@@ -118,7 +118,9 @@ def _request(c: Check, e: Obj, d: Obj) -> None:
     c.request_events.add(text(e["event_id"]))
 
 
-def _end_turn(c: Check, _e: Obj, _d: Obj) -> None:
+def _end_turn(c: Check, _e: Obj, d: Obj) -> None:
+    if d["reason"] != "end_turn" and c.turn is not None:
+        c.ended_runs.add(c.turn)
     c.turn = None
 
 
@@ -130,18 +132,22 @@ def _cancel(c: Check, _e: Obj, d: Obj) -> None:
     """A tree cancel stops a member for good: its end follows. A lead's cancel ends only that
     run's turn; a later run may still give it input."""
     c.stopped = c.stopped or (c.member and d["scope"] == "tree")
+    # Rule 32: no background child spawned before a thread or tree cancel wakes its parent.
+    if d["scope"] in ("thread", "tree"):
+        c.barred.update(c.spawn_runs)
 
 
 FOLDS: dict[str, Callable[[Check, Obj, Obj], None]] = {
     "user_input": _input,
     "woken": _woken,
     "turn_completed": _end_turn,
+    "cancel_requested": _cancel,
+    "handoff": lambda c, _e, _d: setattr(c, "handed_off", True),
     "message_received": lambda c, e, d: _received(c, e, obj(d["envelope"])),
     "mail_refused": _set("mail_done", "mail_id"),
     "message_sent": _sent,
     "ask_closed": lambda c, _e, d: c.asks_out.discard(text(d["ask_id"])),
     "member_ended": _member_ended,
-    "cancel_requested": _cancel,
     "operator_request": _request,
     "tool_call": _set("pending", "call_id"),
     "tool_result": lambda c, _e, d: c.pending.discard(text(d["call_id"])),

@@ -1,5 +1,6 @@
 import { ConfigError } from "../agent/errors";
 import { isTestKit } from "../model/guard";
+import { endedOtherwise, runEnd } from "../reduce/run-end";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
 import { resumeBackground } from "./agents/background";
 import { unparkChildren } from "./agents/park";
@@ -90,18 +91,33 @@ async function session(s: Session, input?: EventDraft): Promise<LoopEnd> {
 /**
  * A run waits for its background children while this writer holds the lease: each end is
  * recorded, and one recorded while no turn is open wakes this thread for another turn
- * (spec/schema/README.md, "Background wakes" and "Run completion"). A parked branch stops
- * once nothing more is running; an end held for another run stays for the next run.
+ * (spec/schema/README.md, "Background wakes" and "Run completion"). A run whose end is decided
+ * otherwise (failed, budget_exhausted, cancelled, handed_off) returns at once. A parked branch
+ * stops once nothing more is running; an end held for another run stays for the next run.
  */
 async function waitForChildren(s: Session, first: LoopEnd): Promise<LoopEnd> {
   let end = first;
   while (end.kind !== "halted") {
+    if (decided(s)) {
+      // Children still running finish on their own; a later run or a host records them.
+      void Promise.allSettled(s.background.values());
+      return end;
+    }
     const idleWithEnds = end.kind === "idle" && s.finished.size > 0;
     if (!idleWithEnds && s.background.size === 0) return end;
     if (!idleWithEnds) await Promise.race(s.background.values());
     end = await runLoop(s);
   }
   return end;
+}
+
+/** The latest request's run ended some other way than completed: run() returns at once. */
+function decided(s: Session): boolean {
+  const request = s.events.findLast((e) => e.type === "user_input");
+  return (
+    request !== undefined &&
+    endedOtherwise(runEnd(s.events, request.event_id).status)
+  );
 }
 
 async function turns(s: Session, input?: EventDraft): Promise<LoopEnd> {

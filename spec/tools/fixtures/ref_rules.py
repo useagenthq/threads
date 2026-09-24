@@ -56,6 +56,9 @@ class Check:
         self.pending: set[str] = set()
         self.spawn_runs: dict[str, Run] = {}
         self.trailing: dict[str, str] = {}
+        self.handed_off = False
+        self.barred: set[str] = set()  # background calls a thread or tree cancel followed
+        self.ended_runs: set[Run] = set()  # runs with a turn that ended but end_turn
         self.ended = self.idle_ok = self.inputs = False
 
     # ---------- one event: the first broken rule, then the fold step ----------
@@ -223,9 +226,15 @@ class Check:
         if set(tail) != set(causes) or None in runs or len(set(runs)) != 1:
             return "32: woken causes are not one run's children of this append"
         run = runs[0]
+        if self.handed_off or run in self.ended_runs or self._barred(causes):
+            return "32: woken after a handoff, for a run that ended otherwise, or after a cancel"
         if run is None or principal(obj(e["actor"])["principal"]) != run[0]:
             return "45: woken principal"
         return None
+
+    def _barred(self, causes: list[str]) -> bool:
+        """A thread or tree cancel request followed a cause's spawn."""
+        return any(self.trailing.get(c) in self.barred for c in causes)
 
     def _fold(self, e: Obj, d: Obj, t: str) -> None:
         advance(self, e, d, t)

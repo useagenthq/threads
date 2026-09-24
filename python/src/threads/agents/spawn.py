@@ -178,7 +178,6 @@ def start_background[D](
 
     async def body() -> None:
         ended = await _outcome(scope, rt, spawned, child, prompt.prompt)
-        del bg.running[child_id]
         if isinstance(ended, Parked):
             await stops.park(rt, spawned, ended)
         elif isinstance(ended, HaltFailed):
@@ -189,6 +188,8 @@ def start_background[D](
             fields = {k: v for k, v in late.data.items() if k != "origin"}
             fields["is_error"] = data["status"] != "completed"
             bg.ended[child_id] = (spawned, (data, fields))
+        # Only now: the lead never sees a child neither running nor ended (nor its park).
+        del bg.running[child_id]
 
     bg.running[child_id] = asyncio.create_task(body())
 

@@ -4,90 +4,38 @@ the same append, the woken turn belongs to the run that spawned the child, run()
 answer after the last wake, and results of two runs are never recorded under one woken."""
 
 import asyncio
-from collections.abc import AsyncIterator, Mapping, Sequence
 
 import pytest
-from corpus import CASES
+from agents.wake_kit import (
+    ALICE,
+    BOB,
+    USAGE,
+    child,
+    events_of,
+    lates,
+    spawns,
+    streamed,
+    text,
+    wakes,
+)
 from pydantic import BaseModel, JsonValue
 
 from threads import (
-    Agent,
     Cancelled,
     Completed,
     EventItem,
-    ModelContext,
-    ModelRequest,
     RunContext,
-    RunResult,
-    Store,
     Thread,
     agent,
     scripted_model,
     sqlite,
     tool,
 )
-from threads.agents.background import Background, may_wake
-from threads.log import (
-    Event,
-    Head,
-    Header,
-    Principal,
-    ToolResultEvent,
-    ToolResultLateEvent,
-    TurnCompletedEvent,
-    UnknownEvent,
-    WokenEvent,
-)
-from threads.log.parse import parse_log_line
-from threads.loop.model import ModelChunk
-from threads.loop.scripted import ScriptedModel, ScriptExhaustedError
-from threads.reduce.fold import Fold
+from threads.agents.background import Background
+from threads.log import ToolResultEvent, ToolResultLateEvent
+from threads.loop.scripted import ScriptExhaustedError
 from threads.result import Ok
 from threads.thread.handle import open_thread
-
-USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
-ALICE = Principal(issuer="api", tenant="local", subject="alice")
-BOB = Principal(issuer="api", tenant="local", subject="bob")
-
-
-def text(reply: str) -> JsonValue:
-    return {"content": [{"type": "text", "text": reply}], "stop_reason": "end_turn", "usage": USAGE}
-
-
-def spawns(*names: str, first: int = 1) -> JsonValue:
-    parts: list[JsonValue] = [
-        {
-            "type": "tool_use",
-            "call_id": f"c{i}",
-            "name": "spawn_agent",
-            "input": {"agent": name, "prompt": "Scan.", "background": True},
-        }
-        for i, name in enumerate(names, first)
-    ]
-    return {"content": parts, "stop_reason": "tool_use", "usage": USAGE}
-
-
-class Gated(ScriptedModel):
-    """A scripted model whose every answer waits for `gate`."""
-
-    def __init__(self, script: Mapping[str, JsonValue], gate: asyncio.Event) -> None:
-        super().__init__(scripted_model(script)._entries, {})
-        self._gate = gate
-
-    async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
-        await self._gate.wait()
-        async for chunk in super().send(request, context):
-            yield chunk
-
-
-def child(name: str, reply: str, gate: asyncio.Event) -> Agent[None, str]:
-    return agent(name=name, model=Gated({"responses": [text(reply)]}, gate))
-
-
-async def events_of(thread: Thread) -> list[Event]:
-    timeline = await thread.timeline()
-    assert isinstance(timeline, Ok)
-    return [e.event for e in timeline.value.entries]
 
 
 @pytest.fixture
@@ -101,34 +49,6 @@ def one_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
             task.result()
 
     monkeypatch.setattr(Background, "next_end", every_end)
-
-
-def lates(events: Sequence[Event]) -> list[str]:
-    return [e.event_id for e in events if isinstance(e, ToolResultLateEvent)]
-
-
-def wakes(events: Sequence[Event]) -> list[WokenEvent]:
-    return [e for e in events if isinstance(e, WokenEvent)]
-
-
-async def streamed(
-    lead: Agent[None, str],
-    text_in: str,
-    gate: asyncio.Event,
-    where: Store | Thread,
-    principal: Principal = ALICE,
-) -> RunResult[str]:
-    """Runs `lead` on a new thread of a store, or on a thread, opening `gate` once its first
-    turn completes."""
-    stream = (
-        lead.stream(text_in, store=where.store, principal=principal, thread=where, deps=None)
-        if isinstance(where, Thread)
-        else lead.stream(text_in, store=where, principal=principal, deps=None)
-    )
-    async for item in stream:
-        if isinstance(item, EventItem) and isinstance(item.event, TurnCompletedEvent):
-            gate.set()
-    return await stream.result
 
 
 def test_the_late_result_and_its_woken_are_one_block_and_run_returns_the_wake_answer() -> None:
@@ -235,7 +155,7 @@ class Empty(BaseModel):
     pass
 
 
-def test_a_late_result_after_the_lead_was_cancelled_is_recorded_with_no_woken() -> None:
+def test_a_run_cancelled_mid_turn_returns_cancelled_and_is_never_woken() -> None:
     async def main() -> None:
         store, gate = sqlite(":memory:"), asyncio.Event()
 
@@ -267,24 +187,6 @@ def test_a_late_result_after_the_lead_was_cancelled_is_recorded_with_no_woken() 
         result = await streamed(lead, "Scan, then stop.", gate, store)
         assert isinstance(result, Cancelled)
         events = await events_of(result.thread)
-        assert len(lates(events)) == 1
         assert wakes(events) == []
 
     asyncio.run(main())
-
-
-def test_a_log_that_has_ended_never_wakes() -> None:
-    staged = CASES.parent / "staged" / "member-ended-then-input-rejected" / "log.jsonl"
-    ended: list[Event] = []
-    for line in staged.read_text().splitlines():
-        parsed = parse_log_line(line)
-        if isinstance(parsed, Ok) and getattr(parsed.value, "type", None) == "member_ended":
-            assert not isinstance(parsed.value, Header | Head | UnknownEvent)
-            ended.append(parsed.value)
-    assert len(ended) == 1
-    fold = Fold(now=0)
-    assert may_wake(fold)
-    fold.events.extend(ended)
-    assert not may_wake(fold)
-    for barred in (Fold(now=0, in_turn=True), Fold(now=0, cancelled=True)):
-        assert not may_wake(barred)

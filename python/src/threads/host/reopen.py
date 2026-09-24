@@ -56,6 +56,9 @@ class Reopening:
         self._runner = runner
         self._open: dict[OpenRun, RunTask] = {}
         self._streaks: dict[OpenRun, _Streak] = {}
+        self._given_up: dict[OpenRun, int] = {}
+        """Rows given up on, with the head seq they failed at: a pending wake is re-listed every
+        pass, and is run again only once its log moves."""
 
     async def first(self, rows: Sequence[OpenRun]) -> list[RunTask]:
         """The start's pass: each open, unparked run resumed. Returns the runs it started."""
@@ -91,6 +94,9 @@ class Reopening:
         try:
             sq = await open_store(self._runner.store(LOCAL_TENANT))
             for row in await sq.tables.wake_branches():
+                if row in self._given_up and self._given_up[row] == await self._head(row):
+                    continue
+                self._given_up.pop(row, None)
                 if row not in self._open:
                     run = await self._reopen(row)
                     if run is not None:
@@ -109,6 +115,7 @@ class Reopening:
             if fresh:
                 self._fail(row, error, run)
         elif _gave_up(row, run):
+            self._given_up[row] = await self._head(row)
             return None
         elif fresh:
             # A run since the streak began ended without a store error: the streak is over.
@@ -147,6 +154,11 @@ class Reopening:
         if (not fold.in_turn and not waking) or fold.parked:
             return None
         return await self._runner.resume(store, thread, branch)
+
+    async def _head(self, row: OpenRun) -> int:
+        """The row's branch head seq, or -1 when it can't be read."""
+        read = await (await open_store(self._runner.store(row[0]))).read(row[2], 0)
+        return read.value.fold.seq if isinstance(read, Ok) else -1
 
     def _fail(self, row: OpenRun, error: StoreError, counted: RunTask) -> None:
         """One more store error in the row's streak: the next look waits twice as long."""

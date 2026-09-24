@@ -1,15 +1,15 @@
 import type { EventOf, Fold } from "../fold/state";
-import type { Run } from "../fold/wake";
+import { spawnRuns, wakeBar } from "../fold/wake";
 import { principalKey } from "../log";
 import { invalid, type Violation } from "./violation";
 
 // Rules 32 and 45 for woken (spec/schema/README.md, "Semantic rules"): a wake opens a turn for
-// background children's late results recorded in the same append, all of one run, and it acts
-// as that run's principal.
+// background children's late results recorded in the same append, all of one run that may still
+// be woken (fold/wake.ts wakeBar), and it acts as that run's principal.
 
-/** The run every cause's child was spawned by, or why there is none. */
-function causesRun(fold: Fold, causes: readonly string[]): Run | string {
-  const { trailingLate, spawnRuns } = fold.wake;
+/** The background calls of the causes, or why they aren't this append's late-result tail. */
+function causeCalls(fold: Fold, causes: readonly string[]): string[] | string {
+  const { trailingLate } = fold.wake;
   if (new Set(causes).size !== causes.length)
     return "woken names a cause twice";
   // The causes are the tail of the late-result block: a late result before the first cause
@@ -18,25 +18,17 @@ function causesRun(fold: Fold, causes: readonly string[]): Run | string {
   const tail = block.slice(Math.min(...causes.map((c) => block.indexOf(c))));
   if (causes.some((c) => !trailingLate.has(c)) || tail.length !== causes.length)
     return "woken must name every late result of its own append, and only those";
-  const runs = causes.map((cause) => {
-    const call = trailingLate.get(cause);
-    return call === undefined ? undefined : spawnRuns.get(call);
-  });
-  const [first] = runs;
-  if (first === undefined || runs.some((r) => r === undefined))
-    return "a woken cause is not the late result of a background child in this append";
-  const one = runs.every(
-    (r) => r?.principal === first.principal && r.root === first.root,
-  );
-  return one ? first : "woken names children of more than one run";
+  return causes.map((c) => trailingLate.get(c) ?? "");
 }
 
 export function checkWoken(fold: Fold, e: EventOf<"woken">): Violation {
   if (fold.turnOpen) return invalid("woken while a turn is open");
-  if (fold.cancelled) return invalid("woken after the thread was cancelled");
-  const run = causesRun(fold, e.data.causes);
-  if (typeof run === "string") return invalid(run);
-  return principalKey(e.actor.principal) === run.principal
+  const calls = causeCalls(fold, e.data.causes);
+  if (typeof calls === "string") return invalid(calls);
+  const barred = wakeBar(fold, calls);
+  if (barred !== undefined) return invalid(barred);
+  const [run] = spawnRuns(fold, calls);
+  return run?.principal === principalKey(e.actor.principal)
     ? undefined
     : invalid(
         "woken acts for another principal than the run that spawned its children",

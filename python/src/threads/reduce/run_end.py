@@ -13,6 +13,7 @@ from pydantic import JsonValue
 from threads.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
+    CancelRequestedEvent,
     Event,
     EventId,
     ModelResponseEvent,
@@ -40,6 +41,11 @@ class RunEnd:
     otherwise. Empty while running or parked."""
     at: int | None = None
     """Where in the events the run ended; None while running or parked."""
+
+
+def ended_otherwise(status: RunStatus) -> bool:
+    """A run that ended some other way than completed: it is never woken again."""
+    return status in ("failed", "cancelled", "budget_exhausted", "handed_off")
 
 
 def _ended_as(reason: str) -> RunStatus:
@@ -76,7 +82,9 @@ class _Run:
                 else self.late_runs.get(event.data.causes[0])
             )
         self._helpers(event)
-        if isinstance(event, TurnCompletedEvent):
+        if isinstance(event, CancelRequestedEvent):
+            self._idle_cancel(event.data.scope, i)
+        elif isinstance(event, TurnCompletedEvent):
             self._turn_end(events, i, event.data.reason)
         elif isinstance(event, ParkedEvent):
             self.parks.append(event.data.address)
@@ -98,6 +106,13 @@ class _Run:
             self.children.discard(event.data.child_thread_id)
         elif isinstance(event, ToolResultLateEvent) and event.data.call_id in self.spawned:
             self.late_runs[event.event_id] = self.spawned[event.data.call_id]
+
+    def _idle_cancel(self, scope: str, i: int) -> None:
+        """A thread or tree cancel while no turn is open ends a run still waiting on its
+        children."""
+        waiting = self.answered is not None and not self.open
+        if waiting and scope != "turn" and self.decided is None:
+            self.decided = RunEnd("cancelled", (), i)
 
     def _turn_end(self, events: Sequence[Event], i: int, reason: str) -> None:
         mine = self.open and self.current == self.request

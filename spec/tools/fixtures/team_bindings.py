@@ -43,10 +43,6 @@ KID = "0192a000-0000-7000-8000-0000000000cb"
 def build(root: pathlib.Path) -> None:
     for name, desc, log in _cases():
         reject(root, (name, FAM, desc), log)
-
-
-def build_staged(root: pathlib.Path) -> None:
-    """Staged until Phase 0 lands the pending_wakes projection it expects."""
     reduce_case(
         root,
         (

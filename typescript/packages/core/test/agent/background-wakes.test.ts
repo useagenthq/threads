@@ -1,86 +1,23 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import {
-  type Agent,
-  agent,
-  type Model,
-  openThread,
-  scriptedModel,
-  sqlite,
-  type ThreadRef,
-  tool,
-} from "../../src";
-import { openStore } from "../../src/agent/sqlite";
-import type { KnownEvent, Principal } from "../../src/log";
-import { markTestKit } from "../../src/model/guard";
-import { knownEvents } from "../../src/reduce";
+import { agent, openThread, scriptedModel, sqlite, tool } from "../../src";
 import { unwrap } from "../store/helpers";
+import {
+  alice,
+  events,
+  gated,
+  lateIds,
+  lead,
+  say,
+  scan,
+  usage,
+  wakes,
+} from "./wake-kit";
 
 // Legacy background subagents wake their lead (spec/schema/README.md, "Background wakes" and
 // "Run completion"; Gate 1 §2.7.3): a late result recorded while no turn is open carries a
 // woken in the same append, the woken turn belongs to the run that spawned the child, and run()
 // returns the answer after the last wake.
-
-const usage = { input_tokens: 10, output_tokens: 2 };
-const say = (text: string) => ({
-  content: [{ type: "text", text }],
-  stop_reason: "end_turn",
-  usage,
-});
-const scan = (id: string) => ({
-  content: [
-    {
-      type: "tool_use",
-      call_id: id,
-      name: "spawn_agent",
-      input: { agent: "scanner", prompt: "Scan.", background: true },
-    },
-  ],
-  stop_reason: "tool_use",
-  usage,
-});
-const alice: Principal = { issuer: "api", tenant: "local", subject: "alice" };
-
-/** A scripted model whose every answer waits for `open`. */
-function gated(responses: readonly unknown[], open: Promise<void>): Model {
-  const model = scriptedModel({ responses: [...responses] });
-  const made: Model = {
-    ...model,
-    send: async function* (...args: Parameters<Model["send"]>) {
-      await open;
-      yield* model.send(...args);
-    },
-  };
-  markTestKit(made);
-  return made;
-}
-
-function lead(scanner: Agent<never, unknown>, responses: readonly unknown[]) {
-  return agent({
-    name: "lead",
-    model: scriptedModel({ responses: [...responses] }),
-    subagents: [scanner],
-  });
-}
-
-async function events(
-  store: ReturnType<typeof sqlite>,
-  thread: ThreadRef,
-): Promise<readonly KnownEvent[]> {
-  const { log } = await openStore(store);
-  return knownEvents(unwrap(log.read(thread.branch)));
-}
-
-/** Every late result is followed, after its append's block, by a woken naming the block. */
-function wakes(log: readonly KnownEvent[]): readonly (readonly string[])[] {
-  return log.flatMap((e) => (e.type === "woken" ? [e.data.causes] : []));
-}
-
-function lateIds(log: readonly KnownEvent[]): readonly string[] {
-  return log.flatMap((e) =>
-    e.type === "tool_result_late" ? [e.event_id] : [],
-  );
-}
 
 describe("a background result wakes the idle lead", () => {
   test("the late result and its woken are one block, and run() returns the wake turn's answer", async () => {
@@ -148,7 +85,12 @@ describe("a background result wakes the idle lead", () => {
         responses: [
           {
             content: [
-              ...scan("c1").content,
+              {
+                type: "tool_use",
+                call_id: "c1",
+                name: "spawn_agent",
+                input: { agent: "scanner", prompt: "Scan.", background: true },
+              },
               {
                 type: "tool_use",
                 call_id: "c2",
@@ -185,7 +127,7 @@ describe("a background result wakes the idle lead", () => {
 });
 
 describe("no wake after a cancel", () => {
-  test("a late result after the lead was cancelled is recorded with no woken", async () => {
+  test("a run cancelled mid-turn returns cancelled at once and is never woken", async () => {
     const store = sqlite(":memory:");
     const child = Promise.withResolvers<void>();
     const slow = Promise.withResolvers<void>();
@@ -235,7 +177,6 @@ describe("no wake after a cancel", () => {
     const result = await running.result;
     expect(result.status).toBe("cancelled");
     const log = await events(store, result.thread);
-    expect(lateIds(log)).toHaveLength(1);
     expect(wakes(log)).toEqual([]);
   });
 });

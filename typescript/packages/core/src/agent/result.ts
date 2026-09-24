@@ -82,6 +82,9 @@ export function endedRun<Output>(
   thread: Thread,
   decode: Decode<Output>,
 ): RunResult<Output> {
+  // A cancel while the run waited on its children ends it outside any turn.
+  if (run.status === "cancelled" && run.turn.length === 0)
+    return { status: "cancelled", thread };
   const done = run.turn.at(-1);
   if (done?.type !== "turn_completed")
     throw new Error("an ended run ended its turn");
