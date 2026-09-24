@@ -1,0 +1,211 @@
+---
+title: "Running evals"
+description: "Check every saved case in CI for free, see which cases your changes touch, and grade your current agent with a judge model when a prompt or model changes."
+icon: ListChecks
+---
+
+Real runs become tests. [Save a turn](/docs/evals/saved-cases) you liked, then run every saved case: for free on each commit, and with a judge model when you change a prompt or a model.
+
+## The loop
+
+1. **Save** a real turn once: `thread.saveCase(...)`.
+2. **Check it for free** in CI: `threads eval --agent ./agents.ts`. No model calls, no API keys, no network.
+3. **Grade it** after changing the prompt or the model: `threads eval --agent ./agents.ts --live`. Real model calls, under a budget.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { anthropic } from "@threads/anthropic";
+import { runEvals } from "@threads/core";
+import { support } from "./agents";
+
+// In CI, for free.
+const report = await runEvals({ cases: "cases", agents: [support] });
+console.log(report.summary); // "12 passed, 0 failed"
+
+// After a prompt or model change: real model calls, graded by a judge.
+const graded = await runEvals({
+  cases: "cases",
+  agents: [support],
+  live: {
+    judge: anthropic("claude-haiku-4-5"),
+    budget: { max_cost_nanos: 500_000_000 }, // $0.50 per run
+  },
+});
+console.log(graded.summary); // "11 passed, 1 failed; 24 model calls (12 agent, 12 judge), $0.38"
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads import Live, run_evals
+from threads.log import Budget
+from threads.anthropic import anthropic
+
+from agents import support
+
+report = await run_evals(cases="cases", agents=(support,))
+print(report.summary)  # "12 passed, 0 failed"
+
+graded = await run_evals(
+    cases="cases",
+    agents=(support,),
+    live=Live(judge=anthropic("claude-haiku-4-5"), budget=Budget(max_cost_nanos=500_000_000)),
+)
+print(graded.summary)
+```
+
+</Tab>
+</Tabs>
+
+## The four checks
+
+Each case runs through the checks cheapest first. A later check runs only if the earlier ones passed.
+
+| Check | Proves | Model calls | Runs when |
+|---|---|---|---|
+| **replay** | Every recorded request in the case log re-renders byte for byte with the threads code running now | none | always |
+| **rerun** | The saved turn still runs to the same events: the recorded replies, tool results and stubs produce what they produced, and every `must` matches | none | always, unless the case can't rerun offline |
+| **drift** | The case was recorded with the agent config you have now: the same instructions, tools and model | none | with `agents` / `--agent` |
+| **judge** | Your current agent answers the case's input well, graded against the rubric by a judge model | agent + judge | only with `live` / `--live` |
+
+What each one tells you:
+
+- **Without `--agent`**, replay and rerun prove that **the threads code** (an upgrade, a switch between TypeScript and Python, a changed adapter) still reproduces your recorded turns exactly. They say nothing about your prompt, tools or model: a changed prompt still passes.
+- **With `--agent`**, drift tells you **which cases your changes affect**, for free.
+- **Only `--live`** tells you whether the changed agent still **behaves well**.
+
+## Case status
+
+| Status | Means | Fails the run |
+|---|---|---|
+| `passed` | Every check that ran passed | no |
+| `failed` | A check ran and failed: a replay mismatch, a rerun mismatch, a criterion judged `fail` | yes |
+| `stale` | Drift found: the case was recorded with another config | only with `--strict` |
+| `skipped` | The case can't run this way, with the reason (`offline_not_runnable:<reason>`, `no_rubric`) | only with `--strict` |
+| `error` | The eval couldn't be carried out: an unreadable case, a live run that didn't complete, invalid verdicts | yes |
+| `not_run` | The run stopped before this case (the test model guard blocked a real model) | yes |
+
+A stale case's rerun result still stands: it proves the threads code, not your agent. Re-save it (or check it with `--live`) once you've reviewed the change.
+
+## Drift
+
+`--agent` loads your agents module and compares each case with the agent of the same name, as a new thread of it would be pinned now. It reports every difference by kind:
+
+- `prompt`: the instructions differ;
+- `tools`: tools added (`+name`), removed (`-name`) or changed (`~name`: schema, description, effect class or deferral);
+- `model`: the model, the adapter settings or the parameters differ, compared with the case's first settings epoch (a fallback during the recorded thread isn't drift);
+- `config`: only a setting the prompt doesn't show changed, such as a tool's `concurrent` flag, permissions or budgets.
+
+The comparison runs **no setup**: it reads no API key and opens no MCP connection, so it runs in keyless CI. What it can't see is reported as `unchecked`, never as stale:
+
+- an MCP server's tools (`unchecked mcp:jira`), since only a connection lists them;
+- the tools and instructions of an extension with a `setup` step (`extension:crm`), and the prompt of an agent whose memory or knowledge provider has one (`memory`, `knowledge`);
+- a case saved from a subagent, a team member or a handoff target (`relation:spawn`), whose config came from its parent. Save top-level turns for drift.
+
+## Live: a judge grades your current agent
+
+With `--live`, each case's input runs on a **new thread** of your current agent, and a judge model grades the whole turn against the case's rubric.
+
+- **Effectful tool calls answer from the recordings.** Every tool call with side effects (your app tools, MCP tools, memory writes, git and channel sends), in the agent's run and in every subagent and handoff target it starts, is answered from the case's recorded results. A call with arguments the recording never made fails closed (`unmatched_external_op`) and is never sent.
+- **The sandbox's own tools** (`bash`, `read`, `write`, `edit`, `ls`, `glob`, `grep`, `notebook_edit`) run for real in the eval's fresh sandbox only when that sandbox's egress is deny-all, so nothing they do leaves it. With `egress: "unenforced"` they are answered from the recordings too, and an unrecorded one fails closed.
+- **What runs for real:** read-only tools, against today's data, which may have changed since the case was recorded; `web_fetch` and `web_search`; MCP connections; your extensions' hooks and setup, and your model, memory and knowledge providers' setup. Those are your code and your services, so keep them safe to run from an eval.
+- **The judge sees the whole turn:** each tool call and result, the agent's interim messages and its final answer, as one JSON document it is told to treat as data. Long texts are cut at 4,000 characters.
+- **Pass or fail per criterion.** A case passes only when every criterion passes; the report keeps each reason and the score (passed / total) for trends. A case with no criteria is skipped as `no_rubric`.
+- **A budget is required.** `live.budget` is the run budget of every agent run and every judge run, subagents included. A run it stops is an `error` with `budget_exhausted`.
+- **Nothing runs live by accident:** there are zero model calls unless you pass `live` / `--live`.
+
+Live runs start a new thread from the case's last input, without the earlier turns, since a changed agent can't continue a thread pinned to the old config. Save cases whose input stands alone.
+
+By default the live and judge threads live in a private in-memory store and are not kept. Pass `--store <dir>` (or `store`) to keep them under tenant `evals`, so `threads timeline` can show them. With `--store`, a run stopped by the test model guard can leave one request without a response; running that thread again abandons it cleanly.
+
+## The agents module
+
+`--agent` imports one module. In TypeScript it default-exports an agent or a list of agents, and for `--live` also exports `judge` and `budget` (and optionally `rubric`, criteria added to every case). In Python the module has `agents` (or `agent`), `judge` and `budget`.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+// agents.ts
+import { anthropic } from "@threads/anthropic";
+import { support } from "./support";
+
+export default [support];
+export const judge = anthropic("claude-haiku-4-5");
+export const budget = { max_cost_nanos: 500_000_000 };
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+# agents.py
+from threads.log import Budget
+from threads.anthropic import anthropic
+
+from support import support
+
+agents = (support,)
+judge = anthropic("claude-haiku-4-5")
+budget = Budget(max_cost_nanos=500_000_000)
+```
+
+</Tab>
+</Tabs>
+
+The module is imported in keyless CI, so it must not need an environment variable at import time. Read MCP URLs and keys lazily, or with a default (`process.env.JIRA_MCP ?? ""`). A module that throws when imported is an error naming it (exit 2).
+
+## CI recipe
+
+```yaml
+# .github/workflows/evals.yml
+name: evals
+on: [push, pull_request]
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      # Free: no model calls, no API keys. Fails on a replay or rerun failure;
+      # --strict also fails when a change touches a saved case.
+      # `threads` is the CLI: see /docs/production/cli for running it from source.
+      - run: threads eval --agent ./agents.ts --strict --out eval-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-report
+          path: eval-report.json
+```
+
+Run `--live` by hand, or in a job that has your provider key, when you change a prompt or a model.
+
+## `threads eval`
+
+```text
+threads eval [--agent <module>] [--cases <dir>] [--case <name>]... [--live] [--store <dir>] [--strict] [--out <file>]
+```
+
+It prints one line per case, then the summary:
+
+```text
+PASS refund-policy
+FAIL late-delivery rerun: unmatched tool_call{"name":"lookup_order"}
+STALE exchange drift: prompt, tools (+issue_exchange)
+SKIP team-handoff offline_not_runnable:child_threads
+10 passed, 1 failed, 1 stale, 1 skipped
+```
+
+Without `--agent` the summary ends with `(framework checks only; pass --agent to detect changes to your agents)`. `--out` writes the whole report as JSON; it has no timestamps, so an offline report is the same bytes in TypeScript and Python. Exit codes: `0` when the run passed, `1` when it failed or was stopped, `2` for a usage or config error.
+
+## What evals don't see
+
+- A live run's read-only tools see today's data, not the data of the recorded turn. An order may have shipped since, or a record been deleted. So a different answer doesn't by itself mean your agent broke, and the same answer doesn't prove it is fine: read the judge's reasons and the transcript.
+- A rerun uses recorded tool results, so a changed tool **body** doesn't change it. Drift shows a changed tool schema or description; `--live` runs the real read-only tools.
+- Drift compares the prompt, the tools, the model and the config hash. A change to a hook's code is invisible to it.
+- An LLM judge is noisy. One call per case, pass/fail criteria and fixed instructions reduce the noise but don't remove it, which is why the free checks, not the judge, are the CI gate.
+- Turns that start subagents or use a team are skipped offline. Save the subagent's own turn instead.

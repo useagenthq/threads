@@ -7464,6 +7464,19 @@
           "name": {
             "$ref": "#/components/schemas/events_Name"
           },
+          "origin": {
+            "additionalProperties": false,
+            "description": "The extension that contributed this tool, static or from its setup. Not model-visible (not in Render v1 line 0); covered by config_hash.",
+            "properties": {
+              "extension": {
+                "$ref": "#/components/schemas/events_Name"
+              }
+            },
+            "required": [
+              "extension"
+            ],
+            "type": "object"
+          },
           "output_schema": {
             "$ref": "#/components/schemas/events_JsonObject",
             "description": "Optional JSON Schema for the tool's result value. A result that fails it is recorded as an error result; the effect still happened."

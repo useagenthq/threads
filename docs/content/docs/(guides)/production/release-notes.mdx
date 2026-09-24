@@ -1,0 +1,18 @@
+---
+title: Release notes
+description: Changes that affect threads you already have, release by release.
+icon: ScrollText
+---
+
+## Unreleased (v0.1)
+
+**Threads started before this release can't be continued** when their agent has extension tools or deferred tools. Start a new thread; the old one stays readable (timeline, export, fork points, saved cases).
+
+- **Tool origin.** A pinned tool now records the extension it came from (`origin`), so [drift](/docs/evals/run-evals#drift) can tell an extension's tools apart. It isn't shown to the model, but it is part of the config hash. Continuing such a thread fails with `invalid_config`: "this thread was started with another config: tool origin was added in this release; start a new thread". Agents without extension tools keep their config hash and their threads continue as before.
+- **Deferred tools.** Tool search pins a deferred tool in a new form, which changes the config hash of agents with deferred tools in the same way.
+- **Threads the host continues for you** meet the same error: a channel conversation's next message, a schedule's next fire on its thread, and approving or denying a run that was awaiting approval. Settle pending approvals before upgrading.
+- **In-flight team members** of such agents fail to rebind with `pin_mismatch`. It surfaces as a turn error on the member, not as a continue error: finish or cancel the team's work before upgrading.
+
+**Evals.** `runEvals()` / `run_evals()` and `threads eval` run [saved cases](/docs/evals/saved-cases): for free in CI, with drift against your current agents, and with a judge model under `--live`. `saveCase` now saves any completed turn with no sandbox snapshot, and `portable` means the case reruns offline from its directory alone.
+
+**The test model guard** raises `ModelBlockedError` (an `Error` in TypeScript, a `RuntimeError` in Python), a subclass of the error it raised before, so existing `catch` / `except` blocks behave the same.

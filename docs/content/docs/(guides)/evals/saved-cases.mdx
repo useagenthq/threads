@@ -1,98 +1,99 @@
 ---
 title: "Saved cases"
-description: "Save a real turn from a thread as a regression case on disk: its history, the model's replies, tool results and what must happen."
+description: "Save any completed turn of a real thread as a regression case on disk: its history, the model's replies, every tool result and what must happen."
 icon: Save
 ---
 
-When an agent does something right (or you've just fixed something it did wrong), `saveCase` / `save_case` turns that turn into a self-contained case directory you can commit next to your code.
+When an agent does something right (or you've just fixed something it did wrong), `saveCase` / `save_case` turns that turn into a self-contained case directory you commit next to your code. [Running evals](/docs/evals/run-evals) checks every case in CI.
 
 ## Save a case
 
-A case restores a fork point and replays the **next user input after it**. You say which events the replay must produce.
+Any completed turn works, the first one included. No sandbox snapshot is needed, and it doesn't matter which sandbox the thread ran on: the case keeps every recorded result, so it reruns with no sandbox at all.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
 
 ```ts
-const dir = mkdtempSync(join(tmpdir(), "cases-"));
-const saved = await thread.saveCase("reads-notes", {
-  expect: {
-    must: [{ type: "tool_result", data: { is_error: false } }],
-    expect: [{ type: "turn_completed" }],
-  },
+const result = await support.run("Please refund order 42.");
+const saved = await result.thread.saveCase("refund-policy", {
+  expect: { must: [{ type: "tool_call", data: { name: "lookup_order" } }] },
   externalEffects: "stub",
-  at: point.event_id,
-  dir,
+  rubric: ["Quotes the 30-day refund window", "Looks up the order before refunding"],
 });
 if (!saved.ok) throw new Error(saved.error.message);
-console.log(saved.value.path, saved.value.portable);
+console.log(saved.value.path, saved.value.portable); // cases/refund-policy true
 ```
 
 </Tab>
 <Tab value="Python">
 
 ```python
-saved = await thread.save_case(
-    "reads-notes",
-    expect=CaseExpectation(
-        must=({"type": "tool_result", "data": {"is_error": False}},),
-        expect=({"type": "turn_completed"},),
-    ),
+result = await support.run("Please refund order 42.")
+saved = await result.thread.save_case(
+    "refund-policy",
+    expect=CaseExpectation(must=({"type": "tool_call", "data": {"name": "lookup_order"}},)),
     external_effects="stub",
-    at=points.value[0].event_id,
-    dir=tempfile.mkdtemp(),
+    rubric=("Quotes the 30-day refund window", "Looks up the order before refunding"),
 )
 if isinstance(saved, Err):
     raise SystemExit(saved.error.message)
-print(saved.value.path, saved.value.portable)
+print(saved.value.path, saved.value.portable)  # cases/refund-policy True
 ```
 
 </Tab>
 </Tabs>
 
-`thread` here is a handle opened with a sandbox, as in [Fork](/docs/evals/fork). `CaseExpectation` is imported from `threads` in Python; in TypeScript it is a plain object.
+`CaseExpectation` is imported from `threads` in Python; in TypeScript it is a plain object.
 
 ## Options
 
 | Option | Required | What it does |
 |---|---|---|
 | name | yes | Lowercase-kebab name. The case is written to `<dir>/<name>/` |
-| `expect.must` | yes, at least one | Event matchers the replay must produce, or the case fails |
+| `expect.must` | yes, at least one | Event matchers the rerun must produce, or the case fails |
 | `expect.expect` | no | Event matchers that are only reported |
 | `externalEffects` / `external_effects` | yes | Must be `"stub"`: a case never makes real calls |
-| `at` | no | The fork point to restore. Default: the latest one. There must be a user input after it |
+| `rubric` | no | Plain-English pass/fail criteria for a [live eval's judge](/docs/evals/run-evals#live-a-judge-grades-your-current-agent). 1 to 20, each 1 to 500 characters |
+| `at` | no | The `user_input` event id of the turn to save. Default: the last completed turn. A snapshot event id means the turn after it |
 | `dir` | no | Parent directory. Default: `cases` |
 
-A matcher is `{ type, data? }`, plus optional `seq`, `actor_kind`, `epoch`, `branch_id` or `critical`. `type` and the listed envelope keys match exactly; `data` matches as a subset, so `{ is_error: false }` matches any successful tool result. In TypeScript, each `must` matcher is also checked against the recorded turn when you save, so a case that couldn't pass is refused with `invalid_request`.
+A matcher is `{ type, data? }`, plus optional `seq`, `actor_kind`, `epoch`, `branch_id` or `critical`. `type` and the listed envelope keys match exactly; `data` matches as a subset, so `{ is_error: false }` matches any successful tool result. Each `must` matcher is checked against the recorded turn when you save, so a case that couldn't pass is refused with `invalid_request`, and so is a turn that hasn't completed.
 
 ## What it writes
 
 ```text
-cases/reads-notes/
-  case.json                  # name, input text, expectations, which scripts to use
-  log.threads-ts.jsonl       # the thread's log up to the snapshot
+cases/refund-policy/
+  case.json                  # name, input text, expectations, rubric
+  log.threads-ts.jsonl       # the thread's log up to the saved turn
   log.threads-py.jsonl
-  expected.threads-ts.json   # the state that log reduces to
+  expected.threads-ts.json   # the events the turn appended, and the state before it
   expected.threads-py.json
-  model.json                 # the model replies recorded after the snapshot
-  stubs.json                 # the recorded results of external calls
-  artifacts/                 # files the log refers to
+  model.json                 # the model replies the turn received
+  sandbox.json               # each read-only tool result, keyed by tool, arguments and occurrence
+  stubs.json                 # each external call's recorded result
+  extensions.json            # hook decisions and recalled memory, when the turn had any
+  line0.json                 # the recorded prompt prefix (instructions, tools, model), for drift
+  artifacts/                 # files the log and the results refer to
 ```
 
-TypeScript also writes `sandbox.json` with the sandbox reads from that turn. The log is saved once per language, so the same case works for a TypeScript and a Python implementation of the agent.
+The log is saved once per language, so a case saved in TypeScript runs in Python and the reverse.
 
-`portable` is `true` when the snapshot came from the in-memory [fake sandbox](/docs/evals/testing), so the case needs no sandbox provider to replay. It is `false` when it depends on a real provider such as E2B.
+`portable` is `true` when the case reruns offline from its directory alone. When it can't, the case is still written, `portable` is `false` and `reason` says why; [runEvals](/docs/evals/run-evals) then skips it offline with that reason:
 
-The case fails to save with `egress_policy_unsupported` if the thread's sandbox can't block network access, since a replay must never reach the outside world.
+| `reason` | Why |
+|---|---|
+| `content_input` | The input has images or documents, which `input.text` can't carry |
+| `child_threads` | The turn started a subagent or handed off: the child's model calls aren't in the case |
+| `team_calls` | The turn used team tools or received team mail |
+| `unsettled_effect` | An external call's outcome was never settled, so there is no result to stub |
+| `artifact_missing` | A result the turn used is gone from the store |
 
-## Using saved cases today
+When the turn happened right after a sandbox snapshot, `case.json` records it as `snapshot`, for a live eval that wants to restore it. The offline checks never need it.
 
-<Callout type="warn">
-threads doesn't ship a runner for saved cases yet.
-</Callout>
+The case fails to save with `egress_policy_unsupported` if the thread's sandbox can't block network access.
 
-A case uses the same file layout as the conformance cases in the threads repo (`spec/conformance/`), and it is plain JSON and JSONL. Today you can:
+## What a saved case can't see
 
-- commit it as a record of a known-good turn and review changes to it in code review;
-- replay the same turn yourself with a [scripted model](/docs/evals/testing) built from `model.json`;
-- re-run the scenario on a [stub fork](/docs/evals/fork#replay-without-real-side-effects) (Python) and compare against `must`.
+A case replays what your code *did*, not your code: tool results, hook decisions and recalled memory come from the recording. A changed tool body or hook doesn't change the rerun. Drift catches a changed tool schema, description or prompt; `--live` runs your real tools and hooks.
+
+One more blind spot: if an extension defines a hook that left no decision in the saved turn, and a newer threads calls that hook somewhere the recording never did, the rerun can't know your extension would have answered. The replay and drift checks still catch framework changes that alter the model's requests.

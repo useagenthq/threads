@@ -1,0 +1,13 @@
+---
+title: "ModelBlockedError"
+description: "Raised by the test model-request guard before dispatch: TS class ModelBlockedError extends Error, Python exception ModelBlockedError(RuntimeError), so existing catch blocks behave the same."
+icon: "Braces"
+---
+
+runEvals catches exactly this type and returns a report with aborted.
+
+## Fields
+
+<Field name="model" type={"string"} required>
+  provider/name of the model the guard blocked.
+</Field>

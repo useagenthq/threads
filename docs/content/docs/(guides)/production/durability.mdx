@@ -41,7 +41,7 @@ again = await bot.run("Are you still there?", store=store, thread=result.thread)
 </Tab>
 </Tabs>
 
-A thread is pinned to the agent config it started with. Running it with a different model, tools or instructions raises a `ConfigError` ("a config change starts a new thread").
+A thread is pinned to the agent config it started with. Running it with a different model, tools or instructions raises a `ConfigError` ("a config change starts a new thread"). A threads release can change what is pinned too; when it does, the error says so, and the [release notes](/docs/production/release-notes) list it.
 
 During recovery threads:
 

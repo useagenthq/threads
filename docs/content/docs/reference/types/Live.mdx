@@ -1,0 +1,21 @@
+---
+title: "Live"
+description: "What a live eval costs money with: the judge and a required budget."
+icon: "Braces"
+---
+
+Live evals need agents too.
+
+## Fields
+
+<Field name="judge" type={"Model"} required>
+  The model that grades each case against its rubric (judge.v1 instructions, one call per case).
+</Field>
+
+<Field name="budget" type={"Budget"} required>
+  The run budget of every agent run and every judge run, subagents included. A run it stops is an error with budget_exhausted.
+</Field>
+
+<Field name="rubric" type={"readonly string[]"} default={"[]"}>
+  Criteria added after each case's own.
+</Field>

@@ -1,0 +1,71 @@
+---
+title: "runEvals / run_evals"
+description: "Runs every saved case under cases through the checks, cheapest first: replay (the recorded requests re-render byte for byte with the code running now), rerun (the recorded turn reruns offline to the same events, with no model call and every effect stubbed), drift (with agents: the case's recorded config against each agent as it is pinned now, by a dry pin that runs no setup, reads no secret and connects to no MCP server) and, only with live, a judged run of the current agent."
+icon: "SquareFunction"
+---
+
+Without agents the free checks prove the threads code, not your agent. Per-case outcomes, and a model-request guard abort, are values in the report; a setup mistake is ConfigError invalid_config naming the option. `threads eval` runs it.
+
+Import from `@threads/core` (TypeScript) or `threads` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function runEvals(options?: {
+  cases?: string;
+  only?: readonly string[];
+  agents?: readonly Agent[];
+  live?: Live;
+  store?: Store;
+  strict?: boolean;
+}): Promise<EvalReport>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def run_evals(
+    *,
+    cases: str = "cases",
+    only: Sequence[str] | None = None,
+    agents: Sequence[Agent] | None = None,
+    live: Live | None = None,
+    store: Store | None = None,
+    strict: bool = False,
+) -> EvalReport
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="cases" type={"string"} default={"cases"}>
+  The directory of saved cases (thread.saveCase dir). A missing directory is invalid_config.
+</Field>
+
+<Field name="only" type={"readonly string[]"}>
+  Run only the cases with these names. Omitted: every case.
+</Field>
+
+<Field name="agents" type={"readonly Agent[]"}>
+  Your current agents, matched to each case by agent name: adds the free drift check. A case whose agent is missing is stale with agent_not_found. Omitted: no drift check; the free checks then test the threads code, not your agents.
+</Field>
+
+<Field name="live" type={"Live"}>
+  Grade the current agents with a judge model: real model calls, each run under live.budget. Needs agents. Omitted: no model call is made. See [Live](/docs/reference/types/Live).
+</Field>
+
+<Field name="store" type={"Store"}>
+  Keeps the live and judge threads (tenant evals) so they can be inspected; the report then carries their thread ids. Omitted: a private in-memory store, and the threads are not kept. See [Store](/docs/reference/types/Store).
+</Field>
+
+<Field name="strict" type={"boolean"} default={"false"}>
+  Also fail the run on stale and skipped cases.
+</Field>
+
+## Returns
+
+[`EvalReport`](/docs/reference/types/EvalReport)

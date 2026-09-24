@@ -1,6 +1,6 @@
 ---
 title: "SavedCase"
-description: "What saveCase returns: where the case was written and whether it replays anywhere."
+description: "What saveCase returns: where the case was written and whether it reruns offline."
 icon: "Braces"
 ---
 
@@ -11,5 +11,9 @@ icon: "Braces"
 </Field>
 
 <Field name="portable" type={"boolean"} required>
-  false when the case depends on a named provider.
+  true when the case reruns offline from its directory alone.
+</Field>
+
+<Field name="reason" type={"OfflineReason"}>
+  Why the case can't rerun offline, when it can't: artifact_missing, unsettled_effect, content_input, child_threads, team_calls or extension_events (reserved). It is still written, and runEvals skips it offline with this reason.
 </Field>

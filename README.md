@@ -86,7 +86,7 @@ No API key yet? The [quickstart](https://threadsai.dev/docs/quickstart) runs the
 - **Replay any run.** `timeline()` walks through every step: each input, the exact request the model was sent, and every tool call and result. Debug a bad answer from production without adding logging first.
 - **Crash-safe resume.** Run the same thread again and it continues from the log. A side effect that may already have happened is never silently repeated: threads proves what happened, or parks the run and asks you.
 - **Fork from a past step.** `fork()` starts a new branch in a fresh sandbox restored from a snapshot. The original run is untouched.
-- **Evals from real runs.** `saveCase()` turns a real turn into a regression case you commit next to your code.
+- **Evals from real runs.** `saveCase()` turns a real turn into a regression case you commit next to your code, and `threads eval` checks them all in CI for free.
 - **An audit trail by default.** The log is append-only and hash-chained, so a changed or missing line is detected. Keys you pass with `secret()` never reach the log, a prompt or the sandbox.
 - **One API, one log format, two languages.** TypeScript and Python follow one spec and write the same bytes. A thread written by one can be opened, inspected and forked by the other.
 
@@ -94,19 +94,27 @@ No API key yet? The [quickstart](https://threadsai.dev/docs/quickstart) runs the
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/evals-flow-dark.svg">
-  <img alt="A real run is recorded in the log. saveCase() writes cases/reads-notes/ with case.json, the TypeScript and Python logs, model.json and stubs.json. The turn replays offline with a scripted model built from the recorded replies, with no API keys and no network. A case runner is coming." src=".github/assets/evals-flow-light.svg" width="100%">
+  <img alt="A real run is recorded in the log. saveCase() writes cases/reads-notes/ with case.json, the TypeScript and Python logs, model.json and stubs.json. The turn replays offline with a scripted model built from the recorded replies, with no API keys and no network. threads eval reruns it for free in CI." src=".github/assets/evals-flow-light.svg" width="100%">
 </picture>
 
-When an agent gets something right, or you have just fixed something it got wrong, save that turn:
+When an agent gets something right, or you have just fixed something it got wrong, save that turn. Any completed turn works, the first one included, from any sandbox:
 
 ```ts
-const saved = await thread.saveCase("reads-notes", {
-  expect: { must: [{ type: "tool_result", data: { is_error: false } }] },
+await thread.saveCase("refund-policy", {
+  expect: { must: [{ type: "tool_call", data: { name: "lookup_order" } }] },
   externalEffects: "stub", // a case never makes real calls
+  rubric: ["Quotes the 30-day refund window"],
 });
 ```
 
-The case holds the log up to that point, the model's replies, the recorded results of external calls and what the replay must produce. Replay it with a [scripted model](https://threadsai.dev/docs/evals/testing) and the in-memory `fakeSandbox()`: no API keys and no network. A built-in runner for saved cases is coming; today you replay them with the scripted model yourself. See [Saved cases](https://threadsai.dev/docs/evals/saved-cases).
+Then check every saved case in CI, for free: no model calls, no API keys, no network.
+
+```bash
+threads eval --agent ./agents.ts          # exit 1 on a failure; --strict also fails on drift
+threads eval --agent ./agents.ts --live   # after a prompt or model change: a judge grades the rubric
+```
+
+The free checks replay the recorded requests and rerun the turn with the code running now, and `--agent` reports which cases your prompt, tool or model changes touch. `--live` runs your current agent and a judge model under a budget you set. `runEvals()` / `run_evals()` is the same thing as a function. See [Running evals](https://threadsai.dev/docs/evals/run-evals).
 
 ## Sandbox-native
 

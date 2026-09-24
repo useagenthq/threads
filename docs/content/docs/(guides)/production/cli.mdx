@@ -15,6 +15,7 @@ threads import <file>                     verify and store an export
 threads repair <branch_id>                make an imported branch with a torn tail runnable
 threads delete <thread_id> | --tenant T   delete a thread, or every thread of a tenant
 threads gc [module] [--grace-days N]      release leftover sandboxes, remove unreferenced artifacts
+threads eval [--agent M] [--live] ...     run saved cases: free checks, drift, a judged live run
 
 global options: --store <dir> (default .threads), --tenant <id> (default local)
 ```
@@ -111,6 +112,14 @@ threads gc app --grace-days 1
 ```
 
 With a host module, `gc` also releases sandboxes that runs left behind, using that module's sandbox providers. It never runs on its own: schedule it (for example with cron) if you want it regular.
+
+## Evals: `eval`
+
+```text
+threads eval [--agent <module>] [--cases <dir>] [--case <name>]... [--live] [--store <dir>] [--strict] [--out <file>]
+```
+
+Runs every saved case under `--cases` (default `cases`). Without `--agent` it loads no user code and runs the free checks; `--agent` adds drift against your current agents; `--live` grades with a judge model. `--store` keeps the live and judge threads (by default they are not kept), `--strict` also fails on stale and skipped cases, and `--out` writes the report as JSON. Exit `0` when the run passed, `1` when it failed, `2` for a usage or config error. See [Running evals](/docs/evals/run-evals).
 
 ## Exit codes
 

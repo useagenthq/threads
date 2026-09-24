@@ -50,11 +50,13 @@
     "production/observability",
     "production/deploying",
     "production/cli",
+    "production/release-notes",
     "---[FlaskConical]Evals & testing---",
     "evals/timeline",
     "evals/replay",
     "evals/fork",
     "evals/saved-cases",
+    "evals/run-evals",
     "evals/testing"
   ]
 }
