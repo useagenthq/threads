@@ -9,7 +9,7 @@ import type {
 import type { ChildRun, Covering } from "../loop";
 import { DEFAULT_PERMISSIONS } from "../permissions";
 import type { EventDraft } from "../store";
-import type { Agent } from "./agent";
+import type { Agent, Models } from "./agent";
 import { checkTree } from "./enforceable";
 import { execute } from "./execute";
 import type { Extension } from "./extension";
@@ -19,6 +19,7 @@ import type { MemberEnv } from "./registry";
 import type { Decode, RunResult, ThreadRef } from "./result";
 import { connectAll, type McpServer } from "./setup";
 import { type Store, sqlite } from "./sqlite";
+import type { DynamicAgent } from "./team/types";
 import type { Tool } from "./tool";
 
 // One run: take the branch lease (recovery runs first), record the input, and loop until the
@@ -51,7 +52,12 @@ export type Resolved<Deps, Output> = Omit<PinOptions, "mcp"> & {
   /** The agents behind PinOptions.handoffs, by name. */
   readonly targets: readonly Agent<never, unknown>[];
   /** The agents behind PinOptions.team, by name: those start may name. */
-  readonly members: readonly Agent<never, unknown>[];
+  readonly members: readonly (
+    | Agent<never, unknown>
+    | DynamicAgent<never, unknown>
+  )[];
+  /** A dynamic agent (dynamicAgent): the models a start may choose, the first its default. */
+  readonly models?: Models;
   /** agent({teamLimits}), defaults filled in. */
   readonly teamLimits: {
     readonly concurrent: number;

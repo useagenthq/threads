@@ -1408,5 +1408,29 @@
     "py": [
       "tests/team/test_agent.py::test_stream_the_committed_events_then_a_result_with_the_team"
     ]
+  },
+  "dynamicAgent": {
+    "ts": [
+      "packages/core/test/team/dynamic-start.test.ts > a lead defines a member of a dynamic agent > the choice is recorded on member_started and bound by the member's pin"
+    ],
+    "py": [
+      "tests/team/test_dynamic.py::test_a_dynamic_start_records_define_and_label_and_the_member_runs_its_pin"
+    ]
+  },
+  "dynamicAgent.models": {
+    "ts": [
+      "packages/core/test/team/dynamic-start.test.ts > dynamicAgent setup > models are required, non-empty and keyed by names"
+    ],
+    "py": [
+      "tests/team/test_dynamic.py::test_setup_refusals_name_the_option"
+    ]
+  },
+  "usd": {
+    "ts": [
+      "packages/core/test/agent/usd.test.ts > usd() > dollars as integer nano-dollars, rounded half up"
+    ],
+    "py": [
+      "tests/team/test_dynamic.py::test_usd_is_nano_dollars"
+    ]
   }
 }

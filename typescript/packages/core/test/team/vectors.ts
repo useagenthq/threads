@@ -9,6 +9,7 @@ import {
   TeamId as TeamIdSchema,
 } from "../../src/log";
 import { IMPL } from "../../src/store/writer";
+import type { Template } from "../../src/team/dynamic";
 import { rebuildTeamIndex } from "../../src/team/rebuild";
 import { VERSION } from "../../src/version";
 import { type Fixture, fixture, unwrap } from "../store/helpers";
@@ -39,6 +40,7 @@ export type Vector = {
     readonly mailbox?: number | undefined;
     readonly concurrent?: number | undefined;
     readonly headroom?: boolean | undefined;
+    readonly templates?: Readonly<Record<string, Template>> | undefined;
   };
   readonly expect: {
     readonly outcome: unknown;
@@ -75,6 +77,15 @@ const Doc: z.ZodType<Doc> = z.object({
         mailbox: z.int().optional(),
         concurrent: z.int().optional(),
         headroom: z.boolean().optional(),
+        templates: z
+          .record(
+            z.string(),
+            z.object({
+              tools: z.array(z.string()),
+              models: z.array(z.string()),
+            }),
+          )
+          .optional(),
       }),
       expect: z.object({
         outcome: z.json(),

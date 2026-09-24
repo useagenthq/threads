@@ -22,6 +22,7 @@ import { decide } from "./decide";
 import {
   type BranchInfo,
   branchInfo,
+  memberView,
   type PendingApproval,
   pendingApprovals,
 } from "./pending";
@@ -89,10 +90,16 @@ export function controls(
     pendingApprovals: async () => {
       const current = readLog(log, branchId);
       if (!current.ok) return [];
+      const events = knownEvents(current.value);
+      const read = (branch: BranchId) => {
+        const other = log.read(branch);
+        return other.ok ? knownEvents(other.value) : undefined;
+      };
       return pendingApprovals(
-        knownEvents(current.value),
+        events,
         current.value.fold,
         log.now(),
+        memberView(events, read),
       );
     },
     approve: (id, principal, options = {}) =>

@@ -29,8 +29,8 @@ import { isMcp, type McpServer, setUp } from "./setup";
 import type { Skill } from "./skills";
 import { stream } from "./stream";
 import { memberOf, teamAgent } from "./team/lead";
-import { checkTeam } from "./team/runtime";
-import type { TeamAgent, TeamLimits } from "./team/types";
+import { checkNotTemplates, checkTeam } from "./team/runtime";
+import type { DynamicAgent, TeamAgent, TeamLimits } from "./team/types";
 import type { Tool } from "./tool";
 
 // agent() (spec/api.json): pure. It does no I/O, reads no env and opens no sockets; its setup
@@ -85,7 +85,7 @@ export type AgentOptions<Deps, Output> = {
    * Agents this one may start as team members, with the team tools. Passing it, even as [],
    * makes agent() return a TeamAgent.
    */
-  readonly team?: readonly Agent<never, unknown>[];
+  readonly team?: Listed;
   /** The team's limits: 4 running members and 100 pending mails per member by default. */
   readonly teamLimits?: TeamLimits;
   /** Saved cross-run memory: localMemory() or an adapter. */
@@ -143,7 +143,8 @@ export type Agent<Deps = undefined, Output = string> = {
   >;
 };
 
-type Listed = readonly Agent<never, unknown>[];
+/** A team: agents, and dynamic agents whose members a start defines (dynamicAgent). */
+type Listed = readonly (Agent<never, unknown> | DynamicAgent<never, unknown>)[];
 
 export function agent<Deps = undefined>(
   options: AgentOptions<Deps, string> & {
@@ -176,6 +177,27 @@ function build<Deps, Output>(
   options: AgentOptions<Deps, Output>,
   decode: Resolved<Deps, Output>["decode"],
 ): Agent<Deps, Output> | TeamAgent<Deps, Output> {
+  const { def, plain } = resolve(options, decode);
+  const handle = options.team === undefined ? plain : teamAgent(plain);
+  registerAs(handle, def, options.approvers);
+  return handle;
+}
+
+/** A dynamic agent's models, in order: the first is the default. */
+export type Models = readonly (readonly [string, Model])[];
+
+/**
+ * An agent's definition and its plain handle; with `models`, a dynamic agent's, whose default
+ * model is `options.model`.
+ */
+export function resolve<Deps, Output>(
+  options: AgentOptions<Deps, Output>,
+  decode: Resolved<Deps, Output>["decode"],
+  models?: Models,
+): {
+  readonly def: Resolved<Deps, Output>;
+  readonly plain: Agent<Deps, Output>;
+} {
   const tools = (options.tools ?? []).flatMap((t) => (isMcp(t) ? [] : [t]));
   const servers = (options.tools ?? []).filter(isMcp);
   const def: Resolved<Deps, Output> = {
@@ -203,14 +225,16 @@ function build<Deps, Output>(
     knowledge: options.knowledge,
     skills: options.skills ?? [],
     setup: async (walked) => {
+      const choosable = (models ?? []).map(([, m]) => m);
       checkLookups(
-        [options.model, ...(options.fallback ?? [])],
+        [options.model, ...choosable, ...(options.fallback ?? [])],
         options.sandbox,
       );
       await setUp(
         options.extensions ?? [],
         [
           options.model,
+          ...choosable,
           ...(options.fallback ?? []),
           options.sandbox,
           options.memory,
@@ -224,11 +248,16 @@ function build<Deps, Output>(
         ],
         walked,
       );
-      checkTeam(options.team);
+      checkTeam(options.name ?? "agent", options.team);
+      checkNotTemplates([
+        ...(options.subagents ?? []),
+        ...(options.handoffs ?? []),
+      ]);
     },
     servers,
     decode,
     ...agentsOf(options),
+    ...(models === undefined ? {} : { models }),
   };
   const plain: Agent<Deps, Output> = {
     name: def.name,
@@ -248,16 +277,23 @@ function build<Deps, Output>(
       }
     },
   };
-  const handle = options.team === undefined ? plain : teamAgent(plain);
+  return { def, plain };
+}
+
+/** What a parent, a host and a team need of the agent behind `handle`. */
+export function registerAs<Deps, Output>(
+  handle: object,
+  def: Resolved<Deps, Output>,
+  approvers: AgentOptions<Deps, Output>["approvers"],
+): void {
   register(handle, {
     setup: def.setup,
     child: subagent(def),
     target: target(def),
     enforce: (covering) => checkTree(def, covering),
-    host: hosted(def, options.approvers),
+    host: hosted(def, approvers),
     member: memberOf(def),
   });
-  return handle;
 }
 
 function capabilitiesOf<Deps, Output>(

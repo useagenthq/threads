@@ -14,7 +14,14 @@ import type { SqliteDriver } from "../store/driver";
 import { uuidv7 } from "../store/encode";
 import { type LogError, logError } from "../verify/error";
 import { Batch, MINT, type Mint } from "./batch";
-import { type MemberRow, memberNamed, pendingTo, teamRow } from "./rows";
+import type { DynamicChoice } from "./dynamic";
+import {
+  type MemberRow,
+  mailEnvelope,
+  memberNamed,
+  pendingTo,
+  teamRow,
+} from "./rows";
 import { settle } from "./settle";
 
 // Materialize (spec/schema/README.md, "Teams"; design §4.10): the team worker's first consume of
@@ -43,7 +50,12 @@ export type Materialized =
 
 export type MaterializeOptions = {
   readonly artifacts: ArtifactStore;
-  readonly rebind: (agent: string, configHash: string) => Promise<Rebind>;
+  /** Rebinds by name; a dynamic agent's member with the choice its starter recorded. */
+  readonly rebind: (
+    agent: string,
+    configHash: string,
+    choice: DynamicChoice | undefined,
+  ) => Promise<Rebind>;
   /** The lease holder the member's first writer runs under. */
   readonly holder: string;
   readonly ttlMs: number;
@@ -83,8 +95,12 @@ export async function materialize(
   const found = starting(store, team, name);
   if (!found.ok) return found;
   if (found.value === undefined) return ok({ status: "not_starting" });
-  const { started } = found.value;
-  const rebind = await o.rebind(started.data.agent, started.data.config_hash);
+  const { started, task } = found.value;
+  const rebind = await o.rebind(
+    started.data.agent,
+    started.data.config_hash,
+    choiceOf(started, task),
+  );
   const config = o.artifacts.get(started.data.config_hash);
   if (!config.ok) return config;
   const pinned = Pinned.parse(
@@ -194,8 +210,25 @@ function starting(
   const row = memberNamed(db, team, name);
   if (row?.state !== "starting") return ok(undefined);
   const task = pendingTo(db, team, name).find((m) => m.kind === "task");
-  const teams = teamRow(db, team);
-  if (task === undefined || teams === undefined) return ok(undefined);
+  if (task === undefined) return ok(undefined);
+  const started = startedBy(store, row, task);
+  if (!started.ok) return started;
+  return started.value === undefined
+    ? ok(undefined)
+    : ok({ row, task, started: started.value });
+}
+
+/**
+ * A member's member_started, read from its starter's log (the lead's, or the team log for an
+ * operator start) as its task mail names it.
+ */
+function startedBy(
+  store: LogStore,
+  row: MemberRow,
+  task: MailEnvelope,
+): Result<EventOf<"member_started"> | undefined, LogError> {
+  const teams = teamRow(store.driver, row.team_id);
+  if (teams === undefined) return ok(undefined);
   const starter =
     "operator" in task.from
       ? ok(teams.team_log_branch_id)
@@ -206,10 +239,46 @@ function starting(
   const started = knownEvents(log.value).find(
     (e): e is EventOf<"member_started"> =>
       e.type === "member_started" &&
-      e.data.member.name === name &&
+      e.data.member.name === row.name &&
       e.data.member.generation === row.generation,
   );
   return started === undefined
-    ? err(logError("log_corrupt", `no member_started for ${name}`))
-    : ok({ row, task, started });
+    ? err(logError("log_corrupt", `no member_started for ${row.name}`))
+    : ok(started);
+}
+
+/**
+ * A running member's recorded choice (every continuation rebinds with it): from its task mail
+ * and its starter's member_started. Undefined for a member of a static agent.
+ */
+export function recordedChoice(
+  store: LogStore,
+  row: MemberRow,
+  mailId: string | undefined,
+): DynamicChoice | undefined {
+  const task =
+    mailId === undefined ? undefined : mailEnvelope(store.driver, mailId);
+  if (task === undefined) return undefined;
+  const started = startedBy(store, row, task);
+  if (!started.ok)
+    throw new Error(`member ${row.name}: ${started.error.message}`);
+  return started.value === undefined
+    ? undefined
+    : choiceOf(started.value, task);
+}
+
+/**
+ * A dynamic member's choice: the define its starter recorded, and who that starter is (the
+ * operator, or the lead member its task came from). Undefined for any other member.
+ */
+function choiceOf(
+  started: EventOf<"member_started">,
+  task: MailEnvelope,
+): DynamicChoice | undefined {
+  const { define } = started.data;
+  if (define === undefined) return undefined;
+  return {
+    define,
+    starter: "operator" in task.from ? "operator" : task.from.name,
+  };
 }

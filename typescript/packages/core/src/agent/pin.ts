@@ -15,20 +15,16 @@ import type { Model } from "../model";
 import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
 import { TEAM_TOOLS, TEAM_TOOLS_PINNED } from "../team/constants";
+import { type DynamicChoice, KEPT_TOOLS } from "../team/dynamic";
 import { builtins, type Capabilities, type Egress } from "../tools";
 import { frameworkSpec } from "../tools/framework";
 import { requireCapabilities } from "../tools/gated";
 import { checkEnforceable } from "./enforceable";
 import { ConfigError } from "./errors";
 import { type Extension, hookNames } from "./extension";
+import { instructions } from "./instructions";
 import { checkRetries, checkStyles, finalOutput, policy } from "./policy";
-import {
-  checkSkills,
-  type Skill,
-  skillListing,
-  skillPins,
-  skillSpecs,
-} from "./skills";
+import { checkSkills, type Skill, skillPins, skillSpecs } from "./skills";
 import type { Tool } from "./tool";
 
 // The resolved, secret-free config an agent pins in thread_started: line 0's
@@ -61,6 +57,10 @@ export type PinOptions = {
   readonly handoffs: readonly string[];
   /** agent({team}): the agents start may name. Undefined: no team. */
   readonly team: readonly string[] | undefined;
+  /** The agents behind team, in order: each dynamic one adds a line to the listing. */
+  readonly members: readonly { readonly name: string }[];
+  /** A member of a dynamic agent: what its starter chose (lane 26). */
+  readonly dynamic?: DynamicPin;
   /** The MCP servers' tools, resolved at setup. */
   readonly mcp: readonly Tool<unknown, unknown, unknown>[];
   readonly memory: MemoryProvider | undefined;
@@ -81,6 +81,9 @@ export type ChildPin = {
   readonly tools?: ReadonlySet<string>;
 };
 
+/** A dynamic member's choice, as its pin binds it: its template, the define and its starter. */
+export type DynamicPin = DynamicChoice & { readonly template: string };
+
 /** spec/api.json agent memory_write. */
 export type MemoryWrite = "deny" | "ask" | "allow_principal" | "allow";
 
@@ -100,7 +103,35 @@ export function pin(
   readonly started: EventDraft;
   readonly config: string;
 } {
-  const within = child?.tools;
+  const { specs, cfg, config } = pinned(options, child?.tools, member);
+  return {
+    specs,
+    config,
+    started: {
+      type: "thread_started",
+      type_version: 1,
+      critical: true,
+      actor: { kind: "host" },
+      data: {
+        ...cfg,
+        config_hash: sha256Hex(config),
+        ...(child === undefined ? {} : { parent: child.parent }),
+      },
+    },
+  };
+}
+
+type Cfg = Omit<ThreadStarted, "config_hash" | "parent" | "team">;
+
+function pinned(
+  options: PinOptions,
+  within: ReadonlySet<string> | undefined,
+  member: boolean,
+): {
+  readonly specs: readonly ToolSpec[];
+  readonly cfg: Cfg;
+  readonly config: string;
+} {
   const o = within === undefined ? options : { ...options, sandbox: undefined };
   // A child runs without a sandbox and within its parent's tools, which were checked already.
   if (within === undefined) requireCapabilities(o.capabilities, o.sandbox);
@@ -124,9 +155,10 @@ export function pin(
     ...o.tools.map((t) => t.spec()),
     ...extensionTools(o.extensions, o.mcp).map((t) => t.spec()),
   ];
-  // A child never gains a tool its parent lacks.
+  // A child never gains a tool its parent lacks; a dynamic member has what its starter chose.
+  const narrow = within ?? chosen(o.dynamic, all);
   const specs = [
-    ...all.filter((t) => within === undefined || within.has(t.name)),
+    ...all.filter((t) => narrow === undefined || narrow.has(t.name)),
     ...finalOutput(o.output),
   ];
   const exts = o.extensions.map((e) => e.name);
@@ -143,7 +175,7 @@ export function pin(
     throw new ConfigError("duplicate_name", `two tools are named ${twice}`);
   checkEnforceable(o.budget, [o.model, ...o.fallback], o.onUnknownUsage);
   const { model, params, adapter } = o.model.info;
-  const cfg = {
+  const cfg: Cfg = {
     agent_name: o.name,
     instructions: instructions(o),
     model,
@@ -168,21 +200,28 @@ export function pin(
     }),
   );
   if (!text.ok) throw new ConfigError("invalid_config", text.error.message);
-  return {
-    specs,
-    config: text.value,
-    started: {
-      type: "thread_started",
-      type_version: 1,
-      critical: true,
-      actor: { kind: "host" },
-      data: {
-        ...cfg,
-        config_hash: sha256Hex(text.value),
-        ...(child === undefined ? {} : { parent: child.parent }),
-      },
-    },
-  };
+  return { specs, cfg, config: text.value };
+}
+
+/**
+ * A dynamic member's tools: what its starter chose, and F. A chosen tool its template no longer
+ * pins (or one of F) can't be rebuilt: ConfigError, which a rebind records as pin_unavailable.
+ */
+function chosen(
+  dynamic: DynamicPin | undefined,
+  all: readonly ToolSpec[],
+): ReadonlySet<string> | undefined {
+  if (dynamic === undefined) return undefined;
+  const names = new Set(all.map((t) => t.name));
+  const gone = dynamic.define.tools.find(
+    (t) => !names.has(t) || KEPT_TOOLS.has(t),
+  );
+  if (gone !== undefined)
+    throw new ConfigError(
+      "invalid_config",
+      `dynamic agent ${dynamic.template} has no tool ${gone} to give its member`,
+    );
+  return new Set([...dynamic.define.tools, ...KEPT_TOOLS]);
 }
 
 /**
@@ -192,6 +231,12 @@ export function pin(
  */
 function hashedOnly(o: PinOptions): Record<string, unknown> {
   return {
+    // Hashed even when line 0 wouldn't show the choice (two keys naming one model).
+    ...(o.dynamic === undefined
+      ? {}
+      : {
+          dynamic: { template: o.dynamic.template, define: o.dynamic.define },
+        }),
     ...(o.memory === undefined ? {} : { memory_write: o.memoryWrite }),
     ...(o.skills.length === 0 ? {} : { skills: skillPins(o.skills) }),
     ...(o.extensions.length === 0
@@ -215,25 +260,6 @@ function hashedOnly(o: PinOptions): Record<string, unknown> {
           },
         }),
   };
-}
-
-/**
- * the base instructions, then each extension's, in declaration order, then the
- * skill listing, then the agents spawn_agent, handoff and start may name.
- */
-function instructions(o: PinOptions): string {
-  const listed = (label: string, names: readonly string[]): string[] =>
-    names.length === 0 ? [] : [`${label}: ${names.join(", ")}.`];
-  return [
-    o.instructions,
-    ...o.extensions.flatMap((e) => e.instructions ?? []),
-    ...skillListing(o.skills),
-    ...listed("Subagents you can start with spawn_agent", o.subagents),
-    ...listed("Agents you can hand the conversation to", o.handoffs),
-    ...listed("Agents you can start as team members with start", o.team ?? []),
-  ]
-    .filter((t) => t !== "")
-    .join("\n\n");
 }
 
 const TEAM = [

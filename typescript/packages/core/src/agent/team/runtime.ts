@@ -95,16 +95,22 @@ export function teamOf<Deps, Output>(
   };
 }
 
-/** The pins of the agents start may name, each made once, on first use. */
+/**
+ * The pins of the agents start may name, each made once, on first use; a dynamic member's each
+ * time, for its starter's choice.
+ */
 function pins<Deps, Output>(def: Resolved<Deps, Output>): TeamRuntime["pin"] {
   const made = new Map<string, Promise<TeamAgentPin | undefined>>();
-  return (agent) => {
+  const entryOf = (agent: string) => {
+    const handle = def.members.find((a) => a.name === agent);
+    return handle === undefined ? undefined : memberEntry(handle);
+  };
+  return (agent, choice) => {
+    if (choice !== undefined)
+      return entryOf(agent)?.pinned(choice) ?? Promise.resolve(undefined);
     const known = made.get(agent);
     if (known !== undefined) return known;
-    const handle = def.members.find((a) => a.name === agent);
-    const entry = handle === undefined ? undefined : memberEntry(handle);
-    const pinned =
-      entry === undefined ? Promise.resolve(undefined) : entry.pinned();
+    const pinned = entryOf(agent)?.pinned() ?? Promise.resolve(undefined);
     made.set(agent, pinned);
     return pinned;
   };
@@ -133,14 +139,38 @@ export function agentsOf(
   return into;
 }
 
+/** The starter a block names for Team.start: no agent in a team may take its name. */
+const OPERATOR = "operator";
+
+/** A dynamic agent runs only as a team member: never as a subagent or a handoff target. */
+export function checkNotTemplates(agents: readonly object[]): void {
+  for (const agent of agents)
+    if (memberEntry(agent)?.template !== undefined) {
+      const { name } = z.object({ name: z.string() }).parse(agent);
+      throw new ConfigError(
+        "invalid_config",
+        `dynamic agents run as team members; put ${name} in team`,
+      );
+    }
+}
+
 /**
  * Setup refusals of a team (spec/api.json agent.team): a listed agent that hands off
- * (handoff_in_team), a listed agent's own tool named like a team tool, and two agents of one
- * name in the tree (duplicate_name).
+ * (handoff_in_team), a listed agent's own tool named like a team tool, two agents of one
+ * name in the tree (duplicate_name), and `operator`, reserved for an operator's start's block.
  */
-export function checkTeam(team: readonly object[] | undefined): void {
+export function checkTeam(
+  lead: string,
+  team: readonly object[] | undefined,
+): void {
   if (team === undefined) return;
-  for (const [name, agent] of agentsOf(team)) {
+  const agents = agentsOf(team);
+  if (lead === OPERATOR || agents.has(OPERATOR))
+    throw new ConfigError(
+      "invalid_config",
+      `the name ${OPERATOR} is reserved in teams; rename that agent`,
+    );
+  for (const [name, agent] of agents) {
     const entry = memberEntry(agent);
     if (entry?.handsOff === true)
       throw new ConfigError(

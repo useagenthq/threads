@@ -17,6 +17,7 @@ import type { LookupResult, Model } from "../model";
 import type { Result } from "../result";
 import type { Stale } from "../sandbox/protocol";
 import type { BudgetLedger } from "../store/budget";
+import type { DynamicChoice } from "../team/dynamic";
 
 /**
  * RunResult failed.error.code: host-api RunErrorCode (spec/schema/host-api), closed. A test
@@ -285,12 +286,22 @@ export type TeamAgentPin = {
   readonly policy: Policy | undefined;
   /** Its own budget: it covers the member. */
   readonly budget: NonNullable<Policy["budget"]> | undefined;
+  /** Its pinned tool names, in order: a dynamic agent's are all a start may choose from, and F. */
+  readonly tools: readonly string[];
+  /** A dynamic agent: its model keys, the first the default. */
+  readonly models?: readonly string[];
 };
 
 /** What the loop of a team's lead or member needs from its team. */
 export type TeamRuntime = {
-  /** The agents start may name, pinned on first use; undefined for an agent the team lacks. */
-  readonly pin: (agent: string) => Promise<TeamAgentPin | undefined>;
+  /**
+   * The agents start may name, pinned on first use; undefined for an agent the team lacks. With
+   * a choice, a dynamic agent's member as that choice defines it (throws ConfigError).
+   */
+  readonly pin: (
+    agent: string,
+    choice?: DynamicChoice,
+  ) => Promise<TeamAgentPin | undefined>;
   readonly limits: { readonly concurrent: number; readonly mailbox: number };
   /**
    * A member's turn is under the run budget of its request: the root request the turn's opener

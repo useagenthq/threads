@@ -10,6 +10,7 @@ import type { EventDraft } from "../store/admit";
 import type { SqliteDriver } from "../store/driver";
 import type { Chain } from "../verify";
 import type { Batch } from "./batch";
+import type { InvalidDefinition } from "./dynamic";
 import type { PutText } from "./mail";
 import { turnProvenance } from "./provenance";
 import {
@@ -45,9 +46,16 @@ export type Caller = {
 };
 
 /** An op's refusal: the op records it as the call's result. */
-export type Refusal = { readonly refused: TeamRefusal };
+export type Refusal = {
+  readonly refused: TeamRefusal;
+  /** invalid_definition only: which chosen field, and why. */
+  readonly detail?: InvalidDefinition;
+};
 
-export const refusal = (code: TeamRefusal): Refusal => ({ refused: code });
+export const refusal = (
+  code: TeamRefusal,
+  detail?: InvalidDefinition,
+): Refusal => ({ refused: code, ...(detail === undefined ? {} : { detail }) });
 
 export function isRefusal(value: unknown): value is Refusal {
   return typeof value === "object" && value !== null && "refused" in value;
@@ -130,7 +138,13 @@ export function recorded(ctx: CallContext, value: unknown): void {
   ctx.batch.add(
     answer(
       ctx,
-      isRefusal(value) ? { code: value.refused, status: "refused" } : value,
+      isRefusal(value)
+        ? {
+            code: value.refused,
+            ...(value.detail === undefined ? {} : { detail: value.detail }),
+            status: "refused",
+          }
+        : value,
     ),
   );
 }

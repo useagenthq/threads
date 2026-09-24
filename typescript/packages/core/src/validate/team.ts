@@ -2,10 +2,12 @@ import { assertNever } from "../assert-never";
 import type { EventOf, Fold } from "../fold/state";
 import { joinsTurn, mailOpensTurn, mailRenders, mailRun } from "../fold/team";
 import { type KnownEvent, principalKey } from "../log";
+import { KEPT_TOOLS, labelOk, refusedText } from "../team/dynamic";
 import { invalid, type Violation } from "./violation";
 
-// Semantic rules 31 and 33-45 on one log (spec/schema/README.md, "Semantic rules"; reference:
-// spec/tools/fixtures/ref_rules.py). Rule 43 is cross-log and 32 is woken's (wake.ts).
+// Semantic rules 31 and 33-46 on one log (spec/schema/README.md, "Semantic rules"; reference:
+// spec/tools/fixtures/ref_rules.py). Rule 43 and half of 46 are cross-log (team/cross.ts); 32 is
+// woken's (wake.ts).
 
 const TEAM_LOG: ReadonlySet<KnownEvent["type"]> = new Set([
   "operator_request",
@@ -236,13 +238,38 @@ function checkDecision(
 }
 
 /**
- * Rules 42 and 45: a lead's member_started is its member's parent; a team log's names the lead
- * and follows its operator_request.
+ * Rule 46 on one log: a label has no control or format character and is 1-64 code points; a
+ * define names each tool once, none of F, and its instructions pass the block check.
+ */
+function checkDefine(d: EventOf<"member_started">["data"]): Violation {
+  if (d.label !== undefined && !labelOk(d.label))
+    return invalid(
+      "a member_started label has a control or format character, or is too long",
+    );
+  if (d.define === undefined) return undefined;
+  const { tools, instructions } = d.define;
+  if (
+    new Set(tools).size !== tools.length ||
+    tools.some((t) => KEPT_TOOLS.has(t))
+  )
+    return invalid("define.tools repeats a tool or chooses a framework tool");
+  return instructions !== undefined && refusedText(instructions)
+    ? invalid(
+        "define.instructions holds the block's delimiter, its sentence or a control character",
+      )
+    : undefined;
+}
+
+/**
+ * Rules 42, 45 and 46: a lead's member_started is its member's parent; a team log's names the
+ * lead and follows its operator_request; a dynamic member's define is well-formed.
  */
 export function checkStarted(
   fold: Fold,
   e: EventOf<"member_started">,
 ): Violation {
+  const defined = checkDefine(e.data);
+  if (defined !== undefined) return defined;
   const { parent } = e.data;
   const { team } = fold;
   if (team.teamLog) {

@@ -18,7 +18,12 @@ import { Batch, type Mint } from "../../team/batch";
 import { claimMail } from "../../team/claim";
 import { TEAM_CONSTANTS } from "../../team/constants";
 import { consumable, consume } from "../../team/consume";
-import { materialize, type Rebind } from "../../team/materialize";
+import type { DynamicChoice } from "../../team/dynamic";
+import {
+  materialize,
+  type Rebind,
+  recordedChoice,
+} from "../../team/materialize";
 import { turnProvenance } from "../../team/provenance";
 import { type RebindCode, rebindFailed } from "../../team/rebind";
 import {
@@ -191,7 +196,8 @@ export class TeamWorker {
     const holder = `team-${crypto.randomUUID()}`;
     const got = await materialize(this.#env.log, row.team_id, row.name, {
       artifacts: this.#env.artifacts,
-      rebind: (agent, configHash) => this.#rebind(agent, configHash),
+      rebind: (agent, configHash, choice) =>
+        this.#rebind(agent, configHash, choice),
       holder,
       ttlMs: LEASE_TTL_MS,
       ...(this.#env.mint === undefined ? {} : { mint: this.#env.mint }),
@@ -204,12 +210,19 @@ export class TeamWorker {
     await this.#member(row, branch, holder);
   }
 
-  /** Rebinds a member's definition by name in this process (design §4.10, prework). */
-  async #rebind(agent: string, configHash: string): Promise<Rebind> {
+  /**
+   * Rebinds a member's definition by name in this process (design §4.10, prework); a dynamic
+   * member's with its recorded choice, never re-resolved.
+   */
+  async #rebind(
+    agent: string,
+    configHash: string,
+    choice: DynamicChoice | undefined,
+  ): Promise<Rebind> {
     const handle = this.#env.agents.get(agent);
     const entry = handle === undefined ? undefined : memberEntry(handle);
     if (entry === undefined) return { status: "pin_unavailable" };
-    const pinned = await pinnedOrUnavailable(entry.pinned);
+    const pinned = await pinnedOrUnavailable(() => entry.pinned(choice));
     if (pinned === undefined) return { status: "pin_unavailable" };
     if (pinned.configHash !== configHash) return { status: "pin_mismatch" };
     if (entry.team === undefined) return { status: "ok" };
@@ -241,9 +254,11 @@ export class TeamWorker {
       throw new Error(`member ${row.name} has no task`);
     const handle = this.#env.agents.get(row.agent);
     const entry = handle === undefined ? undefined : memberEntry(handle);
+    const choice = recordedChoice(this.#env.log, row, task.data.mail_id);
     const rebind = await this.#rebind(
       row.agent,
       started?.data.config_hash ?? "",
+      choice,
     );
     if (entry === undefined || rebind.status !== "ok")
       return this.#unbound(
@@ -266,6 +281,7 @@ export class TeamWorker {
       notify: this.notify,
       covering: ancestorsOf(this.#env.log, parent),
       ...(this.#env.signal === undefined ? {} : { signal: this.#env.signal }),
+      ...(choice === undefined ? {} : { dynamic: choice }),
     });
   }
 

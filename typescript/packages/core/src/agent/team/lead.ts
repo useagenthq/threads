@@ -1,8 +1,11 @@
 import { sha256Hex } from "../../hash";
 import { ThreadStartedData } from "../../log";
 import { knownEvents } from "../../reduce";
+import { type DynamicChoice, KEPT_TOOLS } from "../../team/dynamic";
 import type { Agent } from "../agent";
+import { ConfigError } from "../errors";
 import { execute } from "../execute";
+import { pin } from "../pin";
 import type { MemberEntry } from "../registry";
 import type { RunResult } from "../result";
 import { pinnedAfterSetup, type Resolved } from "../run";
@@ -52,12 +55,25 @@ async function withTeam<Output>(
 export function memberOf<Deps, Output>(
   def: Resolved<Deps, Output>,
 ): MemberEntry {
+  const keys = def.models?.map(([k]) => k);
   return {
     handsOff: def.handoffs.length > 0,
     toolNames: def.tools.map((t) => t.name),
     team: def.team === undefined ? undefined : def.members,
-    pinned: async () => {
-      const { config, started } = await pinnedAfterSetup(def, true);
+    ...(keys === undefined
+      ? {}
+      : {
+          template: {
+            models: keys,
+            listed: () =>
+              pin({ ...def, mcp: [] }, undefined, true)
+                .specs.map((s) => s.name)
+                .filter((n) => !KEPT_TOOLS.has(n)),
+          },
+        }),
+    pinned: async (choice) => {
+      const member = choice === undefined ? def : memberDef(def, choice);
+      const { config, started } = await pinnedAfterSetup(member, true);
       if (started.type !== "thread_started")
         throw new Error("a pin is a thread_started");
       const pinned = ThreadStartedData.parse(started.data);
@@ -69,11 +85,13 @@ export function memberOf<Deps, Output>(
         params,
         policy,
         budget: def.budget,
+        tools: pinned.tools.map((t) => t.name),
+        ...(keys === undefined ? {} : { models: keys }),
       };
     },
     run: async (env) => {
       await execute(
-        def,
+        env.dynamic === undefined ? def : memberDef(def, env.dynamic),
         {
           store: env.store,
           principal: env.principal,
@@ -85,6 +103,32 @@ export function memberOf<Deps, Output>(
         },
         [],
       );
+    },
+  };
+}
+
+/**
+ * A member's definition: its template's, with the chosen model and the choice its pin binds.
+ * A model key the template no longer has is ConfigError, which a rebind records as
+ * pin_unavailable.
+ */
+export function memberDef<Deps, Output>(
+  def: Resolved<Deps, Output>,
+  choice: DynamicChoice,
+): Resolved<Deps, Output> {
+  const model = def.models?.find(([k]) => k === choice.define.model)?.[1];
+  if (model === undefined)
+    throw new ConfigError(
+      "invalid_config",
+      `dynamic agent ${def.name} has no model ${choice.define.model}`,
+    );
+  return {
+    ...def,
+    model,
+    dynamic: {
+      template: def.name,
+      define: choice.define,
+      starter: choice.starter,
     },
   };
 }

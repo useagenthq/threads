@@ -1,4 +1,5 @@
 import type { MailId, MemberRef, TeamId } from "../../log";
+import type { InvalidDefinition } from "../../team/dynamic";
 import type { Agent, RunInput, StreamEvent } from "../agent";
 import type { RunResult } from "../result";
 import type { RunOptions } from "../run";
@@ -22,18 +23,37 @@ export type Team = {
 
 export type { MemberRef } from "../../log";
 
-/** Why a start was refused. team_closed: the lead ended, which closes the team. */
+/**
+ * Why a start was refused. team_closed: the lead ended, which closes the team.
+ * invalid_definition: a label, instructions, tools or model the start may not choose.
+ */
 export type StartRefusal =
   | "forbidden"
   | "unknown_agent"
   | "concurrency_cap"
   | "budget_exceeded"
-  | "team_closed";
+  | "team_closed"
+  | "invalid_definition";
+
+export type { InvalidDefinition } from "../../team/dynamic";
 
 /** The model's start tool result. */
 export type StartResult =
   | { readonly status: "started"; readonly member: MemberRef }
-  | { readonly status: "refused"; readonly code: StartRefusal };
+  | {
+      readonly status: "refused";
+      readonly code: StartRefusal;
+      /** Present exactly when code is invalid_definition. */
+      readonly detail?: InvalidDefinition;
+    };
+
+/**
+ * A dynamic agent (dynamicAgent()): a template in a lead's team whose members a start defines
+ * within what its code pins. It runs only as a team member.
+ */
+export type DynamicAgent<_Deps = undefined, _Output = string> = {
+  readonly name: string;
+};
 
 /** Why a send was refused. stale_member: the member was restarted under a newer generation. */
 export type SendRefusal =

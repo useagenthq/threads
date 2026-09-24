@@ -7,10 +7,12 @@ import { ok } from "../../src/result";
 import type { EventDraft, Writer } from "../../src/store";
 import { Batch } from "../../src/team/batch";
 import { type ConsumeContext, consume } from "../../src/team/consume";
+import { resolveDefinition } from "../../src/team/dynamic";
 import { materialize } from "../../src/team/materialize";
 import { send, start } from "../../src/team/ops";
 import { turnProvenance } from "../../src/team/provenance";
 import { type Settlement, settle } from "../../src/team/settle";
+import { StartInput } from "../../src/tools/team-inputs";
 import type { Fixture } from "../store/helpers";
 import { unwrap } from "../store/helpers";
 import { assertTeamReplays } from "./kit";
@@ -55,7 +57,6 @@ const runs = (v: Vector): boolean =>
   v.by !== "team" && !LATER.has(v.op) && !CONTROL_21E.has(v.name);
 
 const Args = {
-  start: z.object({ agent: z.string(), task: z.string() }),
   send: z.object({ to: z.string(), text: z.string() }),
 };
 const put = (): never => {
@@ -98,13 +99,16 @@ function callOp(fx: Fixture, v: Vector): unknown {
   decided(w, (ctx) => {
     const c = { ...ctx, call, put };
     if (v.op === "send") send(c, Args.send.parse(v.input["args"]), limits(v));
-    else
-      start(c, Args.start.parse(v.input["args"]), {
-        agents: agents(),
+    else {
+      const args = StartInput.parse(v.input["args"]);
+      start(c, args, {
+        agents: agents(v),
+        resolved: resolveDefinition(v.given.templates?.[args.agent], args),
         limits: limits(v),
         headroom: () => v.given.headroom ?? true,
         threadId: ThreadId.parse(v.input["thread_id"]),
       });
+    }
   });
   const result = knownEvents(w.chain).findLast((e) => e.type === "tool_result");
   if (result?.type !== "tool_result") throw new Error("no result");
@@ -116,9 +120,17 @@ const limits = (v: Vector) => ({
   mailbox: v.given.mailbox ?? 100,
 });
 
-/** The agents the worlds' team lists, each with the config_hash its member logs pin. */
-function agents(): ReadonlyMap<string, { readonly configHash: string }> {
+/**
+ * The agents the worlds' team lists, each with the config_hash its member logs pin, and the
+ * vector's dynamic agents with the hash its input gives the define's pin.
+ */
+function agents(
+  v: Vector,
+): ReadonlyMap<string, { readonly configHash: string }> {
   const out = new Map<string, { readonly configHash: string }>();
+  const hash = z.string().optional().parse(v.input["config_hash"]);
+  for (const name of Object.keys(v.given.templates ?? {}))
+    if (hash !== undefined) out.set(name, { configHash: hash });
   for (const e of Object.values(DOC.events)) {
     const data = z
       .object({ agent_name: z.string(), config_hash: z.string() })
@@ -284,7 +296,7 @@ describe("team op vectors, run by this runtime", () => {
       new Set(["start", "send", "consume", "materialize", "idle", "end"]),
     );
     // Pinned: a vector that drops out of the selection fails here, not silently.
-    expect(mine).toHaveLength(35);
+    expect(mine).toHaveLength(44);
   });
 
   for (const v of mine)

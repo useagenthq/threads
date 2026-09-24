@@ -7,12 +7,22 @@ import { Batch } from "../../team/batch";
 import type { CallContext } from "../../team/call";
 import { TEAM_CONSTANTS } from "../../team/constants";
 import { consume } from "../../team/consume";
+import {
+  KEPT_TOOLS,
+  resolveDefinition,
+  type Template,
+} from "../../team/dynamic";
 import { send, start } from "../../team/ops";
 import { SendInput, StartInput } from "../../tools/team-inputs";
 import { roomFor } from "../ledger";
 import type { LoopEnd } from "../run";
 import type { Session } from "../session";
-import { BARRED, type Halt, type TeamRuntime } from "../types";
+import {
+  BARRED,
+  type Halt,
+  type TeamAgentPin,
+  type TeamRuntime,
+} from "../types";
 import { runStatus } from "./stop";
 
 // The team tools start and send (spec/schema/README.md, "Teams", Model tools), run by the loop
@@ -52,14 +62,26 @@ function decided(
   return appended;
 }
 
-/** member.start: the listed agent's config is stored before the append that pins it. */
+/**
+ * member.start: the start's chosen fields are resolved against the listed agent (a dynamic
+ * agent's template), and the member's config is stored before the append that pins it.
+ */
 export async function startTool(
   s: Session,
   call: EventOf<"tool_call">,
 ): Promise<Halt | undefined> {
   const team = teamOf(s);
   const args = StartInput.parse(call.data.input);
-  const pinned = await team.pin(args.agent);
+  const listed = await team.pin(args.agent);
+  const resolved = resolveDefinition(templateOf(listed), args);
+  const define = resolved.ok ? resolved.value.define : undefined;
+  const pinned =
+    define === undefined
+      ? listed
+      : await team.pin(args.agent, {
+          define,
+          starter: s.config.agents?.name ?? "",
+        });
   if (pinned !== undefined) s.artifacts.put(utf8.encode(pinned.config));
   return decided(s, call, (ctx) =>
     start(ctx, args, {
@@ -68,11 +90,21 @@ export async function startTool(
           ? []
           : [[args.agent, { configHash: pinned.configHash }]],
       ),
+      resolved,
       limits: team.limits,
       headroom: () => pinned !== undefined && roomFor(s, pinned),
       threadId: ThreadId.parse(uuidv7(s.now())),
     }),
   );
+}
+
+/** A dynamic agent as a start sees it: its pin's tools but F, and its model keys. */
+function templateOf(pin: TeamAgentPin | undefined): Template | undefined {
+  if (pin?.models === undefined) return undefined;
+  return {
+    tools: pin.tools.filter((t) => !KEPT_TOOLS.has(t)),
+    models: pin.models,
+  };
 }
 
 export function sendTool(

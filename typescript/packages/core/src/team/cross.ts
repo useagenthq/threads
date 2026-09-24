@@ -8,10 +8,12 @@ import type {
   TeamId,
   ThreadId,
 } from "../log";
+import { block, type Define, KEPT_TOOLS } from "./dynamic";
 import { sameJson } from "./json";
 
-// Semantic rule 43 (spec/schema/README.md, "Semantic rules"): what only a team's logs together
-// show, checked by the `team` runner and every index rebuild, never by one log's validate_next.
+// Semantic rules 43 and 46 (spec/schema/README.md, "Semantic rules"): what only a team's logs
+// together show, checked by the `team` runner and every index rebuild, never by one log's
+// validate_next.
 
 /** One of a team's logs, read and verified. */
 export type TeamLogEvents = {
@@ -39,7 +41,11 @@ type Facts = {
   readonly identities: ReadonlyMap<string, ReadonlySet<string>>;
   /** Each team's log, as its lead's thread_started names it. */
   readonly teamLogs: ReadonlyMap<string, TeamLogRef>;
+  /** Each dynamic member thread's define and its starter's name (rule 46). */
+  readonly defined: ReadonlyMap<string, Defined>;
 };
+
+type Defined = { readonly define: Define; readonly starter: string };
 
 type TeamLogRef = { readonly thread: string; readonly branch: string };
 
@@ -55,8 +61,15 @@ function facts(logs: readonly TeamLogEvents[]): Facts {
       logs.map((log) => [log.threadId, new Set<string>()]),
     ),
     teamLogs: new Map<string, TeamLogRef>(),
+    defined: new Map<string, Defined>(),
   };
-  for (const log of logs) for (const e of log.events) learn(known, log, e);
+  for (const log of logs) {
+    // The starter a block names: operator in a team log, else the log's own agent.
+    const first = log.events[0];
+    const starter =
+      first?.type === "thread_started" ? first.data.agent_name : "operator";
+    for (const e of log.events) learn(known, log, e, starter);
+  }
   return known;
 }
 
@@ -66,9 +79,11 @@ function learn(
     readonly parents: Map<string, Parent>;
     readonly identities: Map<string, Set<string>>;
     readonly teamLogs: Map<string, TeamLogRef>;
+    readonly defined: Map<string, Defined>;
   },
   log: TeamLogEvents,
   e: KnownEvent,
+  starter: string,
 ): void {
   const own = known.identities.get(log.threadId);
   if (e.type === "message_sent")
@@ -81,6 +96,8 @@ function learn(
   } else if (e.type === "member_started") {
     const m = e.data.member;
     known.parents.set(e.data.thread_id, e.data.parent);
+    if (e.data.define !== undefined)
+      known.defined.set(e.data.thread_id, { define: e.data.define, starter });
     known.identities
       .get(e.data.thread_id)
       ?.add(member(m.team, m.name, m.generation));
@@ -121,7 +138,11 @@ function firstBreak(
   for (const e of log.events) {
     const why = outside(e, team) ? undefined : check(e, log, known);
     if (why !== undefined)
-      return { branchId: log.branchId, seq: e.seq, message: `43: ${why}` };
+      return {
+        branchId: log.branchId,
+        seq: e.seq,
+        message: why.startsWith("46: ") ? why : `43: ${why}`,
+      };
   }
   return undefined;
 }
@@ -166,12 +187,7 @@ function check(
   if (e.type === "message_received") return received(e, own, known);
   if (e.type === "message_sent") return sent(e, log, own, known);
   if (e.type === "team_opened") return named(e, log, known);
-  if (e.type === "thread_started") {
-    const parent = known.parents.get(log.threadId);
-    return parent !== undefined && !sameJson(e.data.parent ?? null, parent)
-      ? "a member's parent is not its member_started's"
-      : undefined;
-  }
+  if (e.type === "thread_started") return memberPin(e, log, known);
   if (e.type === "user_input" && e.data.mail_id !== undefined) {
     const task = known.sent.get(e.data.mail_id);
     return task !== undefined &&
@@ -180,6 +196,39 @@ function check(
       : undefined;
   }
   return undefined;
+}
+
+/** A member's thread_started: its member_started's parent and, for a dynamic member, define. */
+function memberPin(
+  e: EventOf<"thread_started">,
+  log: TeamLogEvents,
+  known: Facts,
+): string | undefined {
+  const parent = known.parents.get(log.threadId);
+  if (parent !== undefined && !sameJson(e.data.parent ?? null, parent))
+    return "a member's parent is not its member_started's";
+  const defined = known.defined.get(log.threadId);
+  return defined === undefined ? undefined : pinnedAsDefined(e, defined);
+}
+
+/**
+ * Rule 46 across logs: a dynamic member pins exactly define.tools and F, and its line 0 ends with
+ * the block for define.instructions.
+ */
+function pinnedAsDefined(
+  e: EventOf<"thread_started">,
+  { define, starter }: Defined,
+): string | undefined {
+  const names = e.data.tools
+    .map((t) => t.name)
+    .filter((n) => !KEPT_TOOLS.has(n));
+  if (!sameJson(names, define.tools))
+    return "46: a dynamic member's pinned tools are not define.tools and F";
+  const written = define.instructions;
+  return written === undefined ||
+    e.data.instructions.endsWith(block(starter, written))
+    ? undefined
+    : "46: a dynamic member's instructions don't end with its define's block";
 }
 
 /** A team log is the thread and branch its lead's thread_started.team names. */

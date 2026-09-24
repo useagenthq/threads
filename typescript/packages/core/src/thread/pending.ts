@@ -5,6 +5,7 @@ import type {
   CallId,
   JsonObject,
   KnownEvent,
+  MemberDefine,
   PermissionRule,
 } from "../log";
 import type { ListedBranch } from "../store/fork-reads";
@@ -22,7 +23,51 @@ export type PendingApproval = {
   readonly suggested_rules: readonly z.infer<typeof PermissionRule>[];
   /** Copied from the call's permission_decision: a hook's rule, or the memory_write option to change. */
   readonly reason?: string;
+  /** In a team member's thread: which member, its label and what its starter chose. */
+  readonly member?: MemberView;
 };
+
+/** host-api PendingApproval.member, from the starter's member_started. */
+export type MemberView = {
+  readonly name: string;
+  readonly label?: string;
+  readonly define?: z.infer<typeof MemberDefine>;
+};
+
+/**
+ * A team member's view, read from its starter's member_started: the lead's log for a model
+ * start, else the team log the lead names (an operator start). Undefined for any other thread.
+ */
+export function memberView(
+  events: readonly KnownEvent[],
+  read: (branch: BranchId) => readonly KnownEvent[] | undefined,
+): MemberView | undefined {
+  const first = events[0];
+  const parent =
+    first?.type === "thread_started" ? first.data.parent : undefined;
+  if (first === undefined || parent?.relation !== "team_member")
+    return undefined;
+  const lead = read(parent.branch_id) ?? [];
+  const team =
+    lead[0]?.type === "thread_started" ? lead[0].data.team : undefined;
+  const logs = [
+    lead,
+    team === undefined ? [] : (read(team.log_branch_id) ?? []),
+  ];
+  const started = logs
+    .flat()
+    .find(
+      (e) =>
+        e.type === "member_started" && e.data.thread_id === first.thread_id,
+    );
+  if (started?.type !== "member_started") return undefined;
+  const { member, label, define } = started.data;
+  return {
+    name: member.name,
+    ...(label === undefined ? {} : { label }),
+    ...(define === undefined ? {} : { define }),
+  };
+}
 
 /** host-api BranchInfo. */
 export type BranchInfo = {
@@ -33,11 +78,12 @@ export type BranchInfo = {
   readonly runnable: boolean;
 };
 
-/** Open challenges that have not expired, oldest first. */
+/** Open challenges that have not expired, oldest first; in a member's thread, with `member`. */
 export function pendingApprovals(
   events: readonly KnownEvent[],
   fold: Fold,
   now: number,
+  member?: MemberView,
 ): readonly PendingApproval[] {
   return events.flatMap((e): PendingApproval[] => {
     if (e.type !== "approval_requested" || e.data.expires_at <= now) return [];
@@ -63,6 +109,7 @@ export function pendingApprovals(
         expires_at: e.data.expires_at,
         suggested_rules: suggestedRules(call.data.name, call.data.input),
         ...(reason === undefined ? {} : { reason }),
+        ...(member === undefined ? {} : { member }),
       },
     ];
   });

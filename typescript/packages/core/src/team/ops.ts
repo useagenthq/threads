@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { Budget, ThreadId } from "../log";
+import type { Result } from "../result";
 import {
   addressed,
   type CallContext,
@@ -12,6 +13,7 @@ import {
   recorded,
   refusal,
 } from "./call";
+import type { InvalidDefinition, Resolved } from "./dynamic";
 import { bodyOf, sent } from "./mail";
 import { memberRows, pendingTo } from "./rows";
 
@@ -35,6 +37,11 @@ export type Listed = {
 /** What start reads besides the store: the caller's definition. */
 export type StartPlan = {
   readonly agents: ReadonlyMap<string, Listed>;
+  /**
+   * The start's label and chosen fields, resolved against the named agent (a dynamic agent's
+   * template, lane 26). Read only for a listed agent.
+   */
+  readonly resolved: Result<Resolved, InvalidDefinition>;
   readonly limits: TeamLimits;
   /** Every budget covering the new member has room for one request of its model. */
   readonly headroom: (agent: string) => boolean;
@@ -91,6 +98,7 @@ export function start(
       },
       provenance: caller.provenance,
       ...(listed.budget === undefined ? {} : { budget: listed.budget }),
+      ...(plan.resolved.ok ? plan.resolved.value : {}),
     },
   });
   ctx.batch.add(
@@ -108,7 +116,10 @@ export function start(
   recorded(ctx, { member, status: "started" });
 }
 
-/** Policy (only a lead starts), team open, the agent listed, the concurrent cap, headroom. */
+/**
+ * Policy (only a lead starts), team open, the agent listed, the start's chosen fields, the
+ * concurrent cap, headroom.
+ */
 function startChecks(
   ctx: CallContext,
   caller: Caller,
@@ -119,6 +130,8 @@ function startChecks(
   if (denied !== undefined) return denied;
   if (caller.team.closed_at !== null) return refusal("team_closed");
   if (!plan.agents.has(agent)) return refusal("unknown_agent");
+  if (!plan.resolved.ok)
+    return refusal("invalid_definition", plan.resolved.error);
   const live = memberRows(ctx.db, caller.team.team_id).filter(
     (r) => r.role === "member" && LIVE.has(r.state),
   );

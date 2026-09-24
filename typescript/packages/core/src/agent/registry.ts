@@ -9,6 +9,7 @@ import type {
   ThreadId,
 } from "../log";
 import type { ChildRun, Covering, Subagent, TeamAgentPin } from "../loop";
+import type { DynamicChoice } from "../team/dynamic";
 import type { Thread } from "../thread/handle";
 import type { HostRunner } from "./hosted";
 import type { ThreadRef } from "./result";
@@ -61,8 +62,16 @@ export type MemberEntry = {
   readonly toolNames: readonly string[];
   /** The agents of its own team, when it leads one (a nested lead). */
   readonly team: readonly object[] | undefined;
-  /** Its pin as a team member, after setup: config_hash and the canonical config. */
-  readonly pinned: () => Promise<TeamAgentPin>;
+  /** A dynamic agent (lane 26): its model keys, and the choosable tools a lead's listing shows. */
+  readonly template?: {
+    readonly models: readonly string[];
+    readonly listed: () => readonly string[];
+  };
+  /**
+   * Its pin as a team member, after setup: config_hash and the canonical config; a dynamic
+   * agent's as the member a choice defines. Throws ConfigError.
+   */
+  readonly pinned: (choice?: DynamicChoice) => Promise<TeamAgentPin>;
   /** Runs one member branch of it until the branch is idle, parked or ended. */
   readonly run: (env: MemberEnv) => Promise<void>;
 };
@@ -80,6 +89,8 @@ export type MemberEnv = {
   /** Every ancestor thread's budget, which covers the member too. */
   readonly covering: readonly Covering[];
   readonly signal?: AbortSignal;
+  /** A dynamic agent's member: what its starter chose. */
+  readonly dynamic?: DynamicChoice;
 };
 
 type Entry = {
