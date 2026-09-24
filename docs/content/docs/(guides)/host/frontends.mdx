@@ -4,7 +4,7 @@ description: Connect a React chat UI with the AI SDK's useChat, or any AG-UI cli
 icon: MonitorSmartphone
 ---
 
-Every host speaks the two common chat UI protocols out of the box: the Vercel **AI SDK UI message stream** (what `useChat` reads) and **AG-UI** (CopilotKit, `@ag-ui/client`). Point the stock client at the host and you get streaming text, tool calls, approvals and questions in the browser. You don't need an adapter, a proxy or any extra config.
+Every host speaks the two common chat UI protocols out of the box: the Vercel **AI SDK UI message stream** (what `useChat` reads) and **AG-UI** (CopilotKit, `@ag-ui/client`). Point the stock client at the host and you get streaming text, tool calls and approvals in the browser. You don't need an adapter, a proxy or any extra config.
 
 What you get for free:
 
@@ -100,18 +100,30 @@ const agent = new HttpAgent({
 agent.addMessage({ id: crypto.randomUUID(), role: "user", content: "Mail the report to Bob" });
 await agent.runAgent();
 
-// A tool that needs approval ends the run with an interrupt. Answer it to resume.
-for (const interrupt of agent.pendingInterrupts) {
+// A tool that needs approval ends the run with an interrupt. One resume answers them all.
+if (agent.pendingInterrupts.length > 0) {
   await agent.runAgent({
-    resume: [{ interruptId: interrupt.id, status: "resolved", payload: { decision: "grant" } }],
+    resume: agent.pendingInterrupts.map((interrupt) => ({
+      interruptId: interrupt.id,
+      status: "resolved",
+      payload: { decision: "grant" },
+    })),
   });
 }
 ```
 
 - `threadId` is your chat's key, scoped to the caller and the agent just like the AI SDK's `id`.
-- An approval is answered with `{decision: "grant" | "deny"}`, and `status: "cancelled"` denies it. A question takes `{answer: "..."}`. Each interrupt carries its `responseSchema`.
-- If someone else settled the interrupt first (an approver in Slack, say), resuming still works. The stream carries a `threads.resume_conflict` custom event that tells you what was recorded.
+- One `resume` must answer every pending interrupt: two tool calls that both need approval end the run with two, and the client refuses a resume that leaves one out.
+- An approval is answered with `{decision: "grant" | "deny"}`, and `status: "cancelled"` denies it. Each interrupt carries its `responseSchema`.
+- If someone else settled the interrupt first (an approver in Slack, say), resuming still works, even when their decision lands while yours is on its way. The stream carries a `threads.resume_conflict` custom event that tells you what was recorded.
 - After a dropped connection, call `runAgent()` again with the same messages. The host sees the same last message id and streams that run again from a `MESSAGES_SNAPSHOT`. It never starts a second one.
+
+## Good to know
+
+- **Earlier messages after a reload.** The host streams runs, not a chat history: after a reload, `useChat({resume: true})` picks up a run that is still going, and nothing else. Keep the messages in your own store and pass them as `messages`, or rebuild them from the thread's [timeline](/docs/evals/timeline). An AG-UI client gets the whole thread in the `MESSAGES_SNAPSHOT` of its next run.
+- **Other approvers.** A chat's thread belongs to the signed-in user who started it. An approver who isn't that user (a manager, an on-call engineer) decides through the [HTTP API](/docs/host/http-api) approval routes (`POST /v1/threads/{thread_id}/approvals/{challenge_id}`), or in a channel such as Slack. The chat page sees the decision when its stream continues.
+- **A retried model call.** When a model call fails partway and is retried, the host tells the UI to drop what that attempt streamed: an AI SDK `data-attempt` part or an AG-UI `threads.attempt_abandoned` custom event.
+- **AG-UI replays.** A replay starts with a `MESSAGES_SNAPSHOT` built from the log, so messages the page only kept locally are dropped. Its size grows with the thread's history.
 
 ## Custom clients
 
