@@ -6,12 +6,13 @@ from pathlib import Path
 
 from api_docs import check_docs
 
+from .features import features_page
 from .json_access import Json, Obj, load, obj, text
 from .members import Explain
 from .openapi import bundle_openapi
 from .overview import overview_page, sidebar_meta, type_groups
 from .pages import function_page, type_page
-from .tables import NOT_BUILT, OPENAPI, REF, ROOT, SPEC
+from .tables import GUIDES, NOT_BUILT, OPENAPI, REF, ROOT, SPEC
 
 
 def schemas() -> dict[str, Json]:
@@ -42,6 +43,7 @@ def outputs(api: Obj, explain: Explain) -> dict[Path, str]:
     files[REF / "overview.mdx"] = overview_page(api, groups, decisions)
     files[OPENAPI] = json.dumps(bundle_openapi(), indent=2) + "\n"
     files[REF / "meta.json"] = sidebar_meta(api, groups)
+    files[GUIDES / "python-and-typescript.mdx"] = features_page()
     return files
 
 

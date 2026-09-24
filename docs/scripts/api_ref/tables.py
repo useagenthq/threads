@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SPEC = ROOT / "spec"
 DOCS = ROOT / "docs"
 REF = DOCS / "content" / "docs" / "reference"
+GUIDES = DOCS / "content" / "docs" / "(guides)"
 OPENAPI = DOCS / "openapi.json"
 
 type Member = tuple[str, str | None]
