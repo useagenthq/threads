@@ -30,7 +30,9 @@ export function branchLines(
     if (row.value === undefined)
       return err(logError("branch_not_found", `no branch ${id}`));
     leaf ??= row.value;
-    const own = eventLines(db, id, through);
+    // Only through the head read with the row: a line appended since (another process's) is
+    // not in this read, so the head checkpoint stays the last line.
+    const own = eventLines(db, id, Math.min(through, row.value.head_seq));
     if (!own.ok) return own;
     segments.unshift([row.value.header_line, ...own.value]);
     through = Math.min(through, row.value.fork_at_seq ?? 0);
