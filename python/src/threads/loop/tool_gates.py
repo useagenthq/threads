@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Final
 from threads.hooks.runner import RESULT, TEXTS, TOOL, Ran, decision_draft, injected
 from threads.log import CallId, Span, ToolCallEvent, ToolResultEvent
 from threads.loop.drafts import draft
-from threads.loop.gates import Gated, append, decided, last_response, said, texts, verdict
-from threads.loop.history import turn_events
+from threads.loop.gates import Gated, append, decided, said, texts, verdict
+from threads.loop.history import last_response, turn_events
 from threads.loop.runtime import Halt, Runtime, lost
 from threads.permissions import Decision
 from threads.permissions.engine import Verdict

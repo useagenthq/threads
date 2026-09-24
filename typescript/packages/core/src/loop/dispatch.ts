@@ -90,32 +90,38 @@ function ask(s: Session, call: EventOf<"tool_call">): Halt | undefined {
     )
   )
     return denied(s, callId, "approval denied");
-  const open = [...s.fold.approvals].find(
-    ([, a]) => a.callId === callId && !a.consumed,
+  const open = s.events.findLast(
+    (e): e is EventOf<"approval_requested"> =>
+      e.type === "approval_requested" &&
+      e.data.call_id === callId &&
+      s.fold.approvals.get(e.data.challenge_id)?.consumed === false,
   );
   if (open !== undefined)
     return s.append(
       draft.parked({
-        address: { kind: "approval", id: open[0] },
+        address: { kind: "approval", id: open.data.challenge_id },
         reason: "awaiting_approval",
+        expires_at: open.data.expires_at,
       }),
     );
   const args = canonicalize(input);
   if (!args.ok) throw new Error("tool_call input is canonical JSON");
   const challenge = crypto.randomUUID();
+  const expires = s.now() + HOUR;
   return (
     s.append(
       draft.approvalRequested({
         challenge_id: challenge,
         call_id: callId,
         args_hash: sha256Hex(args.value),
-        expires_at: s.now() + HOUR,
+        expires_at: expires,
       }),
     ) ??
     s.append(
       draft.parked({
         address: { kind: "approval", id: challenge },
         reason: "awaiting_approval",
+        expires_at: expires,
       }),
     )
   );

@@ -85,18 +85,51 @@ export function nextStep(events: readonly KnownEvent[], fold: Fold): Step {
   const cancel = cancelRequested(events, fold);
   if (cancel !== undefined) return { kind: "cancel", request: cancel };
   const turn = turnEvents(events, fold);
-  if (fold.pending.size > 0) return { kind: "calls" };
   const at = turn.findLastIndex((e) => isTurnResponse(e, fold));
   const response = turn[at];
+  const after = turn.slice(at + 1);
+  // Every call of a response is recorded and authorized before any runs, also after a crash.
+  if (
+    response !== undefined &&
+    isTurnResponse(response, fold) &&
+    owesCalls(response, after, fold)
+  )
+    return { kind: "respond", response };
+  if (fold.pending.size > 0) return { kind: "calls" };
   if (response === undefined || !isTurnResponse(response, fold))
     return { kind: "request" };
-  const after = turn.slice(at + 1);
   if (after.some(isTurnRequest)) return { kind: "request" };
   if (!after.some((e) => e.type === "tool_call" || e.type === "injected"))
     return resumesPause(turn, response, fold)
       ? { kind: "request" }
       : { kind: "respond", response };
   return endsTurn(after, fold) ? { kind: "end_turn" } : { kind: "request" };
+}
+
+/**
+ * The response has a tool_use part with no tool_call after it, or a pending call with no
+ * permission_decision (a run stopped mid-recording, or a log whose calls were all recorded
+ * before any was authorized).
+ */
+function owesCalls(
+  response: Response,
+  after: readonly KnownEvent[],
+  fold: Fold,
+): boolean {
+  const recorded = new Set(
+    after.flatMap((e) => (e.type === "tool_call" ? [e.data.call_id] : [])),
+  );
+  const decided = new Set(
+    after.flatMap((e) =>
+      e.type === "permission_decision" ? [e.data.call_id] : [],
+    ),
+  );
+  return response.data.content.some(
+    (p) =>
+      p.type === "tool_use" &&
+      (!recorded.has(p.call_id) ||
+        (fold.pending.has(p.call_id) && !decided.has(p.call_id))),
+  );
 }
 
 /**

@@ -34,7 +34,7 @@ from threads.log import (
     ToolResultLateEvent,
     TurnCompletedEvent,
 )
-from threads.loop import calls, gates, output, parallel, retries, tool_gates
+from threads.loop import calls, gates, output, parallel, record, retries, tool_gates
 from threads.loop.defaults import context, max_pauses
 from threads.loop.drafts import draft
 from threads.loop.history import (
@@ -95,11 +95,13 @@ async def _step(rt: Runtime) -> Halt | None:
     cancel = open_cancel(rt.events)
     if cancel is not None:
         return await _cancel(rt, cancel)
-    if fold.pending:
+    owed = record.owed(rt)
+    if fold.pending or owed:
         gated = await gates.after_model(rt)
         if gated is not None:
             return None if gated == gates.AGAIN else gated
-        return await parallel.run_pending(rt)
+        # Every call of the response is recorded and authorized before any of them runs.
+        return await (record.record_calls(rt) if owed else parallel.run_pending(rt))
     return await _next(rt)
 
 

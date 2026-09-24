@@ -16,7 +16,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import CancelledEvent, EventId, ModelRequestEvent, SteerEvent, ToolSpec
 from threads.loop import calls, effects
-from threads.loop.attempt import response_drafts
+from threads.loop.attempt import response_draft
 from threads.loop.drafts import draft
 from threads.loop.history import CallState, call_state, open_cancel, turn_events
 from threads.loop.manual import settle_requested
@@ -103,8 +103,8 @@ async def _model(rt: Runtime, request_id: EventId) -> Halt | None:
         match looked.value:
             case Found(value=response) if response.provider_request_id is not None:
                 # A found response without the provider's id can't be recorded: it stays unknown.
-                found = response_drafts(rt, request_id, response, response.provider_request_id)
-                done = await rt.append(*found)
+                found = response_draft(request_id, response, response.provider_request_id)
+                done = await rt.append(found)
                 return lost(done.error) if isinstance(done, Err) else None
             case NotFound():
                 outcome = "not_sent"
@@ -165,9 +165,9 @@ async def _never_began(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | 
     call_id = state.call.data.call_id
     if rt.fold.last_cancel_seq > state.call.seq:
         return await calls.cancel_call(rt, call_id, "recovery")
-    if state.decision == "deny" or state.approved is False:
-        return await calls.close(rt, call_id, "denied", "denied by policy", "recovery")
-    if state.decision == "ask" and state.approved is None:
+    if state.approved is False:
+        return await calls.close(rt, call_id, "denied", calls.denial(state), "recovery")
+    if state.decision == "ask" and state.approved is None and state.challenge is not None:
         return await calls.await_approval(rt, state, "recovery")
     if state.decision == "allow":
         return await calls.recheck(rt, state, spec)

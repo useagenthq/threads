@@ -25,12 +25,10 @@ from threads.log import (
     HookDecisionEvent,
     InjectedEvent,
     ModelRequestEvent,
-    ModelResponseEvent,
-    ModelResponseRecoveredEvent,
     UserInputEvent,
 )
-from threads.loop.drafts import draft
-from threads.loop.history import turn_events
+from threads.loop.drafts import call_draft, draft
+from threads.loop.history import last_response, response_calls, turn_events
 from threads.loop.results import As, result_draft
 from threads.loop.runtime import FAILED_CODES, Failed, Halt, Runtime, lost
 from threads.result import Err
@@ -143,21 +141,6 @@ async def _before_model(rt: Runtime) -> Gated:
     return await append(rt, drafts)
 
 
-def last_response(
-    turn: Sequence[Event],
-) -> ModelResponseEvent | ModelResponseRecoveredEvent | None:
-    side = {
-        e.event_id
-        for e in turn
-        if isinstance(e, ModelRequestEvent) and e.data.purpose == "compaction"
-    }
-    for event in reversed(turn):
-        turn_response = isinstance(event, ModelResponseEvent | ModelResponseRecoveredEvent)
-        if turn_response and event.data.request_event_id not in side:
-            return event
-    return None
-
-
 async def after_model(rt: Runtime) -> Gated:
     """Gates the response's undispatched calls and the release of its output.
     deny closes them denied and ends the turn with the output withheld; guide closes them and
@@ -181,9 +164,14 @@ async def after_model(rt: Runtime) -> Gated:
         return await append(rt, drafts)
     # Retries are capped per turn, counted from the log so recovery can't reset them.
     denied = "deny" in verdicts or ("retry" in verdicts and _retries(turn) >= MAX_RETRIES)
+    why = "denied by an output guardrail" if denied else "withheld: the response was guided"
+    how = As("denied", True, "host")
+    # An older writer recorded the calls with the response: they are pending already.
     for call_id in rt.fold.pending:
-        why = "denied by an output guardrail" if denied else "withheld: the response was guided"
-        drafts.append(await result_draft(rt, call_id, why, As("denied", True, "host")))
+        drafts.append(await result_draft(rt, call_id, why, how))
+    for use, call in response_calls(rt.events):
+        if call is None:
+            drafts += [call_draft(request, use), await result_draft(rt, use.call_id, why, how)]
     if denied:
         drafts.append(draft("turn_completed", {"reason": "error"}))
     else:

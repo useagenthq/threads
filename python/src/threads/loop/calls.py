@@ -4,10 +4,11 @@ A call that fails before `effect_begin` (unknown tool, bad arguments, a denial) 
 `tool_result` and nothing runs. Only an allowed call reaches the effect path.
 """
 
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Final, Literal
 
-from threads.log import AgentSpawnedEvent, CallId, EventId, ToolSpec, ToolUsePart
+from pydantic import JsonValue
+
+from threads.log import AgentSpawnedEvent, CallId, ToolSpec
 from threads.log.digest import canonical_sha256
 from threads.loop import effects, gates, output, todos, tool_gates
 from threads.loop.drafts import ActorKind, draft
@@ -17,49 +18,13 @@ from threads.loop.runtime import Failed, Halt, Parked, Runtime, fence, lost
 from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertain
 from threads.reduce.fold import call_spec
 from threads.result import Err, Ok
-from threads.store import Draft
 from threads.store.lines import uuid7
 
 if TYPE_CHECKING:
-    from pydantic import JsonValue
+    from threads.store import Draft
 
 APPROVAL_TTL_MS: Final = 3_600_000
 """An approval challenge's default expiry."""
-
-
-def call_drafts(rt: Runtime, request_id: EventId, uses: Sequence[ToolUsePart]) -> list[Draft]:
-    """A `tool_call` per part; a call that can't run gets its error result in the same batch."""
-    out: list[Draft] = []
-    for use in uses:
-        data: dict[str, JsonValue] = {
-            "call_id": use.call_id,
-            "name": use.name,
-            "input": dict(use.input),
-            "request_event_id": request_id,
-        }
-        out.append(draft("tool_call", data))
-        why = _invalid(rt, use)
-        if why is not None:
-            error: dict[str, JsonValue] = {
-                "call_id": use.call_id,
-                "completeness": "complete",
-                "is_error": True,
-                "origin": "not_executed",
-                "preview": why,
-            }
-            out.append(draft("tool_result", error))
-    return out
-
-
-def _invalid(rt: Runtime, use: ToolUsePart) -> str | None:
-    spec = rt.fold.tools.get(use.name)
-    if spec is None:
-        return f"unknown tool {use.name}"
-    if spec.defer_loading is True:
-        return f"tool_not_loaded: search for {use.name} with tool_search first"
-    if output.is_candidate(rt.fold, spec):
-        return None  # validated against the pinned output schema, recorded as output_validated
-    return rt.tools.invalid(spec, use.input)
 
 
 def pending_spec(rt: Runtime, call_id: CallId) -> ToolSpec:
@@ -89,7 +54,7 @@ async def _advance(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None
     if state.decision is None:
         return await authorize(rt, state, spec)
     if state.decision == "deny" or state.approved is False:
-        return await close(rt, call_id, "denied", "denied by policy")
+        return await close(rt, call_id, "denied", denial(state))
     if state.decision == "ask" and state.approved is None:
         return await await_approval(rt, state, "host")
     return await _run(rt, state, spec)
@@ -157,10 +122,7 @@ async def authorize(
         data["rule_id"] = decision.rule
     if decision.reason is not None:
         data["reason"] = decision.reason
-    drafts = [*hooked, draft("permission_decision", data, actor)]
-    if decision.decision == "ask":
-        drafts.append(_challenge(rt, state, actor))
-    done = await rt.append(*drafts)
+    done = await rt.append(*hooked, draft("permission_decision", data, actor))
     if isinstance(done, Err):
         return lost(done.error)
     if decision.decision == "deny":
@@ -169,38 +131,54 @@ async def authorize(
     return None
 
 
-def _challenge(rt: Runtime, state: CallState, actor: ActorKind) -> Draft:
+def _challenge(rt: Runtime, state: CallState) -> dict[str, JsonValue]:
     args = canonical_sha256(dict(state.call.data.input))
     if not isinstance(args, Ok):
         raise AssertionError("a parsed call input always canonicalizes")
     now = rt.clock()
-    data: dict[str, JsonValue] = {
+    return {
         "challenge_id": uuid7(now),
         "call_id": state.call.data.call_id,
         "args_hash": args.value,
         "expires_at": now + APPROVAL_TTL_MS,
     }
-    return draft("approval_requested", data, actor)
 
 
 async def await_approval(rt: Runtime, state: CallState, actor: ActorKind) -> Halt | None:
-    """An open challenge parks the run; an expired one counts as a denial."""
-    challenge = state.challenge
-    if challenge is None:
-        raise AssertionError("an ask decision is recorded with its challenge")
-    if challenge.data.expires_at <= rt.clock():
-        return await close(rt, state.call.data.call_id, "denied", "approval expired", actor)
-    address: dict[str, JsonValue] = {"kind": "approval", "id": challenge.data.challenge_id}
-    if not any(a.kind == "approval" and a.id == address["id"] for a in rt.fold.parked):
+    """An ask's turn to run: its challenge opens and the run parks on it; an expired challenge
+    counts as a denial. The challenge is recorded here, not with the decision, so every call of
+    the response is recorded and authorized before the first one asks."""
+    drafts: list[Draft] = []
+    if state.challenge is None:
+        opened = _challenge(rt, state)
+        drafts.append(draft("approval_requested", opened, actor))
+        challenge_id, expires_at = opened["challenge_id"], opened["expires_at"]
+    elif state.challenge.data.expires_at <= rt.clock():
+        return await close(rt, state.call.data.call_id, "denied", "denied: approval expired", actor)
+    else:
+        challenge_id = state.challenge.data.challenge_id
+        expires_at = state.challenge.data.expires_at
+    if not any(a.kind == "approval" and a.id == challenge_id for a in rt.fold.parked):
         data: dict[str, JsonValue] = {
-            "address": address,
+            "address": {"kind": "approval", "id": challenge_id},
             "reason": "awaiting_approval",
-            "expires_at": challenge.data.expires_at,
+            "expires_at": expires_at,
         }
-        done = await rt.append(draft("parked", data, actor))
+        drafts.append(draft("parked", data, actor))
+    if drafts:
+        done = await rt.append(*drafts)
         if isinstance(done, Err):
             return lost(done.error)
     return Parked("awaiting_approval", tuple(rt.fold.parked))
+
+
+def denial(state: CallState) -> str:
+    """A denied call's result, as the model sees it: `denied`, with the policy's or a hook's
+    reason, or why its approval failed."""
+    if state.approved is False:
+        return "denied: approval denied"
+    reason = state.decision_reason
+    return "denied" if reason is None else f"denied: {reason}"
 
 
 async def _read_only(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:

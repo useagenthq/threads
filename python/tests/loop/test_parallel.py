@@ -23,6 +23,7 @@ from threads.log import (
     Principal,
     ThreadId,
     ToolCallData,
+    ToolCallEvent,
     ToolResultData,
     ToolResultEvent,
     ToolSpec,
@@ -142,6 +143,8 @@ def _trace(events: Sequence[Event]) -> list[str]:
     out: list[str] = []
     for e in events:
         match e:
+            case ToolCallEvent():
+                out.append(f"call:{e.data.call_id}")
             case PermissionDecisionEvent():
                 out.append(f"decision:{e.data.call_id}")
             case ToolResultEvent():
@@ -156,39 +159,38 @@ def _trace(events: Sequence[Event]) -> list[str]:
 
 
 def test_recorded_order_is_call_order_and_authorization_comes_first() -> None:
-    """Replay: the group's results and after_tool decisions are in call order, like a sequential
-    run; only its authorization events move before its first result."""
+    """Replay: a group's log equals a sequential run's. Every call is recorded and authorized,
+    in call order, before any runs; results and after_tool decisions follow in call order."""
     together, parallel = asyncio.run(_reads(concurrent=True))
     alone, sequential = asyncio.run(_reads(concurrent=False))
     assert together == ["c", "b", "a"]
     assert alone == ["a", "b", "c"]
-    assert _trace(sequential) == [
-        "decision:call_1",
-        "result:call_1",
-        "after_tool:call_1",
-        "decision:call_2",
-        "result:call_2",
-        "injected",
-        "after_tool:call_2",
-        "decision:call_3",
-        "result:call_3",
-        "after_tool:call_3",
-    ]
-    assert _trace(parallel) == [
-        "decision:call_1",
-        "decision:call_2",
-        "decision:call_3",
-        "result:call_1",
-        "after_tool:call_1",
-        "result:call_2",
-        "injected",
-        "after_tool:call_2",
-        "result:call_3",
-        "after_tool:call_3",
-    ]
+    assert (
+        _trace(parallel)
+        == _trace(sequential)
+        == [
+            "call:call_1",
+            "decision:call_1",
+            "call:call_2",
+            "decision:call_2",
+            "call:call_3",
+            "decision:call_3",
+            "result:call_1",
+            "after_tool:call_1",
+            "result:call_2",
+            "injected",
+            "after_tool:call_2",
+            "result:call_3",
+            "after_tool:call_3",
+        ]
+    )
 
     # The same sequence TypeScript records (spec/conformance/vectors/tool-groups.json).
-    shared = [t.replace("result:", "tool_result:") for t in _trace(parallel) if "decision" not in t]
+    shared = [
+        t.replace("result:", "tool_result:")
+        for t in _trace(parallel)
+        if not t.startswith(("call:", "decision:"))
+    ]
     assert shared == RECORDED_ORDER
 
     def recorded(events: Sequence[Event]) -> list[object]:
@@ -212,7 +214,15 @@ def test_an_ask_ends_the_group_and_the_next_call_never_starts() -> None:
 
     halt, trace, tools = asyncio.run(main())
     assert isinstance(halt, Parked)
-    assert trace == ["decision:call_1", "decision:call_2", "result:call_1"]
+    assert trace == [
+        "call:call_1",
+        "decision:call_1",
+        "call:call_2",
+        "decision:call_2",
+        "call:call_3",
+        "decision:call_3",
+        "result:call_1",
+    ]
     assert dict(tools.runs) == {"a": 1}
 
 

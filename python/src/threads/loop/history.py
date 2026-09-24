@@ -33,6 +33,7 @@ from threads.log import (
     SteerEvent,
     ToolCallEvent,
     ToolResultEvent,
+    ToolUsePart,
     UserInputEvent,
 )
 from threads.reduce.openers import turn_start
@@ -112,6 +113,32 @@ def step(events: Sequence[Event]) -> Step:
     return Step(attempts, retryable, run, crashes, compacted)
 
 
+def last_response(
+    turn: Sequence[Event],
+) -> ModelResponseEvent | ModelResponseRecoveredEvent | None:
+    """The turn's latest response, a compaction side response never."""
+    side = _side(turn)
+    for event in reversed(turn):
+        turn_response = isinstance(event, ModelResponseEvent | ModelResponseRecoveredEvent)
+        if turn_response and event.data.request_event_id not in side:
+            return event
+    return None
+
+
+def response_calls(events: Sequence[Event]) -> tuple[tuple[ToolUsePart, ToolCallEvent | None], ...]:
+    """The open turn's latest response's `tool_use` parts, each with the `tool_call` recorded
+    for it after that response, if one is."""
+    turn = turn_events(events)
+    response = last_response(turn)
+    if response is None:
+        return ()
+    after = turn[turn.index(response) :]
+    calls = {e.data.call_id: e for e in after if isinstance(e, ToolCallEvent)}
+    return tuple(
+        (p, calls.get(p.call_id)) for p in response.data.content if isinstance(p, ToolUsePart)
+    )
+
+
 def continuations(events: Sequence[Event]) -> int:
     """Max-output continuations appended in the open turn."""
     return sum(
@@ -141,6 +168,8 @@ class CallState:
 
     call: ToolCallEvent
     decision: str | None = None
+    decision_reason: str | None = None
+    """The recorded decision's reason: a deny's why, shown to the model in its result."""
     challenge: ApprovalRequestedEvent | None = None
     approved: bool | None = None
     begins: tuple[EffectBeginEvent, ...] = ()
@@ -162,7 +191,8 @@ def call_state(events: Sequence[Event], call_id: CallId) -> CallState:
 def _fold_call(s: CallState, event: Event, call_id: CallId) -> CallState:  # noqa: PLR0911
     match event:
         case PermissionDecisionEvent() if event.data.call_id == call_id:
-            return replace(s, decision=event.data.decision)
+            reason = None if event.data.reason is MISSING else event.data.reason
+            return replace(s, decision=event.data.decision, decision_reason=reason)
         case ApprovalRequestedEvent() if event.data.call_id == call_id:
             return replace(s, challenge=event)
         case ApprovalGrantedEvent() | ApprovalDeniedEvent() if event.data.call_id == call_id:

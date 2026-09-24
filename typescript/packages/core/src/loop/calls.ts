@@ -1,3 +1,4 @@
+import type { EventOf } from "../fold/state";
 import { AGENT_TOOLS, entry, MEMBER_TOOLS } from "../tools/catalog";
 import { FINAL_OUTPUT } from "../tools/loop-tools";
 import { authorize } from "./authorize";
@@ -16,16 +17,45 @@ type ToolUse = Extract<
   { type: "tool_use" }
 >;
 
+/**
+ * Records each part the log lacks, and authorizes each recorded call still pending without a
+ * decision, in part order: a run resumed mid-recording finishes it as an uninterrupted run would.
+ */
 export async function recordCalls(
   s: Session,
   response: Response,
 ): Promise<Halt | undefined> {
   for (const use of response.data.content) {
     if (use.type !== "tool_use") continue;
-    const stopped = await recordCall(s, use, response.data.request_event_id);
+    const call = s.events.find(
+      (e): e is EventOf<"tool_call"> =>
+        e.seq > response.seq &&
+        e.type === "tool_call" &&
+        e.data.call_id === use.call_id,
+    );
+    const stopped =
+      call === undefined
+        ? await recordCall(s, use, response.data.request_event_id)
+        : await authorizeOwed(s, call);
     if (stopped !== undefined) return stopped;
   }
   return undefined;
+}
+
+function authorizeOwed(
+  s: Session,
+  call: EventOf<"tool_call">,
+): Promise<Halt | undefined> | undefined {
+  const { call_id: callId } = call.data;
+  const decided = s.events.some(
+    (e) =>
+      e.seq > call.seq &&
+      e.type === "permission_decision" &&
+      e.data.call_id === callId,
+  );
+  return s.fold.pending.has(callId) && !decided
+    ? authorize(s, call)
+    : undefined;
 }
 
 async function recordCall(

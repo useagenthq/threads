@@ -12,10 +12,9 @@ from typing import Literal
 
 from pydantic import JsonValue
 
-from threads.log import EventId, ModelRequestEvent, OutputPart, ToolUsePart
+from threads.log import EventId, ModelRequestEvent, OutputPart
 from threads.log.digest import sha256_hex
 from threads.loop import budget, guard
-from threads.loop.calls import call_drafts
 from threads.loop.capabilities import mismatch
 from threads.loop.drafts import draft
 from threads.loop.history import open_cancel
@@ -199,15 +198,15 @@ async def _collect(rt: Runtime, model: Model, req: ModelRequest) -> Outcome:
 def outcome_drafts(
     rt: Runtime, request_id: EventId, outcome: Outcome, *, cause: EventId | None = None
 ) -> Sequence[Draft]:
-    """The events one attempt's outcome appends, in one batch: the response with its tool calls,
-    or the abandonment. A send-time refusal ends the turn unless the attempt is a requested
-    compaction's side request (`cause`), which its caller answers. A refused leak answers
-    `cause` in the same batch and ends the turn, unless a cancel is already requested: then the
-    cancellation step closes the turn."""
+    """The events one attempt's outcome appends, in one batch: the response (its calls follow
+    it, one by one), or the abandonment. A send-time refusal ends the turn unless the attempt is
+    a requested compaction's side request (`cause`), which its caller answers. A refused leak
+    answers `cause` in the same batch and ends the turn, unless a cancel is already requested:
+    then the cancellation step closes the turn."""
     ends_turn = cause is None
     match outcome:
         case ModelResponse():
-            return response_drafts(rt, request_id, outcome)
+            return [response_draft(request_id, outcome)]
         case Rejected(
             reason="content_unsupported"
             | "continuation_unsupported"
@@ -288,10 +287,10 @@ def _rejection(request_id: EventId, rejected: Rejected) -> dict[str, JsonValue]:
     return data
 
 
-def response_drafts(
-    rt: Runtime, request_id: EventId, response: ModelResponse, recovered_as: str | None = None
-) -> Sequence[Draft]:
-    """The response and, in the same batch, a `tool_call` per complete `tool_use` part. A call a
+def response_draft(
+    request_id: EventId, response: ModelResponse, recovered_as: str | None = None
+) -> Draft:
+    """The response. Its calls are recorded one by one after it (threads.loop.record). A call a
     max_tokens stop cut off never exists: adapters emit only complete parts.
     `recovered_as` is the provider request id of a response recovery found by lookup."""
     data: dict[str, JsonValue] = {
@@ -305,5 +304,4 @@ def response_drafts(
     if recovered_as is not None:
         data["provider_request_id"] = recovered_as
         first = draft("model_response_recovered", data, "recovery")
-    uses = [p for p in response.content if isinstance(p, ToolUsePart)]
-    return [first, *call_drafts(rt, request_id, uses)]
+    return first

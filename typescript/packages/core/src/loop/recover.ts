@@ -237,7 +237,13 @@ function notStarted(s: Session, callId: string): Halt | undefined {
     return undefined;
   return s.append(
     draft.parked(
-      { address: { kind: "approval", id }, reason: "awaiting_approval" },
+      {
+        address: { kind: "approval", id },
+        reason: "awaiting_approval",
+        ...(requested === undefined
+          ? {}
+          : { expires_at: requested.data.expires_at }),
+      },
       RECOVERY,
     ),
   );

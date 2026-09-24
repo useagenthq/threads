@@ -1,12 +1,10 @@
 """Parallel tool calls (spec/schema/README.md): the loop's step over pending calls. The next group
 of concurrent reads starts together and is recorded in call order; any other call runs alone.
-
-Python authorizes lazily, so a group's candidates are authorized first, in call order: its
-`before_tool`/`permission_decision` events come before its first result."""
+Every call was authorized when it was recorded (threads.loop.record), so a group is planned from
+the recorded decisions."""
 
 import asyncio
 from collections.abc import Sequence
-from dataclasses import replace
 from typing import Final
 
 from threads.log import CallId, ToolSpec
@@ -23,9 +21,7 @@ WINDOW: Final = 8
 
 async def run_pending(rt: Runtime) -> Halt | None:
     """Runs the next group of pending calls, or the first pending call alone."""
-    group = await _next_group(rt)
-    if not isinstance(group, tuple):
-        return group
+    group = _next_group(rt)
     if len(group) > 1:
         return await run_group(rt, group)
     call_id = rt.fold.pending[0]
@@ -33,20 +29,11 @@ async def run_pending(rt: Runtime) -> Halt | None:
     return halt or await tool_gates.after_tool(rt, call_id)
 
 
-async def _next_group(rt: Runtime) -> tuple[CallId, ...] | Halt:
-    """Authorizes each call that could join, in call order, up to the first that isn't allowed;
-    then plans the group from the first pending call."""
+def _next_group(rt: Runtime) -> tuple[CallId, ...]:
+    """The group that starts at the first pending call."""
     candidates: list[Candidate] = []
     for call_id in rt.fold.pending:
-        state = call_state(rt.events, call_id)
-        spec = calls.pending_spec(rt, call_id)
-        found = _candidate(rt, state, spec)
-        # Authorized only once it could join: other calls keep their lazy authorization.
-        if found.decision == "none" and joins(replace(found, decision="allow")):
-            halt = await calls.authorize(rt, state, spec)
-            if halt is not None:
-                return halt
-            found = _candidate(rt, call_state(rt.events, call_id), spec)
+        found = _candidate(rt, call_state(rt.events, call_id), calls.pending_spec(rt, call_id))
         candidates.append(found)
         if not joins(found):
             break

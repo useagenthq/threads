@@ -19,6 +19,7 @@ from threads.hooks.types import (
     ResponseGate,
     Source,
     StopGate,
+    ToolGate,
 )
 from threads.log import (
     ModelResponseData,
@@ -203,3 +204,44 @@ def test_after_model_retries_are_capped_then_denied() -> None:
     assert isinstance(result, Failed)
     assert kinds(events).count("model_request") == MAX_RETRIES + 1
     assert decisions(events)[-1] == ("after_model", "retry")
+
+
+def test_each_call_is_recorded_with_its_before_tool_decision_before_the_next() -> None:
+    """spec/schema/README.md, "Recording a response's calls": the same order TypeScript writes."""
+
+    async def gate(call: ToolCallData, _ctx: RunContext[None]) -> ToolGate:
+        if call.call_id == "call_2":
+            return {"decision": "deny", "reason": "nope"}
+        return {"decision": "allow"}
+
+    both: JsonValue = {
+        **_response(use("call_1")),
+        "content": [*_parts(use("call_1")), *_parts(use("call_2"))],
+    }
+    box = Box()
+    result, events = asyncio.run(run({"before_tool": gate}, [both, text("ok")], box))
+    assert isinstance(result, Completed)
+    assert box.runs == 1
+    start = kinds(events).index("model_response") + 1
+    assert kinds(events)[start : start + 7] == [
+        "tool_call",
+        "hook_decision",
+        "permission_decision",
+        "tool_call",
+        "hook_decision",
+        "permission_decision",
+        "effect_begin",
+    ]
+    denied = [e for e in events if e.type == "tool_result"][1]
+    assert json.loads(denied.data.model_dump_json())["preview"] == "denied: nope"
+
+
+def _response(response: JsonValue) -> dict[str, JsonValue]:
+    assert isinstance(response, dict)
+    return response
+
+
+def _parts(response: JsonValue) -> list[JsonValue]:
+    parts = _response(response)["content"]
+    assert isinstance(parts, list)
+    return parts

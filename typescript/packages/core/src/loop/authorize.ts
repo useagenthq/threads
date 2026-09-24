@@ -133,6 +133,7 @@ export async function authorize(
       call_id: call.data.call_id,
       decision: final.decision,
       source: final.source,
+      mode: s.fold.mode,
       ...(final.rule_id === undefined ? {} : { rule_id: final.rule_id }),
       ...(final.reason === undefined ? {} : { reason: final.reason }),
     }),

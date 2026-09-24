@@ -149,7 +149,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="beforeTool()[deny].reason / before_tool()[deny].reason" type={"string"} required>
-  Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. TypeScript shows it to the model in the denied tool_result (denied: reason); Python shows the fixed text denied by policy.
+  Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. The model sees it in the denied tool_result (denied: reason).
 </Field>
 
 <Field name="beforeTool()[ask].decision / before_tool()[ask].decision" type={"\"ask\""} required>
@@ -181,7 +181,7 @@ Decisions are &#123;decision: &lt;hook_decision.decision>, ...&#125; objects. In
 </Field>
 
 <Field name="permissionRequest()[deny].reason / permission_request()[deny].reason" type={"string"} required>
-  Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. TypeScript shows it to the model in the denied tool_result (denied: reason); Python shows the fixed text denied by policy.
+  Why, as any text. It is recorded on the hook_decision and kept on the call's permission_decision. The model sees it in the denied tool_result (denied: reason).
 </Field>
 
 <Field name="permissionRequest()[ask].decision / permission_request()[ask].decision" type={"\"ask\""} required>
