@@ -32,7 +32,6 @@ from threads.log import (
 from threads.loop import attempt, defaults
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.gates import said, verdict
-from threads.loop.history import open_cancel
 from threads.loop.restore import restore_drafts, restore_hooks
 from threads.loop.runtime import Failed, Halt, Runtime, lost
 from threads.result import Err, Ok
@@ -123,7 +122,7 @@ def _decided(events: Sequence[Event], request: CompactionRequestedEvent | None) 
 
 async def _side_request(rt: Runtime, bounds: tuple[Event, Event], trigger: Trigger) -> Halt | None:
     """The side request; if it is itself too long, clear every clearable result and retry it
-    once, unless a cancel landed meanwhile: nothing is sent after the barrier."""
+    once (never past a cancel barrier: `attempt.request` checks it)."""
     for side_attempt in (1, 2):
         sent = await attempt.request(rt, side_attempt, "compaction")
         if sent is None or isinstance(sent, Failed):
@@ -137,8 +136,7 @@ async def _side_request(rt: Runtime, bounds: tuple[Event, Event], trigger: Trigg
         too_long = isinstance(outcome, ModelAttemptAbandonedEvent) and (
             outcome.data.reason == "prompt_too_long"
         )
-        last = side_attempt == 2  # noqa: PLR2004 - the fallback retries once
-        if not too_long or last or open_cancel(rt.events) is not None:
+        if not too_long or side_attempt == 2:  # noqa: PLR2004 - the fallback retries once
             reason = "prompt_too_long" if too_long else "model_error"
             return await failed(rt, reason, sent, Answering(trigger))
         halt = await clear(rt, 0, "compaction_fallback")

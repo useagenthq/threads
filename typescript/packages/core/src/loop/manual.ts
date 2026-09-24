@@ -15,7 +15,6 @@ import { RECOVERY } from "./drafts";
 import type { Gated } from "./gates";
 import { retryPolicy } from "./policy";
 import type { Session } from "./session";
-import { cancelRequested } from "./turn";
 import type { Halt } from "./types";
 
 // A requested compaction (Thread.compact): carried out at the next context ladder, before
@@ -74,12 +73,6 @@ export function stage(
   const reason = abandons.at(-1)?.data.reason;
   const count = abandons.filter((a) => a.data.reason === reason).length;
   const next = last.data.attempt + 1;
-  // Nothing is sent after a cancel barrier: what would be sent again is answered failed.
-  if (cancelRequested(events) !== undefined)
-    return {
-      kind: "failed",
-      reason: reason === "prompt_too_long" ? "prompt_too_long" : "model_error",
-    };
   if (reason === "crash")
     return count <= retryPolicy(fold.policy).crash_resends
       ? { kind: "send", attempt: next }
@@ -166,9 +159,10 @@ async function send(
     case "rejected":
     case "broken":
       return undefined;
-    // Answered in the batch that refused it: budget_exceeded, or the leak (which ended the
-    // turn, or left it to a pending cancel).
+    // Answered in the batch that refused it: budget_exceeded, the cancel barrier, or the leak
+    // (which ended the turn, or left it to a pending cancel).
     case "budget":
+    case "barred":
     case "leaked":
       return undefined;
     case "unsupported":

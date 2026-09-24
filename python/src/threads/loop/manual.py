@@ -18,7 +18,6 @@ from threads.log import (
 )
 from threads.loop import attempt, compact, defaults
 from threads.loop.drafts import ActorKind
-from threads.loop.history import open_cancel
 from threads.loop.runtime import Failed, Halt, Runtime
 from threads.reduce import Fold
 
@@ -76,10 +75,6 @@ def _abandoned(events: Sequence[Event], fold: Fold, sides: Sequence[ModelRequest
     count = reasons.count(reason) if reason else 0
     last = sides[-1]
     following = last.data.attempt + 1
-    if open_cancel(events) is not None:
-        # Nothing is sent after a cancel barrier: what would be sent again is answered failed.
-        failure = "prompt_too_long" if reason == "prompt_too_long" else "model_error"
-        return Stage("failed", reason=failure, side=last.event_id)
     if reason == "crash" and count <= defaults.retry(fold).crash_resends:
         return Stage("send", attempt=following)
     # The one fallback is counted from the log, never from the attempt number, so a crash

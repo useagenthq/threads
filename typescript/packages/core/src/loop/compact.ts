@@ -10,7 +10,7 @@ import { decision, defining, recorded, run } from "./hooks";
 import { contextPolicy, tokens } from "./policy";
 import { restoreDrafts, restoreHooks } from "./restore";
 import type { Session } from "./session";
-import { cancelRequested, stepEvents } from "./turn";
+import { stepEvents } from "./turn";
 import type { Halt } from "./types";
 
 // (clear old results) and L2 (summary compaction, then L3 restore), run on a
@@ -78,7 +78,8 @@ export async function compact(
     case "unsupported":
       return failed(s, "model_error");
     case "budget":
-      // The attempt recorded the failure with budget_exceeded.
+    case "barred":
+      // The attempt recorded the failure: with budget_exceeded, or at the cancel barrier.
       return { kind: "failed" };
     default:
       return assertNever(got);
@@ -87,16 +88,11 @@ export async function compact(
 
 /**
  * The side request. If it is itself too long, everything clearable is cleared and it is retried
- * once, unless a cancel landed meanwhile: nothing is sent after the barrier, so the rejection
- * stands and the compaction fails.
+ * once (never past a cancel barrier: `attempt` checks it).
  */
 async function sideRequest(s: Session): Promise<Attempted> {
   const got = await attempt(s, "compaction", 1);
-  if (
-    got.kind !== "rejected" ||
-    got.rejection.reason !== "prompt_too_long" ||
-    cancelRequested(s.events) !== undefined
-  )
+  if (got.kind !== "rejected" || got.rejection.reason !== "prompt_too_long")
     return got;
   const fallback = clear(s, 0, "compaction_fallback");
   if (fallback !== undefined) return { kind: "halt", halt: fallback };

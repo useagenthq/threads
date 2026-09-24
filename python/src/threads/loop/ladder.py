@@ -45,9 +45,6 @@ async def fit(rt: Runtime) -> Gated:
         halt = await compact.summarize(rt, "threshold")
         if halt is not None or not isinstance(rt.events[-1], CompactionFailedEvent):
             return halt or AGAIN
-        if open_cancel(rt.events) is not None:
-            # A cancel landed during the side request: the loop's cancellation step is next.
-            return AGAIN
         # A failed threshold compaction doesn't end the turn: the request goes on to L4, in
         # this same step (ponytail: a crash right here resumes as context_exhausted).
         spent = True
@@ -55,7 +52,10 @@ async def fit(rt: Runtime) -> Gated:
 
 
 async def _preflight(rt: Runtime, guess: int, *, blocked: bool) -> Gated:
-    """L4: the estimate reaches W, so no request is made or billed."""
+    """L4: the estimate reaches W, so no request is made or billed. A cancel pending ends the
+    turn cancelled, never context_exhausted: the cancellation step is next."""
+    if open_cancel(rt.events) is not None:
+        return AGAIN
     window = defaults.effective_window(rt.fold)
     if guess < window:
         return None

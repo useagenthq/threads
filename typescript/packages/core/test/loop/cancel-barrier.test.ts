@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { scriptedModel } from "../../src";
 import { credential } from "../../src/agent/secret";
+import type { LoopExtension } from "../../src/hooks/types";
 import type { KnownEvent, Policy } from "../../src/log";
 import { type LoopConfig, resume } from "../../src/loop";
 import { CONTEXT_DEFAULTS } from "../../src/loop/policy";
 import type { Model } from "../../src/model";
 import type { Writer } from "../../src/store";
 import { ROOT, unwrap } from "../store/helpers";
-import { after, cancelAt } from "./cancel-kit";
+import { after, cancel, cancelAt } from "./cancel-kit";
 import { events, type Harness, harness, userInput } from "./harness";
 import { asked, fail, reply, SUMMARY_TEXT } from "./manual-kit";
 
@@ -45,7 +47,9 @@ const TAIL = [
 async function secondTurn(
   h: Harness,
   model: (writer: () => Writer) => Model,
-  config: Partial<LoopConfig> = {},
+  config:
+    | Partial<LoopConfig>
+    | ((writer: () => Writer) => Partial<LoopConfig>) = {},
 ): Promise<readonly KnownEvent[]> {
   const first = unwrap(h.store.acquire(ROOT, "first"));
   await resume(first, h.artifacts, h.config(), { input: userInput("first") });
@@ -53,10 +57,11 @@ async function secondTurn(
   const writer = unwrap(h.store.acquire(ROOT, "second"));
   // One model for the whole run: it counts its sends.
   const second = model(() => writer);
+  const extra = typeof config === "function" ? config(() => writer) : config;
   await resume(
     writer,
     h.artifacts,
-    h.config({ models: () => second, ...config }),
+    h.config({ models: () => second, ...extra }),
     { input: userInput("second") },
   );
   return events(writer);
@@ -159,6 +164,112 @@ describe("a lease lost right after the cancellation is recorded", () => {
       "cancelled",
       "turn_completed",
     ]);
+    expect(log.at(-1)?.data).toEqual({ reason: "cancelled" });
+  });
+});
+
+/** before_compact asks for a cancel, then lets the compaction go ahead. */
+function cancelsThenProceeds(writer: () => Writer): LoopExtension {
+  return {
+    name: "ops",
+    timeoutMs: 1_000,
+    hooks: {
+      before_compact: async () => {
+        unwrap(writer().append([cancel]));
+        return { decision: "proceed" };
+      },
+    },
+  };
+}
+
+/** Appends the cancel as the side request's prompt_too_long is recorded: the fallback is next. */
+function cancelAtFallback(writer: () => Writer): Partial<LoopConfig> {
+  return {
+    onEvent: (e: KnownEvent) => {
+      if (
+        e.type === "model_attempt_abandoned" &&
+        e.data.reason === "prompt_too_long"
+      )
+        unwrap(writer().append([cancel]));
+    },
+  };
+}
+
+function nothingSentAfterTheBarrier(log: readonly KnownEvent[]): void {
+  const barrier = log.findIndex((e) => e.type === "cancel_requested");
+  expect(barrier).toBeGreaterThan(-1);
+  const rest = log.slice(barrier);
+  expect(rest.some((e) => e.type === "model_request")).toBe(false);
+  expect(rest.some((e) => e.type === "compaction_failed")).toBe(true);
+  expect(log.at(-1)?.data).toEqual({ reason: "cancelled" });
+}
+
+describe("the barrier holds at the send, whatever came before it", () => {
+  test("before_compact cancels then proceeds: an automatic compaction sends nothing", async () => {
+    const h = harness([], [], [say("one", 5_000)], undefined, policy(1_000));
+    const log = await secondTurn(
+      h,
+      () => scriptedModel({ responses: [say("summary", 10), say("two", 10)] }),
+      (w) => ({ extensions: [cancelsThenProceeds(w)] }),
+    );
+    nothingSentAfterTheBarrier(log);
+  });
+
+  test("before_compact cancels then proceeds: a requested compaction sends nothing", async () => {
+    const h = asked([reply(SUMMARY_TEXT)]);
+    h.clock.now += 60_000;
+    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    await resume(
+      writer,
+      h.artifacts,
+      h.config({ extensions: [cancelsThenProceeds(() => writer)] }),
+    );
+    nothingSentAfterTheBarrier(events(writer));
+  });
+
+  test("a cancel as the fallback's results are cleared: an automatic compaction sends nothing more", async () => {
+    const h = harness([], [], [say("one", 5_000)], undefined, policy(1_000));
+    const log = await secondTurn(
+      h,
+      () =>
+        scriptedModel({
+          responses: [fail("prompt_too_long", 400), say("summary", 10)],
+        }),
+      cancelAtFallback,
+    );
+    nothingSentAfterTheBarrier(log);
+  });
+
+  test("a cancel as the fallback's results are cleared: a requested compaction sends nothing more", async () => {
+    const h = asked([fail("prompt_too_long", 400), reply(SUMMARY_TEXT)]);
+    h.clock.now += 60_000;
+    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    await resume(writer, h.artifacts, h.config(cancelAtFallback(() => writer)));
+    nothingSentAfterTheBarrier(events(writer));
+  });
+});
+
+describe("L5 with its compaction already spent (TS)", () => {
+  test("a cancel during the rejected turn request ends the turn cancelled, not context_exhausted", async () => {
+    const h = harness([], [], [say("one", 5_000)], undefined, policy(1_000));
+    // The threshold compaction fails (empty summary), then the turn request is rejected.
+    const log = await secondTurn(h, (w) =>
+      cancelAt(
+        [say("", 10), fail("prompt_too_long", 400), say("never", 10)],
+        2,
+        w,
+      ),
+    );
+    const barrier = log.findIndex((e) => e.type === "cancel_requested");
+    expect(
+      log
+        .slice(barrier)
+        .some(
+          (e) =>
+            e.type === "turn_completed" &&
+            e.data.reason === "context_exhausted",
+        ),
+    ).toBe(false);
     expect(log.at(-1)?.data).toEqual({ reason: "cancelled" });
   });
 });

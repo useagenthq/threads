@@ -85,7 +85,7 @@ export async function ladder(s: Session): Promise<Gated> {
   ) {
     const got = await compact(s, "threshold");
     if (got.kind === "halt") return got.halt;
-    if (got.kind === "ended" || cancelled(s)) return "ended";
+    if (got.kind === "ended") return "ended";
   }
   const estimated = estimate(s);
   return estimated >= window ? preflight(s, estimated, window) : undefined;
@@ -100,6 +100,8 @@ async function preflight(
   estimated: number,
   window: number,
 ): Promise<Gated> {
+  // A cancel pending ends the turn cancelled, never context_exhausted.
+  if (cancelled(s)) return "ended";
   const action = reactiveSpent(s) || breakerOpen(s) ? "fail" : "compact";
   const stopped = s.append(
     draft.preflightBlocked({

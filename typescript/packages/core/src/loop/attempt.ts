@@ -9,6 +9,7 @@ import type { ProviderRejection } from "../model/protocol";
 import { parseRender } from "../model/render-lines";
 import { redactStream, SecretInProviderOutput } from "../redact";
 import { compactionSide, refReader, render } from "../render";
+import type { EventDraft } from "../store";
 import { StoreError } from "../store/driver";
 import { draft } from "./drafts";
 import { reserve, settleOpen } from "./ledger";
@@ -40,6 +41,11 @@ export type Attempted =
    * request's compaction_failed in the same batch.
    */
   | { readonly kind: "budget" }
+  /**
+   * A cancel barrier is in the open turn: nothing was sent. A side request's compaction_failed
+   * is recorded; the cancellation step is next.
+   */
+  | { readonly kind: "barred" }
   | { readonly kind: "halt"; readonly halt: Halt };
 
 type Collected =
@@ -68,6 +74,9 @@ export async function attempt(
   number: number,
   cause?: EventId,
 ): Promise<Attempted> {
+  // The one barrier check for every model request: from here to the append nothing awaits, so
+  // no cancel can land in between (spec/schema/README.md, "Nothing new after a barrier").
+  if (cancelRequested(s.events) !== undefined) return barred(s, purpose, cause);
   const model = s.fold.model && s.config.models(s.fold.model);
   if (model === undefined)
     return halt("model_error", "no adapter for this settings epoch's model");
@@ -115,6 +124,34 @@ const sideTags = (
     ? { purpose: "compaction" }
     : { purpose: "compaction", cause_event_id: cause };
 
+/** A side request that is never sent owes its compaction_failed; a turn request owes nothing. */
+function owed(
+  purpose: "turn" | "compaction",
+  cause: EventId | undefined,
+): readonly EventDraft[] {
+  if (purpose === "turn") return [];
+  return [
+    draft.compactionFailed({
+      stage: "summary",
+      reason: "model_error",
+      ...(cause === undefined ? {} : { cause_event_id: cause }),
+    }),
+  ];
+}
+
+/** Nothing is sent after a cancel barrier: a side request's failure, and nothing else. */
+function barred(
+  s: Session,
+  purpose: "turn" | "compaction",
+  cause: EventId | undefined,
+): Attempted {
+  const answer = owed(purpose, cause);
+  const stopped = answer.length === 0 ? undefined : s.append(...answer);
+  return stopped === undefined
+    ? { kind: "barred" }
+    : { kind: "halt", halt: stopped };
+}
+
 /** budget_exceeded; a side request's compaction_failed goes in the same batch. */
 function refuse(
   s: Session,
@@ -122,15 +159,7 @@ function refuse(
   purpose: "turn" | "compaction",
   cause: EventId | undefined,
 ): Attempted {
-  const failed = draft.compactionFailed({
-    stage: "summary",
-    reason: "model_error",
-    ...(cause === undefined ? {} : { cause_event_id: cause }),
-  });
-  const stopped = s.append(
-    draft.budgetExceeded(over),
-    ...(purpose === "compaction" ? [failed] : []),
-  );
+  const stopped = s.append(draft.budgetExceeded(over), ...owed(purpose, cause));
   return stopped === undefined
     ? { kind: "budget" }
     : { kind: "halt", halt: stopped };

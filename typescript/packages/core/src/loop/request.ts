@@ -103,6 +103,9 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
       return undefined;
     case "budget":
       return endTurn(s, "budget_exhausted");
+    case "barred":
+      // Nothing was sent: the cancellation step is next.
+      return undefined;
     default:
       return assertNever(got);
   }
@@ -233,6 +236,9 @@ async function schedule(
  * again. A second rejection, an open breaker or a failed compaction ends the turn.
  */
 async function reactive(s: Session): Promise<Halt | undefined> {
+  // A cancel pending ends the turn cancelled, never context_exhausted: the cancellation step
+  // is next.
+  if (cancelRequested(s.events) !== undefined) return undefined;
   // Once per step, and never past an open breaker.
   if (reactiveSpent(s) || breakerOpen(s))
     return endTurn(s, "context_exhausted");

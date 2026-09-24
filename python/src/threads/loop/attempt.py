@@ -6,13 +6,14 @@ The Render v1 bytes are a durable artifact before the `model_request` that names
 persist-before-dispatch guarantee for model calls.
 """
 
+import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Final, Literal
 
 from pydantic import JsonValue
 
-from threads.log import EventId, ModelRequestEvent, OutputPart, ToolUsePart
+from threads.log import EventId, ModelRequestEvent, OutputPart, ParseError, ToolUsePart
 from threads.log.digest import sha256_hex
 from threads.loop import budget, guard
 from threads.loop.calls import call_drafts
@@ -25,6 +26,8 @@ from threads.redaction import SecretInProviderOutputError
 from threads.reduce.handlers import to_json
 from threads.result import Err
 from threads.store import Draft, StoreError
+from threads.store.companion import Companion
+from threads.store.verify import StoredEvent
 
 type Purpose = Literal["turn", "compaction"]
 
@@ -35,24 +38,56 @@ async def request(
     """Sends one attempt and records its outcome. Returns the model_request's event id, or None
     when the capability pre-check ended the turn before any model_request. `cause` is the
     compaction_requested a side request summarizes for: that side request never ends the turn,
-    so a refusal before any request is `model_error` for its caller to answer."""
+    so a refusal before any request is `model_error` for its caller to answer. Nothing is sent
+    after a cancel barrier: None, with a side request's compaction_failed recorded."""
     compaction = purpose == "compaction"
-    rendered = await rt.store.render(rt.events, compaction=compaction, cause=cause)
-    if isinstance(rendered, Err):
-        code = rendered.error.code
-        if code in ("artifact_missing", "artifact_corrupt"):
-            return Failed(code, rendered.error.message)
-        raise AssertionError(f"the next request can't render: {rendered.error}")
-    body, line0 = rendered.value.body, rendered.value.line0
-    model = epoch_model(rt)
-    if model is None:
-        return Failed("model_error", "no adapter for this settings epoch's model")
+    if open_cancel(rt.events) is not None:
+        return await _barred(rt, compaction, cause)
+    prepared = await _prepared(rt, compaction, cause)
+    if isinstance(prepared, Failed):
+        return prepared
+    (body, line0), model = prepared
     refused = await _unsupported(rt, body, model, cause)
     if refused is not False:
         return refused
     refused = await budget.reserve(rt, _answer(compaction, cause))
     if refused is not None or not rt.fold.in_turn:
         return refused
+    event = await _recorded(rt, attempt, body, line0, cause, compaction=compaction)
+    if not isinstance(event, ModelRequestEvent):
+        return event
+    sent = await _dispatch(rt, model, event, body, cause)
+    await budget.settle(rt)
+    return sent
+
+
+async def _prepared(
+    rt: Runtime, compaction: bool, cause: EventId | None
+) -> tuple[tuple[bytes, bytes], Model] | Failed:
+    """Render v1 of the next request (its body and line 0) and the epoch's model. A missing or
+    corrupt artifact, or no adapter for the model, fails the run."""
+    rendered = await rt.store.render(rt.events, compaction=compaction, cause=cause)
+    if isinstance(rendered, Err):
+        code = rendered.error.code
+        if code in ("artifact_missing", "artifact_corrupt"):
+            return Failed(code, rendered.error.message)
+        raise AssertionError(f"the next request can't render: {rendered.error}")
+    model = epoch_model(rt)
+    if model is None:
+        return Failed("model_error", "no adapter for this settings epoch's model")
+    return (rendered.value.body, rendered.value.line0), model
+
+
+async def _recorded(  # noqa: PLR0913 - the request's parts, each named
+    rt: Runtime,
+    attempt: int,
+    body: bytes,
+    line0: bytes,
+    cause: EventId | None,
+    *,
+    compaction: bool,
+) -> ModelRequestEvent | Failed | None:
+    """The durable model_request, unless a cancel became durable first: then nothing is sent."""
     sha = await rt.store.put_artifact(body)
     data: dict[str, JsonValue] = {
         "attempt": attempt,
@@ -63,15 +98,16 @@ async def request(
         data["purpose"] = "compaction"
     if cause is not None:
         data["cause_event_id"] = cause
-    appended = await rt.append(draft("model_request", data))
+    appended = await rt.append_with([draft("model_request", data)], _unbarred(rt))
+    if isinstance(appended, Err) and appended.error is _BARRED:
+        await budget.settle(rt)
+        return await _barred(rt, compaction, cause)
     if isinstance(appended, Err):
         return lost(appended.error)
     event = appended.value[0]
     if not isinstance(event, ModelRequestEvent):
         raise AssertionError("a model_request draft stored another type")
-    sent = await _dispatch(rt, model, event, body, cause)
-    await budget.settle(rt)
-    return sent
+    return event
 
 
 async def _unsupported(
@@ -88,8 +124,32 @@ async def _unsupported(
     return lost(ended.error) if isinstance(ended, Err) else None
 
 
+_BARRED: Final = ParseError("invalid_transition", "a cancel barrier is in the open turn")
+
+
+def _unbarred(rt: Runtime) -> Companion:
+    """The barrier again, in the request's own append: a cancel from another task can hold the
+    writer while this request waits for it (spec/schema/README.md, Nothing new after a
+    barrier). The fold then holds the new request after that cancel."""
+
+    def check(_conn: sqlite3.Connection, _events: Sequence[StoredEvent]) -> ParseError | None:
+        return _BARRED if open_cancel(rt.events) is not None else None
+
+    return check
+
+
+async def _barred(rt: Runtime, compaction: bool, cause: EventId | None) -> Failed | None:
+    """Nothing is sent after a cancel barrier: a side request owes its compaction_failed; the
+    cancellation step is next."""
+    owed = _answer(compaction, cause)
+    if owed is None:
+        return None
+    done = await rt.append(owed)
+    return lost(done.error) if isinstance(done, Err) else None
+
+
 def _answer(compaction: bool, cause: EventId | None) -> Draft | None:
-    """A side request's compaction_failed, recorded with a budget refusal."""
+    """A side request's compaction_failed, recorded with a budget refusal or at a barrier."""
     if not compaction:
         return None
     data: dict[str, JsonValue] = {"stage": "summary", "reason": "model_error"}
