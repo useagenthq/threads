@@ -56,6 +56,15 @@ function event(type: string, data: object): KnownEvent {
   });
 }
 
+describe("renderText", () => {
+  test("a host message is one message op of its text; none when empty", () => {
+    expect(adapter().renderText("Which color?")).toEqual([
+      { kind: "message", text: "Which color?" },
+    ]);
+    expect(adapter().renderText("")).toEqual([]);
+  });
+});
+
 describe("render", () => {
   test("a model response is one message op of its joined text", () => {
     const e = event("model_response", {

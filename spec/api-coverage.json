@@ -72,6 +72,9 @@
     ]
   },
   "ChannelAdapter.renderText": {
+    "ts": [
+      "packages/slack/test/outbound.test.ts > renderText > a host message is one message op of its text; none when empty"
+    ],
     "py": [
       "tests/adapters/channels/test_render_text.py::test_a_host_message_is_one_text_op_on_every_channel"
     ]
