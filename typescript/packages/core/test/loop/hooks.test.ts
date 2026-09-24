@@ -369,7 +369,6 @@ describe("input, model and result gates", () => {
       origin: "denied",
       preview: "denied: unsafe",
     });
-    // The contract: the turn ends error; the model is not asked again.
     expect(of(log, "turn_completed")[0]?.data.reason).toBe("error");
     expect(of(log, "model_request")).toHaveLength(1);
   });

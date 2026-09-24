@@ -369,7 +369,7 @@ def test_a_continue_past_the_cap_is_recorded_as_a_stop_as_in_typescript() -> Non
     async def always(_finished: AgentFinishedData, _ctx: RunContext[None]) -> StopGate:
         return {"decision": "continue", "reason": "again"}
 
-    async def main() -> list[tuple[str, str | None]]:
+    async def main() -> list[tuple[str, object]]:
         child = agent(
             name="reviewer", model=scripted_model({"responses": [text(str(n)) for n in range(4)]})
         )
