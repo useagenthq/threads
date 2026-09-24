@@ -12,15 +12,16 @@ from pydantic import JsonValue
 from threads import ConfigError, agent, extension, scripted_model, sqlite
 from threads.agents.pinned import pinned_start
 from threads.agents.store import Store, now_ms, open_store
-from threads.host import Schedule, host
+from threads.host import Schedule, host, occurrences
 from threads.host.cron import parse_cron
 from threads.host.occurrences import log_occurrence
 from threads.host.runs import Runner
 from threads.host.schedule_pass import Pass
 from threads.host.schedule_threads import reserve_due
 from threads.host.schedules import Scheduler
-from threads.log import ScheduleFiredEvent, ScheduleSkippedEvent
+from threads.log import BranchId, ScheduleFiredEvent, ScheduleSkippedEvent
 from threads.result import Ok
+from threads.store import SqliteStore, Writer
 from threads.store.deletion import delete_thread
 from threads.store.schedules import Due
 
@@ -101,6 +102,46 @@ def test_two_schedulers_holding_one_pending_row_the_stale_one_appends_nothing() 
 NINE = int(datetime(2026, 5, 1, 9, 0, tzinfo=UTC).timestamp() * 1000)
 DAY = 86_400_000
 DAILY = Schedule(id="daily", agent="bot", cron="0 9 * * *", input="Report.")
+
+
+def test_a_row_reserved_while_a_scheduler_waits_for_the_writer_stays_pending_never_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def main() -> None:
+        store = sqlite(":memory:")
+        bot = agent(name="bot", model=scripted_model({"responses": [REPLY] * 2}))
+        runner = Runner(store, {"bot": bot}, {})
+        scheduler = Scheduler(runner, [DAILY])
+        await scheduler.tick(NINE - 60_000, NINE + 1_000)
+        await runner.settled()
+        sq = await open_store(store)
+        (thread,) = await sq.tables.schedules.threads()
+        root = await sq.root(thread)
+        assert isinstance(root, Ok)
+        started = await pinned_start(bot.definition, store)
+        waited = occurrences._briefly  # pyright: ignore[reportPrivateUsage] - the writer wait
+
+        async def briefly(sq: SqliteStore, branch: BranchId) -> Writer | None:
+            # This scheduler took its pins (none pending); another reserves the next occurrence,
+            # for an agent this host still serves, before this one gets the writer.
+            due = [Due("daily", NINE + DAY, "bot", "Report.", "UTC", missed=False)]
+            await reserve_due(Pass(runner, store, "local"), started, due, now_ms())
+            return await waited(sq, branch)
+
+        with monkeypatch.context() as m:
+            m.setattr(occurrences, "_briefly", briefly)
+            await occurrences.decide_thread(Pass(runner, store, "local"), thread)
+        assert len(await sq.tables.schedules.pending()) == 1
+        await scheduler.tick(NINE - 60_000, NINE + DAY + 1_000)
+        await runner.settled()
+        read = await sq.read(root.value, now_ms())
+        assert isinstance(read, Ok)
+        decided = ScheduleFiredEvent | ScheduleSkippedEvent
+        logged = [type(e) for e in read.value.fold.events if isinstance(e, decided)]
+        assert logged == [ScheduleFiredEvent, ScheduleFiredEvent]
+        await runner.stop()
+
+    asyncio.run(main())
 
 
 def test_a_deletion_before_a_reservation_strands_nothing_and_a_retired_key_stays_retired() -> None:

@@ -40,18 +40,9 @@ export async function decideThread(
   const writer = await briefly(log, main.value);
   // Contention is not an overlap: the rows stay pending for the next tick.
   if (!writer.ok) return;
-  const events = knownEvents(writer.value.chain);
   let fired: Pending | undefined;
   try {
-    for (const row of pendingOf(db, tenant, threadId)) {
-      const { turnOpen } = writer.value.chain.fold;
-      const started = pins.get(row.agent);
-      const runs = started !== undefined && pinMatches(events, started);
-      const reason = classify(row, turnOpen, runs);
-      // Another scheduler decided it first: its state is current, so stop here.
-      if (!logOccurrence(pass, writer.value, row, reason)) break;
-      if (reason === null) fired = row;
-    }
+    fired = decideRows(pass, writer.value, threadId, pins);
   } finally {
     writer.value.release();
   }
@@ -61,6 +52,29 @@ export async function decideThread(
     id: threadId,
     branch: main.value,
   });
+}
+
+/** Decides the pending rows in order under the writer; the one it fires, if any. */
+function decideRows(
+  pass: Pass,
+  writer: Writer,
+  threadId: ThreadId,
+  pins: ReadonlyMap<string, EventDraft>,
+): Pending | undefined {
+  const events = knownEvents(writer.chain);
+  let fired: Pending | undefined;
+  for (const row of pendingOf(pass.db, pass.tenant, threadId)) {
+    const started = pins.get(row.agent);
+    // Reserved by another scheduler after the pins were taken: it waits for the next tick.
+    // Only an agent this host no longer serves is removed.
+    if (started === undefined && pass.ctx.agents.has(row.agent)) break;
+    const runs = started !== undefined && pinMatches(events, started);
+    const reason = classify(row, writer.chain.fold.turnOpen, runs);
+    // Another scheduler decided it first: its state is current, so stop here.
+    if (!logOccurrence(pass, writer, row, reason)) break;
+    if (reason === null) fired = row;
+  }
+  return fired;
 }
 
 /**

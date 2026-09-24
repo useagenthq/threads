@@ -11,7 +11,7 @@ import { z } from "zod";
 import { HostContext } from "../src/context";
 import { occurrences, parseCron } from "../src/cron";
 import { bindSchedules, tick } from "../src/schedules";
-import { logOccurrence } from "../src/schedules/decide";
+import { decideThread, logOccurrence } from "../src/schedules/decide";
 import { reserveDue } from "../src/schedules/identity";
 import { newPass } from "../src/schedules/pass";
 import { pendingRows } from "../src/schedules/rows";
@@ -139,6 +139,44 @@ describe("scheduler", () => {
     ]);
     await a.ctx.stop();
     await b.ctx.stop();
+  });
+
+  test("a row reserved while a scheduler waits for the writer stays pending, never removed", async () => {
+    const store = sqlite(":memory:");
+    const a = host(store);
+    await tick(a.ctx, a.bound, nine - 60_000, nine + 1_000);
+    await a.ctx.idle();
+    const { db, log, thread, branch } = await scheduleThread(store);
+    // Another scheduler holds the writer: this one takes its pins (none pending), then waits.
+    const held = log.acquire(branch, "other-scheduler");
+    if (!held.ok) throw new Error(held.error.message);
+    const deciding = decideThread(newPass(a.ctx, db, log, "local"), thread);
+    await Bun.sleep(1);
+    // Meanwhile the next occurrence is reserved, for an agent this host still serves.
+    const started = await a.bound[0]?.hosted.runner.started();
+    if (started === undefined) throw new Error("no schedule");
+    const due = {
+      schedule_id: "daily",
+      occurrence_at: nine + DAY,
+      agent: "support",
+      input: "Report.",
+      timezone: "UTC",
+      missed: false,
+    };
+    reserveDue(db, log, started, [due]);
+    held.value.release();
+    await deciding;
+    expect(pendingRows(db, "local")).toHaveLength(1);
+    await tick(a.ctx, a.bound, nine - 60_000, nine + DAY + 1_000);
+    await a.ctx.idle();
+    const logged = (await eventsOf(store, "local", branch)).filter(
+      (e) => e.type === "schedule_fired" || e.type === "schedule_skipped",
+    );
+    expect(logged.map((e) => e.type)).toEqual([
+      "schedule_fired",
+      "schedule_fired",
+    ]);
+    await a.ctx.stop();
   });
 
   test("a deletion before a reservation leaves no stranded row, and a retired key is never reserved again", async () => {
