@@ -15,6 +15,7 @@ export {
   storeOf,
   tenantStore,
 } from "./agent/sqlite";
+export { renewTeam } from "./agent/team/runtime";
 export { assertNever } from "./assert-never";
 export { type EventOf, type ParkAddress, responseText } from "./fold/state";
 export { sha256Hex } from "./hash";

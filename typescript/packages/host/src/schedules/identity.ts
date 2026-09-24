@@ -3,6 +3,7 @@ import {
   type EventDraft,
   knownEvents,
   type LogStore,
+  renewTeam,
   type SqliteDriver,
   ThreadId,
   uuidv7,
@@ -81,7 +82,8 @@ function newThread(
   makeCurrent(db, log.tenant, scheduleId, threadId, log.now());
   must(log.createBranch(threadId, branchId));
   const writer = must(log.acquire(branchId, `schedule-${uuidv7(log.now())}`));
-  must(writer.append([started]));
+  // A lead's new thread names a new team of its own, which its first append opens.
+  must(writer.append([renewTeam(started, log.now())]));
   writer.release();
   return threadId;
 }

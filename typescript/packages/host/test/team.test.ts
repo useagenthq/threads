@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { agent, scriptedModel } from "@threads/core";
+import { agent, scriptedModel, sqlite } from "@threads/core";
+import { hostRunner, openStore, storeConnection } from "@threads/core/host";
 import { z } from "zod";
+import { reserveDue } from "../src/schedules/identity";
 import {
   alice,
   eventsOf,
@@ -85,5 +87,37 @@ describe("a team lead behind the host", () => {
         .safeParse(started).success,
     ).toBe(true);
     expect(events.map((e) => e.type)).toContain("member_started");
+  });
+
+  test("two schedules of one lead in one pass: each new thread opens a team of its own", async () => {
+    const lead = agent({
+      name: "lead",
+      model: scriptedModel({ responses: [] }),
+      team: [],
+    });
+    const runner = hostRunner(lead);
+    if (runner === undefined)
+      throw new Error("agent() registers a host runner");
+    // A pass pins the lead once and reuses the pin for every schedule of it.
+    const started = await runner.started();
+    const store = sqlite(":memory:");
+    const { log } = await openStore(store);
+    const { db } = await storeConnection(store);
+    for (const id of ["morning", "evening"])
+      reserveDue(db, log, started, [
+        {
+          schedule_id: id,
+          occurrence_at: 60_000,
+          agent: "lead",
+          input: "Go.",
+          timezone: "UTC",
+          missed: false,
+        },
+      ]);
+    const teams = z
+      .array(z.object({ team_id: z.string(), lead_thread_id: z.string() }))
+      .parse(db.all("SELECT team_id, lead_thread_id FROM teams", []));
+    expect(teams).toHaveLength(2);
+    expect(new Set(teams.map((t) => t.lead_thread_id)).size).toBe(2);
   });
 });

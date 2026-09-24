@@ -23,12 +23,29 @@ export function leadStarted<Deps, Output>(
 ): EventDraft {
   if (def.team === undefined || started.type !== "thread_started")
     return started;
-  const team = {
+  return { ...started, data: { ...started.data, team: newTeam(now) } };
+}
+
+/**
+ * The same lead's thread_started for another new thread: a new team each time, since a team
+ * belongs to one lead thread (a pin reused across threads keeps everything else).
+ */
+export function renewTeam(started: EventDraft, now: number): EventDraft {
+  if (started.type !== "thread_started" || started.data.team === undefined)
+    return started;
+  return { ...started, data: { ...started.data, team: newTeam(now) } };
+}
+
+function newTeam(now: number): {
+  readonly id: string;
+  readonly log_thread_id: string;
+  readonly log_branch_id: string;
+} {
+  return {
     id: uuidv7(now),
     log_thread_id: uuidv7(now),
     log_branch_id: uuidv7(now),
   };
-  return { ...started, data: { ...started.data, team } };
 }
 
 /** A team thread's runtime and what stops it; undefined for any other thread. */
