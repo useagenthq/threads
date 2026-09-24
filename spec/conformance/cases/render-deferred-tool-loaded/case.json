@@ -2,7 +2,7 @@
   "name": "render-deferred-tool-loaded",
   "family": "tools_streaming",
   "kind": "render",
-  "description": "A deferred MCP tool shows in line 0 as {name, description, deferred: true}. A tool_search call/result is followed by tools_changed{cause: tool_search} with the loaded spec. Line 0 stays byte-equal; the loaded schema renders after the prefix.",
+  "description": "A deferred MCP tool is pinned in reference form (stub plus spec_ref, no schema) and shows in line 0 as {name, description, deferred: true}, with tool_search listing it. The search's result is followed by tools_loaded naming its spec_ref; the next request renders a tools_loaded line with the full spec read from the artifact. Line 0 is unchanged.",
   "clock": {
     "now": 1790000060000
   }

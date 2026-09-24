@@ -1,0 +1,9 @@
+{
+  "name": "tools-loaded-after-error-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 47: the tool_search result is an error, so nothing was loaded.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

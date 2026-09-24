@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 from .common import arr, num, obj, text
@@ -179,6 +180,18 @@ class _View:
     def tools_changed(self, e: Obj) -> Obj:
         return {"role": "tools", "tools": [spec_line(x) for x in arr(obj(e["data"])["tools"])]}
 
+    def tools_loaded(self, e: Obj) -> Obj:
+        return self.loaded_line([e])
+
+    def loaded_line(self, loads: list[Obj]) -> Obj:
+        """One tools_loaded line: each load's specs, read from their artifacts, in order."""
+        specs: list[JsonValue] = []
+        for e in loads:
+            for x in arr(obj(e["data"])["tools"]):
+                ref = obj(obj(x)["spec_ref"])
+                specs.append(spec_line(json.loads(self.artifacts[text(ref["sha256"])])))
+        return {"role": "tools_loaded", "tools": specs}
+
     def assistant(self, e: Obj) -> Obj | None:
         d = obj(e["data"])
         if d["request_event_id"] in self.side:
@@ -261,6 +274,16 @@ class _View:
                 ]
                 if kept:
                     yield kept[-1], _bind(_View.tools_changed, self, kept[-1])
+                after = num(kept[-1]["seq"]) if kept else 0
+                loads = [
+                    x
+                    for x in self.events
+                    if x["type"] == "tools_loaded"
+                    and self._covers(c, num(x["seq"]))
+                    and num(x["seq"]) > after
+                ]
+                if loads:
+                    yield loads[-1], lambda loads=loads: self.loaded_line(loads)
 
 
 def _host_calls(events: list[Obj]) -> set[str]:
@@ -312,6 +335,7 @@ BUILDERS: dict[str, Callable[[_View, Obj], Obj | None]] = {
     "injected": _View.injected,
     "heartbeat": _View.heartbeat,
     "tools_changed": _View.tools_changed,
+    "tools_loaded": _View.tools_loaded,
     "model_response": _View.assistant,
     "model_response_recovered": _View.assistant,
     "tool_result": _View.result,

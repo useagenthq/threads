@@ -1,0 +1,9 @@
+{
+  "name": "tool-search-mixed-exact-falls-back",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "One term is an exact name and one is not, so the query falls back to keyword ranking: distinct query tokens found in name and description, highest score first, ties by name, limit 2.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

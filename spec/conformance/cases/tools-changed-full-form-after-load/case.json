@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-full-form-after-load",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "Rule 17 point 6: after create_issue is loaded, a tools_changed restates the set with create_issue in its full form, whose RFC 8785 bytes equal its spec artifact (checked at import). The next request renders the complete set from it.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

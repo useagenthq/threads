@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-ref-form-after-load-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 17 point 6: after create_issue is loaded, a tools_changed restates it in reference form. A loaded tool is never deferred again.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

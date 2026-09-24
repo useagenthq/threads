@@ -1,0 +1,9 @@
+{
+  "name": "legacy-tools-changed-tool-search",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "The legacy inline form: a deferred MCP tool pinned with its schema shows in line 0 as {name, description, deferred: true}, and a tools_changed{cause: tool_search} restates the complete set with the loaded spec (rule 17 point 2). Nothing writes this form any more, but it stays readable. Line 0 stays byte-equal.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

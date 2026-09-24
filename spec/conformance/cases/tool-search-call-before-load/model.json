@@ -1,0 +1,35 @@
+{
+  "responses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "call_id": "call_1",
+          "name": "mcp__jira__create_issue",
+          "input": {
+            "project": "WEB",
+            "summary": "Login fails"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 80,
+        "output_tokens": 20
+      }
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Done."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 200,
+        "output_tokens": 3
+      }
+    }
+  ]
+}

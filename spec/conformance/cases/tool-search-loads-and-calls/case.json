@@ -1,0 +1,11 @@
+{
+  "name": "tool-search-loads-and-calls",
+  "family": "tools_streaming",
+  "kind": "recover",
+  "description": "End to end on the runtime: the model searches two exact names, the tool_search result lists both and the same batch appends tools_loaded with their pinned spec_refs; the next request renders their full specs; the model then calls one and it runs. Both requests are pinned by hash: line 0 (the declared prefix) is the same, and the second request's bytes extend the first's.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

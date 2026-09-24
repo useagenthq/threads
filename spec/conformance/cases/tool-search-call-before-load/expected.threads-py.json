@@ -1,0 +1,91 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 2,
+      "hash": "51d6c28934a66881d3eda27fe591fa598fbf3a03890f4ed90e4f489d2c15563e"
+    }
+  },
+  "appended": [
+    {
+      "type": "model_request",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "data": {
+        "stop_reason": "tool_use"
+      }
+    },
+    {
+      "type": "tool_call",
+      "data": {
+        "call_id": "call_1",
+        "name": "mcp__jira__create_issue"
+      }
+    },
+    {
+      "type": "tool_result",
+      "data": {
+        "call_id": "call_1",
+        "is_error": true,
+        "origin": "not_executed",
+        "preview": "tool_not_loaded: mcp__jira__create_issue; find it with tool_search first"
+      }
+    },
+    {
+      "type": "model_request",
+      "actor_kind": "host",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "actor_kind": "model",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ],
+  "sandbox": {
+    "dispatches": {
+      "mcp__jira__create_issue": 0
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "tools-loaded-per-call-twice-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 47: a second tools_loaded for the same search call. Only one can directly follow its result.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

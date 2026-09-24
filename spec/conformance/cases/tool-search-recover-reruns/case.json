@@ -1,0 +1,10 @@
+{
+  "name": "tool-search-recover-reruns",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "A crash after a tool_search call was recorded and allowed, before its result. The search is read_only and depends only on the log and the pinned tables, so recovery runs it again: the same result text and the same tools_loaded bytes.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json"
+}

@@ -10,6 +10,7 @@ mkdir -p python/src/threads/_generated typescript/packages/core/src/store/genera
 touch python/src/threads/_generated/__init__.py
 python3 spec/tools/gen_store_sql.py
 python3 spec/tools/gen_model_catalogs.py
+python3 spec/tools/gen_unicode_fold.py
 if [ "$target" != "py" ]; then
   python3 spec/tools/gen_api_surface.py
 fi

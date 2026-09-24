@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-ref-form-kept",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 17 point 6: a tools_changed restates the pinned set, each deferred tool in its reference form byte for byte, while none is loaded. It counts as equal to the pin.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

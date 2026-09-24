@@ -1,0 +1,156 @@
+{
+  "description": "The normative tool_search fold: unassigned (Unicode 15.0.0) and surrogate code points become U+0020, NFKC, full case folding from CaseFolding.txt 15.0.0 (status C and F), NFKC. tokens are the maximal runs of General_Category L, M or N code points of the fold, in order, duplicates kept.",
+  "unicode_version": "15.0.0",
+  "cases": [
+    {
+      "input": "ß",
+      "fold": "ss",
+      "tokens": [
+        "ss"
+      ]
+    },
+    {
+      "input": "ẞ",
+      "fold": "ss",
+      "tokens": [
+        "ss"
+      ]
+    },
+    {
+      "input": "ſ",
+      "fold": "s",
+      "tokens": [
+        "s"
+      ]
+    },
+    {
+      "input": "ﬁ",
+      "fold": "fi",
+      "tokens": [
+        "fi"
+      ]
+    },
+    {
+      "input": "İ",
+      "fold": "i̇",
+      "tokens": [
+        "i̇"
+      ]
+    },
+    {
+      "input": "λόγος",
+      "fold": "λόγοσ",
+      "tokens": [
+        "λόγοσ"
+      ]
+    },
+    {
+      "input": "ΛΌΓΟΣ",
+      "fold": "λόγοσ",
+      "tokens": [
+        "λόγοσ"
+      ]
+    },
+    {
+      "input": "ꭰꭱ",
+      "fold": "ᎠᎡ",
+      "tokens": [
+        "ᎠᎡ"
+      ]
+    },
+    {
+      "input": "Ｃｒｅａｔｅ＿Ｉｓｓｕｅ",
+      "fold": "create_issue",
+      "tokens": [
+        "create",
+        "issue"
+      ]
+    },
+    {
+      "input": "क्षत्रिय",
+      "fold": "क्षत्रिय",
+      "tokens": [
+        "क्षत्रिय"
+      ]
+    },
+    {
+      "input": "é",
+      "fold": "é",
+      "tokens": [
+        "é"
+      ]
+    },
+    {
+      "input": "abc𮯰def",
+      "fold": "abc def",
+      "tokens": [
+        "abc",
+        "def"
+      ]
+    },
+    {
+      "input": "x㇯y",
+      "fold": "x y",
+      "tokens": [
+        "x",
+        "y"
+      ]
+    },
+    {
+      "input": "͸",
+      "fold": " ",
+      "tokens": []
+    },
+    {
+      "input": "Straße",
+      "fold": "strasse",
+      "tokens": [
+        "strasse"
+      ]
+    },
+    {
+      "input": "ǅungla",
+      "fold": "džungla",
+      "tokens": [
+        "džungla"
+      ]
+    },
+    {
+      "input": "Ⅻ ①",
+      "fold": "xii 1",
+      "tokens": [
+        "xii",
+        "1"
+      ]
+    },
+    {
+      "input": "MCP__JIRA__Create_Issue",
+      "fold": "mcp__jira__create_issue",
+      "tokens": [
+        "mcp",
+        "jira",
+        "create",
+        "issue"
+      ]
+    },
+    {
+      "input": "mcp__jira__create_issue",
+      "fold": "mcp__jira__create_issue",
+      "tokens": [
+        "mcp",
+        "jira",
+        "create",
+        "issue"
+      ]
+    },
+    {
+      "input": "tab\there,comma",
+      "fold": "tab\there,comma",
+      "tokens": [
+        "tab",
+        "here",
+        "comma"
+      ]
+    }
+  ]
+}

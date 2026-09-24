@@ -62,6 +62,7 @@ const CACHE_BREAK_CAUSES = [
   "compacted",
   "context_edited",
   "tools_changed",
+  "tools_loaded",
   "ttl_expired",
   "unknown",
 ] as const;

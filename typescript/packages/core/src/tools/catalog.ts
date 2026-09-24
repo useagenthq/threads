@@ -8,6 +8,7 @@ import {
   TeamTaskCreateInput,
   TeamTaskUpdateInput,
   TodoWriteInput,
+  ToolSearchInput,
 } from "./agent-inputs";
 import {
   GitCloneInput,
@@ -304,6 +305,12 @@ const ENTRIES: readonly CatalogEntry[] = [
     description:
       "Replace your todo list with todos, the complete new list. Use it to plan and track multi-step work.",
     input: TodoWriteInput,
+  },
+  {
+    name: "tool_search",
+    description:
+      "Load deferred tools so you can call them. Pass exact tool names, separated by commas, to load those tools; otherwise the query's words are matched against each deferred tool's name and description, and the best matches are loaded. A loaded tool stays available for the rest of the conversation.",
+    input: ToolSearchInput,
   },
   {
     name: "web_fetch",

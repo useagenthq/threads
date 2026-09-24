@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-full-form-before-load-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 17 point 6: a tools_changed gives create_issue, pinned in reference form, its full form before any tools_loaded loaded it. Only tool_search un-defers a tool.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

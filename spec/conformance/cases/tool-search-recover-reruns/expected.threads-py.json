@@ -1,0 +1,99 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [
+      "call_1"
+    ],
+    "effects": [],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 80,
+      "output_tokens": 20,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 6,
+      "hash": "b57c67634d8d0961d6897721e0c98acff1e69fda32828655bfee32b0ac87443c"
+    }
+  },
+  "appended": [
+    {
+      "type": "tool_result",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_1",
+        "is_error": false,
+        "origin": "executed",
+        "preview": "mcp__jira__create_issue: Create a Jira issue in a project.\nmcp__jira__add_comment: Add a comment to a Jira issue."
+      }
+    },
+    {
+      "type": "tools_loaded",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_1",
+        "tools": [
+          {
+            "name": "mcp__jira__create_issue",
+            "spec_ref": {
+              "sha256": "ecaabec32c2d14efb61486beceff8acad3c9d2bea80cbe3ac2afd2acb3e2af21",
+              "bytes": 305,
+              "media_type": "application/json"
+            }
+          },
+          {
+            "name": "mcp__jira__add_comment",
+            "spec_ref": {
+              "sha256": "103c5edf754eebf3ff72336ff143ede11544dacd0017f8f3f9c9e1c24401adea",
+              "bytes": 263,
+              "media_type": "application/json"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "model_request",
+      "actor_kind": "host",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "actor_kind": "model",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ]
+}

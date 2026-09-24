@@ -31,14 +31,14 @@
     "status": "in_turn",
     "head": {
       "seq": 8,
-      "hash": "9e875bafbd7bdeab5b8b2858736565913bc078b226756019883ec9b7c30da235"
+      "hash": "e6b05e6bbf728a734a234585d89512aa6d055c62a4e3dc46574939dbddc8d333"
     }
   },
   "render": {
-    "next_request_sha256": "c8916dacac525ae707c69e167d6733f85a645aeff1cecd2aecd184b0c066142e",
+    "next_request_sha256": "f75f3d7baa3a475001d9aae3a32184d8c9d561697099943286eb754a8f73b9e0",
     "declared_prefix": {
-      "bytes": 657,
-      "sha256": "4b9e7cef03d88d426d2ee26cbc7c8b7c7e999b4c44ccbaabb4e8a20759c299e9"
+      "bytes": 1252,
+      "sha256": "a82fb088535fbaade028ffc5b394bf9a4e58f5dd1ff4e94e05c7bb81a1f63278"
     }
   }
 }

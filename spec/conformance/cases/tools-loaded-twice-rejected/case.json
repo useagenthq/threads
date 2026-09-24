@@ -1,0 +1,9 @@
+{
+  "name": "tools-loaded-twice-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 47: a second search's tools_loaded names create_issue, already loaded on the chain.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

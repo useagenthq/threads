@@ -1,0 +1,9 @@
+{
+  "name": "tools-loaded-artifact-still-deferred-rejected",
+  "family": "log",
+  "kind": "render",
+  "description": "Rule 47 artifact check: the spec artifact itself contains defer_loading. A loaded spec is never deferred again and never names another ref.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

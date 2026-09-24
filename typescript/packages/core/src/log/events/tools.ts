@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { ActorWithPrincipal, PermissionMode } from "../common";
+import { ActorWithPrincipal, ArtifactRef, PermissionMode } from "../common";
 import { type EventDef, event, eventWithActor } from "../envelope";
 import { CallId, ChallengeId, EventId } from "../ids";
 import { JsonObject, Name, Sha256, TimeMs } from "../primitives";
-import type { EnumOf, Opt, Strict } from "../zod-types";
+import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
 
 // Tool calls and the decisions that gate them: permissions, hooks and approvals.
 
@@ -87,6 +87,32 @@ export const ToolCall: EventDef<"tool_call", typeof ToolCallData, true> = event(
     data: ToolCallData,
   },
 );
+
+export const LoadedTool: Strict<{
+  name: typeof Name;
+  spec_ref: typeof ArtifactRef;
+}> = z
+  .strictObject({ name: Name, spec_ref: ArtifactRef })
+  .meta({ id: "LoadedTool" });
+
+export const ToolsLoadedData: Strict<{
+  call_id: typeof CallId;
+  tools: Arr<typeof LoadedTool>;
+}> = z.strictObject({
+  call_id: CallId,
+  tools: z.array(LoadedTool).min(1),
+});
+export const ToolsLoaded: EventDef<
+  "tools_loaded",
+  typeof ToolsLoadedData,
+  true
+> = event({
+  type: "tools_loaded",
+  critical: true,
+  description:
+    "Deferred tools a tool_search call loaded, each by the spec_ref it was pinned with. Appended in the same batch as that call's tool_result, right after it. It renders as a history line with the loaded specs read from their artifacts, so line 0 never changes; the tools stay loaded for the rest of the chain.",
+  data: ToolsLoadedData,
+});
 
 export const PermissionDecisionData: Strict<{
   call_id: typeof CallId;

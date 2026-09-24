@@ -1,0 +1,11 @@
+{
+  "name": "recover-loaded-call-effect-class",
+  "family": "cancellation_resume",
+  "kind": "recover",
+  "description": "Crash after effect_begin of a call to refund_card, a reconcilable tool that was deferred and loaded by tool_search. Its call-time spec is the pinned stub, which carries the effect class: recovery reconciles it with a lookup and never sends it again, exactly as for a tool pinned inline.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

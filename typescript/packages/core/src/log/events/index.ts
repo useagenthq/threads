@@ -88,6 +88,7 @@ import {
   HookDecision,
   PermissionDecision,
   ToolCall,
+  ToolsLoaded,
 } from "./tools";
 
 /** The parser for every known event, keyed on `type`. */
@@ -163,6 +164,7 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
     typeof OperatorRequest.schema,
     typeof OperatorRefused.schema,
     typeof MessagePolicyDecided.schema,
+    typeof ToolsLoaded.schema,
   ],
   "type"
 > = z.discriminatedUnion("type", [
@@ -236,6 +238,7 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
   OperatorRequest.schema,
   OperatorRefused.schema,
   MessagePolicyDecided.schema,
+  ToolsLoaded.schema,
 ]);
 export type KnownEvent = z.infer<typeof KnownEvent>;
 
@@ -311,6 +314,7 @@ export const EVENT_FRAGMENTS: readonly z.ZodType[] = [
   OperatorRequest.fragment,
   OperatorRefused.fragment,
   MessagePolicyDecided.fragment,
+  ToolsLoaded.fragment,
 ];
 
 export * from "./agents";

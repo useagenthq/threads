@@ -1,0 +1,1 @@
+{"description":"Search Jira issues with JQL.","effect_class":"read_only","input_schema":{"additionalProperties":false,"properties":{"jql":{"type":"string"}},"required":["jql"],"type":"object"},"name":"mcp__jira__search_issues"}

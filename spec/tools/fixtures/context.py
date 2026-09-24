@@ -245,11 +245,12 @@ def _deferred(root: pathlib.Path) -> None:
     render_case(
         root,
         (
-            "render-deferred-tool-loaded",
+            "legacy-tools-changed-tool-search",
             "tools_streaming",
-            "A deferred MCP tool shows in line 0 as {name, description, deferred: true}. A "
-            "tool_search call/result is followed by tools_changed{cause: tool_search} with the "
-            "loaded spec. Line 0 stays byte-equal; the loaded schema renders after the prefix.",
+            "The legacy inline form: a deferred MCP tool pinned with its schema shows in line 0 "
+            "as {name, description, deferred: true}, and a tools_changed{cause: tool_search} "
+            "restates the complete set with the loaded spec (rule 17 point 2). Nothing writes "
+            "this form any more, but it stays readable. Line 0 stays byte-equal.",
         ),
         log,
     )

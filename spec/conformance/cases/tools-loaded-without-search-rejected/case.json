@@ -1,0 +1,9 @@
+{
+  "name": "tools-loaded-without-search-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 47: a tools_loaded after the result of a read_file call. Only a tool_search result loads deferred tools.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

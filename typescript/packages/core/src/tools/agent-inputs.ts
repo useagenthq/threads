@@ -91,3 +91,22 @@ export const TeamTaskUpdateInput: Strict<{
     .enum(TASK_UPDATES)
     .describe("released returns a claimed task to the open pool."),
 });
+
+/**
+ * tool_search: at most 200 characters, counted in code points by the tool itself (a JSON Schema
+ * maxLength would count UTF-16 units in Zod and code points in Python).
+ */
+export const ToolSearchInput: Strict<{
+  query: z.ZodString;
+  limit: z.ZodDefault<z.ZodInt>;
+}> = z.strictObject({
+  query: Text.describe(
+    "Exact tool names separated by commas, or keywords. At most 200 characters.",
+  ),
+  limit: z
+    .int()
+    .min(1)
+    .max(10)
+    .default(5)
+    .describe("How many keyword matches to load."),
+});

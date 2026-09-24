@@ -1,0 +1,9 @@
+{
+  "name": "tools-loaded-artifact-widens-rejected",
+  "family": "log",
+  "kind": "render",
+  "description": "Rule 47 artifact check: the spec artifact says read_only while the pinned stub says unguarded. An imported log can't widen a tool through its artifact.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

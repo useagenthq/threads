@@ -1,0 +1,1 @@
+{"description":"Add a comment to a Jira issue.","effect_class":"unguarded","input_schema":{"additionalProperties":false,"properties":{"body":{"type":"string"},"issue":{"type":"string"}},"required":["body","issue"],"type":"object"},"name":"mcp__jira__add_comment"}

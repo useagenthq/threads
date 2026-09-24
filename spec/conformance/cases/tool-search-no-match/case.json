@@ -1,0 +1,9 @@
+{
+  "name": "tool-search-no-match",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "No query token matches a deferred tool: the result is the text no deferred tool matches, nothing is loaded and no tools_loaded is written.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

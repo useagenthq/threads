@@ -1,0 +1,9 @@
+{
+  "name": "tool-search-loaded-across-compaction",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "Two loads, then a compaction over both turns. The view renders the summary, then one tools_loaded line with every tool loaded in the range, in load order, so the loads survive. The request after the compaction keeps line 0 (C7).",
+  "clock": {
+    "now": 1790000060000
+  }
+}

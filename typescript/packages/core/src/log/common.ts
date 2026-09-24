@@ -136,18 +136,37 @@ export const EffectClass: EnumOf<typeof EFFECT_CLASSES> = z
   });
 
 const TOOL_SPEC_RULE = {
-  if: { properties: { effect_class: { const: "idempotent" } } },
-  then: { required: ["dedup_window_ms"] },
-  else: { not: { required: ["dedup_window_ms"] } },
+  allOf: [
+    {
+      if: { properties: { effect_class: { const: "idempotent" } } },
+      then: { required: ["dedup_window_ms"] },
+      else: { not: { required: ["dedup_window_ms"] } },
+    },
+    {
+      if: { required: ["spec_ref"] },
+      then: {
+        required: ["defer_loading"],
+        properties: { defer_loading: { const: true } },
+        not: {
+          anyOf: [
+            { required: ["input_schema"] },
+            { required: ["output_schema"] },
+          ],
+        },
+      },
+      else: { required: ["input_schema"] },
+    },
+  ],
 } as const;
 export const ToolSpec: Ruled<
   Strict<{
     name: typeof Name;
     description: z.ZodString;
-    input_schema: typeof JsonObject;
+    input_schema: Opt<typeof JsonObject>;
     effect_class: typeof EffectClass;
     dedup_window_ms: Opt<typeof PosInt>;
     defer_loading: Opt<z.ZodBoolean>;
+    spec_ref: Opt<typeof ArtifactRef>;
     output_schema: Opt<typeof JsonObject>;
     ends_turn: Opt<z.ZodBoolean>;
   }>,
@@ -156,7 +175,9 @@ export const ToolSpec: Ruled<
   z.strictObject({
     name: Name,
     description: z.string(),
-    input_schema: JsonObject,
+    input_schema: JsonObject.describe(
+      "Required, except in the reference form (spec_ref), which has none.",
+    ).optional(),
     effect_class: EffectClass,
     dedup_window_ms: PosInt.describe(
       "The provider's declared dedup window for this tool's effect key.",
@@ -164,9 +185,12 @@ export const ToolSpec: Ruled<
     defer_loading: z
       .boolean()
       .describe(
-        "true: deferred. Render v1 shows only {name, description, deferred: true} until a tools_changed with cause tool_search loads it (the loaded spec omits this flag). A call to a deferred tool fails pre-effect with tool_not_loaded.",
+        "true: deferred. Render v1 shows only {name, description, deferred: true} until tool_search loads it: a tools_loaded naming its spec_ref, or (legacy inline form) a tools_changed with cause tool_search whose spec omits this flag. A call to a deferred tool fails pre-effect with tool_not_loaded.",
       )
       .optional(),
+    // The reference form of a deferred tool: its complete spec is this pinned artifact (the
+    // RFC 8785 bytes of the ToolSpec without defer_loading and spec_ref, application/json).
+    spec_ref: ArtifactRef.optional(),
     output_schema: JsonObject.describe(
       "Optional JSON Schema for the tool's result value. A result that fails it is recorded as an error result; the effect still happened.",
     ).optional(),

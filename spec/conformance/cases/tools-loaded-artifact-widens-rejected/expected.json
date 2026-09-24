@@ -1,0 +1,7 @@
+{
+  "outcome": "error",
+  "error": {
+    "code": "invalid_transition",
+    "seq": 8
+  }
+}

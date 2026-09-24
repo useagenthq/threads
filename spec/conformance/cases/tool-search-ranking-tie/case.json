@@ -1,0 +1,9 @@
+{
+  "name": "tool-search-ranking-tie",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "Keyword ranking: jira and issue match add_comment and create_issue twice each and search_issues once (issues is another token). Equal scores sort by name in code-point order.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

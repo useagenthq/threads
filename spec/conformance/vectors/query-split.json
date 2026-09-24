@@ -1,0 +1,285 @@
+{
+  "description": "The exact-name split of a tool_search query: unassigned and surrogate code points become U+0020, NFKC, then split on the pinned separators (',', every White_Space code point, U+001C-U+001F, U+FEFF), empty terms dropped. No term means no match.",
+  "cases": [
+    {
+      "query": "a\tb",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a\nb",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a\u000bb",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a\fb",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a\rb",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a\u001cb",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a\u001db",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a\u001eb",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a\u001fb",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a,b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "ab",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a　b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a﻿b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a，b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a﹐b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "a︐b",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": "mcp__a__x\u001fmcp__a__y",
+      "terms": [
+        "mcp__a__x",
+        "mcp__a__y"
+      ]
+    },
+    {
+      "query": "﻿mcp__a__x",
+      "terms": [
+        "mcp__a__x"
+      ]
+    },
+    {
+      "query": "  a,,b  ",
+      "terms": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "query": ", a ,",
+      "terms": [
+        "a"
+      ]
+    },
+    {
+      "query": " ",
+      "terms": []
+    },
+    {
+      "query": ",",
+      "terms": []
+    },
+    {
+      "query": " , ",
+      "terms": []
+    },
+    {
+      "query": "　",
+      "terms": []
+    }
+  ]
+}

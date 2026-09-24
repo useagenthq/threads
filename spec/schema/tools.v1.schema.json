@@ -837,6 +837,27 @@
       ],
       "type": "object"
     },
+    "ToolSearchInput": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "default": 5,
+          "description": "How many keyword matches to load.",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "query": {
+          "description": "Exact tool names separated by commas, or keywords. At most 200 characters.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
     "WaitInput": {
       "additionalProperties": false,
       "properties": {

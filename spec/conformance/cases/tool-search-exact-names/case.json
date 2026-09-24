@@ -1,0 +1,9 @@
+{
+  "name": "tool-search-exact-names",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "A query of two exact names, comma-separated, loads exactly those two in query order, whatever the keyword scores: one tools_loaded names each by its pinned spec_ref, and the next request renders both full specs after the result.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

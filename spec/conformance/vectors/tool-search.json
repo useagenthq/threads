@@ -1,0 +1,425 @@
+{
+  "description": "tool_search results. deferred: the still-deferred tools in tool-set order; loaded: every other current tool. lines: the result text's lines; loads: what tools_loaded names, in order (empty: no event). Exact names first (every term a current tool's name, at most 10 loads), else keyword ranking (distinct query tokens found, score descending, then name), else 'no deferred tool matches'.",
+  "cases": [
+    {
+      "query": "mcp__jira__create_issue, mcp__jira__add_comment",
+      "limit": 5,
+      "deferred": [
+        {
+          "name": "mcp__jira__add_comment",
+          "description": "Add a comment to a Jira issue."
+        },
+        {
+          "name": "mcp__jira__create_issue",
+          "description": "Create a Jira issue in a project.\nReturns the new issue key."
+        },
+        {
+          "name": "mcp__jira__search_issues",
+          "description": "Search Jira issues with JQL."
+        }
+      ],
+      "loaded": [
+        "read_file"
+      ],
+      "lines": [
+        "mcp__jira__create_issue: Create a Jira issue in a project.",
+        "mcp__jira__add_comment: Add a comment to a Jira issue."
+      ],
+      "loads": [
+        "mcp__jira__create_issue",
+        "mcp__jira__add_comment"
+      ]
+    },
+    {
+      "query": "mcp__jira__add_comment mcp__jira__add_comment",
+      "limit": 5,
+      "deferred": [
+        {
+          "name": "mcp__jira__add_comment",
+          "description": "Add a comment to a Jira issue."
+        },
+        {
+          "name": "mcp__jira__create_issue",
+          "description": "Create a Jira issue in a project.\nReturns the new issue key."
+        },
+        {
+          "name": "mcp__jira__search_issues",
+          "description": "Search Jira issues with JQL."
+        }
+      ],
+      "loaded": [
+        "read_file"
+      ],
+      "lines": [
+        "mcp__jira__add_comment: Add a comment to a Jira issue."
+      ],
+      "loads": [
+        "mcp__jira__add_comment"
+      ]
+    },
+    {
+      "query": "MCP__JIRA__ADD_COMMENT，mcp__jira__search_issues",
+      "limit": 5,
+      "deferred": [
+        {
+          "name": "mcp__jira__add_comment",
+          "description": "Add a comment to a Jira issue."
+        },
+        {
+          "name": "mcp__jira__create_issue",
+          "description": "Create a Jira issue in a project.\nReturns the new issue key."
+        },
+        {
+          "name": "mcp__jira__search_issues",
+          "description": "Search Jira issues with JQL."
+        }
+      ],
+      "loaded": [
+        "read_file"
+      ],
+      "lines": [
+        "mcp__jira__add_comment: Add a comment to a Jira issue.",
+        "mcp__jira__search_issues: Search Jira issues with JQL."
+      ],
+      "loads": [
+        "mcp__jira__add_comment",
+        "mcp__jira__search_issues"
+      ]
+    },
+    {
+      "query": "mcp__bulk__tool_00, mcp__bulk__tool_01, mcp__bulk__tool_02, mcp__bulk__tool_03, mcp__bulk__tool_04, mcp__bulk__tool_05, mcp__bulk__tool_06, mcp__bulk__tool_07, mcp__bulk__tool_08, mcp__bulk__tool_09, mcp__bulk__tool_10, mcp__bulk__tool_11",
+      "limit": 3,
+      "deferred": [
+        {
+          "name": "mcp__bulk__tool_00",
+          "description": "Bulk tool number 0."
+        },
+        {
+          "name": "mcp__bulk__tool_01",
+          "description": "Bulk tool number 1."
+        },
+        {
+          "name": "mcp__bulk__tool_02",
+          "description": "Bulk tool number 2."
+        },
+        {
+          "name": "mcp__bulk__tool_03",
+          "description": "Bulk tool number 3."
+        },
+        {
+          "name": "mcp__bulk__tool_04",
+          "description": "Bulk tool number 4."
+        },
+        {
+          "name": "mcp__bulk__tool_05",
+          "description": "Bulk tool number 5."
+        },
+        {
+          "name": "mcp__bulk__tool_06",
+          "description": "Bulk tool number 6."
+        },
+        {
+          "name": "mcp__bulk__tool_07",
+          "description": "Bulk tool number 7."
+        },
+        {
+          "name": "mcp__bulk__tool_08",
+          "description": "Bulk tool number 8."
+        },
+        {
+          "name": "mcp__bulk__tool_09",
+          "description": "Bulk tool number 9."
+        },
+        {
+          "name": "mcp__bulk__tool_10",
+          "description": "Bulk tool number 10."
+        },
+        {
+          "name": "mcp__bulk__tool_11",
+          "description": "Bulk tool number 11."
+        }
+      ],
+      "loaded": [],
+      "lines": [
+        "mcp__bulk__tool_00: Bulk tool number 0.",
+        "mcp__bulk__tool_01: Bulk tool number 1.",
+        "mcp__bulk__tool_02: Bulk tool number 2.",
+        "mcp__bulk__tool_03: Bulk tool number 3.",
+        "mcp__bulk__tool_04: Bulk tool number 4.",
+        "mcp__bulk__tool_05: Bulk tool number 5.",
+        "mcp__bulk__tool_06: Bulk tool number 6.",
+        "mcp__bulk__tool_07: Bulk tool number 7.",
+        "mcp__bulk__tool_08: Bulk tool number 8.",
+        "mcp__bulk__tool_09: Bulk tool number 9."
+      ],
+      "loads": [
+        "mcp__bulk__tool_00",
+        "mcp__bulk__tool_01",
+        "mcp__bulk__tool_02",
+        "mcp__bulk__tool_03",
+        "mcp__bulk__tool_04",
+        "mcp__bulk__tool_05",
+        "mcp__bulk__tool_06",
+        "mcp__bulk__tool_07",
+        "mcp__bulk__tool_08",
+        "mcp__bulk__tool_09"
+      ]
+    },
+    {
+      "query": "mcp__jira__create_issue, comment",
+      "limit": 2,
+      "deferred": [
+        {
+          "name": "mcp__jira__add_comment",
+          "description": "Add a comment to a Jira issue."
+        },
+        {
+          "name": "mcp__jira__create_issue",
+          "description": "Create a Jira issue in a project.\nReturns the new issue key."
+        },
+        {
+          "name": "mcp__jira__search_issues",
+          "description": "Search Jira issues with JQL."
+        }
+      ],
+      "loaded": [
+        "read_file"
+      ],
+      "lines": [
+        "mcp__jira__add_comment: Add a comment to a Jira issue.",
+        "mcp__jira__create_issue: Create a Jira issue in a project."
+      ],
+      "loads": [
+        "mcp__jira__add_comment",
+        "mcp__jira__create_issue"
+      ]
+    },
+    {
+      "query": "jira issue",
+      "limit": 5,
+      "deferred": [
+        {
+          "name": "mcp__jira__add_comment",
+          "description": "Add a comment to a Jira issue."
+        },
+        {
+          "name": "mcp__jira__create_issue",
+          "description": "Create a Jira issue in a project.\nReturns the new issue key."
+        },
+        {
+          "name": "mcp__jira__search_issues",
+          "description": "Search Jira issues with JQL."
+        }
+      ],
+      "loaded": [
+        "read_file"
+      ],
+      "lines": [
+        "mcp__jira__add_comment: Add a comment to a Jira issue.",
+        "mcp__jira__create_issue: Create a Jira issue in a project.",
+        "mcp__jira__search_issues: Search Jira issues with JQL."
+      ],
+      "loads": [
+        "mcp__jira__add_comment",
+        "mcp__jira__create_issue",
+        "mcp__jira__search_issues"
+      ]
+    },
+    {
+      "query": "jira jira issue",
+      "limit": 1,
+      "deferred": [
+        {
+          "name": "mcp__jira__add_comment",
+          "description": "Add a comment to a Jira issue."
+        },
+        {
+          "name": "mcp__jira__create_issue",
+          "description": "Create a Jira issue in a project.\nReturns the new issue key."
+        },
+        {
+          "name": "mcp__jira__search_issues",
+          "description": "Search Jira issues with JQL."
+        }
+      ],
+      "loaded": [
+        "read_file"
+      ],
+      "lines": [
+        "mcp__jira__add_comment: Add a comment to a Jira issue."
+      ],
+      "loads": [
+        "mcp__jira__add_comment"
+      ]
+    },
+    {
+      "query": "create",
+      "limit": 5,
+      "deferred": [
+        {
+          "name": "mcp__jira__add_comment",
+          "description": "Add a comment to a Jira issue."
+        },
+        {
+          "name": "mcp__jira__create_issue",
+          "description": "Create a Jira issue in a project.\nReturns the new issue key."
+        },
+        {
+          "name": "mcp__jira__search_issues",
+          "description": "Search Jira issues with JQL."
+        }
+      ],
+      "loaded": [
+        "read_file"
+      ],
+      "lines": [
+        "mcp__jira__create_issue: Create a Jira issue in a project."
+      ],
+      "loads": [
+        "mcp__jira__create_issue"
+      ]
+    },
+    {
+      "query": "read_file, mcp__jira__create_issue",
+      "limit": 5,
+      "deferred": [
+        {
+          "name": "mcp__jira__add_comment",
+          "description": "Add a comment to a Jira issue."
+        },
+        {
+          "name": "mcp__jira__create_issue",
+          "description": "Create a Jira issue in a project.\nReturns the new issue key."
+        },
+        {
+          "name": "mcp__jira__search_issues",
+          "description": "Search Jira issues with JQL."
+        }
+      ],
+      "loaded": [
+        "read_file"
+      ],
+      "lines": [
+        "read_file: already loaded",
+        "mcp__jira__create_issue: Create a Jira issue in a project."
+      ],
+      "loads": [
+        "mcp__jira__create_issue"
+      ]
+    },
+    {
+      "query": "read_file",
+      "limit": 5,
+      "deferred": [
+        {
+          "name": "mcp__jira__add_comment",
+          "description": "Add a comment to a Jira issue."
+        },
+        {
+          "name": "mcp__jira__create_issue",
+          "description": "Create a Jira issue in a project.\nReturns the new issue key."
+        },
+        {
+          "name": "mcp__jira__search_issues",
+          "description": "Search Jira issues with JQL."
+        }
+      ],
+      "loaded": [
+        "read_file"
+      ],
+      "lines": [
+        "read_file: already loaded"
+      ],
+      "loads": []
+    },
+    {
+      "query": "weather forecast",
+      "limit": 5,
+      "deferred": [
+        {
+          "name": "mcp__jira__add_comment",
+          "description": "Add a comment to a Jira issue."
+        },
+        {
+          "name": "mcp__jira__create_issue",
+          "description": "Create a Jira issue in a project.\nReturns the new issue key."
+        },
+        {
+          "name": "mcp__jira__search_issues",
+          "description": "Search Jira issues with JQL."
+        }
+      ],
+      "loaded": [
+        "read_file"
+      ],
+      "lines": [
+        "no deferred tool matches"
+      ],
+      "loads": []
+    },
+    {
+      "query": " , ",
+      "limit": 5,
+      "deferred": [
+        {
+          "name": "mcp__jira__add_comment",
+          "description": "Add a comment to a Jira issue."
+        },
+        {
+          "name": "mcp__jira__create_issue",
+          "description": "Create a Jira issue in a project.\nReturns the new issue key."
+        },
+        {
+          "name": "mcp__jira__search_issues",
+          "description": "Search Jira issues with JQL."
+        }
+      ],
+      "loaded": [
+        "read_file"
+      ],
+      "lines": [
+        "no deferred tool matches"
+      ],
+      "loads": []
+    },
+    {
+      "query": "returns key",
+      "limit": 5,
+      "deferred": [
+        {
+          "name": "mcp__jira__add_comment",
+          "description": "Add a comment to a Jira issue."
+        },
+        {
+          "name": "mcp__jira__create_issue",
+          "description": "Create a Jira issue in a project.\nReturns the new issue key."
+        },
+        {
+          "name": "mcp__jira__search_issues",
+          "description": "Search Jira issues with JQL."
+        }
+      ],
+      "loaded": [
+        "read_file"
+      ],
+      "lines": [
+        "mcp__jira__create_issue: Create a Jira issue in a project."
+      ],
+      "loads": [
+        "mcp__jira__create_issue"
+      ]
+    },
+    {
+      "query": "jira",
+      "limit": 5,
+      "deferred": [],
+      "loaded": [
+        "read_file"
+      ],
+      "lines": [
+        "no deferred tool matches"
+      ],
+      "loads": []
+    }
+  ]
+}

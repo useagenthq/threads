@@ -1,0 +1,1 @@
+{"description":"Refund a charge.","effect_class":"reconcilable","input_schema":{"additionalProperties":false,"properties":{"charge":{"type":"string"}},"required":["charge"],"type":"object"},"name":"refund_card"}

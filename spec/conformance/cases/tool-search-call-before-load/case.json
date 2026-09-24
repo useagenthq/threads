@@ -1,0 +1,11 @@
+{
+  "name": "tool-search-call-before-load",
+  "family": "tools_streaming",
+  "kind": "recover",
+  "description": "The model calls a deferred tool without loading it. The call fails before any effect: tool_result{not_executed} with the one pinned text, no permission decision and no effect event, and the tool never runs.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "model_script": "model.json",
+  "sandbox_script": "sandbox.json"
+}

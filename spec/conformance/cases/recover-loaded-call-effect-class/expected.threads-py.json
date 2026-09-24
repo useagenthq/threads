@@ -1,0 +1,124 @@
+{
+  "outcome": "ok",
+  "state": {
+    "thread_id": "0192a000-0000-7000-8000-000000000001",
+    "branch_id": "0192b000-0000-7000-8000-000000000001",
+    "epoch": 1,
+    "turns_completed": 0,
+    "pending_calls": [
+      "call_2"
+    ],
+    "effects": [
+      {
+        "effect_key": "0192b000-0000-7000-8000-000000000001:call_2",
+        "call_id": "call_2",
+        "status": "begun"
+      }
+    ],
+    "parked": [],
+    "fork_points": [],
+    "usage": {
+      "input_tokens": 160,
+      "output_tokens": 40,
+      "unknown_responses": 0
+    },
+    "transcript": [
+      {
+        "role": "user",
+        "event_id": "0192e000-0000-7000-8000-000000000002"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-000000000004"
+      },
+      {
+        "role": "tool",
+        "event_id": "0192e000-0000-7000-8000-000000000007"
+      },
+      {
+        "role": "assistant",
+        "event_id": "0192e000-0000-7000-8000-00000000000a"
+      }
+    ],
+    "status": "in_turn",
+    "head": {
+      "seq": 13,
+      "hash": "26cf68ab91b96fe7c3fb76cc9d7742a269e8ebc5c3a581fec8988f8fc1059ef6"
+    }
+  },
+  "appended": [
+    {
+      "type": "effect_unknown",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_2",
+        "reason": "crash_after_begin"
+      }
+    },
+    {
+      "type": "effect_resolved",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_2",
+        "outcome": "confirmed_success",
+        "by": "reconcile",
+        "result_ref": {
+          "sha256": "da515a645df21f49d22986dd458c081ba43467cb4aff96b1ce37622ddf8a78e0",
+          "bytes": 19,
+          "media_type": "text/plain"
+        }
+      }
+    },
+    {
+      "type": "tool_result",
+      "actor_kind": "recovery",
+      "epoch": 2,
+      "data": {
+        "call_id": "call_2",
+        "is_error": false,
+        "origin": "executed",
+        "preview": "refunded ch_1 re_77"
+      }
+    },
+    {
+      "type": "model_request",
+      "actor_kind": "host",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "model_response",
+      "actor_kind": "model",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done."
+          }
+        ],
+        "stop_reason": "end_turn",
+        "completeness": "complete"
+      }
+    },
+    {
+      "type": "turn_completed",
+      "data": {
+        "reason": "end_turn"
+      }
+    }
+  ],
+  "sandbox": {
+    "dispatches": {
+      "refund_card": 0
+    },
+    "new_executions": {
+      "refund_card": 0
+    },
+    "lookups": {
+      "refund_card": 1
+    }
+  }
+}

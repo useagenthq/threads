@@ -1,6 +1,6 @@
 {
   "description": "Built-in tool inputs: each case is parsed with the tool's catalog schema (Zod in TypeScript, the generated Pydantic model in Python) and must be accepted exactly when valid. catalog_sha256 is the SHA-256 of spec/schema/tools.v1.catalog.json, the canonical catalog both runtimes pin.",
-  "catalog_sha256": "23cacb96149c237d47900a535181e542cce7659ee4b702fbc6cd8a20da2671eb",
+  "catalog_sha256": "f64d39f16b64551bc2088f0130cb7dda025cd0520536420081ba06220d1162a5",
   "cases": [
     {
       "tool": "bash",
@@ -553,6 +553,81 @@
       "input": {
         "todos": "1. Fix"
       },
+      "valid": false
+    },
+    {
+      "tool": "tool_search",
+      "input": {
+        "query": "jira"
+      },
+      "valid": true
+    },
+    {
+      "tool": "tool_search",
+      "input": {
+        "query": "jira",
+        "limit": 1
+      },
+      "valid": true
+    },
+    {
+      "tool": "tool_search",
+      "input": {
+        "query": "jira",
+        "limit": 10
+      },
+      "valid": true
+    },
+    {
+      "tool": "tool_search",
+      "input": {
+        "query": ""
+      },
+      "valid": false
+    },
+    {
+      "tool": "tool_search",
+      "input": {
+        "query": "jira",
+        "limit": 0
+      },
+      "valid": false
+    },
+    {
+      "tool": "tool_search",
+      "input": {
+        "query": "jira",
+        "limit": 11
+      },
+      "valid": false
+    },
+    {
+      "tool": "tool_search",
+      "input": {
+        "query": "jira",
+        "limit": 2.5
+      },
+      "valid": false
+    },
+    {
+      "tool": "tool_search",
+      "input": {
+        "query": "jira",
+        "limit": "5"
+      },
+      "valid": false
+    },
+    {
+      "tool": "tool_search",
+      "input": {
+        "query": "jira",
+        "mode": "exact"
+      },
+      "valid": false
+    },
+    {
+      "tool": "tool_search",
+      "input": {},
       "valid": false
     },
     {

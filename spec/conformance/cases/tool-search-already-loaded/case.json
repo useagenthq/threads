@@ -1,0 +1,9 @@
+{
+  "name": "tool-search-already-loaded",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "A second search names a loaded tool (in capitals: names match after the normative fold) and a tool that was never deferred. Every term is a current tool's name, so the result reports both as already loaded, loads nothing and writes no tools_loaded.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

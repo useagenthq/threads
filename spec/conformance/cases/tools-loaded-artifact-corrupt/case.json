@@ -1,0 +1,9 @@
+{
+  "name": "tools-loaded-artifact-corrupt",
+  "family": "log",
+  "kind": "render",
+  "description": "Rule 47 artifact check: create_issue's spec_ref names its artifact's sha256 with the wrong byte length. Import reads each loaded spec and verifies both, so it refuses the log with artifact_corrupt at the tools_loaded.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "tools": {
+    "refund_card": {
+      "output": "refunded",
+      "lookup": {
+        "0192b000-0000-7000-8000-000000000001:call_2": {
+          "result": "found",
+          "final": true,
+          "output": "refunded ch_1 re_77"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "tool-search-prefix-stable",
+  "family": "tools_streaming",
+  "kind": "render",
+  "description": "Two loads in two turns, each followed by a recorded request. Every declared_prefix is the one line 0 (C7): a load is a history line, never a settings change. Each recorded request's bytes are a byte prefix of the next request's, since a load only appends its call, result and tools_loaded lines.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

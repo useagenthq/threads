@@ -1,0 +1,9 @@
+{
+  "name": "tools-loaded-ref-mismatch-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 47: a tools_loaded names create_issue with add_comment's spec_ref, not the spec_ref create_issue was pinned with.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

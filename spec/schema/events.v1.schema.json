@@ -193,6 +193,7 @@
             "compacted",
             "context_edited",
             "tools_changed",
+            "tools_loaded",
             "ttl_expired",
             "unknown"
           ]
@@ -747,6 +748,9 @@
             },
             {
               "$ref": "#/$defs/ev_message_policy_decided"
+            },
+            {
+              "$ref": "#/$defs/ev_tools_loaded"
             }
           ]
         }
@@ -1181,7 +1185,8 @@
             "ask_closed",
             "operator_request",
             "operator_refused",
-            "message_policy_decided"
+            "message_policy_decided",
+            "tools_loaded"
           ]
         },
         "type_version": {
@@ -1191,6 +1196,22 @@
       "required": [
         "type",
         "type_version"
+      ],
+      "type": "object"
+    },
+    "LoadedTool": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/Name"
+        },
+        "spec_ref": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "name",
+        "spec_ref"
       ],
       "type": "object"
     },
@@ -2540,27 +2561,72 @@
     },
     "ToolSpec": {
       "additionalProperties": false,
-      "else": {
-        "not": {
-          "required": [
-            "dedup_window_ms"
-          ]
-        }
-      },
-      "if": {
-        "properties": {
-          "effect_class": {
-            "const": "idempotent"
+      "allOf": [
+        {
+          "else": {
+            "not": {
+              "required": [
+                "dedup_window_ms"
+              ]
+            }
+          },
+          "if": {
+            "properties": {
+              "effect_class": {
+                "const": "idempotent"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "dedup_window_ms"
+            ]
+          }
+        },
+        {
+          "else": {
+            "required": [
+              "input_schema"
+            ]
+          },
+          "if": {
+            "required": [
+              "spec_ref"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "input_schema"
+                  ]
+                },
+                {
+                  "required": [
+                    "output_schema"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "defer_loading": {
+                "const": true
+              }
+            },
+            "required": [
+              "defer_loading"
+            ]
           }
         }
-      },
+      ],
       "properties": {
         "dedup_window_ms": {
           "$ref": "#/$defs/PosInt",
           "description": "The provider's declared dedup window for this tool's effect key."
         },
         "defer_loading": {
-          "description": "true: deferred. Render v1 shows only {name, description, deferred: true} until a tools_changed with cause tool_search loads it (the loaded spec omits this flag). A call to a deferred tool fails pre-effect with tool_not_loaded.",
+          "description": "true: deferred. Render v1 shows only {name, description, deferred: true} until tool_search loads it: a tools_loaded naming its spec_ref, or (legacy inline form) a tools_changed with cause tool_search whose spec omits this flag. A call to a deferred tool fails pre-effect with tool_not_loaded.",
           "type": "boolean"
         },
         "description": {
@@ -2574,7 +2640,8 @@
           "type": "boolean"
         },
         "input_schema": {
-          "$ref": "#/$defs/JsonObject"
+          "$ref": "#/$defs/JsonObject",
+          "description": "Required, except in the reference form (spec_ref), which has none."
         },
         "name": {
           "$ref": "#/$defs/Name"
@@ -2582,19 +2649,16 @@
         "output_schema": {
           "$ref": "#/$defs/JsonObject",
           "description": "Optional JSON Schema for the tool's result value. A result that fails it is recorded as an error result; the effect still happened."
+        },
+        "spec_ref": {
+          "$ref": "#/$defs/ArtifactRef"
         }
       },
       "required": [
         "name",
         "description",
-        "input_schema",
         "effect_class"
       ],
-      "then": {
-        "required": [
-          "dedup_window_ms"
-        ]
-      },
       "type": "object"
     },
     "ToolUsePart": {
@@ -6582,6 +6646,47 @@
         },
         "type": {
           "const": "tools_changed"
+        },
+        "type_version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "type",
+        "type_version",
+        "critical",
+        "data"
+      ],
+      "type": "object"
+    },
+    "ev_tools_loaded": {
+      "description": "Deferred tools a tool_search call loaded, each by the spec_ref it was pinned with. Appended in the same batch as that call's tool_result, right after it. It renders as a history line with the loaded specs read from their artifacts, so line 0 never changes; the tools stay loaded for the rest of the chain.",
+      "properties": {
+        "critical": {
+          "const": true
+        },
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "call_id": {
+              "$ref": "#/$defs/CallId"
+            },
+            "tools": {
+              "items": {
+                "$ref": "#/$defs/LoadedTool"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "call_id",
+            "tools"
+          ],
+          "type": "object"
+        },
+        "type": {
+          "const": "tools_loaded"
         },
         "type_version": {
           "const": 1

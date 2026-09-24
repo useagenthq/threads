@@ -1,0 +1,1 @@
+{"description":"Create a Jira issue in a project.\nReturns the new issue key.","effect_class":"unguarded","input_schema":{"additionalProperties":false,"properties":{"project":{"type":"string"},"summary":{"type":"string"}},"required":["project","summary"],"type":"object"},"name":"mcp__jira__create_issue"}

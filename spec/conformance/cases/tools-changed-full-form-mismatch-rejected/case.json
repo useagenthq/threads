@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-full-form-mismatch-rejected",
+  "family": "log",
+  "kind": "render",
+  "description": "Rule 17 point 6 artifact check: after create_issue is loaded, a tools_changed gives it a full form whose input_schema differs from its spec artifact.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

@@ -67,6 +67,10 @@ from . import (
     tool_calls_gone,
     tool_groups,
     tool_inputs,
+    tool_search,
+    tool_search_loop,
+    tool_search_rules,
+    tool_search_vectors,
     tool_sets,
     wake_bars,
     wakes,
@@ -89,6 +93,9 @@ FAMILIES = (
     changes,
     tool_sets,
     tool_calls_gone,
+    tool_search,
+    tool_search_rules,
+    tool_search_loop,
     content,
     context,
     models,
@@ -231,6 +238,7 @@ def main() -> int:
             )
             problems += handoff_transcripts.check()
             problems += anthropic_requests.check() + dynamic.check()
+            problems += tool_search_vectors.check()
         for p in problems:
             print(f"coverage.json: {p}")
         if problems:
@@ -250,6 +258,7 @@ def main() -> int:
         handoff_transcripts.write()
         anthropic_requests.write()
         dynamic.write()
+        tool_search_vectors.write()
         otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
         for built, dest in ((out, CASES), (staged, STAGED), *otel_parts):
             shutil.rmtree(dest, ignore_errors=True)
