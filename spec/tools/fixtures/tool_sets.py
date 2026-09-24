@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 FAM = "tools_streaming"
 DEPLOY = tool("mcp__ops__deploy", "Deploy the app.", {"env": {"type": "string"}}, "unguarded")
 WIDE: Obj = {"type": "object"}
+SEARCH_TOOL = tool("tool_search", "Search tools.", {"query": {"type": "string"}}, "unguarded")
 TODO_WRITE = tool("todo_write", "Replace the todo list.", {"todos": {"type": "array"}}, "unguarded")
 
 
@@ -134,6 +135,13 @@ def _added() -> list[tuple[str, str, Log]]:
             "with no effect_begin whatever its spec, so an added one would grant a capability "
             "the pin never did.",
             _one([READ_FILE], [READ_FILE, TODO_WRITE]),
+        ),
+        (
+            "tools-changed-adds-tool-search-rejected",
+            "A tools_changed adds tool_search as unguarded. It is a tool the loop runs itself "
+            "(it writes tools_loaded, which loads deferred specs), pinned only when something is "
+            "deferred, so no later set may add it.",
+            _one([READ_FILE], [READ_FILE, SEARCH_TOOL]),
         ),
         (
             "tools-changed-added-tool-changed-rejected",

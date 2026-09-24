@@ -1,0 +1,9 @@
+{
+  "name": "tools-changed-adds-tool-search-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "Rule 17: A tools_changed adds tool_search as unguarded. It is a tool the loop runs itself (it writes tools_loaded, which loads deferred specs), pinned only when something is deferred, so no later set may add it.",
+  "clock": {
+    "now": 1790000060000
+  }
+}
