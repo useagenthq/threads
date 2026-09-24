@@ -28,6 +28,7 @@ export const CatalogEntry: Strict<
     id: typeof Text;
     alias_of: Opt<typeof Text>;
     source: z.ZodString;
+    note: Opt<typeof Text>;
     verified: z.ZodString;
   }
 > = z.strictObject({
@@ -42,6 +43,9 @@ export const CatalogEntry: Strict<
     .string()
     .regex(/^https:\/\/\S+$/)
     .describe("Where the limits were read (a Models API URL or a model page)."),
+  note: Text.optional().describe(
+    "How a value was obtained when the source doesn't state it outright (evidence, not behavior).",
+  ),
   verified: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)

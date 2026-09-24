@@ -49,6 +49,10 @@ describe("anthropic(id)", () => {
     expect(() => anthropic("claude-next")).toThrow(
       'anthropic: unknown model "claude-next"; pass maxInputTokens and maxOutputTokens',
     );
+    // A near-miss id sees the ids it may have meant; matching stays exact.
+    expect(() => anthropic("claude-haiku-4-5")).toThrow(
+      "or use a listed id: claude-fable-5-1, claude-haiku-4-5-20251001, claude-opus-5-5, claude-sonnet-5",
+    );
     const { info } = anthropic("claude-next", {
       maxInputTokens: 500_000,
       maxOutputTokens: 4096,

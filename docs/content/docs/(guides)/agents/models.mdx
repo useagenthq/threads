@@ -76,7 +76,7 @@ threads needs two numbers for every model: the most input tokens one request may
 | `claude-haiku-4-5-20251001` | 200,000 | 64,000 | Anthropic Models API |
 | `gpt-5.5`, `gpt-5.5-2026-04-23`, `gpt-6-sol` | 922,000 | 128,000 | OpenAI model pages* |
 
-\* OpenAI publishes GPT-5.5's 1,050,000-token context window and 128,000 output limit but no separate input limit; 922,000 is the window minus the output limit, which is the input limit OpenAI publishes for GPT-6 Sol with the same window.
+\* Derived, not published: OpenAI's GPT-5.5 page gives a 1,050,000-token context window and a 128,000 output limit but no input limit, so threads uses the window minus the output limit, 922,000. OpenAI's GPT-6 Sol page publishes 922,000 as the input limit for the same window and output limit.
 
 The id must match exactly: `claude-haiku-4-5` is not `claude-haiku-4-5-20251001`. A dated snapshot id keeps a long-lived thread on one model. For any other id, pass both limits; leaving one out is a `ConfigError` that names it:
 
@@ -109,6 +109,15 @@ const writer = anthropic("claude-sonnet-5", { maxTokens: 32_000 });
 `maxTokens` is the only way to set the cap: putting `max_tokens` (or OpenAI's `max_output_tokens`) in `params` is refused. Output-token budgets read this cap, for every provider.
 
 The limits are recorded when a thread starts. If a catalog entry is ever found wrong, it is withdrawn rather than edited: the factory then asks you for the limits, and its error prints both the corrected values (for new threads) and the old ones (to keep continuing a thread started with them).
+
+<Callout title="Release note: threads started before the model catalog">
+A thread continues only with the same pinned limits and cap it started with. These threads, started before the catalog, can't be continued with the new defaults; they stay readable (`timeline()`, `cost()`, export):
+
+- **OpenAI threads** (either language): the cap is now pinned as `max_tokens`. They can't be continued.
+- **TypeScript `aiSdk` threads**: the cap is now pinned as `max_tokens`. They can't be continued.
+- **Python `anthropic` and `litellm` threads that used the default cap**: it was the model's whole output limit and is now 8192. Pass the old value to continue one, e.g. `max_tokens=128_000`.
+- **Threads started with limits other than the catalog's** (such as the README's old `200_000` for `claude-sonnet-5`): pass the old `maxInputTokens`, `maxOutputTokens` and `maxTokens` to continue one.
+</Callout>
 
 ## Other providers
 

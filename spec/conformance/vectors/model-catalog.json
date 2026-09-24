@@ -19,6 +19,20 @@
       ]}
     },
     {
+      "name": "an entry with a note on how a value was derived",
+      "valid": true,
+      "catalog": {"version": 1, "provider": "acme", "withdrawn": [], "entries": [
+        {"id": "m-1", "max_input_tokens": 900, "max_output_tokens": 100, "source": "https://acme.test/m-1", "note": "Derived: window minus output cap.", "verified": "2026-09-24"}
+      ]}
+    },
+    {
+      "name": "an empty note",
+      "valid": false,
+      "catalog": {"version": 1, "provider": "acme", "withdrawn": [], "entries": [
+        {"id": "m-1", "max_input_tokens": 900, "max_output_tokens": 100, "source": "https://acme.test/m-1", "note": "", "verified": "2026-09-24"}
+      ]}
+    },
+    {
       "name": "an empty catalog",
       "valid": true,
       "catalog": {"version": 1, "provider": "acme", "entries": [], "withdrawn": []}

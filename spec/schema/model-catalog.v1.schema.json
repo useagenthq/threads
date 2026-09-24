@@ -30,6 +30,11 @@
             "minimum": 1,
             "type": "integer"
           },
+          "note": {
+            "description": "How a value was obtained when the source doesn't state it outright (evidence, not behavior).",
+            "minLength": 1,
+            "type": "string"
+          },
           "source": {
             "description": "Where the limits were read (a Models API URL or a model page).",
             "pattern": "^https:\\/\\/\\S+$",

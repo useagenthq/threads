@@ -12,7 +12,7 @@ from typing import Final, Required, TypedDict
 from pydantic import JsonValue
 
 from threads._generated.model_catalog_v1 import Entry, WithdrawnItem
-from threads.adapters.models.catalog import CATALOGS, ModelCatalog
+from threads.adapters.models.catalog import ModelCatalog, catalog_for
 from threads.agents.config import ConfigError
 from threads.log import AdapterRef, ModelRef, Price
 from threads.log import Model as ModelLimits
@@ -72,34 +72,54 @@ def resolve_limits(
 ) -> Limits:
     """`factory`'s limits for `model`: the options, else its catalog entry (the embedded one for
     `factory` unless `catalog` is given). Raises invalid_config naming what to pass."""
-    catalog = catalog or CATALOGS.get(factory)
+    catalog = catalog or catalog_for(factory)
     entry = next((e for e in catalog.entries if e.id == model), None) if catalog else None
     withdrawal = next((w for w in catalog.withdrawn if w.id == model), None) if catalog else None
     known = None if withdrawal else entry
-    inp = options.get("max_input_tokens", known.max_input_tokens if known else None)
-    out = options.get("max_output_tokens", known.max_output_tokens if known else None)
+    # None is absent, as undefined is in TS: the catalog's value applies.
+    given_in, given_out = options.get("max_input_tokens"), options.get("max_output_tokens")
+    inp = given_in if given_in is not None else known.max_input_tokens if known else None
+    out = given_out if given_out is not None else known.max_output_tokens if known else None
     if inp is None or out is None:
         missing = " and ".join(
             n for n, v in (("max_input_tokens", inp), ("max_output_tokens", out)) if v is None
         )
-        why = f'unknown model "{model}"; pass {missing}'
+        why = _unknown(catalog, model, missing)
         if entry and withdrawal:
             why = _withdrawn(model, missing, entry, withdrawal)
         raise ConfigError("invalid_config", f"{factory}: {why}")
-    cap = options.get("max_tokens", min(DEFAULT_MAX_TOKENS, out))
-    for name, value in (("max_input_tokens", inp), ("max_output_tokens", out), ("max_tokens", cap)):
-        # Exactly int: a bool is an int to Python, and an untyped caller may pass a float.
-        if type(value) is not int or value < 1:
-            raise ConfigError(
-                "invalid_config",
-                f"{factory}: {name} must be a positive whole number of tokens, not {value!r}",
-            )
+    inp, out = _count(factory, "max_input_tokens", inp), _count(factory, "max_output_tokens", out)
+    given_cap = options.get("max_tokens")
+    cap = _count(
+        factory, "max_tokens", min(DEFAULT_MAX_TOKENS, out) if given_cap is None else given_cap
+    )
     if cap > out:
         raise ConfigError(
             "invalid_config",
             f"{factory}: max_tokens {cap} is above max_output_tokens {out}; lower it",
         )
     return Limits(inp, out, cap)
+
+
+def _count(factory: str, name: str, value: object) -> int:
+    """A token count, checked before any arithmetic: an untyped caller may pass anything."""
+    # Exactly int: a bool is an int to Python.
+    if type(value) is not int or value < 1:
+        raise ConfigError(
+            "invalid_config",
+            f"{factory}: {name} must be a positive whole number of tokens, not {value!r}",
+        )
+    return value
+
+
+def _unknown(catalog: ModelCatalog | None, model: str, missing: str) -> str:
+    """Lists the catalog's usable ids rather than guessing a match: a near-miss id is usually a
+    typo of one of them, and matching stays exact."""
+    if catalog is None:
+        return f'no catalog lists "{model}"; pass {missing}'
+    withdrawn = {w.id for w in catalog.withdrawn}
+    listed = ", ".join(e.id for e in catalog.entries if e.id not in withdrawn)
+    return f'unknown model "{model}"; pass {missing}, or use a listed id: {listed}'
 
 
 def _withdrawn(model: str, missing: str, entry: Entry, withdrawal: WithdrawnItem) -> str:

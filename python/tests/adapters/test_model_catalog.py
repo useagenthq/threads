@@ -14,8 +14,9 @@ from fakes import FakeContext, Script, collect, line, sse
 from pydantic import JsonValue
 
 from threads._generated.model_catalogs import MODEL_CATALOGS
+from threads.adapters.models import catalog as catalog_module
 from threads.adapters.models.anthropic.model import AnthropicModel
-from threads.adapters.models.catalog import ModelCatalog, parse_catalog
+from threads.adapters.models.catalog import ModelCatalog, catalog_for, parse_catalog
 from threads.adapters.models.openai.model import OpenAIModel
 from threads.adapters.models.options import Limits, resolve_limits
 from threads.agents.config import ConfigError
@@ -90,13 +91,52 @@ def test_each_option_overrides_one_limit() -> None:
     )
 
 
-def test_an_unknown_id_names_only_the_missing_options() -> None:
-    with pytest.raises(
-        ConfigError, match=r'acme: unknown model "m-9"; pass max_input_tokens and max_output_tokens'
-    ):
+def test_an_unknown_id_names_the_missing_options_and_the_listed_ids() -> None:
+    # The withdrawn m-small is not offered.
+    with pytest.raises(ConfigError) as refused:
         resolve_limits("acme", "m-9", {}, ACME)
-    with pytest.raises(ConfigError, match=r'unknown model "m-9"; pass max_output_tokens$'):
+    assert str(refused.value).endswith(
+        'acme: unknown model "m-9"; pass max_input_tokens and max_output_tokens, or use a listed '
+        "id: m-1"
+    )
+    with pytest.raises(ConfigError, match=r'"m-9"; pass max_output_tokens, or use a listed id'):
         resolve_limits("acme", "m-9", {"max_input_tokens": 10}, ACME)
+    with pytest.raises(ConfigError, match=r'litellm: no catalog lists "x"; pass max_input_tokens'):
+        resolve_limits("litellm", "x", {})
+
+
+def test_a_near_miss_id_sees_the_ids_it_may_have_meant() -> None:
+    with pytest.raises(ConfigError) as refused:
+        anthropic("claude-haiku-4-5")
+    assert str(refused.value).endswith(
+        "or use a listed id: claude-fable-5-1, claude-haiku-4-5-20251001, claude-opus-5-5, "
+        "claude-sonnet-5"
+    )
+
+
+def test_none_is_absent_so_the_catalog_value_applies() -> None:
+    options: dict[str, object] = {"max_input_tokens": None, "max_tokens": None}
+    limits = resolve_limits("acme", "m-1", options, ACME)  # pyright: ignore[reportArgumentType] - None on purpose, as an untyped caller would
+    assert limits == Limits(1000, 100_000, 8192)
+
+
+def test_a_limit_of_the_wrong_type_is_invalid_config_before_any_arithmetic() -> None:
+    with pytest.raises(ConfigError) as refused:
+        resolve_limits("acme", "m-1", {"max_output_tokens": "128000"}, ACME)  # pyright: ignore[reportArgumentType] - a string on purpose
+    assert refused.value.code == "invalid_config"
+    assert str(refused.value).endswith(
+        "max_output_tokens must be a positive whole number of tokens, not '128000'"
+    )
+
+
+def test_the_embedded_catalog_can_t_be_changed_at_run_time() -> None:
+    found = catalog_for("anthropic")
+    assert found is not None
+    assert isinstance(found.entries, list)
+    found.entries.clear()
+    assert anthropic("claude-sonnet-5").info.params == {"max_tokens": 8192}
+    with pytest.raises(TypeError):
+        catalog_module._CATALOGS["acme"] = ACME  # pyright: ignore[reportPrivateUsage, reportIndexIssue] - proving it is read-only
 
 
 def test_a_withdrawn_id_prints_its_reason_the_corrected_and_the_original_values() -> None:
@@ -143,7 +183,7 @@ def test_anthropic_and_openai_need_only_the_model_id() -> None:
     assert gpt.params == {"max_tokens": 8192}
     assert (gpt.limits.context_window, gpt.limits.max_output_tokens) == (922_000, 128_000)
     with pytest.raises(
-        ConfigError, match=r'anthropic: unknown model "claude-next"; pass max_input_tokens'
+        ConfigError, match=r'anthropic: unknown model "claude-next"; pass max_input'
     ):
         anthropic("claude-next")
 

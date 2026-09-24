@@ -922,7 +922,7 @@
       "ts": "openai",
       "py": "openai",
       "package": "openai",
-      "doc": "An OpenAI model through the Responses API (stateless: store is false). openai(\"gpt-5.5\") needs no limits: they come from spec/models/openai.v1.json, verified against OpenAI's model pages. Pass it as agent({model: openai(\"gpt-5.5\")}).",
+      "doc": "An OpenAI model through the Responses API (stateless: store is false). openai(\"gpt-5.5\") needs no limits: they come from spec/models/openai.v1.json, read from OpenAI's model pages (gpt-5.5's input limit is derived as context window minus output cap; see spec/models/README.md). Pass it as agent({model: openai(\"gpt-5.5\")}).",
       "async": false,
       "params": [
         {"name": "model", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The provider's exact model id. Matched against spec/models/openai.v1.json by string equality only; a snapshot id keeps a long-lived thread on one model."},

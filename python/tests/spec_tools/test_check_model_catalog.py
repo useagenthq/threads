@@ -1,7 +1,8 @@
 """spec/tools/check_model_catalog.py: released catalog entries are append-only, evidence can be
 refreshed forward only, and withdrawals are locked too."""
 
-from check_model_catalog import MODELS, Obj, behavior, check, main
+import check_model_catalog
+from check_model_catalog import MODELS, Obj, Outcome, behavior, main
 
 ENTRY: Obj = {
     "id": "m-1",
@@ -11,6 +12,11 @@ ENTRY: Obj = {
     "verified": "2026-09-24",
 }
 WITHDRAWAL: Obj = {"id": "m-1", "reason": "wrong", "use": {"max_input_tokens": 900}}
+
+
+def check(catalog: Obj, lock: Obj, *, add: bool = False, refresh: bool = False) -> Outcome:
+    """The checker on the file of provider `p`."""
+    return check_model_catalog.check(catalog, lock, provider="p", add=add, refresh=refresh)
 
 
 def catalog(*entries: Obj, withdrawn: tuple[Obj, ...] = ()) -> Obj:
@@ -99,4 +105,17 @@ def test_withdrawals_are_locked_append_only() -> None:
     changed: Obj = {**WITHDRAWAL, "use": {"max_input_tokens": 800}}
     assert check(catalog(ENTRY, withdrawn=(changed,)), sealed).problems == (
         "m-1: a locked withdrawal's reason and use never change",
+    )
+
+
+def test_a_file_names_its_own_provider() -> None:
+    other = {**catalog(ENTRY), "provider": "q"}
+    for add in (False, True):
+        assert check(other, LOCK, add=add).problems == ("provider 'q' is not the file's 'p'",)
+
+
+def test_a_withdrawal_names_an_entry_of_the_catalog() -> None:
+    stray = {**WITHDRAWAL, "id": "m-9"}
+    assert check(catalog(ENTRY, withdrawn=(stray,)), LOCK, add=True).problems == (
+        "m-9: a withdrawal must name an entry of this catalog",
     )

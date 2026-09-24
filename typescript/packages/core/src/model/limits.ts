@@ -64,7 +64,7 @@ export function limitsFrom(
     ].join(" and ");
     const why =
       entry === undefined || withdrawal === undefined
-        ? `unknown model "${model}"; pass ${missing}`
+        ? unknown(catalog, model, missing)
         : `model "${model}" was withdrawn from the catalog (${withdrawal.reason}); pass ${missing}: ` +
           `maxInputTokens: ${withdrawal.use.max_input_tokens} and maxOutputTokens: ${withdrawal.use.max_output_tokens} are correct, ` +
           `and maxInputTokens: ${entry.max_input_tokens} and maxOutputTokens: ${entry.max_output_tokens} continue threads started with the old values`;
@@ -84,6 +84,24 @@ export function limitsFrom(
     max_output_tokens: output,
     max_tokens: maxTokens,
   };
+}
+
+/**
+ * Lists the catalog's usable ids rather than guessing a match: a near-miss id is usually a typo
+ * of one of them, and matching stays exact.
+ */
+function unknown(
+  catalog: ModelCatalog | undefined,
+  model: string,
+  missing: string,
+): string {
+  if (catalog === undefined)
+    return `no catalog lists "${model}"; pass ${missing}`;
+  const withdrawn = new Set(catalog.withdrawn.map((w) => w.id));
+  const listed = catalog.entries
+    .map((e) => e.id)
+    .filter((id) => !withdrawn.has(id));
+  return `unknown model "${model}"; pass ${missing}, or use a listed id: ${listed.join(", ")}`;
 }
 
 function count(factory: string, option: string, value: number): void {

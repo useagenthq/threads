@@ -8,7 +8,8 @@
 
 The lock (<provider>.v1.lock.json) holds, per id, the sha256 of the RFC 8785 form of the entry's
 behavioral fields (id, limits, alias_of) and its last accepted `verified` date, and per withdrawal
-the sha256 of the whole withdrawal. A released entry's behavior never changes; its evidence
+the sha256 of the whole withdrawal. Each file also names its own provider, and a withdrawal names
+one of its entries. A released entry's behavior never changes; its evidence
 (`source`, `verified`) may, but a date only moves forward and only with --refresh, so the PR that
 moves it carries the refreshed lock line. Schema checks are the runtime parsers' job (both
 languages parse every embedded catalog at load). Stdlib only.
@@ -72,10 +73,13 @@ def _entry(entry: Obj, locked: JsonValue, refresh: bool) -> tuple[JsonValue, lis
     return {**line, "verified": now}, []
 
 
-def check(catalog: Obj, lock: Obj, *, add: bool = False, refresh: bool = False) -> Outcome:
-    """The catalog against its lock; with add/refresh, the lock those flags produce."""
+def check(
+    catalog: Obj, lock: Obj, *, provider: str, add: bool = False, refresh: bool = False
+) -> Outcome:
+    """The catalog (the file of `provider`) against its lock; with add/refresh, the lock those
+    flags produce. A problem that isn't about the lock is never fixed by a flag."""
     locked, entries = _obj(lock.get("entries")), _obj(lock.get("entries")).copy()
-    problems: list[str] = []
+    problems = _own_problems(catalog, provider)
     present = {str(e.get("id")): e for e in _objs(catalog.get("entries"))}
     problems += [f"{name}: a locked entry was removed" for name in locked if name not in present]
     for name, entry in present.items():
@@ -103,6 +107,19 @@ def check(catalog: Obj, lock: Obj, *, add: bool = False, refresh: bool = False) 
     return Outcome({"entries": entries, "withdrawn": withdrawn}, tuple(problems))
 
 
+def _own_problems(catalog: Obj, provider: str) -> list[str]:
+    """One file per provider, named after it (so no two files claim one provider), and a
+    withdrawal only of an entry it keeps (else the id would read as unknown, with no reason)."""
+    named = catalog.get("provider")
+    problems = [f"provider {named!r} is not the file's {provider!r}"] if named != provider else []
+    ids = {str(e.get("id")) for e in _objs(catalog.get("entries"))}
+    return problems + [
+        f"{w.get('id')}: a withdrawal must name an entry of this catalog"
+        for w in _objs(catalog.get("withdrawn"))
+        if str(w.get("id")) not in ids
+    ]
+
+
 def _read(path: pathlib.Path) -> Obj:
     return _obj(json.loads(path.read_text(encoding="utf-8"))) if path.exists() else {}
 
@@ -116,7 +133,9 @@ def main(argv: list[str]) -> int:
     for path in sorted(MODELS.glob("*.v1.json")):
         lock_path = path.with_name(path.name.replace(".v1.json", ".v1.lock.json"))
         lock = _read(lock_path)
-        out = check(_read(path), lock, add="--add" in flags, refresh="--refresh" in flags)
+        provider = path.name.removesuffix(".v1.json")
+        add, refresh = "--add" in flags, "--refresh" in flags
+        out = check(_read(path), lock, provider=provider, add=add, refresh=refresh)
         for problem in out.problems:
             print(f"{path.name}: {problem}", file=sys.stderr)
             failed = 1

@@ -8,6 +8,7 @@
       "max_output_tokens": 128000,
       "alias_of": "gpt-5.5-2026-04-23",
       "source": "https://developers.openai.com/api/docs/models/gpt-5.5",
+      "note": "Derived: the page publishes a 1,050,000-token context window and 128,000 max output tokens but no maximum input, so max_input_tokens is window minus output cap. The gpt-6-sol page publishes 922,000 maximum input for the same window and cap.",
       "verified": "2026-09-24"
     },
     {
@@ -15,6 +16,7 @@
       "max_input_tokens": 922000,
       "max_output_tokens": 128000,
       "source": "https://developers.openai.com/api/docs/models/gpt-5.5",
+      "note": "Derived: the page publishes a 1,050,000-token context window and 128,000 max output tokens but no maximum input, so max_input_tokens is window minus output cap. The gpt-6-sol page publishes 922,000 maximum input for the same window and cap.",
       "verified": "2026-09-24"
     },
     {

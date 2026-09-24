@@ -2,6 +2,7 @@
 parsed from the bytes generate.sh embeds, so the runtime reads no file under spec/."""
 
 from collections.abc import Mapping, Sequence
+from types import MappingProxyType
 from typing import Final
 
 from pydantic import ValidationError
@@ -10,7 +11,7 @@ from threads._generated.model_catalog_v1 import ModelCatalog
 from threads._generated.model_catalogs import MODEL_CATALOGS
 from threads.result import Err, Ok
 
-__all__ = ["CATALOGS", "ModelCatalog", "parse_catalog"]
+__all__ = ["ModelCatalog", "catalog_for", "parse_catalog"]
 
 
 def parse_catalog(text: str) -> Ok[ModelCatalog] | Err[str]:
@@ -37,6 +38,12 @@ def _load(text: str) -> ModelCatalog:
     return parsed.value
 
 
-CATALOGS: Final[Mapping[str, ModelCatalog]] = {
-    c.provider: c for c in (_load(text) for text in MODEL_CATALOGS)
-}
+_CATALOGS: Final[Mapping[str, ModelCatalog]] = MappingProxyType(
+    {c.provider: c for c in (_load(text) for text in MODEL_CATALOGS)}
+)
+
+
+def catalog_for(provider: str) -> ModelCatalog | None:
+    """The embedded catalog of `provider`, a copy: released entries can't change at run time."""
+    found = _CATALOGS.get(provider)
+    return None if found is None else found.model_copy(deep=True)

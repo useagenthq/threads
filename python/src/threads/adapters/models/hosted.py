@@ -10,11 +10,9 @@ from pydantic import JsonValue
 
 from threads.agents.config import ConfigError
 
-type HostedTool = Mapping[str, JsonValue]
-
 
 def declare(
-    tools: Sequence[HostedTool], allowed: Callable[[str], bool], name_key: str
+    tools: Sequence[Mapping[str, JsonValue]], allowed: Callable[[str], bool], name_key: str
 ) -> tuple[dict[str, JsonValue], tuple[str, ...]]:
     """The adapter settings that pin `tools`, and their names for `ModelInfo.hosted_tools`.
     Raises `hosted_tool_unsupported` for a tool outside the adapter's allowlist."""

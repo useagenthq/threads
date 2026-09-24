@@ -109,14 +109,15 @@ describe("modelLimits", () => {
   });
 
   test("an unknown id names the options to pass, and only the missing ones", () => {
+    // The withdrawn m-small is not offered.
     expect(() => limits("m-9")).toThrow(
-      'acme: unknown model "m-9"; pass maxInputTokens and maxOutputTokens',
+      'acme: unknown model "m-9"; pass maxInputTokens and maxOutputTokens, or use a listed id: m-1',
     );
     expect(() => limits("m-9", { maxInputTokens: 10 })).toThrow(
-      'acme: unknown model "m-9"; pass maxOutputTokens',
+      'acme: unknown model "m-9"; pass maxOutputTokens, or use a listed id: m-1',
     );
     expect(() => limitsFrom(undefined, "aiSdk", "x", {})).toThrow(
-      expect.objectContaining({ code: "invalid_config" }),
+      'aiSdk: no catalog lists "x"; pass maxInputTokens and maxOutputTokens',
     );
     expect(limits("m-9", { maxInputTokens: 10, maxOutputTokens: 20 })).toEqual({
       max_input_tokens: 10,

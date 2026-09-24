@@ -4,7 +4,7 @@ Each model factory's catalog: the limits of exact model ids, so `anthropic("clau
 
 | File | What it is |
 |---|---|
-| `<provider>.v1.json` | The entries (`id`, `max_input_tokens`, `max_output_tokens`, optional `alias_of`, `source`, `verified`) and the withdrawals |
+| `<provider>.v1.json` | The entries (`id`, `max_input_tokens`, `max_output_tokens`, optional `alias_of`, `source`, optional `note`, `verified`) and the withdrawals. `provider` equals the file name's first part, and every withdrawal names an entry |
 | `<provider>.v1.lock.json` | Per id, the sha256 of the entry's behavioral fields and its last accepted `verified` date; per withdrawal, the sha256 of the whole withdrawal |
 
 ## Where the numbers come from
@@ -12,7 +12,9 @@ Each model factory's catalog: the limits of exact model ids, so `anthropic("clau
 Every entry names its `source` and the day it was read there (`verified`). Values are copied from the provider, never guessed.
 
 - **Anthropic**: the Models API, `GET https://api.anthropic.com/v1/models/<id>`: `max_input_tokens` and `max_tokens` (our `max_output_tokens`). The request costs no tokens.
-- **OpenAI**: the model page, `https://developers.openai.com/api/docs/models/<id>`. When the page publishes a maximum input (GPT-6 Sol: 922,000), that is `max_input_tokens`. The GPT-5.5 page publishes a 1,050,000-token context window and 128,000 max output tokens but no maximum input, so its `max_input_tokens` is the window minus the output cap, 922,000: the relation OpenAI's own page states for GPT-6 Sol, which has the same window and cap. `gpt-5.5` is an alias entry with `alias_of` its snapshot, `gpt-5.5-2026-04-23` (the page lists it).
+- **OpenAI**: the model page, `https://developers.openai.com/api/docs/models/<id>`. When the page publishes a maximum input (GPT-6 Sol: 922,000), that is `max_input_tokens`. The GPT-5.5 page publishes a 1,050,000-token context window and 128,000 max output tokens but no maximum input, so its `max_input_tokens` is **derived** as window minus cap, 922,000. That relation is our inference, not a statement on either page: the gpt-6-sol page publishes 922,000 input with the same 1,050,000 window and 128,000 cap. The two gpt-5.5 entries say so in `note`. `gpt-5.5` is an alias entry with `alias_of` its snapshot, `gpt-5.5-2026-04-23` (the page lists it).
+
+An entry's `note` records how a value was obtained when its `source` doesn't state it outright. Like `source` and `verified`, it is evidence: it isn't in the locked behavioral fields.
 
 Verified 2026-09-24 for every entry.
 
