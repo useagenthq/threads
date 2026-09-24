@@ -11,6 +11,7 @@ import {
 } from "@threads/core/adapter";
 
 export { type CredentialCase, credentialCases } from "./credentials";
+export { type DryPinCase, dryPinCases } from "./dry-pin";
 
 // Shared by the model adapter tests: Render v1 bodies, conformance render cases and a recording
 // fetch. Nothing here touches the network.

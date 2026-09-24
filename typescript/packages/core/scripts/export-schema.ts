@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { canonicalize } from "../src/log";
 import { ModelCatalog } from "../src/model/catalog";
+import { evalSchema } from "./eval-schema";
 import { specSchema } from "./spec-schema";
 import { toolCatalog, toolSchema } from "./tool-catalog";
 
@@ -100,6 +101,11 @@ function catalogSchema(): Json {
   };
 }
 
+const EVAL = join(
+  import.meta.dir,
+  "../../../../spec/schema/eval.v1.schema.json",
+);
+
 const [flag, file = SPEC] = process.argv.slice(2);
 const schema = specSchema();
 if (flag === "--check") {
@@ -108,12 +114,16 @@ if (flag === "--check") {
     (file === SPEC
       ? check(toolSchema(), TOOLS) +
         checkBytes(toolCatalog(), CATALOG) +
-        check(catalogSchema(), MODEL_CATALOG)
+        check(catalogSchema(), MODEL_CATALOG) +
+        check(evalSchema(schema), EVAL)
       : 0);
 } else {
   writeFileSync(SPEC, format(schema));
   writeFileSync(TOOLS, format(toolSchema()));
   writeFileSync(CATALOG, toolCatalog());
   writeFileSync(MODEL_CATALOG, format(catalogSchema()));
-  console.log(`wrote ${SPEC}, ${TOOLS}, ${CATALOG} and ${MODEL_CATALOG}`);
+  writeFileSync(EVAL, format(evalSchema(schema)));
+  console.log(
+    `wrote ${SPEC}, ${TOOLS}, ${CATALOG}, ${MODEL_CATALOG} and ${EVAL}`,
+  );
 }

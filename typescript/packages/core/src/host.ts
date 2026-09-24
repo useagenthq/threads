@@ -1,5 +1,6 @@
 // @threads/core/host: what @threads/host builds on. Core never imports the host.
 
+export { dryPin } from "./agent/dry-pin";
 export type { HostRunner, NewThreadPin } from "./agent/hosted";
 export { hostRunner } from "./agent/registry";
 export {
@@ -18,6 +19,8 @@ export {
 } from "./agent/sqlite";
 export { renewTeam } from "./agent/team/runtime";
 export { assertNever } from "./assert-never";
+export { caseNames } from "./evals/case-dir";
+export { caseLine } from "./evals/report";
 export {
   type EventOf,
   HOST_SEND,
@@ -46,6 +49,7 @@ export {
   type PrincipalKey,
   principalKey,
   ThreadId,
+  ThreadStartedData,
   Uuid,
 } from "./log";
 export { dueQuestions } from "./loop/questions";
@@ -53,6 +57,7 @@ export { turnEvents } from "./loop/turn";
 export { redactSecrets } from "./redact";
 export { knownEvents } from "./reduce";
 export { type RunEnd, runEnd } from "./reduce/run-end";
+export { pinnedLine0 } from "./render/prefix";
 export { err, ok, type Result } from "./result";
 export { collect, type Sandbox } from "./sandbox";
 export { dispatched, FenceRefused, within } from "./sandbox/remote";

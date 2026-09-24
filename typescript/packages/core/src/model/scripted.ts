@@ -86,6 +86,12 @@ const INFO: ModelInfo = {
   cache: "none",
 };
 
+/** Why a ModelScript file is invalid, or undefined when scriptedModel() would accept it. */
+export function scriptProblem(script: unknown): string | undefined {
+  const parsed = Script.safeParse(script);
+  return parsed.success ? undefined : parsed.error.message;
+}
+
 /**
  * Test kit. Consumes the script in order. A call past the end is rejected as a provider error,
  * which fails the run (turn_completed{error}); the exact requests are in the log. A lookup

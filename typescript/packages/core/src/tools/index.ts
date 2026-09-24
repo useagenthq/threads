@@ -32,6 +32,22 @@ export type Egress = readonly string[] | "unenforced";
 const byName = (a: Builtin, b: Builtin): number =>
   a.spec.name < b.spec.name ? -1 : 1;
 
+/**
+ * The sandbox's own tools: what they change stays inside the sandbox, so a live eval may run
+ * them in its throwaway sandbox when egress is deny-all (the computer tool is left out: it can
+ * act outside).
+ */
+export const SANDBOX_TOOLS: ReadonlySet<string> = new Set([
+  "bash",
+  "edit",
+  "glob",
+  "grep",
+  "ls",
+  "notebook_edit",
+  "read",
+  "write",
+]);
+
 export function builtins(
   sandbox: Sandbox | undefined,
   egress: Egress | undefined,

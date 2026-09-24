@@ -173,7 +173,8 @@ async function sent(
   call: EventOf<"tool_call">,
 ): Promise<ToolRun | "unmatched"> {
   const stub = s.config.stub;
-  if (stub === undefined) return body(s, call);
+  if (stub === undefined || stub.live?.has(call.data.name) === true)
+    return body(s, call);
   const args = canonicalize(call.data.input);
   if (!args.ok) throw new Error("tool_call input is canonical JSON");
   const answer = stub.answer(call.data.name, sha256Hex(args.value));

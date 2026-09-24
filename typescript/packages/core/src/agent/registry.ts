@@ -7,12 +7,20 @@ import type {
   Policy,
   Principal,
   ThreadId,
+  ThreadStartedData,
 } from "../log";
-import type { ChildRun, Covering, Subagent, TeamAgentPin } from "../loop";
+import type {
+  ChildRun,
+  Covering,
+  StubGateway,
+  Subagent,
+  TeamAgentPin,
+} from "../loop";
 import type { DynamicChoice } from "../team/dynamic";
+
 import type { Thread } from "../thread/handle";
 import type { HostRunner } from "./hosted";
-import type { ThreadRef } from "./result";
+import type { RunResult, ThreadRef } from "./result";
 import type { Store } from "./sqlite";
 
 // Agent handles are plain objects (spec/api.json Agent); what a parent needs to run one as a
@@ -32,6 +40,8 @@ export type ChildEnv = {
   readonly covering?: readonly Covering[];
   /** A handoff target: the handing-off thread's resolved defer_tools. */
   readonly deferTools?: NonNullable<Policy["context"]>["defer_tools"];
+  /** A live eval's recorded stubs, which the whole tree answers mediated calls from. */
+  readonly stub?: StubGateway;
 };
 
 export type ChildFactory = (env: ChildEnv) => Subagent;
@@ -100,10 +110,38 @@ export type MemberEnv = {
   /** The lead's resolved defer_tools, inherited unless the member sets its own. */
   readonly deferTools?: NonNullable<Policy["context"]>["defer_tools"];
 };
+/** A pin made without setup, secrets or MCP connections, and what it therefore couldn't see. */
+export type DryPin = {
+  readonly started: z.infer<typeof ThreadStartedData>;
+  /** MCP servers whose tools only a connection lists. */
+  readonly mcp: readonly string[];
+  /** Extensions with a setup step: their tools and instructions may come from it. */
+  readonly setupExtensions: readonly string[];
+  /** Memory and knowledge providers with a setup step, by role. */
+  readonly setupProviders: readonly ("memory" | "knowledge")[];
+  /** agent({team}): its members run in the team worker, outside a live eval's stubs. */
+  readonly leadsTeam: boolean;
+};
+
+/** What a live eval runs an agent with. */
+export type LiveOptions = {
+  readonly store: Store;
+  readonly principal: Principal;
+  readonly budget: z.infer<typeof Budget>;
+  readonly stub: StubGateway;
+};
+export type LiveRun = (
+  input: string,
+  options: LiveOptions,
+) => Promise<RunResult<unknown>>;
 
 type Entry = {
   /** The agent's setup (agent/setup.ts), run by a parent's setup too, with the agents it walked. */
   readonly setup: (walked?: Set<object>) => Promise<void>;
+  /** The agent pinned without setup (evals' drift check). Throws ConfigError on a bad config. */
+  readonly dry?: () => DryPin;
+  /** A live eval's run: a new thread whose mediated calls answer from recorded stubs. */
+  readonly live?: LiveRun;
   readonly child: ChildFactory;
   readonly target: TargetFactory;
   readonly enforce: Enforcement;
@@ -121,6 +159,16 @@ export function setupOf(
   agent: object,
 ): ((walked?: Set<object>) => Promise<void>) | undefined {
   return AGENTS.get(agent)?.setup;
+}
+
+/** A live eval's run of an agent handle, or undefined for a foreign object. */
+export function liveRunOf(agent: object): LiveRun | undefined {
+  return AGENTS.get(agent)?.live;
+}
+
+/** The dry pin of an agent handle, or undefined for a foreign object. */
+export function dryPinOf(agent: object): (() => DryPin) | undefined {
+  return AGENTS.get(agent)?.dry;
 }
 
 export function childFactory(agent: object): ChildFactory | undefined {

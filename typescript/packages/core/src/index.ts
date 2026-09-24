@@ -10,6 +10,7 @@ export {
   type RawResponse,
   VerifiedDelivery,
 } from "./channel/protocol";
+export * from "./evals";
 export { Principal } from "./log";
 export * from "./memory";
 export {
@@ -17,6 +18,7 @@ export {
   type LookupCapability,
   type LookupResult,
   type Model,
+  ModelBlockedError,
   type ModelChunk,
   type ModelInfo,
   type ModelRequest,

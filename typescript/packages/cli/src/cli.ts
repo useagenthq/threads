@@ -14,6 +14,7 @@ import {
   tenantStore,
 } from "@threads/core/host";
 import { type Host, hostSandboxes } from "@threads/host";
+import { type EvalArgs, evals } from "./eval";
 
 // The `threads` CLI (spec/api.json cli): thin wrappers over library calls, never a feature of its
 // own. Every command answers an exit code; output goes through `io`.
@@ -33,14 +34,23 @@ const USAGE = `usage: threads <command> [options]
   repair <branch_id>                record log_repaired on an imported torn branch
   delete <thread_id> | --tenant T   delete a thread, or every thread of a tenant
   gc [module] [--grace-days N]      release collectable resources, sweep unreferenced artifacts
+  eval [--agent M] [--cases D] [--case N]... [--live] [--store D] [--strict] [--out F]
+                                    run saved cases: replay and rerun for free, drift with
+                                    --agent, a judged live run with --live
 options: --store <dir> (default .threads), --tenant <id> (default local)`;
 
 const OPTIONS = {
-  store: { type: "string", default: ".threads" },
+  store: { type: "string" },
   tenant: { type: "string" },
   branch: { type: "string" },
   port: { type: "string", default: "8787" },
   "grace-days": { type: "string", default: "7" },
+  agent: { type: "string" },
+  cases: { type: "string", default: "cases" },
+  case: { type: "string", multiple: true },
+  live: { type: "boolean", default: false },
+  strict: { type: "boolean", default: false },
+  out: { type: "string" },
 } as const;
 
 type Parsed = {
@@ -51,6 +61,7 @@ type Parsed = {
   readonly branch: string | undefined;
   readonly port: number;
   readonly graceDays: number;
+  readonly eval: EvalArgs;
 };
 
 function parse(argv: readonly string[]): Parsed {
@@ -63,11 +74,21 @@ function parse(argv: readonly string[]): Parsed {
   return {
     command,
     args,
-    store: values.store,
+    store: values.store ?? ".threads",
     tenant: values.tenant,
     branch: values.branch,
     port: Number(values.port),
     graceDays: Number(values["grace-days"]),
+    // eval keeps its threads only in a --store it is given: its default is in memory.
+    eval: {
+      agent: values.agent,
+      cases: values.cases,
+      only: values.case ?? [],
+      live: values.live,
+      store: values.store,
+      strict: values.strict,
+      out: values.out,
+    },
   };
 }
 
@@ -105,6 +126,8 @@ export async function run(
       return remove(p, io);
     case "gc":
       return gc(p, io);
+    case "eval":
+      return evals(p.eval, io);
     default:
       io.err(USAGE);
       return 2;

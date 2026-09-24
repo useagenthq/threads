@@ -68,6 +68,7 @@ function targetPlan<Deps>(
     ...(env.chain === undefined ? {} : { chain: env.chain }),
     ...(env.covering === undefined ? {} : { covering: env.covering }),
     ...(env.deferTools === undefined ? {} : { deferTools: env.deferTools }),
+    ...(env.stub === undefined ? {} : { stub: env.stub }),
   };
 }
 
@@ -105,6 +106,8 @@ export async function handedOff<Deps, Output>(
     ...(writer.chain.fold.policy?.context === undefined
       ? {}
       : { deferTools: writer.chain.fold.policy.context.defer_tools }),
+    // A live eval's target answers effects from the same recordings: never for real.
+    ...(plan.stub === undefined ? {} : { stub: plan.stub }),
   })({
     threadId: handoff.data.to_thread_id,
     parent: {

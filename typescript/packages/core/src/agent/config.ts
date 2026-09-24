@@ -6,6 +6,7 @@ import {
   type Covering,
   FINAL_OUTPUT,
   type LoopConfig,
+  type StubGateway,
   type TeamRuntime,
   type ToolImpl,
 } from "../loop";
@@ -44,6 +45,8 @@ export type RunEnv<Deps> = {
   readonly inherited: readonly Covering[];
   /** A team's lead or member: what its team tools and settlements need. */
   readonly team?: TeamRuntime;
+  /** A live eval's recorded stubs: every mediated call answers from them, this tree's too. */
+  readonly stub?: StubGateway;
 };
 
 type Permissions = NonNullable<Policy["permissions"]>;
@@ -107,6 +110,7 @@ export function loopConfig<Deps, Output>(
     budgets: { ledger: env.ledger, inherited: env.inherited },
     ...(readFile === undefined ? {} : { readFile }),
     ...(env.team === undefined ? {} : { team: env.team }),
+    ...(env.stub === undefined ? {} : { stub: env.stub }),
     ...(def.output === undefined ? {} : { output: def.output }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(hooks.onEvent === undefined ? {} : { onEvent: hooks.onEvent }),
@@ -190,6 +194,7 @@ function agents<Deps, Output>(
     store: env.thread.store,
     principal: env.principal,
     ...(signal === undefined ? {} : { signal }),
+    ...(env.stub === undefined ? {} : { stub: env.stub }),
   };
   return {
     name: def.name,

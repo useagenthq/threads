@@ -1,14 +1,14 @@
 import { z } from "zod";
 import { assertNever } from "../assert-never";
 import { canonicalize } from "../log";
-import type { ChildDone, ChildEnd, Halt, Subagent } from "../loop";
+import type { ChildDone, ChildEnd, ChildRun, Halt, Subagent } from "../loop";
 import { reduce } from "../reduce";
 import { type EventDraft, liveWriter } from "../store";
 import { cancelTree } from "../thread/cancel";
 import { execute } from "./execute";
 import type { ChildEnv, ChildFactory } from "./registry";
 import type { RunResult } from "./result";
-import type { Resolved } from "./run";
+import type { Plan, Resolved } from "./run";
 import { openStore } from "./sqlite";
 
 // An agent run as a subagent: a child thread in the same store, under the
@@ -40,16 +40,7 @@ export function subagent<Deps, Output>(
         child.cancel === undefined
           ? child.inputs.map((text) => input(env, text))
           : [];
-      const result = await execute(
-        asText,
-        {
-          store: env.store,
-          principal: env.principal,
-          child,
-          ...(env.signal === undefined ? {} : { signal: env.signal }),
-        },
-        inputs,
-      );
+      const result = await execute(asText, planOf(env, child), inputs);
       return ended(result, await usage(env, result));
     },
     held: async (child) => {
@@ -63,6 +54,17 @@ export function subagent<Deps, Output>(
       return cancelTree(log, child, principal, reason);
     },
   });
+}
+
+/** The child's run: its parent's store, principal, signal and (a live eval's) stubs. */
+function planOf(env: ChildEnv, child: ChildRun): Plan<never> {
+  return {
+    store: env.store,
+    principal: env.principal,
+    child,
+    ...(env.signal === undefined ? {} : { signal: env.signal }),
+    ...(env.stub === undefined ? {} : { stub: env.stub }),
+  };
 }
 
 const CANCELLED: ChildEnd = {

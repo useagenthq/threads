@@ -6,7 +6,7 @@ import type {
   Principal,
   ThreadId,
 } from "../log";
-import type { ChildRun, Covering } from "../loop";
+import type { ChildRun, Covering, StubGateway } from "../loop";
 import { DEFAULT_PERMISSIONS } from "../permissions";
 import type { EventDraft } from "../store";
 import type { Agent, Models } from "./agent";
@@ -91,6 +91,7 @@ export async function run<Deps, Output>(
   input: string | readonly InputPart[],
   options: RunOptions<Deps>,
   hooks: Hooks = {},
+  stub?: StubGateway,
 ): Promise<RunResult<Output>> {
   checkTree(def, options.budget === undefined ? [] : [options.budget]);
   const principal = options.principal ?? OPERATOR;
@@ -109,7 +110,12 @@ export async function run<Deps, Output>(
   };
   const store =
     options.store ?? handleOf(options.thread)?.store ?? sqlite(".threads");
-  return execute(def, { ...options, store, principal }, [draft], hooks);
+  return execute(
+    def,
+    { ...options, store, principal, ...(stub === undefined ? {} : { stub }) },
+    [draft],
+    hooks,
+  );
 }
 
 /** What one execution runs besides the agent: a thread, and for a child its parent's link. */
@@ -137,6 +143,8 @@ export type Plan<Deps> = RunOptions<Deps> & {
   readonly covering?: readonly Covering[];
   /** A handoff target's or member's parent's resolved defer_tools, unless it sets its own. */
   readonly deferTools?: DeferTools;
+  /** A live eval's recorded stubs: every mediated call of the tree answers from them. */
+  readonly stub?: StubGateway;
 };
 
 /** Every ceiling this run is also decided under. */

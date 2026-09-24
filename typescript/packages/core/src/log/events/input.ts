@@ -25,7 +25,7 @@ const INPUT_SOURCES = [
   "team_task",
 ] as const;
 const STEER_SOURCES = ["api", "cli", "channel", "parent_agent"] as const;
-const INJECTED_SOURCES = [
+export const INJECTED_SOURCES = [
   "memory",
   "knowledge",
   "skill",

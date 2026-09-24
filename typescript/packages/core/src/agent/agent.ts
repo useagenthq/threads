@@ -12,9 +12,10 @@ import type { KnowledgeProvider, MemoryProvider } from "../memory/protocol";
 import type { Model } from "../model";
 import type { Sandbox } from "../sandbox";
 import { TEAM_LIMITS } from "../team/constants";
-import type { Capabilities, Egress } from "../tools";
+import { type Capabilities, type Egress, SANDBOX_TOOLS } from "../tools";
 import type { GitOptions } from "../tools/git/host";
 import { subagent } from "./child";
+import { dryOf } from "./dry-pin";
 import { checkTree } from "./enforceable";
 import { ConfigError } from "./errors";
 import type { Extension } from "./extension";
@@ -288,6 +289,17 @@ export function registerAs<Deps, Output>(
 ): void {
   register(handle, {
     setup: def.setup,
+    dry: () => dryOf(def),
+    live: (text, o) =>
+      run(
+        def,
+        text,
+        { store: o.store, principal: o.principal, budget: o.budget },
+        {},
+        denyAll(def.sandbox, def.egress)
+          ? { ...o.stub, live: SANDBOX_TOOLS }
+          : o.stub,
+      ),
     child: subagent(def),
     target: target(def),
     enforce: (covering) => checkTree(def, covering),
@@ -333,4 +345,12 @@ function agentsOf<Deps, Output>(
     members,
     teamLimits: { ...TEAM_LIMITS, ...options.teamLimits },
   };
+}
+
+/** A sandbox whose egress is deny-all: nothing the sandbox tools do leaves it. */
+function denyAll(
+  sandbox: Sandbox | undefined,
+  egress: Egress | undefined,
+): boolean {
+  return sandbox?.info.egress === "enforced" && egress !== "unenforced";
 }

@@ -4,10 +4,12 @@ import { z } from "zod";
 
 // Test-only: spec/conformance/case.schema.json compiled with z.fromJSONSchema, so tests can check
 // a saved case against the real schema. Core carries no JSON Schema evaluator (api.json saveCase).
-// The events schema's $defs are merged in under an `ev__` prefix, since its refs are external.
+// The events and eval schemas' $defs are merged in under `ev__` and `eval__` prefixes, since
+// their refs are external.
 
 const SPEC = join(import.meta.dir, "../../../../../spec");
 const EVENTS = "urn:threads:schema:events:v1#/$defs/";
+const EVAL = "urn:threads:schema:eval:v1#/$defs/";
 
 function read(path: string): string {
   return readFileSync(join(SPEC, path), "utf8");
@@ -19,7 +21,9 @@ const JsonObject = z.record(z.string(), z.json());
 function merged(): Record<string, Json> {
   const cases = JsonObject.parse(
     JSON.parse(
-      read("conformance/case.schema.json").replaceAll(EVENTS, "#/$defs/ev__"),
+      read("conformance/case.schema.json")
+        .replaceAll(EVENTS, "#/$defs/ev__")
+        .replaceAll(EVAL, "#/$defs/eval__"),
     ),
   );
   const events = JsonObject.parse(
@@ -30,11 +34,20 @@ function merged(): Record<string, Json> {
       ),
     ),
   );
+  const evals = JsonObject.parse(
+    JSON.parse(
+      read("schema/eval.v1.schema.json")
+        .replaceAll('"#/$defs/', '"#/$defs/eval__')
+        .replaceAll(EVENTS, "#/$defs/ev__"),
+    ),
+  );
   const defs: Record<string, Json> = {};
   for (const [key, value] of Object.entries(JsonObject.parse(cases["$defs"])))
     defs[key] = unconditional(value);
   for (const [key, value] of Object.entries(JsonObject.parse(events["$defs"])))
     defs[`ev__${key}`] = unconditional(value);
+  for (const [key, value] of Object.entries(JsonObject.parse(evals["$defs"])))
+    defs[`eval__${key}`] = unconditional(value);
   const { $id: _id, ...rest } = cases;
   return { ...rest, $defs: defs };
 }

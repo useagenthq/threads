@@ -25,17 +25,25 @@ export function line0(events: readonly KnownEvent[]): string {
   const started = events.find((e) => e.type === "thread_started");
   if (started?.type !== "thread_started")
     throw new Error("a verified chain starts with thread_started");
-  let settings: Pick<
-    typeof started.data,
-    "model" | "model_params" | "adapter"
-  > = started.data;
+  let settings: Settings = started.data;
   for (const e of events)
     if (e.type === "settings_changed") settings = e.data.settings;
+  return pinnedLine0(started.data, settings);
+}
+
+type Started = Extract<KnownEvent, { type: "thread_started" }>["data"];
+type Settings = Pick<Started, "model" | "model_params" | "adapter">;
+
+/** Line 0 of a pin under the given settings epoch (default: its own, the first). */
+export function pinnedLine0(
+  started: Pick<Started, "instructions" | "tools"> & Settings,
+  settings: Settings = started,
+): string {
   return jcs({
     adapter: settings.adapter,
     model: settings.model,
     params: settings.model_params,
-    system: started.data.instructions,
-    tools: started.data.tools.map(toolLine),
+    system: started.instructions,
+    tools: started.tools.map(toolLine),
   });
 }

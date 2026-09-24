@@ -1,11 +1,12 @@
+import type { SandboxResult, SandboxResults } from "../evals/files";
 import { sha256Hex } from "../hash";
 import { canonicalize, type KnownEvent } from "../log";
 import type { ArtifactStore } from "../store";
-import type { EventMatcher } from "./save-case";
+import { isLoopTool } from "../tools/loop-tools";
 
-// The scripts a saved case replays its next turn against (spec/conformance/case.schema.json
-// ModelScript, StubScript, SandboxScript), read off the turn the branch recorded after the
-// snapshot. Built from typed values, so they are valid by construction.
+// The scripts a saved case replays its turn against (spec/conformance/case.schema.json
+// ModelScript, StubScript, SandboxScript v2), read off the recorded turn. Built from typed
+// values, so they are valid by construction.
 
 type Of<T extends KnownEvent["type"]> = Extract<KnownEvent, { type: T }>;
 
@@ -24,12 +25,6 @@ export type StubScriptFile = {
     readonly output: string;
     readonly is_error: boolean;
   }[];
-};
-
-export type SandboxScriptFile = {
-  readonly tools: Readonly<
-    Record<string, { readonly output: string; readonly is_error: boolean }>
-  >;
 };
 
 /** The recorded model responses, in order: the case's model.json. */
@@ -80,6 +75,13 @@ function outputOf(
 const begun = (turn: readonly KnownEvent[], callId: string): boolean =>
   turn.some((e) => e.type === "effect_begin" && e.data.call_id === callId);
 
+/** sha256 of a call's RFC 8785 input: how stubs and sandbox results are keyed. */
+export function argsHash(input: Of<"tool_call">["data"]["input"]): string {
+  const args = canonicalize(input);
+  if (!args.ok) throw new Error("tool_call input is canonical JSON");
+  return sha256Hex(args.value);
+}
+
 /** Every mediated call (one with effect events) as a stub, by (tool, args_hash, occurrence). */
 export function stubScript(
   turn: readonly KnownEvent[],
@@ -88,16 +90,14 @@ export function stubScript(
   const seen = new Map<string, number>();
   const stubs = turn.flatMap((e) => {
     if (e.type !== "tool_call" || !begun(turn, e.data.call_id)) return [];
-    const args = canonicalize(e.data.input);
-    if (!args.ok) throw new Error("tool_call input is canonical JSON");
-    const argsHash = sha256Hex(args.value);
-    const key = `${e.data.name}\n${argsHash}`;
+    const hash = argsHash(e.data.input);
+    const key = `${e.data.name}\n${hash}`;
     const occurrence = seen.get(key) ?? 0;
     seen.set(key, occurrence + 1);
     return [
       {
         tool: e.data.name,
-        args_hash: argsHash,
+        args_hash: hash,
         occurrence,
         output: outputOf(turn, e.data.call_id, artifacts),
         is_error: resultOf(turn, e.data.call_id)?.data.is_error ?? false,
@@ -108,44 +108,35 @@ export function stubScript(
 }
 
 /**
- * Read-only calls run in the sandbox, not the gateway: their recorded output as the fake
- * sandbox's scripted tools. One output per tool name (the first call's).
+ * sandbox.json v2: every executed read-only call's recorded result, keyed like stubs.json but
+ * counting occurrences from 1, with its content parts and spill ref so it replays in full.
+ * Framework tools run from the log in the rerun too, so they are never recorded.
  */
-export function sandboxScript(
+export function sandboxResults(
   turn: readonly KnownEvent[],
-): SandboxScriptFile | undefined {
-  const tools: Record<string, { output: string; is_error: boolean }> = {};
-  for (const e of turn) {
-    if (e.type !== "tool_call" || begun(turn, e.data.call_id)) continue;
+): SandboxResults | undefined {
+  const seen = new Map<string, number>();
+  const results = turn.flatMap((e): SandboxResult[] => {
+    if (e.type !== "tool_call" || isLoopTool(e.data.name)) return [];
     const result = resultOf(turn, e.data.call_id);
-    tools[e.data.name] ??= {
-      output: result?.data.preview ?? "",
-      is_error: result?.data.is_error ?? false,
-    };
-  }
-  return Object.keys(tools).length === 0 ? undefined : { tools };
-}
-
-/** An EventMatcher against one event: listed envelope keys exactly, data as a deep subset. */
-export function matches(m: EventMatcher, e: KnownEvent): boolean {
-  const envelope: readonly [unknown, unknown][] = [
-    [m.type, e.type],
-    [m.seq, e.seq],
-    [m.actor_kind, e.actor.kind],
-    [m.epoch, e.epoch],
-    [m.branch_id, e.branch_id],
-    [m.critical, e.critical],
-  ];
-  return (
-    envelope.every(([want, got]) => want === undefined || want === got) &&
-    (m.data === undefined || subset(m.data, e.data))
-  );
-}
-
-function subset(want: unknown, got: unknown): boolean {
-  const isObject = (v: unknown): v is object =>
-    typeof v === "object" && v !== null && !Array.isArray(v);
-  if (!isObject(want) || !isObject(got))
-    return JSON.stringify(want) === JSON.stringify(got);
-  return Object.entries(want).every(([k, v]) => subset(v, Reflect.get(got, k)));
+    if (begun(turn, e.data.call_id) || result?.data.origin !== "executed")
+      return [];
+    const hash = argsHash(e.data.input);
+    const key = `${e.data.name}\n${hash}`;
+    const occurrence = (seen.get(key) ?? 0) + 1;
+    seen.set(key, occurrence);
+    const { is_error, preview, content, ref } = result.data;
+    return [
+      {
+        tool: e.data.name,
+        args_hash: hash,
+        occurrence,
+        is_error,
+        preview,
+        ...(content === undefined ? {} : { content }),
+        ...(ref === undefined ? {} : { ref }),
+      },
+    ];
+  });
+  return results.length === 0 ? undefined : { version: 2, results };
 }

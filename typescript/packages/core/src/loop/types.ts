@@ -134,6 +134,11 @@ export type StubGateway = {
     tool: string,
     argsHash: string,
   ) => { readonly output: string; readonly isError: boolean } | undefined;
+  /**
+   * Tools that still run for real: a live eval's sandbox tools, inside a sandbox whose egress
+   * is deny-all, so what they change stays in that throwaway sandbox.
+   */
+  readonly live?: ReadonlySet<string>;
 };
 
 export type LoopConfig = {

@@ -376,14 +376,16 @@ function namespaced<Deps>(
   ext: string,
 ): Tool<unknown, unknown, Deps> {
   const name = `${ext}__${t.name}`;
+  // Not model-visible: line 0 leaves it out, config_hash covers it (drift reads it).
+  const origin = { extension: ext };
   return {
     name,
     ...(t.concurrent === undefined ? {} : { concurrent: t.concurrent }),
     ...(t.defer === undefined ? {} : { defer: t.defer }),
-    spec: () => ({ ...t.spec(), name }),
+    spec: () => ({ ...t.spec(), name, origin }),
     bind: (env) => {
       const impl = t.bind(env);
-      return { ...impl, spec: { ...impl.spec, name } };
+      return { ...impl, spec: { ...impl.spec, name, origin } };
     },
   };
 }

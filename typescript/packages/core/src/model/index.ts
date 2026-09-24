@@ -1,4 +1,8 @@
-export { assertModelAllowed, blockRealModels } from "./guard";
+export {
+  assertModelAllowed,
+  blockRealModels,
+  ModelBlockedError,
+} from "./guard";
 export type {
   LookupCapability,
   LookupResult,

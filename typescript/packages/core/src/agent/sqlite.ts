@@ -107,6 +107,21 @@ async function connect(store: Store): Promise<OpenStore> {
 }
 
 /**
+ * A private in-memory store on an injected clock, which the caller closes: what an eval rerun
+ * imports a case into, so nothing it does reaches a store the user passed.
+ */
+export async function memoryStore(
+  now: () => number,
+): Promise<OpenStore & { readonly close: () => void }> {
+  const { openBunSqlite } = await import("../store/bun-sqlite");
+  const db = openBunSqlite(":memory:");
+  const artifacts = memoryArtifacts();
+  const log = LogStore.open(db, now, artifacts);
+  if (!log.ok) throw new Error(`memory store: ${log.error.message}`);
+  return { log: log.value, artifacts, close: () => db.close() };
+}
+
+/**
  * A Store over a log and artifact store already open, for the test kit and embedders. With
  * `connection`, tenant views and the host's tables work on it too, on its injected clock.
  */

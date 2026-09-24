@@ -122,7 +122,7 @@ export async function execute<Deps, Output>(
       ],
       events: () => knownEvents(writer.chain),
       ceilings: ceilingsOf(plan),
-      ...(plan.chain === undefined ? {} : { chain: plan.chain }),
+      ...scopeOf(plan),
       ledger: log.budgets,
       inherited: inheritedOf(plan),
       ...(builtin.readFile === undefined ? {} : { readFile: builtin.readFile }),
@@ -254,4 +254,12 @@ function asPinned<P>(
   return plan.answerer === "pinned" && asks(knownEvents(writer.chain))
     ? answering()
     : created;
+}
+
+/** What a run inherits from the run that started it: its decision chain and a live eval's stubs. */
+function scopeOf(plan: Plan<unknown>): Pick<Plan<unknown>, "chain" | "stub"> {
+  return {
+    ...(plan.chain === undefined ? {} : { chain: plan.chain }),
+    ...(plan.stub === undefined ? {} : { stub: plan.stub }),
+  };
 }

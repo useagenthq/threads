@@ -1,163 +1,72 @@
 import { expect } from "bun:test";
 import { z } from "zod";
+import { matches } from "../../src/evals/compare";
+import { rerun } from "../../src/evals/rerun";
 import type { KnownEvent } from "../../src/log";
-import {
-  type LoopConfig,
-  type LoopEnd,
-  recordedStubs,
-  resume,
-} from "../../src/loop";
-import { scriptedModel } from "../../src/model";
-import { knownEvents } from "../../src/reduce";
-import { refReader } from "../../src/render";
-import { readSpec } from "../../src/render/tool-specs";
-import type { ArtifactStore, Writer } from "../../src/store";
-import { verifyExport } from "../../src/verify";
-import { unwrap } from "../store/helpers";
-import { type Case, type Counters, caseStore, type Matcher } from "./cases";
-import { scriptedTools } from "./sandbox";
+import { SandboxScript } from "../../src/sandbox";
+import type { Case, Counters, Matcher } from "./cases";
 
 // The recover and stub kinds (spec/conformance/README.md): acquire (recovery runs first), then
 // resume the loop against the scripts until the branch is idle or parked, and compare exactly
-// what was appended.
+// what was appended. The run itself is the eval runner's rerun (src/evals/rerun.ts): one
+// implementation for the corpus and for saved cases.
 
 const ALICE = { issuer: "api", tenant: "acme", subject: "alice" };
-const HOLDER = "conformance-runner";
 
 /** Runs a recover or stub case and compares its outcome, appended events and counters. */
 export async function runAppending(c: Case, bytes: Uint8Array): Promise<void> {
-  const imported = caseStore(c);
-  const log = unwrap(imported.store.importLog(bytes));
-  const leaf = log.segments.at(-1)?.header;
-  if (leaf === undefined) throw new Error("a verified log has a header");
-  const { db, store, artifacts } = imported;
-  const clock = { now: c.now };
-  const acquired = store.acquire(leaf.branch_id, HOLDER);
-  if (!acquired.ok) {
-    expect<unknown>({
-      code: acquired.error.code,
-      seq: acquired.error.seq,
-    }).toEqual({
-      code: c.error?.code,
-      seq: c.error?.seq,
-    });
-    expect(c.appended ?? []).toEqual([]);
-    return close(imported.db, db);
-  }
-  // Acquiring may already append (log_repaired).
-  const before = log.fold.seq;
-
-  const outcome = await run(c, acquired.value, artifacts, clock);
-  const appended = knownEvents(acquired.value.chain).filter(
-    (e) => e.seq > before,
-  );
-  if (c.error === undefined) expect(outcome.end.kind).not.toBe("halted");
-  else
-    expect(outcome.end.kind === "halted" ? outcome.end.halt.code : "ok").toBe(
-      c.error.code,
-    );
-  expectAppended(appended, c.appended ?? []);
-  for (const m of c.must)
-    expect(appended.some((e) => matchesOne(m, e))).toBe(true);
-  const exported = unwrap(store.exportBranch(leaf.branch_id));
-  expect(verifyExport(exported).ok).toBe(true);
-  close(imported.db, db);
-}
-
-function close(...dbs: readonly { close: () => void }[]): void {
-  for (const db of new Set(dbs)) db.close();
-}
-
-type Clock = { now: number };
-
-async function run(
-  c: Case,
-  writer: Writer,
-  artifacts: ArtifactStore,
-  clock: Clock,
-): Promise<{ readonly end: LoopEnd }> {
-  const model = scriptedModel(c.scripts.model ?? { responses: [] });
-  const read = refReader(artifacts);
-  const sandbox = scriptedTools(
-    c.scripts.sandbox,
-    // The host binds every tool its config pinned or added, whatever the latest set holds; a
-    // deferred tool by the full spec its spec_ref artifact holds.
-    [...writer.chain.fold.knownTools.values()].map((spec) =>
-      spec.spec_ref === undefined
-        ? spec
-        : unwrap(readSpec(read, spec.spec_ref, 0)),
-    ),
-    () => clock.now,
-  );
-  const stubs =
-    c.scripts.stubs === undefined ? undefined : recordedStubs(c.scripts.stubs);
-  const output = writer.chain.fold.policy?.output;
-  const started = knownEvents(writer.chain).find(
-    (e) => e.type === "thread_started",
-  );
-  const config: LoopConfig = {
-    models: () => model,
-    tools: sandbox.tools,
-    authorize: (call) => {
-      const decision = sandbox.decision(call.data.name);
-      return {
-        decision,
-        source: "policy",
-        rule_id: `conformance_${decision}`,
-      };
-    },
-    clock: {
-      now: () => clock.now,
-      sleepUntil: async (t) => {
-        clock.now = Math.max(clock.now, t);
-      },
-    },
-    principal: ALICE,
-    skewMarginMs: 1000,
-    // The thread is its own team lead; no subagents (spec/conformance/README.md, recover 5).
-    agents: {
-      name: started?.type === "thread_started" ? started.data.agent_name : "",
-      subagent: () => undefined,
-      subagents: [],
-    },
-    ...(stubs === undefined ? {} : { stub: stubs }),
-    ...(output === undefined
-      ? {}
-      : { output: z.fromJSONSchema(output.schema) }),
-  };
   // stub input.text: the user_input the case sends once its log is imported.
   const text = z
     .strictObject({ text: z.string() })
     .optional()
     .parse(c.input)?.text;
-  const end = await resume(writer, artifacts, config, {
-    loop: c.scripts.model !== undefined,
-    ...(text === undefined
-      ? {}
-      : {
-          input: {
+  const outcome = await rerun({
+    log: bytes,
+    artifacts: c.artifacts,
+    now: c.now,
+    model: c.scripts.model,
+    sandbox:
+      c.scripts.sandbox === undefined
+        ? undefined
+        : SandboxScript.parse(c.scripts.sandbox),
+    stubs: c.scripts.stubs,
+    extensions: undefined,
+    input:
+      text === undefined
+        ? undefined
+        : {
             type: "user_input",
             type_version: 1,
             critical: true,
             actor: { kind: "user", principal: ALICE },
             data: { source: "api", text },
           },
-        }),
+    recorded: undefined,
   });
+  if (outcome.kind === "refused") {
+    expect<unknown>({ code: outcome.code, seq: outcome.seq }).toEqual({
+      code: c.error?.code,
+      seq: c.error?.seq,
+    });
+    expect(c.appended ?? []).toEqual([]);
+    return;
+  }
+  const { end, appended } = outcome;
+  if (c.error === undefined) expect(end.kind).not.toBe("halted");
+  else expect(end.kind === "halted" ? end.halt.code : "ok").toBe(c.error.code);
+  expectAppended(appended, c.appended ?? []);
+  for (const m of c.must)
+    expect(appended.some((e) => matches(m, e))).toBe(true);
   expect({
-    remaining: model.remaining(),
-    unexpected: model.unexpected(),
+    remaining: outcome.scriptLeft,
+    unexpected: outcome.unexpected,
   }).toEqual({
     remaining: 0,
     unexpected: 0,
   });
-  expect(pick(sandbox.counters(), c.sandbox)).toEqual(c.sandbox ?? {});
-  if (stubs !== undefined)
-    expect({
-      consumed: stubs.consumed(),
-      unmatched: stubs.unmatched(),
-    }).toEqual(c.stubs ?? { consumed: 0, unmatched: 0 });
-  return { end };
+  expect(pick(outcome.counters, c.sandbox)).toEqual(c.sandbox ?? {});
+  if (outcome.stubs !== undefined)
+    expect(outcome.stubs).toEqual(c.stubs ?? { consumed: 0, unmatched: 0 });
 }
 
 /** The counters a case lists, with 0 for a tool that never ran. */
@@ -213,18 +122,4 @@ function subset(actual: unknown, want: unknown): unknown {
       subset(Reflect.get(actual, key), value),
     ]),
   );
-}
-
-/** A must matcher against one event: the same deep-subset rule as `appended`. */
-function matchesOne(m: Matcher, e: KnownEvent): boolean {
-  const shown = {
-    type: e.type,
-    ...(m.seq === undefined ? {} : { seq: e.seq }),
-    ...(m.actor_kind === undefined ? {} : { actor_kind: e.actor.kind }),
-    ...(m.epoch === undefined ? {} : { epoch: e.epoch }),
-    ...(m.branch_id === undefined ? {} : { branch_id: e.branch_id }),
-    ...(m.critical === undefined ? {} : { critical: e.critical }),
-    ...(m.data === undefined ? {} : { data: subset(e.data, m.data) }),
-  };
-  return JSON.stringify(plainJson(shown)) === JSON.stringify(plainJson(m));
 }

@@ -20,6 +20,8 @@ const Stubs = z.strictObject({
 export type RecordedStubs = StubGateway & {
   readonly consumed: () => number;
   readonly unmatched: () => number;
+  /** Recorded stubs no invocation consumed. */
+  readonly left: () => number;
 };
 
 /** A stub gateway over a StubScript (spec/conformance case.schema.json $defs/StubScript). */
@@ -50,5 +52,6 @@ export function recordedStubs(script: unknown): RecordedStubs {
     },
     consumed: () => used.size,
     unmatched: () => unmatched,
+    left: () => stubs.length - used.size,
   };
 }

@@ -1,0 +1,10 @@
+{
+  "name": "threads-examples",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "dependencies": {
+    "@threads/core": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

@@ -78,7 +78,7 @@ export function principalKey(p: Principal): PrincipalKey {
     .parse(`${keyPart(p.issuer)}/${keyPart(p.tenant)}/${keyPart(p.subject)}`);
 }
 
-const ACTOR_KINDS = [
+export const ACTOR_KINDS = [
   "user",
   "model",
   "host",
@@ -169,6 +169,7 @@ export const ToolSpec: Ruled<
     spec_ref: Opt<typeof ArtifactRef>;
     output_schema: Opt<typeof JsonObject>;
     ends_turn: Opt<z.ZodBoolean>;
+    origin: Opt<Strict<{ extension: typeof Name }>>;
   }>,
   typeof TOOL_SPEC_RULE
 > = withRule(
@@ -198,6 +199,12 @@ export const ToolSpec: Ruled<
       .boolean()
       .describe(
         "A successful result ends the turn without another model call (the final_output tool).",
+      )
+      .optional(),
+    origin: z
+      .strictObject({ extension: Name })
+      .describe(
+        "The extension that contributed this tool, static or from its setup. Not model-visible (not in Render v1 line 0); covered by config_hash.",
       )
       .optional(),
   }),

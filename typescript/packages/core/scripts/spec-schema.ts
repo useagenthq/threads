@@ -15,7 +15,7 @@ import {
 // can't represent throws. The passes below only drop or re-spell keywords, never change meaning.
 
 type Json = z.core.util.JSONType;
-type Node = { [key: string]: Json };
+export type Node = { [key: string]: Json };
 
 // Defs that only a rule's `$ref` or the wire contract names; the walk from LogLine misses them.
 const EXTRA_DEFS = [
@@ -112,6 +112,11 @@ function respell(node: Node): Node {
   return out;
 }
 
+/** The two passes every exported schema goes through, with `defs` the ones `$ref`s resolve to. */
+export function tidy(schema: Node, defs: Node): Node {
+  return transform(transform(schema, dropInherited(defs)), respell);
+}
+
 export function specSchema(): Node {
   const exported = z.toJSONSchema(z.tuple([LogLine, ...EXTRA_DEFS]), {
     target: "draft-2020-12",
@@ -129,5 +134,5 @@ export function specSchema(): Node {
     ...root,
     $defs: rest,
   };
-  return transform(transform(schema, dropInherited(rest)), respell);
+  return tidy(schema, rest);
 }
