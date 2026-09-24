@@ -8,7 +8,15 @@ import { memberRows } from "../../src/team/rows";
 import { unwrap } from "../store/helpers";
 import { Crash, crashing, drill, type Point } from "./crash-kit";
 import { assertTeamReplays } from "./kit";
-import { answering, askIds, call, replyTo, say, start } from "./run-kit";
+import {
+  answering,
+  askIds,
+  call,
+  replyTo,
+  resultOf,
+  say,
+  start,
+} from "./run-kit";
 
 // Crash drills at the commit points of an ask and a wait (design §7, Phase 1 proofs): the process
 // dies inside the transaction that opens the ask, sends the reply, closes the ask, registers the
@@ -82,17 +90,6 @@ const WAIT_POINTS: readonly Point[] = [
 
 const count = (log: readonly KnownEvent[], type: string): number =>
   log.filter((e) => e.type === type).length;
-
-function resultOf(log: readonly KnownEvent[], callId: string): unknown {
-  const results = log.filter(
-    (e) => e.type === "tool_result" && e.data.call_id === callId,
-  );
-  expect(results).toHaveLength(1);
-  const [only] = results;
-  return only?.type === "tool_result"
-    ? JSON.parse(only.data.preview)
-    : undefined;
-}
 
 async function crashThenRestart(point: Point, first: readonly unknown[]) {
   const d = drill();

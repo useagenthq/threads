@@ -139,23 +139,42 @@ export class TeamWorker {
     if (branch === null) return undefined;
     const pending = pendingFor(db, ownRows(db, row.thread_id));
     // A parked member runs again at a run's start (what it waits on may be answered by now), for
-    // mail that may resume it, and once an ask or a wait it parked on is due.
+    // mail that may resume it, and once an ask or a wait it parked on is due. Waking on a due
+    // deadline or on mail to refuse waits for a free lease: its holder does that work, and a
+    // launch that can't acquire would relaunch at once, never yielding.
     if (row.state === "parked") {
-      const wake =
-        recovering ||
-        this.#claim(db, pending.filter(mayResume)) ||
-        this.#due(db, branch);
+      const wake = recovering || this.#wakesParked(db, branch, pending);
       return wake ? () => this.#member(row, branch) : undefined;
     }
-    if (row.state === "ended")
-      return pending.length > 0
-        ? async () => refuseEnded(this.#env, branch)
-        : undefined;
+    if (row.state === "ended") return this.#refusing(db, branch, pending);
     // A turn left open with its lease free is resumed (hostless recovery).
     const stranded =
       row.state === "running" && (recovering || this.#free(db, branch));
     const woken = this.#claim(db, pending.filter(consumable));
     return woken || stranded ? () => this.#member(row, branch) : undefined;
+  }
+
+  /** An ended member's pending mail is refused, once its lease is free. */
+  #refusing(
+    db: SqliteDriver,
+    branch: BranchId,
+    pending: readonly MailEnvelope[],
+  ): (() => Promise<void>) | undefined {
+    return pending.length > 0 && this.#free(db, branch)
+      ? async () => refuseEnded(this.#env, branch)
+      : undefined;
+  }
+
+  /** Mail that may resume the parked member, or, with its lease free, a due ask or wait. */
+  #wakesParked(
+    db: SqliteDriver,
+    branch: BranchId,
+    pending: readonly MailEnvelope[],
+  ): boolean {
+    return (
+      this.#claim(db, pending.filter(mayResume)) ||
+      (this.#free(db, branch) && this.#due(db, branch))
+    );
   }
 
   /**

@@ -1,16 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { z } from "zod";
 import { agent, scriptedModel, sqlite } from "../../src";
-import type { KnownEvent } from "../../src/log";
 import { assertTeamReplays } from "./kit";
 import {
-  answering,
+  answers,
   call,
   events,
   logOf,
   memberEvents,
   receipts,
   replyTo,
+  resultOf,
   say,
   start,
   types,
@@ -21,36 +20,12 @@ import {
 // closes the ask answered, resumes the asker and records the call's one result, and the turn
 // goes on. Every test ends with the team replaying from its logs.
 
-/** A model whose `n`th answer (from 0) is made from its rendered request. */
-function scripted(answers: readonly ((request: string) => unknown)[]) {
-  let n = 0;
-  return answering((request) => {
-    const next = answers[n] ?? (() => say("Nothing more."));
-    n += 1;
-    return next(request);
-  });
-}
-
-const Preview = z.object({ status: z.string() }).loose();
-
-/** The value a call's one tool_result records. */
-function resultOf(log: readonly KnownEvent[], callId: string): unknown {
-  const results = log.filter(
-    (e) => e.type === "tool_result" && e.data.call_id === callId,
-  );
-  expect(results).toHaveLength(1);
-  const [only] = results;
-  return only?.type === "tool_result"
-    ? Preview.parse(JSON.parse(only.data.preview))
-    : undefined;
-}
-
 describe("ask and reply", () => {
   test("the lead asks a member: its reply is the ask's result, and the turn goes on", async () => {
     const store = sqlite(":memory:");
     const researcher = agent({
       name: "researcher",
-      model: scripted([
+      model: answers([
         () => say("Read about batteries."),
         (request) => replyTo("r1", request, "Batteries."),
         () => say("Replied."),
@@ -96,7 +71,7 @@ describe("ask and reply", () => {
     const store = sqlite(":memory:");
     const researcher = agent({
       name: "researcher",
-      model: scripted([
+      model: answers([
         () => say("Read."),
         (request) => replyTo("r1", request, "Batteries."),
         () => say("Replied."),
@@ -162,6 +137,40 @@ describe("ask and reply", () => {
       status: "refused",
     });
     expect(types(log)).not.toContain("parked");
+    assertTeamReplays(await logOf(store), r.team.ref.id);
+  });
+});
+
+describe("ask headroom", () => {
+  test("an ask of a member with no room left in its own budget is refused budget_exceeded", async () => {
+    const store = sqlite(":memory:");
+    const lead = agent({
+      name: "lead",
+      model: scriptedModel({
+        responses: [
+          start("c1", "a", "Go."),
+          call("c2", "wait", { members: ["a-1"] }),
+          call("c3", "ask", { to: "a-1", question: "More?" }),
+          say("No room."),
+          say("Final."),
+        ],
+      }),
+      team: [
+        agent({
+          name: "a",
+          budget: { max_model_requests: 1 },
+          model: scriptedModel({ responses: [say("done."), say("more.")] }),
+        }),
+      ],
+    });
+    const r = await lead.run("Go.", { store });
+    const log = await events(store, r.thread);
+    expect(resultOf(log, "c3")).toEqual({
+      code: "budget_exceeded",
+      status: "refused",
+    });
+    const member = await memberEvents(store, r.team.ref.id, "a-1");
+    expect(receipts(member, "ask")).toHaveLength(0);
     assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 });

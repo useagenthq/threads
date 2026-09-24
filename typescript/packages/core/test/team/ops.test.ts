@@ -108,7 +108,7 @@ describe("team op vectors, run by this runtime", () => {
       ]),
     );
     // Pinned: a vector that drops out of the selection fails here, not silently.
-    expect(mine).toHaveLength(64);
+    expect(mine).toHaveLength(65);
   });
 
   for (const v of mine)

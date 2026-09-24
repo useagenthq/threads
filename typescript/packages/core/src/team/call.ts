@@ -66,6 +66,13 @@ export const refusal = (
   detail?: InvalidDefinition,
 ): Refusal => ({ refused: code, ...(detail === undefined ? {} : { detail }) });
 
+/** A refusal as the call's tool_result records it. */
+export type Refused = {
+  readonly status: "refused";
+  readonly code: CallRefusal;
+  readonly detail?: InvalidDefinition;
+};
+
 export function isRefusal(value: unknown): value is Refusal {
   return typeof value === "object" && value !== null && "refused" in value;
 }
@@ -148,8 +155,16 @@ export function toolResult(callId: string, value: unknown): EventDraft {
 }
 
 /** Records the op's result, or its refusal, as the call's result; returns what it recorded. */
-export function recorded(ctx: CallContext, value: unknown): unknown {
-  const out = isRefusal(value)
+export function recorded(ctx: CallContext, value: Refusal): Refused;
+export function recorded<T extends object>(
+  ctx: CallContext,
+  value: T | Refusal,
+): T | Refused;
+export function recorded<T extends object>(
+  ctx: CallContext,
+  value: T | Refusal,
+): T | Refused {
+  const out: T | Refused = isRefusal(value)
     ? {
         code: value.refused,
         ...(value.detail === undefined ? {} : { detail: value.detail }),

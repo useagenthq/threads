@@ -5,7 +5,9 @@ import {
   committedNotices,
   completeAsk,
   finishWait,
+  type Waiting,
 } from "./close";
+import type { AskOutcome, Waited, Wire } from "./results";
 import { askRow, dueAsks } from "./rows";
 import { askOpen, openWaits } from "./view";
 
@@ -32,7 +34,14 @@ function startedOf(
 }
 
 /** The deadline step for `id`, an AskId or a WaitId of this writer. */
-export function deadline(ctx: CloseContext, id: string): unknown {
+/** What a deadline step did: closed the ask, finished the wait, or nothing yet. */
+export type DeadlineOutcome =
+  | Wire<AskOutcome>
+  | Wire<Waited>
+  | Waiting
+  | typeof NOT_DUE;
+
+export function deadline(ctx: CloseContext, id: string): DeadlineOutcome {
   const ask = askRow(ctx.db, id);
   if (ask !== undefined) {
     const open = askOpen(ctx.db, ctx.branchId, id, ctx.batch);

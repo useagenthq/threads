@@ -19,6 +19,7 @@ import {
   type MemberRow,
   memberRows,
   monitorsOn,
+  openAsks,
   ownRows,
   pendingTo,
   refOf,
@@ -91,6 +92,19 @@ export function settle(ctx: SettleContext, how: Settlement): void {
     return;
   }
   const result: Result = { member, ...how };
+  // The member's own open asks never outlive it: each closes cancelled before its end.
+  const closed = new Set(
+    ctx.batch.drafts.flatMap((d) =>
+      d.type === "ask_closed" ? [d.data.ask_id] : [],
+    ),
+  );
+  for (const askId of openAsks(ctx.db, ctx.branchId))
+    if (!closed.has(askId))
+      ctx.batch.add({
+        ...HOST,
+        type: "ask_closed",
+        data: { ask_id: askId, outcome: { status: "cancelled" } },
+      });
   const settled = ctx.batch.add({
     ...HOST,
     type: "member_ended",

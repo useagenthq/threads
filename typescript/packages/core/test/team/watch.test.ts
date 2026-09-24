@@ -1,13 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { agent, type Model, scriptedModel, sqlite } from "../../src";
-import { storeOf } from "../../src/agent/sqlite";
-import type { KnownEvent } from "../../src/log";
-import { markTestKit } from "../../src/model/guard";
-import { LogStore, memoryArtifacts } from "../../src/store";
-import { openBunSqlite } from "../../src/store/bun-sqlite";
+import { agent, scriptedModel, sqlite } from "../../src";
 import { TEAM_CONSTANTS } from "../../src/team/constants";
-import { unwrap } from "../store/helpers";
+import { clocked, held, until } from "./clock-kit";
 import { assertTeamReplays } from "./kit";
 import {
   call,
@@ -15,6 +10,7 @@ import {
   logOf,
   memberEvents,
   receipts,
+  resultOf,
   say,
   start,
   types,
@@ -23,63 +19,6 @@ import {
 // wait and monitor in a running team, and the deadlines of asks and waits (spec/schema/README.md,
 // "Teams", Waits and monitors; design §4.12 and §4.13). A wait parks its caller until every
 // listed member settles, or until its deadline, when it returns what settled so far.
-
-const Preview = z.object({ status: z.string() }).loose();
-
-function resultOf(log: readonly KnownEvent[], callId: string): unknown {
-  const found = log.findLast(
-    (e) => e.type === "tool_result" && e.data.call_id === callId,
-  );
-  return found?.type === "tool_result"
-    ? Preview.parse(JSON.parse(found.data.preview))
-    : undefined;
-}
-
-/**
- * A store on a clock the test moves (deadlines are read from the store's clock). Time passing
- * also renews every live lease, as each holder's renewal timer would have.
- */
-function clocked() {
-  const clock = { now: Date.now() };
-  const artifacts = memoryArtifacts();
-  const db = openBunSqlite(":memory:");
-  const log = unwrap(LogStore.open(db, () => clock.now, artifacts));
-  const elapse = (ms: number): void => {
-    db.run(
-      "UPDATE leases SET expires_at = expires_at + ? WHERE expires_at > ?",
-      [ms, clock.now],
-    );
-    clock.now += ms;
-  };
-  return { store: storeOf({ log, artifacts }), elapse };
-}
-
-/** A scripted model whose first request waits for `open`. */
-function held(open: Promise<void>, responses: readonly unknown[]): Model {
-  const base = scriptedModel({ responses: [...responses] });
-  let first = true;
-  const made: Model = {
-    ...base,
-    send: async function* (...args: Parameters<Model["send"]>) {
-      if (first) {
-        first = false;
-        await open;
-      }
-      yield* base.send(...args);
-    },
-  };
-  markTestKit(made);
-  return made;
-}
-
-/** Resolves once `check` holds, polling. */
-async function until(check: () => Promise<boolean>): Promise<void> {
-  for (let i = 0; i < 500; i += 1) {
-    if (await check()) return;
-    await new Promise((r) => setTimeout(r, 10));
-  }
-  throw new Error("timed out waiting");
-}
 
 describe("wait", () => {
   test("the lead waits for two members: both results, in the wait's member order", async () => {

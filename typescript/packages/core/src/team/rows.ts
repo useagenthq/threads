@@ -229,6 +229,19 @@ export function askRow(db: SqliteDriver, askId: string): AskRow | undefined {
 }
 
 /** This branch's open asks whose deadline is at or before `now`, oldest first. */
+/** This branch's open asks, in ask_id order. */
+export function openAsks(db: SqliteDriver, branch: string): readonly string[] {
+  return z
+    .array(z.strictObject({ ask_id: z.string() }))
+    .parse(
+      db.all(
+        "SELECT ask_id FROM asks WHERE asker_branch_id = ? AND state = 'open' ORDER BY ask_id",
+        [branch],
+      ),
+    )
+    .map((r) => r.ask_id);
+}
+
 export function dueAsks(
   db: SqliteDriver,
   branch: string,

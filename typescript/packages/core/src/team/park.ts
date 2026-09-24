@@ -4,7 +4,7 @@ import type { CallContext, Caller } from "./call";
 import { addressOf, received, sent } from "./mail";
 import { monitorsOn, ownRows, refOf, teamRow } from "./rows";
 import type { AppendContext, SettleContext } from "./settle";
-import { parkedOn } from "./view";
+import { type Item, itemsOf, openWaits, parkedOn } from "./view";
 
 // A member's park and its starter (spec/schema/README.md, "Teams"; design §2.7.1): the member's
 // first park while its task monitor is unfired carries one member_parked notice to the starter,
@@ -68,37 +68,57 @@ export function takeParkNotice(
 }
 
 /**
- * A member's ask or wait parks its call once its turn has nothing else to run (it is the only
- * pending call), with its first park's member_parked notice. The team log never parks.
+ * A member's ask or wait parks its turn once the turn has nothing else to run: every pending call
+ * is an opened ask or wait of this log (a call the batch closes no longer counts). Each gets one
+ * park, and the member's first park carries its member_parked notice. The team log never parks.
  */
-export function parkCall(
-  ctx: CallContext,
-  caller: Caller,
-  address: ParkAddress,
-): void {
-  const { fold } = ctx.chain;
-  const alone =
-    fold.pending.size === 1 && fold.pending.has(ctx.call.data.call_id);
-  if (!alone || parkedOn(ctx.chain, ctx.batch, address)) return;
-  const first = !ctx.chain.events.some(
-    (l) => l.kind === "event" && l.event.type === "parked",
-  );
-  const eventId = ctx.batch.add({
-    type: "parked",
-    type_version: 1,
-    critical: true,
-    actor: { kind: "host" },
-    data: { address, reason: "awaiting_member" },
-  });
-  if (!first) return;
-  parkNotice(
-    {
-      db: ctx.db,
-      batch: ctx.batch,
-      threadId: ctx.call.thread_id,
-      branchId: ctx.call.branch_id,
-      provenance: caller.provenance,
-    },
-    { eventId, reason: "awaiting_member" },
-  );
+export function parkCall(ctx: CallContext, caller: Caller): void {
+  const addresses = waitingOn(ctx);
+  if (addresses === undefined) return;
+  let first = !itemsOf(ctx.chain, ctx.batch).some((e) => e.type === "parked");
+  for (const address of addresses) {
+    if (parkedOn(ctx.chain, ctx.batch, address)) continue;
+    const eventId = ctx.batch.add({
+      type: "parked",
+      type_version: 1,
+      critical: true,
+      actor: { kind: "host" },
+      data: { address, reason: "awaiting_member" },
+    });
+    if (!first) continue;
+    first = false;
+    parkNotice(
+      {
+        db: ctx.db,
+        batch: ctx.batch,
+        threadId: ctx.call.thread_id,
+        branchId: ctx.call.branch_id,
+        provenance: caller.provenance,
+      },
+      { eventId, reason: "awaiting_member" },
+    );
+  }
 }
+
+/** Each pending call's ask or wait, or undefined when a pending call is still runnable. */
+function waitingOn(ctx: CallContext): readonly ParkAddress[] | undefined {
+  const items = itemsOf(ctx.chain, ctx.batch);
+  const waits = openWaits(ctx.chain, ctx.batch);
+  const out: ParkAddress[] = [];
+  for (const callId of ctx.chain.fold.pending) {
+    const id = `${ctx.call.branch_id}:${callId}`;
+    const closed = items.some(
+      (e) => e.type === "tool_result" && e.data.call_id === callId,
+    );
+    if (closed) continue;
+    if (waits.has(id)) out.push({ kind: "wait", id });
+    else if (items.some((e) => isAsk(e, id))) out.push({ kind: "ask", id });
+    else return undefined;
+  }
+  return out;
+}
+
+const isAsk = (e: Item, id: string): boolean =>
+  e.type === "message_sent" &&
+  e.data.envelope.kind === "ask" &&
+  e.data.envelope.mail_id === id;

@@ -1,3 +1,5 @@
+import { expect } from "bun:test";
+import { z } from "zod";
 import {
   type Model,
   scriptedModel,
@@ -48,6 +50,32 @@ export function answering(next: (request: string) => unknown): Model {
   };
   markTestKit(made);
   return made;
+}
+
+/** A model whose `n`th answer (from 0) is made from its rendered request. */
+export function answers(
+  made: readonly ((request: string) => unknown)[],
+): Model {
+  let n = 0;
+  return answering((request) => {
+    const next = made[n] ?? (() => say("Nothing more."));
+    n += 1;
+    return next(request);
+  });
+}
+
+const Preview = z.object({ status: z.string() }).loose();
+
+/** The value a call's one tool_result records. */
+export function resultOf(log: readonly KnownEvent[], callId: string): unknown {
+  const results = log.filter(
+    (e) => e.type === "tool_result" && e.data.call_id === callId,
+  );
+  expect(results).toHaveLength(1);
+  const [only] = results;
+  return only?.type === "tool_result"
+    ? Preview.parse(JSON.parse(only.data.preview))
+    : undefined;
 }
 
 /** The ask ids a rendered request shows, oldest first. */

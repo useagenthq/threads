@@ -11,6 +11,7 @@ import type { ArtifactStore } from "../store/artifacts";
 import type { Chain } from "../verify";
 import { toolResult } from "./call";
 import { received } from "./mail";
+import type { AskOutcome, MemberResult, Waited, Wire } from "./results";
 import { mailEnvelope, memberNamed, ownRows, pendingFor } from "./rows";
 import type { AppendContext } from "./settle";
 import {
@@ -43,6 +44,9 @@ export function readerOf(artifacts: ArtifactStore): ReadText {
   };
 }
 
+/** A wait not finished yet: the waiter's call stays pending. */
+export type Waiting = { readonly status: "waiting"; readonly wait_id: string };
+
 /** A writer's append that closes asks and waits: its committed log, and where refs are read. */
 export type CloseContext = AppendContext & {
   readonly chain: Chain;
@@ -72,7 +76,7 @@ function textOf(body: Body | undefined, read: ReadText): string {
 export function publicResult(
   result: StoredMemberResult,
   read: ReadText,
-): unknown {
+): Wire<MemberResult> {
   return result.status === "completed"
     ? { ...result, output: textOf(result.output, read) }
     : result;
@@ -105,7 +109,7 @@ export function closeAsk(
   askId: string,
   outcome: Outcome,
   cause?: string,
-): unknown {
+): Wire<AskOutcome> {
   const closed = ctx.batch.add({
     ...HOST,
     type: "ask_closed",
@@ -118,11 +122,16 @@ export function closeAsk(
   return value;
 }
 
-function askValue(ctx: CloseContext, askId: string, outcome: Outcome): unknown {
+function askValue(
+  ctx: CloseContext,
+  askId: string,
+  outcome: Outcome,
+): Wire<AskOutcome> {
   switch (outcome.status) {
     case "answered": {
       const reply = mailEnvelope(ctx.db, outcome.reply);
-      if (reply === undefined) throw new Error(`no reply ${outcome.reply}`);
+      if (reply === undefined || "operator" in reply.from)
+        throw new Error(`no member's reply ${outcome.reply}`);
       const text = textOf(reply.body, ctx.read);
       return { ask_id: askId, status: "answered", member: reply.from, text };
     }
@@ -147,7 +156,7 @@ export function completeAsk(
   ctx: CloseContext,
   askId: string,
   how: { readonly cancelled: boolean; readonly due: boolean },
-): unknown {
+): Wire<AskOutcome> | undefined {
   for (const kind of ["reply", "bounce"] as const) {
     const env = mine(ctx).find((m) => m.kind === kind && m.ask_id === askId);
     if (env === undefined) continue;
@@ -259,7 +268,7 @@ export function finishWait(
   ctx: CloseContext,
   waitId: string,
   how: { readonly cause?: string; readonly deadline: boolean },
-): unknown {
+): Wire<Waited> | Waiting {
   const started = itemsOf(ctx.chain, ctx.batch).find(
     (e) => e.type === "wait_started" && e.data.wait_id === waitId,
   );
@@ -275,7 +284,7 @@ export function finishWait(
     type: "wait_finished",
     data: { wait_id: waitId, ...done },
   });
-  const waited = {
+  const waited: Wire<Waited> = {
     status: "waited",
     ...done,
     finished: finished.map((r) => publicResult(r, ctx.read)),

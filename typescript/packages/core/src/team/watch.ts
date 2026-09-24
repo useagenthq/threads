@@ -5,11 +5,13 @@ import {
   callMailId,
   decide,
   isRefusal,
+  type Refused,
   recorded,
 } from "./call";
-import { finishWait, publicResult } from "./close";
+import { finishWait, publicResult, type Waiting } from "./close";
 import { TEAM_CONSTANTS } from "./constants";
 import { parkCall } from "./park";
+import type { MonitorResult, Waited, Wire } from "./results";
 import { type MemberRow, refOf, settledOf } from "./rows";
 
 // The model tools wait and monitor (spec/schema/README.md, "Teams", Waits and monitors; design
@@ -46,7 +48,7 @@ export function wait(
   ctx: CallContext,
   args: { readonly members: readonly string[] },
   timeoutMs: number = TEAM_CONSTANTS.askWaitDefaultMs,
-): unknown {
+): Wire<Waited> | Waiting | Refused {
   const caller = callerOf(ctx);
   if (caller === undefined) throw new Error("a team tool call outside a team");
   const waitId = callMailId(ctx);
@@ -57,7 +59,7 @@ export function wait(
       l.event.data.wait_id === waitId,
   );
   if (again) {
-    parkCall(ctx, caller, { kind: "wait", id: waitId });
+    parkCall(ctx, caller);
     return { status: "waiting", wait_id: waitId };
   }
   const rows: MemberRow[] = [];
@@ -85,7 +87,7 @@ export function wait(
     observe(ctx, `${ctx.call.branch_id}:${started}:${row.name}`, row);
   if (settled.length === rows.length)
     return finishWait(closing(ctx), waitId, { deadline: false });
-  parkCall(ctx, caller, { kind: "wait", id: waitId });
+  parkCall(ctx, caller);
   return { status: "waiting", wait_id: waitId };
 }
 
@@ -105,7 +107,7 @@ function closing(ctx: CallContext): Parameters<typeof finishWait>[0] {
 export function monitor(
   ctx: CallContext,
   args: { readonly member: string },
-): unknown {
+): Wire<MonitorResult> | Refused {
   const caller = callerOf(ctx);
   if (caller === undefined) throw new Error("a team tool call outside a team");
   decide(ctx, "monitor", args.member, true);
@@ -120,11 +122,14 @@ export function monitor(
     data: { member },
   });
   if (row.state !== "ended")
-    return recorded(ctx, { member, status: "monitoring" });
+    return recorded(ctx, {
+      member,
+      status: "monitoring",
+    } satisfies Wire<MonitorResult>);
   observe(ctx, `${ctx.call.branch_id}:${set}:${row.name}`, row);
   const { result } = settledOf(ctx.db, row);
   return recorded(ctx, {
     result: publicResult(result, ctx.read),
     status: "ended",
-  });
+  } satisfies Wire<MonitorResult>);
 }

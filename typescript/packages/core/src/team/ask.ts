@@ -6,6 +6,7 @@ import {
   callerOf,
   callMailId,
   causalOf,
+  type Refused,
   recorded,
   refusal,
 } from "./call";
@@ -13,6 +14,7 @@ import { TEAM_CONSTANTS } from "./constants";
 import { bodyOf, sent } from "./mail";
 import { deliverable, type TeamLimits } from "./ops";
 import { parkCall } from "./park";
+import type { ReplyResult, Wire } from "./results";
 import { askRow, type MemberRow } from "./rows";
 
 // The model tools ask and reply (spec/schema/README.md, "Teams"; design §4.8 open and §4.9), each
@@ -55,7 +57,7 @@ export function ask(
   ctx: CallContext,
   args: { readonly to: string; readonly question: string },
   plan: AskPlan,
-): unknown {
+): Opened | Refused {
   const caller = callerOf(ctx);
   if (caller === undefined) throw new Error("a team tool call outside a team");
   const askId = callMailId(ctx);
@@ -80,7 +82,7 @@ export function ask(
       body: bodyOf(args.question, ctx.put),
     }),
   );
-  parkCall(ctx, caller, { kind: "ask", id: askId });
+  parkCall(ctx, caller);
   return { status: "open", ask_id: askId, deadline } satisfies Opened;
 }
 
@@ -89,9 +91,14 @@ function reopened(
   caller: Caller,
   opened: MailEnvelope,
 ): Opened {
-  const askId = callMailId(ctx);
-  parkCall(ctx, caller, { kind: "ask", id: askId });
-  return { status: "open", ask_id: askId, deadline: opened.deadline ?? 0 };
+  if (opened.deadline === undefined)
+    throw new Error("an ask envelope always has a deadline");
+  parkCall(ctx, caller);
+  return {
+    status: "open",
+    ask_id: callMailId(ctx),
+    deadline: opened.deadline,
+  };
 }
 
 /**
@@ -101,7 +108,7 @@ function reopened(
 export function reply(
   ctx: CallContext,
   args: { readonly ask_id: string; readonly text: string },
-): unknown {
+): Wire<ReplyResult> | Refused {
   const caller = callerOf(ctx);
   if (caller === undefined) throw new Error("a team tool call outside a team");
   const events = eventsOf(ctx);
@@ -140,5 +147,5 @@ export function reply(
       body: bodyOf(args.text, ctx.put),
     }),
   );
-  return recorded(ctx, { id, status: "sent" });
+  return recorded(ctx, { id, status: "sent" } satisfies Wire<ReplyResult>);
 }
