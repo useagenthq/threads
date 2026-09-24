@@ -147,10 +147,21 @@ def test_a_second_tab_repeating_an_approval_gets_the_first_tabs_stream() -> None
             tab_a = await post(client, AI_SDK, "alice", chat("c", user("m1", "Send x"), asked))
             tab_b = await post(client, AI_SDK, "alice", chat("c", user("m1", "Send x"), asked))
             assert tab_b.status_code == HTTPStatus.OK
-            assert frames(tab_b) == frames(tab_a)
+            # Tab A may have seen the text live (frames without ids); the content is the same.
+            assert _content(tab_b) == _content(tab_a)
+            assert _content(tab_b) == ("Sent it.", ["sent"])
+            assert frames(tab_b)[-1][1] == "[DONE]"
             assert sent == ["x"]
 
     run(main)
+
+
+def _content(response: httpx.Response) -> tuple[str, list[str]]:
+    """A stream's text and its tool outputs, however it was split."""
+    data = [d for _, d in frames(response) if isinstance(d, dict)]
+    text = "".join(str(d["delta"]) for d in data if d.get("type") == "text-delta")
+    outputs = [str(d["output"]) for d in data if d.get("type") == "tool-output-available"]
+    return text, outputs
 
 
 def test_the_live_hub_never_crosses_tenants() -> None:
