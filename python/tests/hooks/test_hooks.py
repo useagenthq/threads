@@ -22,6 +22,7 @@ from threads.hooks.types import (
     ToolGate,
 )
 from threads.log import (
+    HookDecisionEvent,
     ModelResponseData,
     ToolCallData,
     ToolResultData,
@@ -205,7 +206,10 @@ def test_after_model_retries_are_capped_then_denied() -> None:
     result, events = asyncio.run(run({"after_model": retry}, replies))
     assert isinstance(result, Failed)
     assert kinds(events).count("model_request") == MAX_RETRIES + 1
-    assert decisions(events)[-1] == ("after_model", "retry")
+    # Past the cap the answer is recorded as a deny, as TypeScript records it.
+    assert decisions(events)[-1] == ("after_model", "deny")
+    last = [e for e in events if isinstance(e, HookDecisionEvent)][-1]
+    assert last.data.reason == "retry limit reached: again"
 
 
 def test_each_call_is_recorded_with_its_before_tool_decision_before_the_next() -> None:

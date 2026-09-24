@@ -163,17 +163,24 @@ async def after_model(rt: Runtime) -> Gated:
         until=lambda r: verdict(r) != "proceed",
     )
     ids = {"request_event_id": request}
+    last = ran[-1] if ran else None
+    # Retries are capped per turn, counted from the log so recovery can't reset them; past the
+    # cap the retry is recorded as the deny it stands for, as TypeScript records it.
+    capped = last is not None and verdict(last) == "retry" and _retries(turn) >= MAX_RETRIES
     drafts = [
-        decision_draft("after_model", r, verdict(r), said(r, "reason") or said(r, "text"), **ids)
+        decision_draft(
+            "after_model",
+            r,
+            "deny" if capped and r is last else verdict(r),
+            _reason(r, capped=capped and r is last),
+            **ids,
+        )
         for r in ran
     ]
-    last = ran[-1] if ran else None
     if last is None or verdict(last) == "proceed":
         return await append(rt, drafts)
-    # Retries are capped per turn, counted from the log so recovery can't reset them.
-    kind = verdict(last)
-    denied = kind not in ("guide", "retry") or (kind == "retry" and _retries(turn) >= MAX_RETRIES)
-    why = said(last, "text") or said(last, "reason") or ""
+    denied = capped or verdict(last) not in ("guide", "retry")
+    why = _reason(last, capped=capped) or ""
     shown = (
         f"denied: {last.failure or why}"
         if denied
@@ -190,6 +197,12 @@ async def after_model(rt: Runtime) -> Gated:
         draft("turn_completed", {"reason": "error"}) if denied else _instruction("after_model", why)
     )
     return await append(rt, drafts)
+
+
+def _reason(ran: Ran[object], *, capped: bool) -> str | None:
+    """What a decision records: its reason (or guide text), prefixed once past the retry cap."""
+    why = said(ran, "reason") or said(ran, "text")
+    return f"retry limit reached: {why or ''}" if capped else why
 
 
 def _retries(turn: Sequence[Event]) -> int:
