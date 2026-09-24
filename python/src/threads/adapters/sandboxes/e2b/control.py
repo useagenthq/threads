@@ -16,12 +16,16 @@ from e2b.api.client.api.sandboxes import (
     post_v2_sandboxes,
 )
 from e2b.api.client.models import NewSandboxV2, SandboxState
-from e2b.api.client.types import Response
+from e2b.api.client.types import UNSET, Response, Unset
 
 from threads.adapters.sandboxes.e2b import wire
 
 KEY = "threads_operation_key"
 """The sandbox metadata entry that names the operation that created it."""
+PAGE = 100
+"""The listing's page size (E2B's maximum)."""
+MAX_PAGES = 100
+"""Pages one lookup follows before it gives up: an answer, never a false absence."""
 
 
 class MalformedError(Exception):
@@ -58,17 +62,27 @@ class Control:
         return wire.Sandbox.model_validate_json(_expect(res, HTTPStatus.CREATED))
 
     async def find(self, key: str) -> list[str]:
-        """The live or paused sandboxes created under `key`."""
+        """The live or paused sandboxes created under `key`, from every page of the listing
+        (`X-Next-Token`). A page that fails raises: a partial listing never reads as absence."""
         metadata = urllib.parse.urlencode({urllib.parse.quote(KEY): urllib.parse.quote(key)})
-        res = await _sent(
-            get_v2_sandboxes.asyncio_detailed(
-                client=self.client,
-                metadata=metadata,
-                state=[SandboxState.RUNNING, SandboxState.PAUSED],
+        found: list[str] = []
+        token: str | Unset = UNSET
+        for _ in range(MAX_PAGES):
+            res = await _sent(
+                get_v2_sandboxes.asyncio_detailed(
+                    client=self.client,
+                    metadata=metadata,
+                    state=[SandboxState.RUNNING, SandboxState.PAUSED],
+                    next_token=token,
+                    limit=PAGE,
+                )
             )
-        )
-        listed = wire.LISTED.validate_json(_expect(res, HTTPStatus.OK))
-        return [s.sandbox_id for s in listed if s.metadata and s.metadata.get(KEY) == key]
+            listed = wire.LISTED.validate_json(_expect(res, HTTPStatus.OK))
+            found += [s.sandbox_id for s in listed if s.metadata and s.metadata.get(KEY) == key]
+            token = res.headers.get("x-next-token") or UNSET
+            if isinstance(token, Unset):
+                return found
+        raise ApiError(HTTPStatus.OK, b"the sandbox listing did not end within its page limit")
 
     async def describe(self, sandbox_id: str) -> wire.Sandbox | None:
         """None: no such sandbox."""

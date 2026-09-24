@@ -1,0 +1,1656 @@
+{
+  "_doc": "E2B's wire, shared by both E2B adapters (spec/tools/fixtures/e2b_wire.py cites the sources). Each case runs one call against the replayed exchanges in order: the adapter must send each request exactly (method, URL, the listed headers, the body as JSON, one Connect envelope or one multipart file part), must send nothing more, and must end with `expect`: `ok` and its value, or `error` and the sandbox error code. No envd request may carry `api_key`. `envd_urls` is how an adapter reaches a sandbox's envd.",
+  "api_key": "e2b_vector_key_canary",
+  "domain": "e2b.test",
+  "envd_sandbox": {
+    "templateID": "base",
+    "sandboxID": "sbx_vector_1",
+    "clientID": "client",
+    "envdVersion": "0.5.8",
+    "envdAccessToken": "envd-token-vector",
+    "domain": "e2b.test",
+    "startedAt": "2026-09-23T00:00:00Z",
+    "endAt": "2026-09-23T01:00:00Z",
+    "cpuCount": 2,
+    "memoryMB": 512,
+    "diskSizeMB": 1024,
+    "state": "running",
+    "metadata": {
+      "threads_operation_key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+    },
+    "futureField": {
+      "added": "later"
+    }
+  },
+  "envd_urls": [
+    {
+      "sandbox_id": "sbx_vector_1",
+      "domain": "e2b.test",
+      "url": "https://49983-sbx_vector_1.e2b.test"
+    },
+    {
+      "sandbox_id": "sbx_vector_1",
+      "domain": "e2b.app",
+      "url": "https://sandbox.e2b.app"
+    }
+  ],
+  "max_message_bytes": 4194304,
+  "cases": [
+    {
+      "name": "create",
+      "call": {
+        "op": "create",
+        "template": "base",
+        "key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+        "timeout_s": 600,
+        "internet": false
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://api.e2b.test/v2/sandboxes",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary",
+              "content-type": "application/json"
+            },
+            "json": {
+              "templateID": "base",
+              "timeout": 600,
+              "autoPause": false,
+              "autoPauseMemory": true,
+              "allow_internet_access": false,
+              "metadata": {
+                "threads_operation_key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+              },
+              "envVars": {}
+            }
+          },
+          "response": {
+            "status": 201,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"templateID\":\"base\",\"sandboxID\":\"sbx_vector_1\",\"clientID\":\"client\",\"envdVersion\":\"0.5.8\",\"envdAccessToken\":\"envd-token-vector\",\"domain\":\"e2b.test\",\"startedAt\":\"2026-09-23T00:00:00Z\",\"endAt\":\"2026-09-23T01:00:00Z\",\"cpuCount\":2,\"memoryMB\":512,\"diskSizeMB\":1024,\"state\":\"running\",\"metadata\":{\"threads_operation_key\":\"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b\"},\"futureField\":{\"added\":\"later\"}}"
+          }
+        }
+      ],
+      "expect": {
+        "ok": {
+          "sandbox_id": "sbx_vector_1",
+          "envd_access_token": "envd-token-vector",
+          "domain": "e2b.test"
+        }
+      }
+    },
+    {
+      "name": "create_unknown_template",
+      "call": {
+        "op": "create",
+        "template": "base",
+        "key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+        "timeout_s": 600,
+        "internet": false
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://api.e2b.test/v2/sandboxes",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary",
+              "content-type": "application/json"
+            },
+            "json": {
+              "templateID": "base",
+              "timeout": 600,
+              "autoPause": false,
+              "autoPauseMemory": true,
+              "allow_internet_access": false,
+              "metadata": {
+                "threads_operation_key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+              },
+              "envVars": {}
+            }
+          },
+          "response": {
+            "status": 404,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":404,\"message\":\"no template\"}"
+          }
+        }
+      ],
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "name": "create_unexpected_status",
+      "call": {
+        "op": "create",
+        "template": "base",
+        "key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+        "timeout_s": 600,
+        "internet": false
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://api.e2b.test/v2/sandboxes",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary",
+              "content-type": "application/json"
+            },
+            "json": {
+              "templateID": "base",
+              "timeout": 600,
+              "autoPause": false,
+              "autoPauseMemory": true,
+              "allow_internet_access": false,
+              "metadata": {
+                "threads_operation_key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+              },
+              "envVars": {}
+            }
+          },
+          "response": {
+            "status": 500,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":500,\"message\":\"boom\"}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    },
+    {
+      "name": "create_malformed_body",
+      "call": {
+        "op": "create",
+        "template": "base",
+        "key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+        "timeout_s": 600,
+        "internet": false
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://api.e2b.test/v2/sandboxes",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary",
+              "content-type": "application/json"
+            },
+            "json": {
+              "templateID": "base",
+              "timeout": 600,
+              "autoPause": false,
+              "autoPauseMemory": true,
+              "allow_internet_access": false,
+              "metadata": {
+                "threads_operation_key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+              },
+              "envVars": {}
+            }
+          },
+          "response": {
+            "status": 201,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"unexpected\":true}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    },
+    {
+      "name": "create_wrong_type",
+      "call": {
+        "op": "create",
+        "template": "base",
+        "key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+        "timeout_s": 600,
+        "internet": false
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://api.e2b.test/v2/sandboxes",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary",
+              "content-type": "application/json"
+            },
+            "json": {
+              "templateID": "base",
+              "timeout": 600,
+              "autoPause": false,
+              "autoPauseMemory": true,
+              "allow_internet_access": false,
+              "metadata": {
+                "threads_operation_key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+              },
+              "envVars": {}
+            }
+          },
+          "response": {
+            "status": 201,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"templateID\":\"base\",\"sandboxID\":5,\"clientID\":\"client\",\"envdVersion\":\"0.5.8\",\"envdAccessToken\":\"envd-token-vector\",\"domain\":\"e2b.test\",\"startedAt\":\"2026-09-23T00:00:00Z\",\"endAt\":\"2026-09-23T01:00:00Z\",\"cpuCount\":2,\"memoryMB\":512,\"diskSizeMB\":1024,\"state\":\"running\",\"metadata\":{\"threads_operation_key\":\"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b\"},\"futureField\":{\"added\":\"later\"}}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    },
+    {
+      "name": "create_redirect_not_followed",
+      "call": {
+        "op": "create",
+        "template": "base",
+        "key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+        "timeout_s": 600,
+        "internet": false
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://api.e2b.test/v2/sandboxes",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary",
+              "content-type": "application/json"
+            },
+            "json": {
+              "templateID": "base",
+              "timeout": 600,
+              "autoPause": false,
+              "autoPauseMemory": true,
+              "allow_internet_access": false,
+              "metadata": {
+                "threads_operation_key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+              },
+              "envVars": {}
+            }
+          },
+          "response": {
+            "status": 307,
+            "headers": {
+              "location": "https://api.e2b.test/elsewhere"
+            },
+            "text": ""
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    },
+    {
+      "name": "find",
+      "call": {
+        "op": "find",
+        "key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://api.e2b.test/v2/sandboxes?metadata=threads_operation_key%3D0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b&state=running%2Cpaused&limit=100",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "[{\"templateID\":\"base\",\"sandboxID\":\"sbx_vector_1\",\"clientID\":\"client\",\"envdVersion\":\"0.5.8\",\"envdAccessToken\":\"envd-token-vector\",\"domain\":\"e2b.test\",\"startedAt\":\"2026-09-23T00:00:00Z\",\"endAt\":\"2026-09-23T01:00:00Z\",\"cpuCount\":2,\"memoryMB\":512,\"diskSizeMB\":1024,\"state\":\"running\",\"metadata\":{\"threads_operation_key\":\"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b\"},\"futureField\":{\"added\":\"later\"}}]"
+          }
+        }
+      ],
+      "expect": {
+        "ok": [
+          "sbx_vector_1"
+        ]
+      }
+    },
+    {
+      "name": "find_follows_next_token",
+      "call": {
+        "op": "find",
+        "key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://api.e2b.test/v2/sandboxes?metadata=threads_operation_key%3D0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b&state=running%2Cpaused&limit=100",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "x-next-token": "page-2"
+            },
+            "text": "[{\"templateID\":\"base\",\"sandboxID\":\"sbx_other\",\"clientID\":\"client\",\"envdVersion\":\"0.5.8\",\"envdAccessToken\":\"envd-token-vector\",\"domain\":\"e2b.test\",\"startedAt\":\"2026-09-23T00:00:00Z\",\"endAt\":\"2026-09-23T01:00:00Z\",\"cpuCount\":2,\"memoryMB\":512,\"diskSizeMB\":1024,\"state\":\"running\",\"metadata\":{\"threads_operation_key\":\"another-key\"},\"futureField\":{\"added\":\"later\"}}]"
+          }
+        },
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://api.e2b.test/v2/sandboxes?metadata=threads_operation_key%3D0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b&state=running%2Cpaused&nextToken=page-2&limit=100",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "[{\"templateID\":\"base\",\"sandboxID\":\"sbx_vector_1\",\"clientID\":\"client\",\"envdVersion\":\"0.5.8\",\"envdAccessToken\":\"envd-token-vector\",\"domain\":\"e2b.test\",\"startedAt\":\"2026-09-23T00:00:00Z\",\"endAt\":\"2026-09-23T01:00:00Z\",\"cpuCount\":2,\"memoryMB\":512,\"diskSizeMB\":1024,\"state\":\"running\",\"metadata\":{\"threads_operation_key\":\"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b\"},\"futureField\":{\"added\":\"later\"}}]"
+          }
+        }
+      ],
+      "expect": {
+        "ok": [
+          "sbx_vector_1"
+        ]
+      }
+    },
+    {
+      "name": "find_page_failure_is_not_absence",
+      "call": {
+        "op": "find",
+        "key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://api.e2b.test/v2/sandboxes?metadata=threads_operation_key%3D0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b&state=running%2Cpaused&limit=100",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json",
+              "x-next-token": "page-2"
+            },
+            "text": "[]"
+          }
+        },
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://api.e2b.test/v2/sandboxes?metadata=threads_operation_key%3D0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b&state=running%2Cpaused&nextToken=page-2&limit=100",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary"
+            }
+          },
+          "response": {
+            "status": 500,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":500,\"message\":\"boom\"}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    },
+    {
+      "name": "find_none",
+      "call": {
+        "op": "find",
+        "key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://api.e2b.test/v2/sandboxes?metadata=threads_operation_key%3D0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b&state=running%2Cpaused&limit=100",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "[{\"templateID\":\"base\",\"sandboxID\":\"sbx_other\",\"clientID\":\"client\",\"envdVersion\":\"0.5.8\",\"envdAccessToken\":\"envd-token-vector\",\"domain\":\"e2b.test\",\"startedAt\":\"2026-09-23T00:00:00Z\",\"endAt\":\"2026-09-23T01:00:00Z\",\"cpuCount\":2,\"memoryMB\":512,\"diskSizeMB\":1024,\"state\":\"running\",\"metadata\":{\"threads_operation_key\":\"another-key\"},\"futureField\":{\"added\":\"later\"}}]"
+          }
+        }
+      ],
+      "expect": {
+        "ok": []
+      }
+    },
+    {
+      "name": "find_malformed_body",
+      "call": {
+        "op": "find",
+        "key": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://api.e2b.test/v2/sandboxes?metadata=threads_operation_key%3D0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b&state=running%2Cpaused&limit=100",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"not\":\"a list\"}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    },
+    {
+      "name": "describe",
+      "call": {
+        "op": "describe",
+        "id": "sbx_vector_1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://api.e2b.test/sandboxes/sbx_vector_1",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"templateID\":\"base\",\"sandboxID\":\"sbx_vector_1\",\"clientID\":\"client\",\"envdVersion\":\"0.5.8\",\"envdAccessToken\":\"envd-token-vector\",\"domain\":\"e2b.test\",\"startedAt\":\"2026-09-23T00:00:00Z\",\"endAt\":\"2026-09-23T01:00:00Z\",\"cpuCount\":2,\"memoryMB\":512,\"diskSizeMB\":1024,\"state\":\"running\",\"metadata\":{\"threads_operation_key\":\"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b\"},\"futureField\":{\"added\":\"later\"}}"
+          }
+        }
+      ],
+      "expect": {
+        "ok": {
+          "sandbox_id": "sbx_vector_1",
+          "envd_access_token": "envd-token-vector",
+          "domain": "e2b.test"
+        }
+      }
+    },
+    {
+      "name": "describe_missing",
+      "call": {
+        "op": "describe",
+        "id": "sbx_vector_1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://api.e2b.test/sandboxes/sbx_vector_1",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary"
+            }
+          },
+          "response": {
+            "status": 404,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":404,\"message\":\"not found\"}"
+          }
+        }
+      ],
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "name": "describe_malformed_body",
+      "call": {
+        "op": "describe",
+        "id": "sbx_vector_1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://api.e2b.test/sandboxes/sbx_vector_1",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "[1]"
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    },
+    {
+      "name": "kill",
+      "call": {
+        "op": "kill",
+        "id": "sbx_vector_1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "DELETE",
+            "url": "https://api.e2b.test/sandboxes/sbx_vector_1",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary"
+            }
+          },
+          "response": {
+            "status": 204,
+            "headers": {},
+            "text": ""
+          }
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "kill_already_gone",
+      "call": {
+        "op": "kill",
+        "id": "sbx_vector_1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "DELETE",
+            "url": "https://api.e2b.test/sandboxes/sbx_vector_1",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary"
+            }
+          },
+          "response": {
+            "status": 404,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":404,\"message\":\"not found\"}"
+          }
+        }
+      ],
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "kill_unexpected_status",
+      "call": {
+        "op": "kill",
+        "id": "sbx_vector_1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "DELETE",
+            "url": "https://api.e2b.test/sandboxes/sbx_vector_1",
+            "headers": {
+              "x-api-key": "e2b_vector_key_canary"
+            }
+          },
+          "response": {
+            "status": 500,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":500,\"message\":\"boom\"}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    },
+    {
+      "name": "start",
+      "call": {
+        "op": "start",
+        "argv": [
+          "/bin/sh",
+          "-c",
+          "echo hi"
+        ],
+        "env": {},
+        "cwd": "/",
+        "tag": "pk-1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/Start",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "keepalive-ping-interval": "50",
+              "connect-protocol-version": "1",
+              "content-type": "application/connect+json"
+            },
+            "envelope": {
+              "process": {
+                "cmd": "/bin/sh",
+                "args": [
+                  "-c",
+                  "echo hi"
+                ],
+                "cwd": "/"
+              },
+              "tag": "pk-1"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/connect+json"
+            },
+            "hex": "000000001d7b226576656e74223a7b227374617274223a7b22706964223a377d7d7d00000000247b226576656e74223a7b2264617461223a7b227374646f7574223a2261476b4b227d7d7d000000001a7b226576656e74223a7b226b656570616c697665223a7b7d7d7d00000000287b226576656e74223a7b2264617461223a7b22737464657272223a226232397763773d3d227d7d7d00000000517b226576656e74223a7b22656e64223a7b2265786974436f6465223a332c22657869746564223a747275652c22737461747573223a2265786974207374617475732033222c226c61746572223a317d7d7d02000000027b7d"
+          }
+        }
+      ],
+      "expect": {
+        "ok": {
+          "stdout": "hi\n",
+          "stderr": "oops",
+          "exit": 3
+        }
+      }
+    },
+    {
+      "name": "start_with_env_and_no_tag",
+      "call": {
+        "op": "start",
+        "argv": [
+          "env"
+        ],
+        "env": {
+          "A": "1"
+        },
+        "cwd": "/workspace",
+        "tag": null
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/Start",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "keepalive-ping-interval": "50",
+              "connect-protocol-version": "1",
+              "content-type": "application/connect+json"
+            },
+            "envelope": {
+              "process": {
+                "cmd": "env",
+                "envs": {
+                  "A": "1"
+                },
+                "cwd": "/workspace"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/connect+json"
+            },
+            "hex": "000000001d7b226576656e74223a7b227374617274223a7b22706964223a377d7d7d000000003a7b226576656e74223a7b22656e64223a7b22657869746564223a747275652c22737461747573223a2265786974207374617475732030227d7d7d02000000027b7d"
+          }
+        }
+      ],
+      "expect": {
+        "ok": {
+          "stdout": "",
+          "stderr": "",
+          "exit": 0
+        }
+      }
+    },
+    {
+      "name": "start_output_before_start",
+      "call": {
+        "op": "start",
+        "argv": [
+          "/bin/sh",
+          "-c",
+          "echo hi"
+        ],
+        "env": {},
+        "cwd": "/",
+        "tag": "pk-1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/Start",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "keepalive-ping-interval": "50",
+              "connect-protocol-version": "1",
+              "content-type": "application/connect+json"
+            },
+            "envelope": {
+              "process": {
+                "cmd": "/bin/sh",
+                "args": [
+                  "-c",
+                  "echo hi"
+                ],
+                "cwd": "/"
+              },
+              "tag": "pk-1"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/connect+json"
+            },
+            "hex": "00000000247b226576656e74223a7b2264617461223a7b227374646f7574223a2261476b4b227d7d7d000000001d7b226576656e74223a7b227374617274223a7b22706964223a377d7d7d000000003a7b226576656e74223a7b22656e64223a7b22657869746564223a747275652c22737461747573223a2265786974207374617475732030227d7d7d02000000027b7d"
+          }
+        }
+      ],
+      "expect": {
+        "ok": {
+          "stdout": "hi\n",
+          "stderr": "",
+          "exit": 0
+        }
+      }
+    },
+    {
+      "name": "start_end_stream_error",
+      "call": {
+        "op": "start",
+        "argv": [
+          "/bin/sh",
+          "-c",
+          "echo hi"
+        ],
+        "env": {},
+        "cwd": "/",
+        "tag": "pk-1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/Start",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "keepalive-ping-interval": "50",
+              "connect-protocol-version": "1",
+              "content-type": "application/connect+json"
+            },
+            "envelope": {
+              "process": {
+                "cmd": "/bin/sh",
+                "args": [
+                  "-c",
+                  "echo hi"
+                ],
+                "cwd": "/"
+              },
+              "tag": "pk-1"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/connect+json"
+            },
+            "hex": "020000003b7b226572726f72223a7b22636f6465223a22756e617661696c61626c65222c226d657373616765223a22656e76642077656e742061776179227d7d"
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    },
+    {
+      "name": "start_error_after_start",
+      "call": {
+        "op": "start",
+        "argv": [
+          "/bin/sh",
+          "-c",
+          "echo hi"
+        ],
+        "env": {},
+        "cwd": "/",
+        "tag": "pk-1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/Start",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "keepalive-ping-interval": "50",
+              "connect-protocol-version": "1",
+              "content-type": "application/connect+json"
+            },
+            "envelope": {
+              "process": {
+                "cmd": "/bin/sh",
+                "args": [
+                  "-c",
+                  "echo hi"
+                ],
+                "cwd": "/"
+              },
+              "tag": "pk-1"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/connect+json"
+            },
+            "hex": "000000001d7b226576656e74223a7b227374617274223a7b22706964223a377d7d7d00000000247b226576656e74223a7b2264617461223a7b227374646f7574223a2261476b4b227d7d7d020000003b7b226572726f72223a7b22636f6465223a22756e617661696c61626c65222c226d657373616765223a22656e76642077656e742061776179227d7d"
+          }
+        }
+      ],
+      "expect": {
+        "ok": {
+          "stdout": "hi\n",
+          "stderr": "",
+          "exit_error": "unavailable"
+        }
+      }
+    },
+    {
+      "name": "start_stream_without_end",
+      "call": {
+        "op": "start",
+        "argv": [
+          "/bin/sh",
+          "-c",
+          "echo hi"
+        ],
+        "env": {},
+        "cwd": "/",
+        "tag": "pk-1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/Start",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "keepalive-ping-interval": "50",
+              "connect-protocol-version": "1",
+              "content-type": "application/connect+json"
+            },
+            "envelope": {
+              "process": {
+                "cmd": "/bin/sh",
+                "args": [
+                  "-c",
+                  "echo hi"
+                ],
+                "cwd": "/"
+              },
+              "tag": "pk-1"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/connect+json"
+            },
+            "hex": "000000001d7b226576656e74223a7b227374617274223a7b22706964223a377d7d7d00000000247b226576656e74223a7b2264617461223a7b227374646f7574223a2261476b4b227d7d7d02000000027b7d"
+          }
+        }
+      ],
+      "expect": {
+        "ok": {
+          "stdout": "hi\n",
+          "stderr": "",
+          "exit_error": "unavailable"
+        }
+      }
+    },
+    {
+      "name": "start_truncated_frame",
+      "call": {
+        "op": "start",
+        "argv": [
+          "/bin/sh",
+          "-c",
+          "echo hi"
+        ],
+        "env": {},
+        "cwd": "/",
+        "tag": "pk-1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/Start",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "keepalive-ping-interval": "50",
+              "connect-protocol-version": "1",
+              "content-type": "application/connect+json"
+            },
+            "envelope": {
+              "process": {
+                "cmd": "/bin/sh",
+                "args": [
+                  "-c",
+                  "echo hi"
+                ],
+                "cwd": "/"
+              },
+              "tag": "pk-1"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/connect+json"
+            },
+            "hex": "000000001d7b226576656e74223a7b227374617274223a7b22706964223a377d7d7d00000000247b226576656e74223a7b2264617461223a7b227374646f7574223a2261476b4b227d7d7d00000000217b226576656e74223a7b22656e64223a7b22657869746564223a74727565"
+          }
+        }
+      ],
+      "expect": {
+        "ok": {
+          "stdout": "hi\n",
+          "stderr": "",
+          "exit_error": "unavailable"
+        }
+      }
+    },
+    {
+      "name": "start_compressed_flag",
+      "call": {
+        "op": "start",
+        "argv": [
+          "/bin/sh",
+          "-c",
+          "echo hi"
+        ],
+        "env": {},
+        "cwd": "/",
+        "tag": "pk-1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/Start",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "keepalive-ping-interval": "50",
+              "connect-protocol-version": "1",
+              "content-type": "application/connect+json"
+            },
+            "envelope": {
+              "process": {
+                "cmd": "/bin/sh",
+                "args": [
+                  "-c",
+                  "echo hi"
+                ],
+                "cwd": "/"
+              },
+              "tag": "pk-1"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/connect+json"
+            },
+            "hex": "010000001d7b226576656e74223a7b227374617274223a7b22706964223a377d7d7d"
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    },
+    {
+      "name": "start_oversize_message",
+      "call": {
+        "op": "start",
+        "argv": [
+          "/bin/sh",
+          "-c",
+          "echo hi"
+        ],
+        "env": {},
+        "cwd": "/",
+        "tag": "pk-1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/Start",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "keepalive-ping-interval": "50",
+              "connect-protocol-version": "1",
+              "content-type": "application/connect+json"
+            },
+            "envelope": {
+              "process": {
+                "cmd": "/bin/sh",
+                "args": [
+                  "-c",
+                  "echo hi"
+                ],
+                "cwd": "/"
+              },
+              "tag": "pk-1"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/connect+json"
+            },
+            "hex": "0000400001"
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    },
+    {
+      "name": "start_two_outputs_in_one_event",
+      "call": {
+        "op": "start",
+        "argv": [
+          "/bin/sh",
+          "-c",
+          "echo hi"
+        ],
+        "env": {},
+        "cwd": "/",
+        "tag": "pk-1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/Start",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "keepalive-ping-interval": "50",
+              "connect-protocol-version": "1",
+              "content-type": "application/connect+json"
+            },
+            "envelope": {
+              "process": {
+                "cmd": "/bin/sh",
+                "args": [
+                  "-c",
+                  "echo hi"
+                ],
+                "cwd": "/"
+              },
+              "tag": "pk-1"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/connect+json"
+            },
+            "hex": "000000001d7b226576656e74223a7b227374617274223a7b22706964223a377d7d7d00000000347b226576656e74223a7b2264617461223a7b227374646f7574223a2261476b4b222c22737464657272223a2261476b4b227d7d7d000000003a7b226576656e74223a7b22656e64223a7b22657869746564223a747275652c22737461747573223a2265786974207374617475732030227d7d7d02000000027b7d"
+          }
+        }
+      ],
+      "expect": {
+        "ok": {
+          "stdout": "",
+          "stderr": "",
+          "exit_error": "unavailable"
+        }
+      }
+    },
+    {
+      "name": "start_http_error",
+      "call": {
+        "op": "start",
+        "argv": [
+          "/bin/sh",
+          "-c",
+          "echo hi"
+        ],
+        "env": {},
+        "cwd": "/",
+        "tag": "pk-1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/Start",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "keepalive-ping-interval": "50",
+              "connect-protocol-version": "1",
+              "content-type": "application/connect+json"
+            },
+            "envelope": {
+              "process": {
+                "cmd": "/bin/sh",
+                "args": [
+                  "-c",
+                  "echo hi"
+                ],
+                "cwd": "/"
+              },
+              "tag": "pk-1"
+            }
+          },
+          "response": {
+            "status": 503,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":\"unavailable\",\"message\":\"no envd\"}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    },
+    {
+      "name": "signal",
+      "call": {
+        "op": "signal",
+        "tag": "pk-1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/SendSignal",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "connect-protocol-version": "1",
+              "content-type": "application/json"
+            },
+            "json": {
+              "process": {
+                "tag": "pk-1"
+              },
+              "signal": "SIGNAL_SIGKILL"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{}"
+          }
+        }
+      ],
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "signal_no_such_process",
+      "call": {
+        "op": "signal",
+        "tag": "pk-1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/SendSignal",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "connect-protocol-version": "1",
+              "content-type": "application/json"
+            },
+            "json": {
+              "process": {
+                "tag": "pk-1"
+              },
+              "signal": "SIGNAL_SIGKILL"
+            }
+          },
+          "response": {
+            "status": 404,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":\"not_found\",\"message\":\"no process\"}"
+          }
+        }
+      ],
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "signal_error",
+      "call": {
+        "op": "signal",
+        "tag": "pk-1"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/process.Process/SendSignal",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector",
+              "connect-protocol-version": "1",
+              "content-type": "application/json"
+            },
+            "json": {
+              "process": {
+                "tag": "pk-1"
+              },
+              "signal": "SIGNAL_SIGKILL"
+            }
+          },
+          "response": {
+            "status": 500,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":\"internal\",\"message\":\"boom\"}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    },
+    {
+      "name": "upload",
+      "call": {
+        "op": "upload",
+        "path": "/workspace/a b.txt",
+        "text": "abc"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/files?path=%2Fworkspace%2Fa+b.txt&username=root",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector"
+            },
+            "multipart": {
+              "name": "file",
+              "filename": "/workspace/a b.txt",
+              "text": "abc"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "[{\"name\":\"a b.txt\",\"type\":\"file\",\"path\":\"/workspace/a b.txt\"}]"
+          }
+        }
+      ],
+      "expect": {
+        "ok": null
+      }
+    },
+    {
+      "name": "upload_too_large",
+      "call": {
+        "op": "upload",
+        "path": "/workspace/a b.txt",
+        "text": "abc"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "POST",
+            "url": "https://49983-sbx_vector_1.e2b.test/files?path=%2Fworkspace%2Fa+b.txt&username=root",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector"
+            },
+            "multipart": {
+              "name": "file",
+              "filename": "/workspace/a b.txt",
+              "text": "abc"
+            }
+          },
+          "response": {
+            "status": 507,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":507,\"message\":\"no space\"}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "too_large"
+      }
+    },
+    {
+      "name": "download",
+      "call": {
+        "op": "download",
+        "path": "/workspace/a b.txt"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://49983-sbx_vector_1.e2b.test/files?path=%2Fworkspace%2Fa+b.txt&username=root",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/octet-stream"
+            },
+            "text": "abc"
+          }
+        }
+      ],
+      "expect": {
+        "ok": "abc"
+      }
+    },
+    {
+      "name": "download_404_not_found",
+      "call": {
+        "op": "download",
+        "path": "/workspace/a b.txt"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://49983-sbx_vector_1.e2b.test/files?path=%2Fworkspace%2Fa+b.txt&username=root",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector"
+            }
+          },
+          "response": {
+            "status": 404,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":404,\"message\":\"no such file\"}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "not_found"
+      }
+    },
+    {
+      "name": "download_400_is_directory",
+      "call": {
+        "op": "download",
+        "path": "/workspace/a b.txt"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://49983-sbx_vector_1.e2b.test/files?path=%2Fworkspace%2Fa+b.txt&username=root",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector"
+            }
+          },
+          "response": {
+            "status": 400,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":400,\"message\":\"path is a directory\"}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "is_directory"
+      }
+    },
+    {
+      "name": "download_400_invalid_path",
+      "call": {
+        "op": "download",
+        "path": "/workspace/a b.txt"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://49983-sbx_vector_1.e2b.test/files?path=%2Fworkspace%2Fa+b.txt&username=root",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector"
+            }
+          },
+          "response": {
+            "status": 400,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":400,\"message\":\"bad path\"}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "invalid_path"
+      }
+    },
+    {
+      "name": "download_401_permission_denied",
+      "call": {
+        "op": "download",
+        "path": "/workspace/a b.txt"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://49983-sbx_vector_1.e2b.test/files?path=%2Fworkspace%2Fa+b.txt&username=root",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector"
+            }
+          },
+          "response": {
+            "status": 401,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":401,\"message\":\"denied\"}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "permission_denied"
+      }
+    },
+    {
+      "name": "download_413_too_large",
+      "call": {
+        "op": "download",
+        "path": "/workspace/a b.txt"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://49983-sbx_vector_1.e2b.test/files?path=%2Fworkspace%2Fa+b.txt&username=root",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector"
+            }
+          },
+          "response": {
+            "status": 413,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":413,\"message\":\"too big\"}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "too_large"
+      }
+    },
+    {
+      "name": "download_502_unavailable",
+      "call": {
+        "op": "download",
+        "path": "/workspace/a b.txt"
+      },
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "https://49983-sbx_vector_1.e2b.test/files?path=%2Fworkspace%2Fa+b.txt&username=root",
+            "headers": {
+              "e2b-sandbox-id": "sbx_vector_1",
+              "e2b-sandbox-port": "49983",
+              "authorization": "Basic cm9vdDo=",
+              "x-access-token": "envd-token-vector"
+            }
+          },
+          "response": {
+            "status": 502,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "text": "{\"code\":502,\"message\":\"gone\"}"
+          }
+        }
+      ],
+      "expect": {
+        "error": "unavailable"
+      }
+    }
+  ]
+}

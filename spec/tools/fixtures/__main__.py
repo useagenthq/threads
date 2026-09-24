@@ -24,6 +24,7 @@ from . import (
     cost_usage,
     coverage,
     dynamic,
+    e2b_wire,
     effects,
     eval_vectors,
     evals,
@@ -266,7 +267,7 @@ def main() -> int:
             problems += handoff_transcripts.check() + questions.check()
             problems += agent_pins.check()
             problems += anthropic_requests.check() + dynamic.check()
-            problems += tool_search_vectors.check()
+            problems += tool_search_vectors.check() + e2b_wire.check()
             problems += ui_vectors.check()
         for p in problems:
             print(f"coverage.json: {p}")
@@ -290,6 +291,7 @@ def main() -> int:
         anthropic_requests.write()
         dynamic.write()
         tool_search_vectors.write()
+        e2b_wire.write()
         questions.write()
         ui_vectors.write()
         otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
