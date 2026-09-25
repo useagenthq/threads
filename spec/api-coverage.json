@@ -1031,7 +1031,7 @@
   },
   "modal": {
     "ts": [
-      "packages/modal/test/modal.test.ts > modal() is refused at setup: its command router can't be fenced"
+      "packages/modal/test/modal.test.ts > modal() is refused at setup with a hint to use the Python adapter"
     ],
     "py": [
       "tests/adapters/sandboxes/test_factory_defaults.py::test_modal_defaults"
@@ -1049,7 +1049,7 @@
   },
   "modal!transport_fence_unsupported": {
     "ts": [
-      "packages/modal/test/modal.test.ts > modal() is refused at setup: its command router can't be fenced"
+      "packages/modal/test/modal.test.ts > modal() is refused at setup with a hint to use the Python adapter"
     ]
   },
   "modal.allow_internet=default": {

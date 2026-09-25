@@ -14,6 +14,6 @@ import { ConfigError, type ProviderSandbox } from "@threads/core/adapter";
 export function modal(): ProviderSandbox {
   throw new ConfigError(
     "transport_fence_unsupported",
-    "modal: the Modal SDK's command router transport (exec, stdio, files) can't be fenced",
+    "modal: not available in TypeScript: Modal's JS SDK sends exec and file operations over a channel threads can't fence; use the Python adapter (`from threads.modal import modal`)",
   );
 }
