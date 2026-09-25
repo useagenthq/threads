@@ -4,6 +4,7 @@ untrusted reference, and the hook set is part of the pinned config."""
 
 import asyncio
 import json
+import weakref
 from collections.abc import Sequence
 
 import pytest
@@ -251,3 +252,9 @@ def _parts(response: JsonValue) -> list[JsonValue]:
     parts = _response(response)["content"]
     assert isinstance(parts, list)
     return parts
+
+
+def test_an_extension_can_be_held_weakly() -> None:
+    # The setup memory holds extensions weakly; CPython 3.12.0-3.12.3 drop a slotted generic
+    # dataclass's weakref slot (gh-118033), which failed every run's setup there.
+    weakref.ref(extension(name="held"))

@@ -40,7 +40,9 @@ class ExtensionOptions[D](TypedDict, total=False):
     hook_timeout_ms: int
 
 
-@dataclass(frozen=True, slots=True, weakref_slot=True)
+# No slots: the setup memory holds an extension weakly, and before 3.12.4 a slotted generic
+# dataclass drops its weakref slot (CPython gh-118033), so every run failed setup.
+@dataclass(frozen=True)
 class Extension[D]:
     """spec/api.json `Extension`. Build it with `extension()`. D is the deps its hooks and tools
     read: the agent's Deps, None when they read none."""
