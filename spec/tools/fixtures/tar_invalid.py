@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from .jcs import JsonValue, Obj
 
 A = file("a", b"alpha")
+TOO_LONG = "d/" * 2048 + "x"  # 4097 bytes
+TOO_LONG_UTF8 = "\u00e9" * 2049
 B = file("b", b"bravo")
 
 
@@ -80,6 +82,10 @@ def _cases() -> tuple[Case, ...]:
         ("root-file", "the root as a regular file", archive((file("./", b""),)), None,
          "bad_path", "./"),
         ("not-utf8", "a name that isn't UTF-8", _not_utf8(), None, "bad_path", None),
+        ("path-too-long", "a pax path one byte over the 4096-byte cap",
+         archive((file(TOO_LONG, b"x"),)), None, "bad_path", TOO_LONG),
+        ("path-too-long-utf8", "4098 UTF-8 bytes in 2049 characters: the cap counts bytes",
+         archive((file(TOO_LONG_UTF8, b"x"),)), None, "bad_path", TOO_LONG_UTF8),
         ("duplicate", "the same path twice", archive((A, A)), None, "duplicate", "a"),
         ("duplicate-dot-slash", "./a and a normalize to one path",
          archive((file("./a", b"1"), file("a", b"2"))), None, "duplicate", "a"),

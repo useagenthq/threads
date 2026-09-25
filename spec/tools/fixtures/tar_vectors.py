@@ -25,6 +25,7 @@ INVALID = CASES.parent / "vectors" / "archive-invalid.json"
 
 LONG = "deep/" * 24 + "leaf.txt"  # 128 bytes: ustar's prefix field, pax elsewhere
 LONG_TARGET = "x/" + "../x/" * 25 + "t"
+AT_CAP = "d/" * 2047 + "xy"  # 4096 bytes
 
 # (name, description, format, record padding kept, members)
 VALID: tuple[tuple[str, str, int, bool, tuple[Member, ...]], ...] = (
@@ -92,6 +93,13 @@ VALID: tuple[tuple[str, str, int, bool, tuple[Member, ...]], ...] = (
         (file("only", b"1"),),
     ),
     ("empty", "no entries, only the two zero blocks", tarfile.PAX_FORMAT, False, ()),
+    (
+        "path-cap",
+        "a path of exactly 4096 UTF-8 bytes, the cap",
+        tarfile.PAX_FORMAT,
+        False,
+        (file(AT_CAP, b"deepest"),),
+    ),
 )
 
 
@@ -181,6 +189,7 @@ BAD_TREES: tuple[tuple[str, str], ...] = (
         ).decode(),
     ),
     ("mode out of range", _tree_bytes([{**_A, "mode": 4096}]).decode()),
+    ("path over 4096 bytes", _tree_bytes([{**_A, "path": "a" * 4097}]).decode()),
 )
 
 
