@@ -144,6 +144,22 @@ export type SandboxSession = {
   readonly close: (
     context: SandboxContext,
   ) => Promise<Result<void, ReleaseFailure | Stale>>;
+} & Partial<Trees>;
+
+/**
+ * spec/api.json SandboxSession.exportTree and importTree: the optional capability to move
+ * /workspace as one tar archive. Core reads an export with the tree reader (sandbox/trees.ts).
+ */
+export type Trees = {
+  /** The archive on stdout, then exit code 0; any other code is a failed export. */
+  readonly exportTree: (
+    context: SandboxContext,
+  ) => Promise<Result<ExecOutput, Failure<"unavailable"> | Stale>>;
+  /** Extracts a host-built archive (modes already masked to 0o777) into /workspace, owner dropped. */
+  readonly importTree: (
+    tar: AsyncIterable<Uint8Array>,
+    context: SandboxContext,
+  ) => Promise<Result<void, Failure<"unavailable"> | Stale>>;
 };
 
 /** What a sandbox adapter returns. Every create and restore carries a ledgered operation key. */

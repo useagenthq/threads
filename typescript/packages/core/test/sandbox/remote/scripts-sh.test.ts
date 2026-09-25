@@ -1,22 +1,28 @@
 import { describe, expect, test } from "bun:test";
 import {
   chmodSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
+  readlinkSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sha256Hex } from "../../../src/hash";
-import { manifestHash } from "../../../src/sandbox";
+import { err, ok } from "../../../src/result";
+import type { Trees } from "../../../src/sandbox/protocol";
+import { joined } from "../../../src/sandbox/remote/bytes";
 import {
+  EXPORT_TREE_SCRIPT,
   execScript,
-  MANIFEST_SCRIPT,
-  parseManifest,
-  quote,
+  importTreeScript,
   WORKSPACE,
 } from "../../../src/sandbox/remote/scripts";
+import { placeTree, treeHash } from "../../../src/sandbox/trees";
+import { memoryArtifacts } from "../../../src/store/artifacts";
+import { CTX } from "../context";
+import { sampleTree } from "./trees";
 
 // The kit's scripts run in a real `sh`, as a provider would run them, instead of being read
 // back by the emulated machine.
@@ -74,8 +80,9 @@ describe("exec in a real sh", () => {
   });
 });
 
-// A fixed tree: nested dirs, a non-ASCII name, a space, an executable and an empty file. Python
-// pins the same hash (tests/adapters/sandboxes/test_posix_sh.py), so both languages agree.
+// A fixed tree: nested dirs, a non-ASCII name, a space, an executable and an empty file. Its
+// hash was pinned by the retired in-sandbox manifest script (find, stat, sha256sum), and Python
+// pins it too (tests/adapters/sandboxes/test_posix_sh.py): trees hash as manifests did.
 const TREE: readonly (readonly [string, string, number])[] = [
   ["a.txt", "hello\n", 0o644],
   ["dir/sub/run.sh", "#!/bin/sh\necho hi\n", 0o755],
@@ -86,38 +93,76 @@ const TREE: readonly (readonly [string, string, number])[] = [
 const TREE_HASH =
   "5002ad0ef59bdacdec8326269f3818c29b9f57ec31ff8c1973451a54a5b2a60f";
 
-describe.skipIf(process.platform !== "linux")(
-  "the manifest in a real sh",
-  () => {
-    test("lists the tree exactly as the host sees it", () => {
-      const root = mkdtempSync(join(tmpdir(), "threads-manifest-"));
-      const utf8 = new TextEncoder();
-      for (const [path, body, mode] of TREE) {
-        mkdirSync(join(root, path, ".."), { recursive: true });
-        writeFileSync(join(root, path), body);
-        chmodSync(join(root, path), mode);
-      }
-      const script = MANIFEST_SCRIPT.replace(
-        `cd ${WORKSPACE}`,
-        `cd ${quote(root)}`,
+/** The kit's tree scripts run by a real `sh` over `root` as /workspace (bsdtar on macOS). */
+function shellTrees(root: string): Trees {
+  const here = (script: string) => script.replaceAll(WORKSPACE, root);
+  // macOS tar would add AppleDouble `._` entries for extended metadata.
+  const env = { PATH: "/usr/bin:/bin", COPYFILE_DISABLE: "1" };
+  return {
+    exportTree: async () => {
+      const proc = Bun.spawn(["/bin/sh", "-c", here(EXPORT_TREE_SCRIPT)], {
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      return ok({
+        exit_code: proc.exited,
+        stdout: proc.stdout,
+        stderr: proc.stderr,
+      });
+    },
+    importTree: async (tar) => {
+      const path = join(mkdtempSync(join(tmpdir(), "threads-up-")), "t.tar");
+      writeFileSync(path, await joined(tar));
+      const proc = Bun.spawnSync(
+        ["/bin/sh", "-c", here(importTreeScript(path))],
+        {
+          env,
+        },
       );
-      const out = Bun.spawnSync(["/bin/sh", "-c", script]);
-      expect(out.exitCode).toBe(0);
-      const manifest = parseManifest(out.stdout);
-      expect(manifest).toEqual(
-        TREE.map(([path, body, mode]) => ({
-          path,
-          mode,
-          size: utf8.encode(body).length,
-          sha256: sha256Hex(utf8.encode(body)),
-        })).toSorted((a, b) => (a.path < b.path ? -1 : 1)),
-      );
-      expect(manifestHash(manifest ?? [])).toBe(TREE_HASH);
-    });
-  },
-);
+      if (lstatSync(path, { throwIfNoEntry: false }) !== undefined)
+        throw new Error("the import left its archive behind");
+      return proc.exitCode === 0
+        ? ok(undefined)
+        : err({ code: "unavailable", message: text.decode(proc.stderr) });
+    },
+  };
+}
 
-test("a manifest line with an empty mode (BSD stat) is refused", () => {
-  const line = `\t1\t${"a".repeat(64)}\t61\n`;
-  expect(parseManifest(new TextEncoder().encode(line))).toBeUndefined();
+describe("the tree scripts in a real sh", () => {
+  test("an export hashes a tree as the retired manifest script did", async () => {
+    const root = mkdtempSync(join(tmpdir(), "threads-tree-"));
+    for (const [path, body, mode] of TREE) {
+      mkdirSync(join(root, path, ".."), { recursive: true });
+      writeFileSync(join(root, path), body);
+      chmodSync(join(root, path), mode);
+    }
+    expect(await treeHash(shellTrees(root), CTX)).toEqual(ok(TREE_HASH));
+  });
+
+  test("placeTree keeps modes and symlinks, and masks setuid to 0755", async () => {
+    const artifacts = memoryArtifacts();
+    const tree = await sampleTree(artifacts);
+    const root = mkdtempSync(join(tmpdir(), "threads-place-"));
+    expect(await placeTree(shellTrees(root), tree, artifacts, CTX)).toEqual(
+      ok(undefined),
+    );
+    expect(lstatSync(join(root, "bin/run")).mode & 0o7777).toBe(0o755);
+    expect(lstatSync(join(root, "bin/su")).mode & 0o7777).toBe(0o755);
+    expect(readlinkSync(join(root, "link"))).toBe("bin/run");
+  });
+
+  test("placeTree refuses a /workspace that isn't empty", async () => {
+    const root = mkdtempSync(join(tmpdir(), "threads-full-"));
+    writeFileSync(join(root, "left"), "x");
+    const placed = await placeTree(
+      shellTrees(root),
+      { tree_version: 1, entries: [] },
+      memoryArtifacts(),
+      CTX,
+    );
+    expect(placed.ok ? undefined : placed.error.code).toBe(
+      "workspace_not_empty",
+    );
+  });
 });

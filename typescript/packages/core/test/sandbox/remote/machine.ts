@@ -1,5 +1,10 @@
 import { sha256Hex } from "../../../src/hash";
 import type { ManifestEntry } from "../../../src/sandbox";
+import {
+  archiveOf,
+  extract,
+  type MemoryEntry,
+} from "../../../src/sandbox/fake-trees";
 import type { Sinks, Started } from "../../../src/sandbox/remote";
 import { FILE_EXIT, WORKSPACE } from "../../../src/sandbox/remote/scripts";
 
@@ -20,9 +25,17 @@ type Proc = { readonly kill: () => void };
 const utf8 = new TextEncoder();
 const text = new TextDecoder();
 
-export function fileOf(bytes: Uint8Array): FileRec {
-  return { mode: 0o644, size: bytes.length, sha256: sha256Hex(bytes), bytes };
+export function fileOf(bytes: Uint8Array, mode = 0o644): FileRec {
+  return { mode, size: bytes.length, sha256: sha256Hex(bytes), bytes };
 }
+
+/**
+ * The bytes of the files conformance snapshot scripts name only by hash (spec/tools/fixtures
+ * pieces.py README_BYTES), so an export of a scripted restore can carry them.
+ */
+const KNOWN = new Map(
+  ["# demo\n"].map((body) => [sha256Hex(utf8.encode(body)), utf8.encode(body)]),
+);
 
 /** The single-quoted words the kit writes (`'a'\''b'`), unquoted. */
 export function shellWords(line: string): string[] {
@@ -62,6 +75,8 @@ export function parseExec(script: string): ExecCall {
 
 export class Machine {
   readonly files: Map<string, FileRec> = new Map();
+  /** Symlinks by absolute path: their targets. */
+  readonly links: Map<string, string> = new Map();
   /** Running processes by the key the provider recorded them under. */
   readonly procs: Map<string, Proc> = new Map();
   /** Every script it ran, for assertions (the credential canary reads these). */
@@ -83,8 +98,10 @@ export class Machine {
         return done(0);
       case "threads-exec":
         return this.exec(parseExec(script), sinks, processKey);
-      case "threads-manifest":
-        return done(0, this.manifest());
+      case "threads-export-tree":
+        return { exit: this.export(sinks) };
+      case "threads-import-tree":
+        return { exit: this.import(tag[2] ?? "") };
       case "threads-check-write":
         return done(this.checkWrite(tag[2] ?? ""));
       case "threads-check-read":
@@ -94,17 +111,45 @@ export class Machine {
     }
   }
 
-  private manifest(): string {
+  /** `tar -cf - -C /workspace .`: the files (seeded ones by their known bytes) and links. */
+  private async export(sinks: Sinks): Promise<number> {
     // A running writer changes the tree while anyone looks.
     if (this.procs.has("writer"))
       this.write(`${WORKSPACE}/tick`, utf8.encode(`${this.ticks++}`));
-    return [...this.files]
-      .filter(([p]) => p.startsWith(`${WORKSPACE}/`))
-      .map(
-        ([p, f]) =>
-          `${f.mode.toString(8)}\t${f.size}\t${f.sha256}\t${utf8.encode(p.slice(WORKSPACE.length + 1)).toHex()}\n`,
-      )
-      .join("");
+    const inside = (p: string) => p.startsWith(`${WORKSPACE}/`);
+    const rel = (p: string) => p.slice(WORKSPACE.length + 1);
+    const entries: MemoryEntry[] = [
+      ...[...this.files]
+        .filter(([p]) => inside(p))
+        .map(([p, f]) => {
+          const bytes = f.bytes ?? KNOWN.get(f.sha256);
+          if (bytes === undefined) throw new Error(`no bytes for ${p}`);
+          return { path: rel(p), mode: f.mode, bytes };
+        }),
+      ...[...this.links]
+        .filter(([p]) => inside(p))
+        .map(([p, target]) => ({ path: rel(p), target })),
+    ];
+    sinks.stdout(await archiveOf(entries));
+    return 0;
+  }
+
+  /** `tar -xpf <path> -C /workspace`, then the upload removed; 2 when tar refuses it. */
+  private async import(path: string): Promise<number> {
+    const data = this.files.get(path)?.bytes;
+    this.files.delete(path);
+    const got = await extract(
+      (async function* () {
+        if (data !== undefined) yield data;
+      })(),
+    );
+    if (!got.ok) return 2;
+    for (const e of got.value) {
+      const at = `${WORKSPACE}/${e.path}`;
+      if ("target" in e) this.links.set(at, e.target);
+      else this.files.set(at, fileOf(e.bytes, e.mode));
+    }
+    return 0;
   }
 
   private isDir(path: string): boolean {

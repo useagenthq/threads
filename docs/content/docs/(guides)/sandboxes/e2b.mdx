@@ -41,7 +41,7 @@ e2b_sandbox = e2b(template="base", lifetime_ms=10 * 60_000)
 | `domain` | `domain` | E2B's | The E2B domain to connect to, for self-hosted E2B. |
 | — | `name` | `"e2b"` | Python only: the provider name sandboxes are recorded under. |
 
-A custom template needs `/bin/sh` and the GNU tools `env`, `find`, `stat` and `sha256sum`. E2B's `base` template has them.
+A custom template needs `/bin/sh`, `env` and `tar`. E2B's `base` template has them.
 
 ## Good to know
 

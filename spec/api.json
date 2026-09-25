@@ -1256,7 +1256,7 @@
       "async": false,
       "params": [
         {"name": "api_key", "kind": "option", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"E2B_API_KEY\")", "doc": "The E2B API key: a secret() or a string. Omitted: secret(\"E2B_API_KEY\"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. It never enters a sandbox."},
-        {"name": "template", "kind": "option", "type": {"prim": "string"}, "required": false, "default": "base", "doc": "The E2B template a new sandbox starts from. It needs /bin/sh, sed, find, stat and sha256sum (E2B's base has them)."},
+        {"name": "template", "kind": "option", "type": {"prim": "string"}, "required": false, "default": "base", "doc": "The E2B template a new sandbox starts from. It needs /bin/sh, env and tar (E2B's base has them)."},
         {"name": "lifetime_ms", "kind": "option", "type": {"prim": "integer"}, "required": false, "default": 3600000, "doc": "How long a sandbox lives, in milliseconds, before E2B kills it (the declared expiry). A positive integer; anything else is invalid_config."},
         {"name": "allow_internet", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "Lets the sandbox reach the internet. Its egress is then unenforced, so the agent must also set egress: \"unenforced\"."},
         {"name": "domain", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The E2B domain, for a self-hosted or regional deployment. Omitted: E2B's default."},
@@ -1296,7 +1296,7 @@
       "doc": "A Sandbox on Modal. Pass it as agent({sandbox: modal(image_id=\"im-...\")}). Each sandbox starts with no environment and its network blocked. TypeScript: always refuses (Modal's JS SDK runs commands over a transport threads can't fence); use Python.",
       "async": false,
       "params": [
-        {"name": "image_id", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": true, "doc": "A built Modal image (im-..., for example modal.Image.debian_slim().build(app) once at setup). It needs /bin/sh, sed, find, sha256sum and stat. Empty is invalid_config."},
+        {"name": "image_id", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": true, "doc": "A built Modal image (im-..., for example modal.Image.debian_slim().build(app) once at setup). It needs /bin/sh, env and tar. Empty is invalid_config."},
         {"name": "token_id", "kind": "option", "lang": "py", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"MODAL_TOKEN_ID\")", "doc": "The Modal token id: a secret() or a string. Omitted: secret(\"MODAL_TOKEN_ID\"). Resolved on the host at setup with token_secret; either unset is missing_secret. It goes only to Modal's control plane."},
         {"name": "token_secret", "kind": "option", "lang": "py", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"MODAL_TOKEN_SECRET\")", "doc": "The Modal token secret: a secret() or a string. Omitted: secret(\"MODAL_TOKEN_SECRET\"). Resolved with token_id."},
         {"name": "app_name", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "threads", "doc": "The Modal app sandboxes are created under."},
@@ -4356,9 +4356,32 @@
           "async": true,
           "params": [{"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() before releasing: the owner's lease, or gc's cleanup claim."}],
           "returns": {"result": {"prim": "void"}, "errors": ["stale_epoch", "cleanup_claim_lost", "release_failed", "unavailable"]}
+        },
+        "exportTree": {
+          "ts": "exportTree",
+          "py": "export_tree",
+          "doc": "Stream /workspace as a tar archive (spec/schema/README.md, Snapshot manifest): the archive on stdout, then exit_code 0; any other exit code means the export failed, and stderr says why. The archive is a sandbox response: the runtime parses it strictly before using it. Setuid, setgid and sticky bits are reported as the sandbox has them.",
+          "async": true,
+          "optional": true,
+          "capability": "Trees",
+          "params": [{"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() at every provider request the export makes."}],
+          "returns": {"result": {"$ref": "#/types/ExecOutput"}, "errors": ["stale_epoch", "cleanup_claim_lost", "unavailable"]}
+        },
+        "importTree": {
+          "ts": "importTree",
+          "py": "import_tree",
+          "doc": "Extract a host-built tar archive into /workspace, keeping each entry's mode as the archive gives it but never its owner. The runtime's tree builder writes every mode as mode & 0o777, so setuid, setgid and sticky bits never survive an import (a sandbox extracting as root would keep them). Existing files at the archive's paths are replaced.",
+          "async": true,
+          "optional": true,
+          "capability": "Trees",
+          "params": [
+            {"name": "tar", "kind": "positional", "type": {"stream": {"prim": "bytes"}}, "required": true, "doc": "The archive, as the runtime's tree builder writes it: normal relative paths, symlinks inside the root."},
+            {"name": "context", "kind": "positional", "type": {"$ref": "#/types/SandboxContext"}, "required": true, "doc": "The authority to re-check with context.fence() at every provider request the import makes."}
+          ],
+          "returns": {"result": {"prim": "void"}, "errors": ["stale_epoch", "cleanup_claim_lost", "unavailable"]}
         }
       },
-      "doc": "One live sandbox, as an adapter returns it from create, restore or attach: run commands, move files, snapshot and close it. Every method takes the SandboxContext to fence at the provider call."
+      "doc": "One live sandbox, as an adapter returns it from create, restore or attach: run commands, move files, snapshot and close it, and, with the optional Trees capability, export and import /workspace as a tar archive. Every method takes the SandboxContext to fence at the provider call."
     },
     "ExecOutput": {
       "kind": "object",

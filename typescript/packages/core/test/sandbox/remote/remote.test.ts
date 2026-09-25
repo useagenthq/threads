@@ -10,7 +10,6 @@ import {
 } from "../../../src/sandbox/remote";
 import {
   execScript,
-  parseManifest,
   quote,
   sandboxPath,
 } from "../../../src/sandbox/remote/scripts";
@@ -22,6 +21,7 @@ import { ledgerSuite } from "../ledger-suite";
 import { contractSuite } from "./contract";
 import { parseExec, shellWords } from "./machine";
 import { memoryDriver } from "./memory-driver";
+import { treesSuite } from "./trees";
 import { World } from "./world";
 
 // The remote kit over an in-memory driver: the shared contract, the fork cases and the ledger
@@ -41,6 +41,10 @@ const adapter = (world: World) =>
 contractSuite("remote kit", () => {
   const world = new World();
   return { sandbox: adapter(world), world, sandboxTraffic: () => "" };
+});
+treesSuite("remote kit", () => {
+  const world = new World();
+  return { sandbox: adapter(world), world };
 });
 forkCases(remoteHarness("remote kit", adapter));
 ledgerSuite(remoteHarness("remote kit", adapter));
@@ -101,38 +105,6 @@ describe("the kit's scripts", () => {
     expect(sandboxPath("/etc/x")).toBe("/etc/x");
     expect(sandboxPath("/..")).toBeUndefined();
     expect(sandboxPath("a\0b")).toBeUndefined();
-  });
-
-  test("a manifest is parsed strictly: malformed output is refused", () => {
-    const utf8 = new TextEncoder();
-    const sha = "a".repeat(64);
-    const hex = (path: string) => utf8.encode(path).toHex();
-    const good = `644\t3\t${sha}\t${hex("b\tc\nd")}\n755\t1\t${sha}\t${hex("a")}\n`;
-    expect(parseManifest(utf8.encode(good))).toEqual([
-      { path: "a", mode: 0o755, size: 1, sha256: sha },
-      { path: "b\tc\nd", mode: 0o644, size: 3, sha256: sha },
-    ]);
-    const bad = [
-      `9\t3\t${sha}\t${hex("b")}\n`,
-      `644\tx\t${sha}\t${hex("b")}\n`,
-      `644\t3\tzz\t${hex("b")}\n`,
-      `644\t3\t${sha}\t\n`,
-      `644\t3\t${sha}\tb\n`,
-      `644\t3\t${sha}\t${hex("b")}\textra\n`,
-    ];
-    for (const output of bad)
-      expect(parseManifest(utf8.encode(output))).toBeUndefined();
-  });
-
-  test("a path that isn't UTF-8 is refused, never read as U+FFFD", () => {
-    const sha = "a".repeat(64);
-    const line = (raw: string) =>
-      new TextEncoder().encode(`644\t1\t${sha}\t78${raw}\n`);
-    expect(parseManifest(line("ff"))).toBeUndefined();
-    expect(parseManifest(line("fe"))).toBeUndefined();
-    expect(parseManifest(line("c3a9"))).toEqual([
-      { path: "xé", mode: 0o644, size: 1, sha256: sha },
-    ]);
   });
 });
 

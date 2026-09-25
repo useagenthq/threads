@@ -1,9 +1,7 @@
-import { z } from "zod";
 import { sha256Hex } from "../../hash";
-import { type ManifestEntry, ManifestEntry as ManifestSchema } from "../script";
 
 // The POSIX scripts a remote sandbox runs through its provider's `sh -c`: one
-// implementation of exec, the manifest and file checks for every provider. Each script's first
+// implementation of exec, the tree export and import, and the file checks for every provider. Each script's first
 // line is a `:` no-op naming what it is, so it reads clearly in a process list. Values are
 // single-quoted, so no host value is ever interpreted by the shell. Nothing here proves
 // termination or quiescence: an in-guest scan is forgeable, so those come only from provider
@@ -77,16 +75,31 @@ export function execScript(spec: ExecSpec): string {
   ].join("\n");
 }
 
-/**
- * Prints the /workspace file tree as `mode\tsize\tsha256\thex(path)` lines. The path's raw bytes
- * go out as hex, so the output is ASCII and no transport that decodes text (E2B's does) can
- * turn two different paths into one.
- */
-export const MANIFEST_SCRIPT: string = [
-  ": threads-manifest",
-  `cd ${WORKSPACE} || exit 1`,
-  `find . -type f -exec sh -c 'for f do printf "%s\\t%s\\t%s\\t%s\\n" "$(stat -c %a "$f")" "$(stat -c %s "$f")" "$(sha256sum < "$f" | cut -c1-64)" "$(printf %s "\${f#./}" | od -An -tx1 -v | tr -d " \\n")"; done' sh {} +`,
+/** Streams /workspace as a tar archive on stdout (SandboxSession.exportTree). */
+export const EXPORT_TREE_SCRIPT: string = [
+  ": threads-export-tree",
+  `exec tar -cf - -C ${WORKSPACE} .`,
 ].join("\n");
+
+/** Where an import's archive is uploaded; the import script removes it. */
+export function treePath(): string {
+  return `/tmp/threads-tree-${crypto.randomUUID()}.tar`;
+}
+
+/**
+ * Extracts the uploaded archive into /workspace, keeping its modes (-p, which the host builder
+ * masked to 0o777) but not its owner, then removes it whatever tar answered.
+ */
+export function importTreeScript(path: string): string {
+  const p = quote(path);
+  return [
+    `: threads-import-tree ${p}`,
+    `tar -xpf ${p} -C ${WORKSPACE} --no-same-owner`,
+    "__t_s=$?",
+    `rm -f ${p}`,
+    'exit "$__t_s"',
+  ].join("\n");
+}
 
 /** Checks a path before a write: a directory or an unwritable file is a typed failure. */
 export function checkWriteScript(path: string): string {
@@ -110,51 +123,4 @@ export function checkReadScript(path: string): string {
     `[ -r ${p} ] || exit ${FILE_EXIT.permission_denied}`,
     "exit 0",
   ].join("\n");
-}
-
-// Fatal: a raw-byte path has no lossless JSON string, and a lossy decode would give two
-// different paths the same manifest.
-const utf8 = new TextDecoder("utf-8", { fatal: true });
-const Line = z.tuple([
-  z.string().regex(/^[0-7]{1,6}$/),
-  z.string().regex(/^[0-9]{1,15}$/),
-  z.string(),
-  z.string().regex(/^(?:[0-9a-f]{2})+$/),
-]);
-
-/** A path's hex bytes as UTF-8 text; undefined when they aren't UTF-8. */
-function pathOf(hex: string): string | undefined {
-  try {
-    return utf8.decode(Uint8Array.fromHex(hex));
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Parses the manifest script's output (a sandbox response: a trust boundary), in UTF-16 order
- * of path (spec/schema/README.md, Snapshot manifest). Malformed output, including a path that
- * isn't UTF-8, is undefined.
- */
-export function parseManifest(
-  output: Uint8Array,
-): readonly ManifestEntry[] | undefined {
-  const entries: ManifestEntry[] = [];
-  for (const line of new TextDecoder().decode(output).split("\n")) {
-    if (line === "") continue;
-    const fields = Line.safeParse(line.split("\t"));
-    if (!fields.success) return undefined;
-    const [mode, size, sha256, hex] = fields.data;
-    const parsed = ManifestSchema.safeParse({
-      mode: Number.parseInt(mode, 8),
-      size: Number(size),
-      sha256,
-      path: pathOf(hex),
-    });
-    if (!parsed.success) return undefined;
-    entries.push(parsed.data);
-  }
-  return entries.toSorted((a, b) =>
-    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
-  );
 }

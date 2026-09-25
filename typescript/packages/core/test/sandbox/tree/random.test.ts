@@ -3,6 +3,7 @@ import { buildTar } from "../../../src/sandbox/tree/build";
 import { readTar } from "../../../src/sandbox/tree/tar";
 import {
   encodeTree,
+  masked,
   parseTree,
   type Tree,
   type TreeEntry,
@@ -78,7 +79,7 @@ async function archive(
   return new Uint8Array(parts);
 }
 
-test("a random tree survives build, then read from any chunking", async () => {
+test("a random tree survives build (modes masked to 0o777), then read from any chunking", async () => {
   for (let seed = 1; seed <= 200; seed++) {
     const random = seeded(seed);
     const artifacts = memoryArtifacts();
@@ -88,7 +89,7 @@ test("a random tree survives build, then read from any chunking", async () => {
       chunked(await archive(tree, artifacts), random, 900),
       artifacts.sink,
     );
-    expect(read).toEqual({ ok: true, value: tree });
+    expect(read).toEqual({ ok: true, value: masked(tree) });
   }
 });
 

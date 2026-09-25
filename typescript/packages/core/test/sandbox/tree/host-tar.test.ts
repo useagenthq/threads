@@ -10,20 +10,13 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sha256Hex } from "../../../src/hash";
-import { manifestHash } from "../../../src/sandbox";
-import {
-  MANIFEST_SCRIPT,
-  parseManifest,
-  quote,
-  WORKSPACE,
-} from "../../../src/sandbox/remote/scripts";
 import { storeTar } from "../../../src/sandbox/tree/tar";
 import type { TreeEntry } from "../../../src/sandbox/tree/tree";
 import { memoryArtifacts } from "../../../src/store/artifacts";
 
 // A real tree archived by the host's `tar -cf - -C dir .` (GNU tar on Linux, bsdtar on macOS)
-// reads as the tree on disk. On Linux the tar-based manifest hash also equals the old
-// MANIFEST_SCRIPT's for the same tree, so snapshots taken before trees still verify.
+// reads as the tree on disk. The hash of a tree exported this way equals the retired manifest
+// script's (test/sandbox/remote/scripts-sh.test.ts pins that script's hash).
 
 const LONG = `déjà vu/${"n".repeat(120)}`;
 const FILES: readonly (readonly [string, string, number])[] = [
@@ -78,23 +71,6 @@ describe.skipIf(Bun.which("tar") === null)("the host's tar", () => {
     ];
     expect(read.entries).toEqual(
       want.toSorted((a, b) => (a.path < b.path ? -1 : 1)),
-    );
-  });
-});
-
-describe.skipIf(process.platform !== "linux")("the old manifest script", () => {
-  test("hashes the same tree to the same manifest_hash", async () => {
-    const root = tree();
-    const script = MANIFEST_SCRIPT.replace(
-      `cd ${WORKSPACE}`,
-      `cd ${quote(root)}`,
-    );
-    const out = Bun.spawnSync(["/bin/sh", "-c", script]);
-    expect(out.exitCode).toBe(0);
-    const manifest = parseManifest(out.stdout);
-    expect(manifest).toBeDefined();
-    expect((await stored(root)).manifest_hash).toBe(
-      manifestHash(manifest ?? []),
     );
   });
 });

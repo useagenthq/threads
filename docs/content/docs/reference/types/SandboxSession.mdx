@@ -1,6 +1,6 @@
 ---
 title: "SandboxSession"
-description: "One live sandbox, as an adapter returns it from create, restore or attach: run commands, move files, snapshot and close it."
+description: "One live sandbox, as an adapter returns it from create, restore or attach: run commands, move files, snapshot and close it, and, with the optional Trees capability, export and import /workspace as a tar archive."
 icon: "Plug"
 ---
 
@@ -251,3 +251,66 @@ async def close(
 </Field>
 
 **Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `release_failed`, `unavailable`.
+
+### exportTree / export_tree
+
+Stream /workspace as a tar archive: the archive on stdout, then exit_code 0; any other exit code means the export failed, and stderr says why. The archive is a sandbox response: the runtime parses it strictly before using it. Setuid, setgid and sticky bits are reported as the sandbox has them.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+exportTree(context: SandboxContext): Promise<Result<ExecOutput>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def export_tree(
+    context: SandboxContext,
+) -> Ok[ExecOutput] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="context" type={"SandboxContext"} required>
+  The authority to re-check with context.fence() at every provider request the export makes. See [SandboxContext](/docs/reference/types/SandboxContext).
+</Field>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `unavailable`.
+
+### importTree / import_tree
+
+Extract a host-built tar archive into /workspace, keeping each entry's mode as the archive gives it but never its owner. The runtime's tree builder writes every mode as mode & 0o777, so setuid, setgid and sticky bits never survive an import (a sandbox extracting as root would keep them). Existing files at the archive's paths are replaced.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+importTree(tar: AsyncIterable<Uint8Array>, context: SandboxContext): Promise<Result<void>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def import_tree(
+    tar: AsyncIterator[bytes],
+    context: SandboxContext,
+) -> Ok[None] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="tar" type={"AsyncIterable<Uint8Array>"} required>
+  The archive, as the runtime's tree builder writes it: normal relative paths, symlinks inside the root.
+</Field>
+
+<Field name="context" type={"SandboxContext"} required>
+  The authority to re-check with context.fence() at every provider request the import makes. See [SandboxContext](/docs/reference/types/SandboxContext).
+</Field>
+
+**Returns an error value** with one of these codes: `stale_epoch`, `cleanup_claim_lost`, `unavailable`.

@@ -6,6 +6,7 @@ import { buildTar } from "../../../src/sandbox/tree/build";
 import { CAPS, readTar, storeTar } from "../../../src/sandbox/tree/tar";
 import {
   encodeTree,
+  masked,
   parseTree,
   TreeEntry,
   treeManifestHash,
@@ -109,7 +110,7 @@ describe("tree.json", () => {
         })(),
         memoryArtifacts().sink,
       );
-      expect(again).toEqual({ ok: true, value: tree.value });
+      expect(again).toEqual({ ok: true, value: masked(tree.value) });
     });
   }
   for (const c of trees.invalid) {

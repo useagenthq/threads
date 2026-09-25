@@ -40,7 +40,7 @@ def modal(
 ## Parameters
 
 <Field name="image_id" type={"str"} required>
-  Python only. A built Modal image (im-..., for example modal.Image.debian_slim().build(app) once at setup). It needs /bin/sh, sed, find, sha256sum and stat. Empty is invalid_config.
+  Python only. A built Modal image (im-..., for example modal.Image.debian_slim().build(app) once at setup). It needs /bin/sh, env and tar. Empty is invalid_config.
 </Field>
 
 <Field name="token_id" type={"str | Secret"}>

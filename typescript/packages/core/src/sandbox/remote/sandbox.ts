@@ -4,13 +4,14 @@ import type {
   ReleaseFailure,
   RestoreFailure,
   Sandbox,
+  SandboxContext,
   SandboxInfo,
   SandboxSession,
 } from "../protocol";
 import type { ProviderExpiry, ProviderSandbox, SandboxDriver } from "./driver";
 import { guarded, messageOf, refusedHere, within } from "./fence";
 import { INIT_SCRIPT } from "./scripts";
-import { remoteSession, runScript, treeHash } from "./session";
+import { measured, remoteSession, runScript } from "./session";
 
 // remoteSandbox(): a provider driver as the Sandbox protocol (spec/api.json). Creation is
 // findable by its operation key, and a restore verifies the restored tree against the snapshot
@@ -69,9 +70,10 @@ export function remoteSandbox(
   const verify = async (
     id: string,
     expected: string,
+    context: SandboxContext,
   ): Promise<Result<SandboxSession, RestoreFailure>> => {
     try {
-      const hash = await treeHash(driver, id);
+      const hash = await measured(session(id), context);
       if (hash === expected) return ok(session(id));
       if (hash !== undefined) {
         await driver.kill(id);
@@ -112,7 +114,7 @@ export function remoteSandbox(
         const made = await driver.create(operationKey, snapshotId);
         if (made.kind !== "created")
           return err({ code: made.kind, message: made.message });
-        return verify(made.id, expected);
+        return verify(made.id, expected, context);
       },
       unavailable,
     );

@@ -4,6 +4,7 @@ import type { LookupResult } from "../model/protocol";
 import { err, ok, type Result } from "../result";
 import { admitExec } from "./admit";
 import { builtin, type Ran, toolName } from "./fake-shell";
+import { fakeTrees } from "./fake-trees";
 import type {
   ExecOutput,
   FileFailure,
@@ -157,6 +158,7 @@ export function fakeSandbox(script: unknown = {}): FakeSandbox {
     const ran = new Map<string, string>();
     trees.push(tree);
     const self: SandboxSession = {
+      ...fakeTrees(tree),
       id: SandboxId.parse(id),
       exec: async (given, context, givenOptions) => {
         const { command, options } = admitExec(given, givenOptions);

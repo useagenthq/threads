@@ -5,6 +5,7 @@ import { remoteHarness } from "../../core/test/sandbox/harness";
 import { ledgerSuite } from "../../core/test/sandbox/ledger-suite";
 import { CANARY, contractSuite } from "../../core/test/sandbox/remote/contract";
 import { losesAfter } from "../../core/test/sandbox/remote/kit";
+import { treesSuite } from "../../core/test/sandbox/remote/trees";
 import { World } from "../../core/test/sandbox/remote/world";
 import { code, unwrap } from "../../core/test/store/helpers";
 import { daytona } from "../src";
@@ -34,6 +35,10 @@ contractSuite("daytona", () => {
   const world = new World();
   const { sandbox, backend } = adapter(world);
   return { sandbox, world, sandboxTraffic: backend.traffic };
+});
+treesSuite("daytona", () => {
+  const world = new World();
+  return { sandbox: adapter(world).sandbox, world };
 });
 forkCases(remoteHarness("daytona", (world) => adapter(world).sandbox));
 ledgerSuite(remoteHarness("daytona", (world) => adapter(world).sandbox));

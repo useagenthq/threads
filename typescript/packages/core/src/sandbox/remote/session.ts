@@ -1,57 +1,103 @@
 import { SandboxId, SnapshotId } from "../../log";
 import { err, ok } from "../../result";
 import { admitExec } from "../admit";
-import { manifestHash } from "../fake";
+import { isRefusal } from "../context";
 import type {
   ExecOutput,
   Failure,
   FileFailure,
   ReleaseFailure,
+  SandboxContext,
   SandboxSession,
   SnapshotData,
+  Trees,
 } from "../protocol";
+import { type ReadFailure, treeHash } from "../trees";
 import { byteStream, joined } from "./bytes";
 import type { SandboxDriver } from "./driver";
-import { guarded, messageOf } from "./fence";
+import { FenceRefused, guarded, messageOf } from "./fence";
 import {
   checkReadScript,
   checkWriteScript,
+  EXPORT_TREE_SCRIPT,
   execScript,
   FILE_EXIT,
-  MANIFEST_SCRIPT,
-  parseManifest,
+  importTreeScript,
   sandboxPath,
   stdinPath,
+  treePath,
   WORKSPACE,
 } from "./scripts";
 
 // One remote sandbox as a SandboxSession (spec/api.json): every operation fences through the
 // driver's transport, and everything above the raw provider calls is the shared POSIX kit.
 
-/** A kit script's exit code and stdout, collected: its outputs are small. */
+/** A kit script's exit code and output, collected: its outputs are small. */
 export async function runScript(
   driver: SandboxDriver,
   id: string,
   script: string,
-): Promise<{ readonly exit: number; readonly stdout: Uint8Array }> {
+): Promise<{
+  readonly exit: number;
+  readonly stdout: Uint8Array;
+  readonly stderr: string;
+}> {
   const out = byteStream();
+  const err = byteStream();
   const started = await driver.run(id, script, {
     stdout: out.push,
-    stderr: () => undefined,
+    stderr: err.push,
   });
   const stdout = joined(out.chunks);
-  const exit = await started.exit.finally(out.end);
-  return { exit, stdout: await stdout };
+  const stderr = joined(err.chunks);
+  const exit = await started.exit.finally(() => {
+    out.end();
+    err.end();
+  });
+  return {
+    exit,
+    stdout: await stdout,
+    stderr: new TextDecoder().decode(await stderr),
+  };
 }
 
-/** The canonical manifest hash of the sandbox's /workspace, or undefined when unreadable. */
-export async function treeHash(
+/**
+ * The manifest hash of the sandbox's /workspace through its export, inside a kit operation:
+ * undefined when it can't be read, and a refused fence thrown so the operation reports it.
+ */
+export async function measured(
+  session: Pick<Trees, "exportTree">,
+  context: SandboxContext,
+): Promise<string | undefined> {
+  const hash = await treeHash(session, context);
+  if (hash.ok) return hash.value;
+  if (isRefusal<ReadFailure["code"]>(hash.error))
+    throw new FenceRefused(hash.error);
+  return undefined;
+}
+
+/** A script started with its output streamed, never joined (exec, the tree export). */
+async function streamed(
   driver: SandboxDriver,
   id: string,
-): Promise<string | undefined> {
-  const run = await runScript(driver, id, MANIFEST_SCRIPT);
-  const manifest = run.exit === 0 ? parseManifest(run.stdout) : undefined;
-  return manifest === undefined ? undefined : manifestHash(manifest);
+  script: string,
+  processKey?: string,
+): Promise<ExecOutput> {
+  const stdout = byteStream();
+  const stderr = byteStream();
+  const started = await driver.run(
+    id,
+    script,
+    { stdout: stdout.push, stderr: stderr.push },
+    processKey,
+  );
+  const exit = started.exit.finally(() => {
+    stdout.end();
+    stderr.end();
+  });
+  // Read after both streams end; a transport failure mid-stream rejects it then.
+  exit.catch(() => undefined);
+  return { exit_code: exit, stdout: stdout.chunks, stderr: stderr.chunks };
 }
 
 const unavailable = (error: unknown) =>
@@ -82,7 +128,7 @@ export function remoteSession(
   driver: SandboxDriver,
   provider: string,
   id: string,
-): SandboxSession {
+): SandboxSession & Trees {
   const sandboxId = SandboxId.parse(id);
   // A confirmed driver's answer. Otherwise a best-effort kill that never claims it worked: a
   // descendant can drop out of the process the provider tracks, so only an operator can
@@ -116,8 +162,6 @@ export function remoteSession(
           return err({ code: "invalid_path", message: `cwd ${options.cwd}` });
         if (options.stdin !== undefined)
           await driver.write(id, stdinPath(options.processKey), options.stdin);
-        const stdout = byteStream();
-        const stderr = byteStream();
         const script = execScript({
           command,
           cwd,
@@ -125,25 +169,9 @@ export function remoteSession(
           processKey: options.processKey,
           stdin: options.stdin !== undefined,
         });
-        const started = await driver.run(
-          id,
-          script,
-          { stdout: stdout.push, stderr: stderr.push },
-          options.processKey,
-        );
         // The deadline (timeoutMs) is the sandbox layer's: execute() reports it as a timeout
         // and calls terminate (sandbox/exec.ts).
-        const exit = started.exit.finally(() => {
-          stdout.end();
-          stderr.end();
-        });
-        // Read after both streams end; a transport failure mid-stream rejects it then.
-        exit.catch(() => undefined);
-        return ok({
-          exit_code: exit,
-          stdout: stdout.chunks,
-          stderr: stderr.chunks,
-        });
+        return ok(await streamed(driver, id, script, options.processKey));
       },
       unavailable,
     );
@@ -179,6 +207,32 @@ export function remoteSession(
       unavailable,
     );
 
+  const exportTree: Trees["exportTree"] = (context) =>
+    guarded<ExecOutput, Failure<"unavailable">>(
+      context,
+      async () => ok(await streamed(driver, id, EXPORT_TREE_SCRIPT)),
+      unavailable,
+    );
+
+  // Uploaded as one file, then extracted by the sandbox's own tar (spec/schema/README.md,
+  // "Sandbox image"); the builder already masked every mode to 0o777.
+  const importTree: Trees["importTree"] = (tar, context) =>
+    guarded<void, Failure<"unavailable">>(
+      context,
+      async () => {
+        const path = treePath();
+        await driver.write(id, path, await joined(tar));
+        const run = await runScript(driver, id, importTreeScript(path));
+        return run.exit === 0
+          ? ok(undefined)
+          : err({
+              code: "unavailable",
+              message: `the import into ${WORKSPACE} exited ${run.exit}: ${run.stderr}`,
+            });
+      },
+      unavailable,
+    );
+
   const capture = driver.snapshot;
   // Only a provider-owned whole-sandbox boundary makes a capture quiescent. The tree hashed
   // before and after must also match, or a writer ran around it (not_quiescent).
@@ -191,9 +245,9 @@ export function remoteSession(
             code: "unavailable",
             message: `${provider} has no confirmed quiescent snapshot`,
           });
-        const before = await treeHash(driver, id);
+        const before = await measured({ exportTree }, context);
         const made = await capture.take(id, operationKey);
-        const after = await treeHash(driver, id);
+        const after = await measured({ exportTree }, context);
         if (before === undefined || before !== after) {
           await driver.deleteSnapshot(made.ref);
           return err({
@@ -237,5 +291,7 @@ export function remoteSession(
     download,
     snapshot,
     close,
+    exportTree,
+    importTree,
   };
 }

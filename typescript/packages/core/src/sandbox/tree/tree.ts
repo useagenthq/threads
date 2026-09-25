@@ -91,6 +91,19 @@ export function encodeTree(tree: Tree): Uint8Array {
   return new TextEncoder().encode(text.value);
 }
 
+/** The mode bits an import keeps: setuid, setgid and sticky (0o7000) are masked off. */
+export const PERMISSIONS = 0o777;
+
+/** The tree as an import of its built archive leaves it: every file and dir mode masked. */
+export function masked(tree: Tree): Tree {
+  return {
+    tree_version: tree.tree_version,
+    entries: tree.entries.map((e) =>
+      e.kind === "symlink" ? e : { ...e, mode: e.mode & PERMISSIONS },
+    ),
+  };
+}
+
 /** The snapshot manifest hash of the tree's files (spec/schema/README.md, Snapshot manifest). */
 export function treeManifestHash(tree: Tree): string {
   return manifestHash(

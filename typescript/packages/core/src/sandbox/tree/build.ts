@@ -2,7 +2,7 @@ import { err, ok, type Result } from "../../result";
 import type { ArtifactStore } from "../../store/artifacts";
 import { type LogError, logError } from "../../verify/error";
 import { BLOCK } from "./header";
-import { broken, type Tree, type TreeEntry } from "./tree";
+import { broken, PERMISSIONS, type Tree, type TreeEntry } from "./tree";
 
 // The canonical archive of a tree (spec/schema/README.md, "Snapshot manifest"): ustar headers
 // in tree order, a pax header only for a name or link over 100 bytes, mtime 0, the caller's
@@ -78,11 +78,12 @@ function headers(e: TreeEntry, owner: Owner): readonly Uint8Array[] {
     ...(name.length > FIELD ? [paxRecord("path", name)] : []),
     ...(link.length > FIELD ? [paxRecord("linkpath", link)] : []),
   ];
+  // Setuid, setgid and sticky bits never reach an import: a sandbox extracting as root keeps them.
   const [type, mode, size] =
     e.kind === "file"
-      ? ["0", e.mode, e.size]
+      ? ["0", e.mode & PERMISSIONS, e.size]
       : e.kind === "dir"
-        ? ["5", e.mode, 0]
+        ? ["5", e.mode & PERMISSIONS, 0]
         : ["2", 0o777, 0];
   const own = header(type, name, link, mode, size, owner);
   if (records.length === 0) return [own];
