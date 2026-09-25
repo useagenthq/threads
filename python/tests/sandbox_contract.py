@@ -11,7 +11,7 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from typing import Protocol
 
-from sandbox_backend import FakeBackend
+from sandbox_backend import Box, FakeBackend
 from sandbox_kit import OPEN, KitContext
 
 from threads.adapters.sandboxes.posix import collect
@@ -216,6 +216,27 @@ async def quiescence_comes_only_from_a_provider_pause_or_stop(h: Harness) -> Non
     assert h.backend.snaps[snap.value.snapshot_id].frozen or stopped
 
 
+async def a_tree_that_changes_around_the_capture_is_not_quiescent(h: Harness) -> None:
+    """A guest write lands just after the capture: the tree after it differs from the one
+    before, so the snapshot is refused (not_quiescent) and the provider's snapshot deleted."""
+    if not h.sandbox.info.capture_classes:
+        return
+    s = await session(h)
+    assert await s.upload("/workspace/a.txt", b"A", OPEN) == Ok(None)
+
+    def unchanged(_box: Box) -> None:
+        return None
+
+    def written(box: Box) -> None:
+        box.files["/workspace/a.txt"] = b"B"
+
+    h.backend.around_capture = (unchanged, written)
+    snap = await s.snapshot("snap-key", OPEN)
+    assert isinstance(snap, Err)
+    assert snap.error.code == "not_quiescent"
+    assert not h.backend.snaps, "the refused capture's snapshot was left behind"
+
+
 async def a_lost_create_is_found_by_its_key(h: Harness) -> None:
     h.backend.lose_creates = 1
     lost = await h.sandbox.create("k-lost", OPEN)
@@ -260,6 +281,7 @@ CHECKS: tuple[Check, ...] = (
     every_operation_is_fenced_at_the_transport,
     a_snapshot_restores_isolated_and_verified,
     quiescence_comes_only_from_a_provider_pause_or_stop,
+    a_tree_that_changes_around_the_capture_is_not_quiescent,
     a_lost_create_is_found_by_its_key,
     attach_then_close_releases,
     a_snapshot_release_is_idempotent,
