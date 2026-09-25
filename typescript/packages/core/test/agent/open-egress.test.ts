@@ -69,7 +69,7 @@ describe("open egress: the sandbox mutators are unguarded", () => {
       const result = await bot.run("go", { store: sqlite(":memory:") });
       expect(result.status).toBe("parked");
       const { log } = await openStore(result.thread.store);
-      const events = knownEvents(unwrap(log.read(result.thread.branch)));
+      const events = knownEvents(unwrap(await log.read(result.thread.branch)));
       const started = events.find((e) => e.type === "thread_started");
       if (started?.type !== "thread_started") throw new Error("no pin");
       const classes = started.data.tools
