@@ -102,9 +102,10 @@ export function remoteSandbox(
     guarded<SandboxSession, RestoreFailure>(
       context,
       async () => {
+        // As Python's kit: no snapshot of this provider can exist, so none is found.
         if (driver.snapshot === undefined)
           return err({
-            code: "snapshot_restore_failed",
+            code: "snapshot_missing",
             message: `${info.provider} has no snapshots`,
           });
         // A throw here is a lost create response: the ledger resolves it by lookup.

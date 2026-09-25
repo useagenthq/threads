@@ -189,7 +189,7 @@ describe("snapshot capability by the provider's declared boundary", () => {
     expect(code(await box.snapshot("s", CTX))).toBe("unavailable");
     expect(
       code(await sandbox.restore("s", manifestHash([]), "op-2", CTX)),
-    ).toBe("snapshot_restore_failed");
+    ).toBe("snapshot_missing");
     expect(world.creates).toBe(1);
   });
 });
