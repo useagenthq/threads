@@ -25,3 +25,4 @@ export * from "./policy";
 export * from "./primitives";
 export * from "./team";
 export * from "./usage";
+export * from "./workspace";

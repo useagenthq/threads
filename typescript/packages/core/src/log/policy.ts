@@ -7,6 +7,7 @@ import {
 } from "./common";
 import { Int, JsonObject, Name, NonEmpty, PosInt, Sha256 } from "./primitives";
 import { Currency } from "./usage";
+import { WorkspacePin } from "./workspace";
 import type { Arr, EnumOf, Opt, Strict } from "./zod-types";
 
 // The resolved, secret-free runtime policy pinned by thread_started (ADRs 0019-0023).
@@ -219,6 +220,7 @@ export const Policy: Strict<{
   output: Opt<typeof OutputPolicy>;
   handoffs: Opt<Arr<typeof NonEmpty>>;
   output_styles: Opt<z.ZodRecord<typeof NonEmpty, typeof NonEmpty>>;
+  workspace: Opt<typeof WorkspacePin>;
 }> = z
   .strictObject({
     models: z
@@ -248,6 +250,7 @@ export const Policy: Strict<{
         "Named instructions Thread.setOutputStyle can switch the thread to; an injected{source: output_style} must carry the text pinned here.",
       )
       .optional(),
+    workspace: WorkspacePin.optional(),
   })
   .meta({
     id: "Policy",

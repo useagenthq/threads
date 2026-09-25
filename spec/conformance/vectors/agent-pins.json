@@ -1,5 +1,5 @@
 {
-  "description": "Agent pins (spec/schema/README.md, The pinned config). Build `agent`: models are scripted models under `name`, declaring `price` and a `cache_ttl_ms` lifetime when given ('none' otherwise; `model` absent: scripted-1); each given permissions, retry or context section is the default one with those fields replaced; `sandbox` is the fake sandbox, with the agent's `egress` when given; `memory_write` gives local memory; extension hooks and observers are no-ops; an agent with `models` is a dynamic agent (its keys in order, the first the default), pinned as the member `dynamic` defines when given. A new thread's thread_started data (with `member`, that agent of the lead's team pinned as a member, which pins the lead's resolved defer_tools unless it sets its own) must equal `thread_started`, config_hash included; a team lead's `team` ids are fresh per thread and left out.",
+  "description": "Agent pins (spec/schema/README.md, The pinned config). Build `agent`: models are scripted models under `name`, declaring `price` and a `cache_ttl_ms` lifetime when given ('none' otherwise; `model` absent: scripted-1); each given permissions, retry or context section is the default one with those fields replaced; `sandbox` is the fake sandbox, with the agent's `egress` when given; `memory_write` gives local memory; extension hooks and observers are no-ops; an agent with `models` is a dynamic agent (its keys in order, the first the default), pinned as the member `dynamic` defines when given; `workspace` is the agent's workspace, with a local_dir case's contents in `directory` (written under a scratch directory the run starts from). A new thread's thread_started data (with `member`, that agent of the lead's team pinned as a member, which pins the lead's resolved defer_tools unless it sets its own) must equal `thread_started`, config_hash included; a team lead's `team` ids are fresh per thread and left out.",
   "cases": [
     {
       "name": "bare-agent",
@@ -3846,6 +3846,975 @@
           }
         },
         "config_hash": "07d0c0a324ea06ef7bca6826a22d3bb02611bdad1fd07065e00cac5a1e051fd9"
+      }
+    },
+    {
+      "name": "workspace-files",
+      "agent": {
+        "name": "coder",
+        "instructions": "Be brief.",
+        "sandbox": "fake",
+        "workspace": {
+          "files": {
+            "NOTES.md": "# notes\n",
+            "docs/plan.md": "Plan.\n"
+          }
+        }
+      },
+      "thread_started": {
+        "agent_name": "coder",
+        "instructions": "Be brief.",
+        "model": {
+          "provider": "scripted",
+          "name": "scripted-1"
+        },
+        "model_params": {
+          "max_tokens": 1024
+        },
+        "adapter": {
+          "name": "scripted",
+          "version": "1",
+          "settings": {}
+        },
+        "tools": [
+          {
+            "description": "Run a shell command in the sandbox. Returns exit_code, stdout and stderr previews, and full_output when truncated.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "command": {
+                  "description": "Run with bash -c.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "timeout_ms": {
+                  "description": "Default 120000.",
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "command"
+              ],
+              "type": "object"
+            },
+            "name": "bash",
+            "effect_class": "sandbox_local"
+          },
+          {
+            "description": "Replace old_string with new_string in a sandbox file. old_string must be unique unless replace_all.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "expected_sha256": {
+                  "description": "The file's current lowercase hex sha256; a mismatch changes nothing.",
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "new_string": {
+                  "type": "string"
+                },
+                "old_string": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "path": {
+                  "description": "Relative to /workspace, or absolute.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "replace_all": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "path",
+                "old_string",
+                "new_string"
+              ],
+              "type": "object"
+            },
+            "name": "edit",
+            "effect_class": "sandbox_local"
+          },
+          {
+            "description": "List files under path whose path relative to it matches pattern.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "default": ".",
+                  "description": "Directory, relative to /workspace; . is the workspace root.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "pattern": {
+                  "description": "A gitignore-style glob relative to path; ** spans directories.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ],
+              "type": "object"
+            },
+            "name": "glob",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Search file contents under path with an extended regular expression; prints path:line:text.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "glob": {
+                  "description": "Only files whose path relative to path matches this glob.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "path": {
+                  "default": ".",
+                  "description": "Directory, relative to /workspace; . is the workspace root.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "pattern": {
+                  "description": "An extended regular expression.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ],
+              "type": "object"
+            },
+            "name": "grep",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "List the entries of a sandbox directory.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "default": ".",
+                  "description": "Directory, relative to /workspace; . is the workspace root.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "ls",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Replace, insert after, or delete a Jupyter notebook cell by its cell id.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "cell_id": {
+                  "description": "The nbformat cell id; insert adds the new cell after it.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "cell_type": {
+                  "description": "Required for insert; replace keeps the type when absent.",
+                  "enum": [
+                    "code",
+                    "markdown"
+                  ],
+                  "type": "string"
+                },
+                "mode": {
+                  "default": "replace",
+                  "enum": [
+                    "replace",
+                    "insert",
+                    "delete"
+                  ],
+                  "type": "string"
+                },
+                "new_source": {
+                  "description": "The cell's new source; ignored by delete.",
+                  "type": "string"
+                },
+                "path": {
+                  "description": "An .ipynb file, relative to /workspace.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "cell_id",
+                "new_source"
+              ],
+              "type": "object"
+            },
+            "name": "notebook_edit",
+            "effect_class": "sandbox_local"
+          },
+          {
+            "description": "Read a text file in the sandbox, with line numbers.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "limit": {
+                  "default": 2000,
+                  "description": "Lines to read.",
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "offset": {
+                  "default": 1,
+                  "description": "First line, 1-based.",
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "path": {
+                  "description": "Relative to /workspace, or absolute.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "type": "object"
+            },
+            "name": "read",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Read bytes [offset, offset + length) of an earlier tool result by call_id, including spilled or cleared output.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "call_id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "length": {
+                  "maximum": 65536,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "offset": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "call_id",
+                "offset",
+                "length"
+              ],
+              "type": "object"
+            },
+            "name": "read_tool_result",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Replace your todo list with todos, the complete new list. Use it to plan and track multi-step work.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "todos": {
+                  "description": "The complete new list; ids are unique.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "active_form": {
+                        "description": "Present tense, shown while in_progress.",
+                        "type": "string"
+                      },
+                      "content": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "id": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "completed"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "content",
+                      "status"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "todos"
+              ],
+              "type": "object"
+            },
+            "name": "todo_write",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Create or overwrite a file in the sandbox.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "content": {
+                  "type": "string"
+                },
+                "expected_sha256": {
+                  "description": "The file's current lowercase hex sha256; a mismatch changes nothing.",
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "path": {
+                  "description": "Relative to /workspace, or absolute.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "content"
+              ],
+              "type": "object"
+            },
+            "name": "write",
+            "effect_class": "sandbox_local"
+          }
+        ],
+        "policy": {
+          "models": [
+            {
+              "provider": "scripted",
+              "name": "scripted-1",
+              "context_window": 200000,
+              "max_output_tokens": 8192,
+              "input_billing_bound": "context_window"
+            }
+          ],
+          "permissions": {
+            "mode": "default",
+            "allow": [],
+            "ask": [],
+            "deny": [],
+            "protected_paths": [
+              ".git/**",
+              ".threads/**",
+              ".claude/**",
+              ".mcp.json",
+              "**/.bashrc",
+              "**/.zshrc",
+              "**/.profile",
+              "**/.gitconfig",
+              "**/.ssh/**"
+            ],
+            "allow_bypass": false,
+            "plan_exit_mode": "default"
+          },
+          "retry": {
+            "max_retries": 8,
+            "base_delay_ms": 1000,
+            "max_delay_ms": 32000,
+            "max_retry_after_ms": 60000,
+            "max_total_wait_ms": 600000,
+            "crash_resends": 2,
+            "fallback_after": 3,
+            "fallback_scope": "turn",
+            "heartbeat_ms": 15000
+          },
+          "context": {
+            "reserve_tokens": 20000,
+            "cache_ttl_ms": 300000,
+            "clear_results": {
+              "trigger": {
+                "permille": 700
+              },
+              "keep_recent": 5,
+              "exclude_tools": []
+            },
+            "spill": {
+              "threshold_bytes": 32768,
+              "head_bytes": 2048,
+              "tail_bytes": 1024,
+              "request_budget_bytes": 204800
+            },
+            "compact": {
+              "trigger": {
+                "permille": 850
+              },
+              "keep_tail": {
+                "tokens": 20000
+              },
+              "max_failures": 3
+            },
+            "restore": {
+              "max_files": 5,
+              "file_tokens": 5000,
+              "skill_tokens": 5000,
+              "skills_total_tokens": 25000
+            },
+            "max_output_continuations": 3,
+            "defer_tools": "auto",
+            "defer_threshold": {
+              "permille": 100
+            },
+            "server_edits": "disabled"
+          },
+          "workspace": {
+            "tree": {
+              "sha256": "e351a9f031ea5ccde6f5a9e9fef520b4193db7e4ba78c70d7a1009b978c5f59f",
+              "bytes": 294
+            },
+            "manifest_hash": "7cbb1261a0888a5aca5e54bcdd9a1d9f1df813fae2314a78f8d3f79bbfa0b9bc",
+            "sources": [
+              {
+                "kind": "files"
+              }
+            ]
+          }
+        },
+        "sandbox_provider": "fake",
+        "config_hash": "0c6caec12cf35b71a27904e4372f7f88878cb59fb0883f13fd9c0a3343363589"
+      }
+    },
+    {
+      "name": "workspace-local-dir",
+      "agent": {
+        "name": "coder",
+        "instructions": "Be brief.",
+        "sandbox": "fake",
+        "workspace": {
+          "files": {
+            "NOTES.md": "# notes\n"
+          },
+          "local_dir": "./app",
+          "include": [
+            ".env.test"
+          ]
+        }
+      },
+      "directory": [
+        {
+          "path": "src/main.ts",
+          "text": "console.log(1);\n"
+        },
+        {
+          "path": "bin/run.sh",
+          "text": "#!/bin/sh\necho hi\n",
+          "exec": true
+        },
+        {
+          "path": "main.ts",
+          "symlink": "src/main.ts"
+        },
+        {
+          "path": "logs",
+          "dir": true
+        },
+        {
+          "path": ".env",
+          "text": "MODE=prod\n"
+        },
+        {
+          "path": ".env.test",
+          "text": "MODE=test\n"
+        },
+        {
+          "path": "id_rsa",
+          "text": "not a key\n"
+        },
+        {
+          "path": "id_ed25519",
+          "text": "not a key\n"
+        },
+        {
+          "path": "id_utils/index.ts",
+          "text": "export {};\n"
+        },
+        {
+          "path": "id_token.ts",
+          "text": "export {};\n"
+        },
+        {
+          "path": ".npmrc",
+          "text": "registry=x\n"
+        },
+        {
+          "path": ".ssh/config",
+          "text": "Host x\n"
+        },
+        {
+          "path": ".docker/config.json",
+          "text": "{}\n"
+        },
+        {
+          "path": "certs/server.pem",
+          "text": "pem\n"
+        },
+        {
+          "path": "config.json",
+          "text": "{}\n"
+        }
+      ],
+      "thread_started": {
+        "agent_name": "coder",
+        "instructions": "Be brief.",
+        "model": {
+          "provider": "scripted",
+          "name": "scripted-1"
+        },
+        "model_params": {
+          "max_tokens": 1024
+        },
+        "adapter": {
+          "name": "scripted",
+          "version": "1",
+          "settings": {}
+        },
+        "tools": [
+          {
+            "description": "Run a shell command in the sandbox. Returns exit_code, stdout and stderr previews, and full_output when truncated.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "command": {
+                  "description": "Run with bash -c.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "timeout_ms": {
+                  "description": "Default 120000.",
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "command"
+              ],
+              "type": "object"
+            },
+            "name": "bash",
+            "effect_class": "sandbox_local"
+          },
+          {
+            "description": "Replace old_string with new_string in a sandbox file. old_string must be unique unless replace_all.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "expected_sha256": {
+                  "description": "The file's current lowercase hex sha256; a mismatch changes nothing.",
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "new_string": {
+                  "type": "string"
+                },
+                "old_string": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "path": {
+                  "description": "Relative to /workspace, or absolute.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "replace_all": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "path",
+                "old_string",
+                "new_string"
+              ],
+              "type": "object"
+            },
+            "name": "edit",
+            "effect_class": "sandbox_local"
+          },
+          {
+            "description": "List files under path whose path relative to it matches pattern.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "default": ".",
+                  "description": "Directory, relative to /workspace; . is the workspace root.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "pattern": {
+                  "description": "A gitignore-style glob relative to path; ** spans directories.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ],
+              "type": "object"
+            },
+            "name": "glob",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Search file contents under path with an extended regular expression; prints path:line:text.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "glob": {
+                  "description": "Only files whose path relative to path matches this glob.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "path": {
+                  "default": ".",
+                  "description": "Directory, relative to /workspace; . is the workspace root.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "pattern": {
+                  "description": "An extended regular expression.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ],
+              "type": "object"
+            },
+            "name": "grep",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "List the entries of a sandbox directory.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "default": ".",
+                  "description": "Directory, relative to /workspace; . is the workspace root.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "ls",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Replace, insert after, or delete a Jupyter notebook cell by its cell id.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "cell_id": {
+                  "description": "The nbformat cell id; insert adds the new cell after it.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "cell_type": {
+                  "description": "Required for insert; replace keeps the type when absent.",
+                  "enum": [
+                    "code",
+                    "markdown"
+                  ],
+                  "type": "string"
+                },
+                "mode": {
+                  "default": "replace",
+                  "enum": [
+                    "replace",
+                    "insert",
+                    "delete"
+                  ],
+                  "type": "string"
+                },
+                "new_source": {
+                  "description": "The cell's new source; ignored by delete.",
+                  "type": "string"
+                },
+                "path": {
+                  "description": "An .ipynb file, relative to /workspace.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "cell_id",
+                "new_source"
+              ],
+              "type": "object"
+            },
+            "name": "notebook_edit",
+            "effect_class": "sandbox_local"
+          },
+          {
+            "description": "Read a text file in the sandbox, with line numbers.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "limit": {
+                  "default": 2000,
+                  "description": "Lines to read.",
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "offset": {
+                  "default": 1,
+                  "description": "First line, 1-based.",
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "path": {
+                  "description": "Relative to /workspace, or absolute.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "type": "object"
+            },
+            "name": "read",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Read bytes [offset, offset + length) of an earlier tool result by call_id, including spilled or cleared output.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "call_id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "length": {
+                  "maximum": 65536,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "offset": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "call_id",
+                "offset",
+                "length"
+              ],
+              "type": "object"
+            },
+            "name": "read_tool_result",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Replace your todo list with todos, the complete new list. Use it to plan and track multi-step work.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "todos": {
+                  "description": "The complete new list; ids are unique.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "active_form": {
+                        "description": "Present tense, shown while in_progress.",
+                        "type": "string"
+                      },
+                      "content": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "id": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "completed"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "content",
+                      "status"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "todos"
+              ],
+              "type": "object"
+            },
+            "name": "todo_write",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Create or overwrite a file in the sandbox.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "content": {
+                  "type": "string"
+                },
+                "expected_sha256": {
+                  "description": "The file's current lowercase hex sha256; a mismatch changes nothing.",
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "path": {
+                  "description": "Relative to /workspace, or absolute.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "content"
+              ],
+              "type": "object"
+            },
+            "name": "write",
+            "effect_class": "sandbox_local"
+          }
+        ],
+        "policy": {
+          "models": [
+            {
+              "provider": "scripted",
+              "name": "scripted-1",
+              "context_window": 200000,
+              "max_output_tokens": 8192,
+              "input_billing_bound": "context_window"
+            }
+          ],
+          "permissions": {
+            "mode": "default",
+            "allow": [],
+            "ask": [],
+            "deny": [],
+            "protected_paths": [
+              ".git/**",
+              ".threads/**",
+              ".claude/**",
+              ".mcp.json",
+              "**/.bashrc",
+              "**/.zshrc",
+              "**/.profile",
+              "**/.gitconfig",
+              "**/.ssh/**"
+            ],
+            "allow_bypass": false,
+            "plan_exit_mode": "default"
+          },
+          "retry": {
+            "max_retries": 8,
+            "base_delay_ms": 1000,
+            "max_delay_ms": 32000,
+            "max_retry_after_ms": 60000,
+            "max_total_wait_ms": 600000,
+            "crash_resends": 2,
+            "fallback_after": 3,
+            "fallback_scope": "turn",
+            "heartbeat_ms": 15000
+          },
+          "context": {
+            "reserve_tokens": 20000,
+            "cache_ttl_ms": 300000,
+            "clear_results": {
+              "trigger": {
+                "permille": 700
+              },
+              "keep_recent": 5,
+              "exclude_tools": []
+            },
+            "spill": {
+              "threshold_bytes": 32768,
+              "head_bytes": 2048,
+              "tail_bytes": 1024,
+              "request_budget_bytes": 204800
+            },
+            "compact": {
+              "trigger": {
+                "permille": 850
+              },
+              "keep_tail": {
+                "tokens": 20000
+              },
+              "max_failures": 3
+            },
+            "restore": {
+              "max_files": 5,
+              "file_tokens": 5000,
+              "skill_tokens": 5000,
+              "skills_total_tokens": 25000
+            },
+            "max_output_continuations": 3,
+            "defer_tools": "auto",
+            "defer_threshold": {
+              "permille": 100
+            },
+            "server_edits": "disabled"
+          },
+          "workspace": {
+            "tree": {
+              "sha256": "81e4e1c55e587843e6f31ddb1165e902ded96527f80e32c6120ae4dc07d86c5a",
+              "bytes": 1271
+            },
+            "manifest_hash": "8deaea43712ea18231ebf75b5269b327bf3354cc59407398a9e99f688af670f4",
+            "sources": [
+              {
+                "kind": "files"
+              },
+              {
+                "kind": "local_dir",
+                "path": "./app",
+                "skipped": [
+                  ".docker/config.json",
+                  ".env",
+                  ".npmrc",
+                  ".ssh",
+                  "certs/server.pem",
+                  "id_ed25519",
+                  "id_rsa"
+                ]
+              }
+            ]
+          }
+        },
+        "sandbox_provider": "fake",
+        "config_hash": "52300965956327dc76026be0478f02a5ce3998da4ca1a4bf55cf644aa8c7faf8"
       }
     },
     {

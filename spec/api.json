@@ -428,6 +428,7 @@
           "required": false,
           "doc": "The sandbox the sandbox tools run in: bash and the file tools (read, write, edit, ls, glob, grep). The git, lsp and computer options also need one. Omitted: no sandbox tools."
         },
+        {"name": "workspace", "kind": "option", "type": {"$ref": "#/types/Workspace"}, "required": false, "doc": "Files every sandbox this thread creates starts with in /workspace, resolved on the host into one tree and pinned (policy.workspace, covered by config_hash) when the thread starts. Continuing a thread re-resolves them; any change is ConfigError invalid_config. Needs a sandbox whose sessions have exportTree and importTree, or it is capability_missing. Omitted: /workspace starts empty."},
         {"name": "memory", "kind": "option", "type": {"$ref": "#/types/MemoryProvider"}, "required": false, "doc": "Saved cross-run memory: localMemory() or a memory adapter. It pins save_memory, search_memory and forget_memory. Omitted: the agent has no memory tools."},
         {
           "name": "memory_write",
@@ -3867,6 +3868,17 @@
       "role": "opaque",
       "properties": {"name": {"type": {"prim": "string"}, "required": true, "doc": "The host environment variable the value is read from. Unset or empty when used is a ConfigError missing_secret."}},
       "doc": "A reference to a host secret, made by secret(name). It holds only the name: host code reads the value from the environment when it uses it, and the value never enters the sandbox, a prompt or the log."
+    },
+    "Workspace": {
+      "kind": "object",
+      "casing": "api",
+      "fields": {
+        "files": {"type": {"map": {"union": [{"prim": "string"}, {"prim": "bytes"}]}}, "required": false, "doc": "Tree path to contents (text as UTF-8), mode 0o644, taken as given."},
+        "local_dir": {"type": {"prim": "string"}, "required": false, "doc": "A host directory, read on the host and pinned exactly as written. .git, gitignored files (the host's git, including the user's global excludes) and deny-listed names (.env*, *.pem, *.key, id_rsa and the other exact key names, .npmrc, .pypirc, .netrc, .aws, .ssh, .docker/config.json) are skipped and listed in the pin. Submodules, nested repositories, escaping symlinks and special files are ConfigError invalid_config."},
+        "git": {"type": {"object": {"repo": {"type": {"prim": "string"}, "required": true, "doc": "owner/name on the forge of the agent's git option (default https://github.com)."}, "ref": {"type": {"prim": "string"}, "required": true, "doc": "A branch, tag or commit, resolved to a commit when the thread starts."}}}, "required": false, "doc": "A repository fetched on the host with the git option's credential (anonymously without one), with the local_dir exclusions."},
+        "include": {"type": {"array": {"prim": "string"}}, "required": false, "default": [], "doc": "Tree paths that the gitignore or deny-list rules skipped, re-admitted one by one; a directory re-admits its subtree except .git and deny-listed names inside it. An entry that re-admits nothing, or names .git, is ConfigError invalid_config."}
+      },
+      "doc": "Workspace inputs (spec/schema/README.md, Workspace inputs). Every input file is scanned for registered secret values: a hit is ConfigError invalid_config naming the file, never the value. At most 10,000 files and 256 MiB in total after exclusions. Two inputs naming one path are ConfigError invalid_config."
     },
     "Skill": {
       "kind": "object",

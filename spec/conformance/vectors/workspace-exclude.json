@@ -1,0 +1,141 @@
+{
+  "description": "The workspace deny-list with .git (spec/schema/README.md, Workspace inputs, rules 1 and 3): `excluded` is whether a local_dir or git path is skipped by its segments alone, before gitignore and include.",
+  "cases": [
+    {
+      "path": ".env",
+      "excluded": true
+    },
+    {
+      "path": ".env.test",
+      "excluded": true
+    },
+    {
+      "path": ".envrc",
+      "excluded": true
+    },
+    {
+      "path": "src/.env.example",
+      "excluded": true
+    },
+    {
+      "path": "environment.ts",
+      "excluded": false
+    },
+    {
+      "path": "id_rsa",
+      "excluded": true
+    },
+    {
+      "path": "id_dsa",
+      "excluded": true
+    },
+    {
+      "path": "id_ecdsa",
+      "excluded": true
+    },
+    {
+      "path": "id_ed25519",
+      "excluded": true
+    },
+    {
+      "path": "id_ecdsa_sk",
+      "excluded": true
+    },
+    {
+      "path": "id_ed25519_sk",
+      "excluded": true
+    },
+    {
+      "path": "keys/id_ed25519",
+      "excluded": true
+    },
+    {
+      "path": "id_rsa.pub",
+      "excluded": false
+    },
+    {
+      "path": "id_utils/index.ts",
+      "excluded": false
+    },
+    {
+      "path": "id_token.ts",
+      "excluded": false
+    },
+    {
+      "path": "certs/server.pem",
+      "excluded": true
+    },
+    {
+      "path": "tls.key",
+      "excluded": true
+    },
+    {
+      "path": "keyboard.ts",
+      "excluded": false
+    },
+    {
+      "path": "a.keys",
+      "excluded": false
+    },
+    {
+      "path": ".npmrc",
+      "excluded": true
+    },
+    {
+      "path": ".pypirc",
+      "excluded": true
+    },
+    {
+      "path": ".netrc",
+      "excluded": true
+    },
+    {
+      "path": ".aws/credentials",
+      "excluded": true
+    },
+    {
+      "path": ".ssh/config",
+      "excluded": true
+    },
+    {
+      "path": "home/.ssh/known_hosts",
+      "excluded": true
+    },
+    {
+      "path": ".docker/config.json",
+      "excluded": true
+    },
+    {
+      "path": ".docker/daemon.json",
+      "excluded": false
+    },
+    {
+      "path": "config.json",
+      "excluded": false
+    },
+    {
+      "path": "app/.docker/config.json",
+      "excluded": true
+    },
+    {
+      "path": ".git/config",
+      "excluded": true
+    },
+    {
+      "path": "vendor/lib/.git",
+      "excluded": true
+    },
+    {
+      "path": ".gitignore",
+      "excluded": false
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "excluded": false
+    },
+    {
+      "path": "src/main.ts",
+      "excluded": false
+    }
+  ]
+}

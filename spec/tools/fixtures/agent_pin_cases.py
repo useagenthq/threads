@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .jcs import Obj
+    from .jcs import JsonValue, Obj
 
 
 def cases() -> list[tuple[str, Obj, str | None, Obj | None]]:
@@ -142,6 +142,32 @@ def cases() -> list[tuple[str, Obj, str | None, Obj | None]]:
         ),
         ("memory", {"name": "remembers", **brief, "memory_write": "allow"}, None, None),
         (
+            "workspace-files",
+            {
+                "name": "coder",
+                **brief,
+                "sandbox": "fake",
+                "workspace": {"files": {"NOTES.md": "# notes\n", "docs/plan.md": "Plan.\n"}},
+            },
+            None,
+            None,
+        ),
+        (
+            "workspace-local-dir",
+            {
+                "name": "coder",
+                **brief,
+                "sandbox": "fake",
+                "workspace": {
+                    "files": {"NOTES.md": "# notes\n"},
+                    "local_dir": "./app",
+                    "include": [".env.test"],
+                },
+            },
+            None,
+            None,
+        ),
+        (
             "skills",
             {
                 "name": "skilled",
@@ -184,3 +210,28 @@ def cases() -> list[tuple[str, Obj, str | None, Obj | None]]:
             {"define": {"tools": ["bash"], "model": "fast"}, "starter": "operator"},
         ),
     ]
+
+
+def directories() -> dict[str, list[JsonValue]]:
+    """A local_dir case's directory contents: {path, text[, exec]}, {path, symlink} or
+    {path, dir: true}, written under the case's local_dir before the agent is pinned."""
+    return {
+        "workspace-local-dir": [
+            {"path": "src/main.ts", "text": "console.log(1);\n"},
+            {"path": "bin/run.sh", "text": "#!/bin/sh\necho hi\n", "exec": True},
+            {"path": "main.ts", "symlink": "src/main.ts"},
+            {"path": "logs", "dir": True},
+            {"path": ".env", "text": "MODE=prod\n"},
+            {"path": ".env.test", "text": "MODE=test\n"},
+            {"path": "id_rsa", "text": "not a key\n"},
+            {"path": "id_ed25519", "text": "not a key\n"},
+            {"path": "id_utils/index.ts", "text": "export {};\n"},
+            {"path": "id_token.ts", "text": "export {};\n"},
+            {"path": ".npmrc", "text": "registry=x\n"},
+            {"path": ".ssh/config", "text": "Host x\n"},
+            {"path": ".docker/config.json", "text": "{}\n"},
+            {"path": "certs/server.pem", "text": "pem\n"},
+            {"path": "config.json", "text": "{}\n"},
+        ]
+    }
+
