@@ -38,12 +38,12 @@ class DaytonaDriver:
         self._clients, self._base, self._placed = clients, base, placed
         self._poll_s, self._wait_s = pacing
         # A create that passed its fence may still be in flight at the provider.
-        self.lookup = NonfinalLookup(self._find)
+        self.lookup: NonfinalLookup = NonfinalLookup(self._find)
         # Deleting the command's session is Daytona's only kill, and it can't see detached
         # descendants.
-        self.termination = Unconfirmed(self._stop)
+        self.termination: Unconfirmed = Unconfirmed(self._stop)
         # Cold only: stop (every process ends), capture, start.
-        self.capture = Capture("stopped", self._take, self._delete)
+        self.capture: Capture | None = Capture("stopped", self._take, self._delete)
 
     def bound(self) -> Self:
         clients = self._clients()

@@ -41,7 +41,7 @@ class RemoteInfo:
     egress: Literal["enforced", "unenforced"]
 
 
-def info_of(driver: SandboxDriver, declared: RemoteInfo) -> SandboxInfo:
+def _info_of(driver: SandboxDriver, declared: RemoteInfo) -> SandboxInfo:
     capture = driver.capture
     quiescent = capture is not None and capture.quiescence != "unconfirmed"
     return SandboxInfo(
@@ -83,7 +83,7 @@ _CREATE_ERRORS = ("stale_epoch", "cleanup_claim_lost", "timeout")
 class RemoteSandbox:
     def __init__(self, driver: SandboxDriver, declared: RemoteInfo) -> None:
         self._driver = driver
-        self._info = info_of(driver, declared)
+        self._info = _info_of(driver, declared)
 
     @property
     def info(self) -> SandboxInfo:

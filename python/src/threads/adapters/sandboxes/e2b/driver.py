@@ -54,9 +54,9 @@ class E2BDriver:
     def __init__(self, plane: Callable[[], Plane], settings: Settings) -> None:
         self._plane, self._settings = plane, settings
         # A create that passed its fence may still be in flight when the query runs.
-        self.lookup = NonfinalLookup(self._find)
+        self.lookup: NonfinalLookup = NonfinalLookup(self._find)
         # envd kills the process it started, not what that process detached.
-        self.termination = Unconfirmed(self._signal)
+        self.termination: Unconfirmed = Unconfirmed(self._signal)
         self.capture: Capture | None = None
 
     def bound(self) -> Self:

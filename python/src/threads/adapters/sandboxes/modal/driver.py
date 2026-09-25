@@ -28,9 +28,9 @@ class ModalDriver:
     def __init__(self, plane: Callable[[], Plane]) -> None:
         self._plane = plane
         # A create already past its fence may still land.
-        self.lookup = NonfinalLookup(self._find)
+        self.lookup: NonfinalLookup = NonfinalLookup(self._find)
         # The router has no kill for an exec and no view of its descendants.
-        self.termination = Unconfirmed(self._stop)
+        self.termination: Unconfirmed = Unconfirmed(self._stop)
         self.capture: Capture | None = None
 
     def bound(self) -> Self:
