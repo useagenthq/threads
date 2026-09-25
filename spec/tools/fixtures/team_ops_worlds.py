@@ -135,3 +135,4 @@ class Vec:
     appended: dict[str, list[str]]
     now: int = NOW
     given: Obj = field(default_factory=dict[str, "JsonValue"])
+    lane: str | None = None  # a later build's vector (Teams Phase 2): runtimes skip it until then

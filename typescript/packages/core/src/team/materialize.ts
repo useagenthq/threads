@@ -4,7 +4,7 @@ import {
   BranchId,
   type MailEnvelope,
   type TeamSettings,
-  ThreadStartedData,
+  ThreadStartedFields,
 } from "../log";
 import { knownEvents } from "../reduce";
 import { err, ok, type Result } from "../result";
@@ -78,7 +78,7 @@ type Starting = {
 
 // thread_started takes the pinned config's line-0 fields; the rest of the config is hashed only.
 const Pinned = z.object(
-  ThreadStartedData.pick({
+  ThreadStartedFields.pick({
     agent_name: true,
     instructions: true,
     model: true,
@@ -324,6 +324,7 @@ function choiceOf(
   if (define === undefined) return undefined;
   return {
     define,
-    starter: "operator" in task.from ? "operator" : task.from.name,
+    // A caller never sends a task (the envelope's rule), so a sender without a name is the operator.
+    starter: "name" in task.from ? task.from.name : "operator",
   };
 }

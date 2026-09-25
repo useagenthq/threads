@@ -233,11 +233,14 @@ def _started(fold: Fold, event: MemberStartedEvent) -> ParseError | None:
     why = _defined(event)
     if why is not None:
         return reject(event, why)
-    parent, team = event.data.parent, fold.team
+    parent, provenance, team = event.data.parent, event.data.provenance, fold.team
+    # Only a host member's start (Phase 2, refused first by rules_phase2) has neither.
+    if parent is MISSING or provenance is MISSING:
+        return reject(event, "a member_started without a parent is a host member's")
     if team.team_log:
         if parent.thread_id != team.lead_thread:
             return reject(event, "an operator start's parent is not the lead's thread")
-        root = event.data.provenance.root_request
+        root = provenance.root_request
         if root.thread_id == event.thread_id and root.event_id in team.request_events:
             return None
         return reject(event, "an operator start before its operator_request")

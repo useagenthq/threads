@@ -1,0 +1,14 @@
+{
+  "name": "host-member-started-in-lead-team-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 50: only a host team's log starts host members: a lead's team log records member_started{host_member}: invalid_transition there, in the team log.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team"
+    ]
+  }
+}

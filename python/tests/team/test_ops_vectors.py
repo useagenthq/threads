@@ -29,7 +29,12 @@ from threads.team.materialize import MaterializeOptions, Rebind, materialize
 
 OPERATOR_LATER = frozenset({"ask", "wait", "cancel"})
 """The operator's ask, wait and cancel wait for their Team methods (lane 21F follow-up)."""
-MINE = [v for v in vectors() if not (v["by"] == "team" and v["op"] in OPERATOR_LATER)]
+MINE = [
+    v
+    for v in vectors()
+    if "lane" not in v  # a Teams Phase 2 vector waits for its sub-lane's build
+    and not (v["by"] == "team" and v["op"] in OPERATOR_LATER)
+]
 
 
 def _clock(v: Obj) -> Callable[[], int]:

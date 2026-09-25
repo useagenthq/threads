@@ -8,6 +8,8 @@ language is marked as built in the other (ONLY_IN).
 
 from pathlib import Path
 
+from surface_changed import marker
+
 from .json_access import array, load, obj, text
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -42,6 +44,35 @@ def _missing() -> dict[Member, set[str]]:
             langs.update(out.get(("", container), set()))
     return out
 
+
+# What today's build does instead, for each member whose contract changed ahead of its build (a
+# `changed` gap): the docs mark it so they never promise what isn't built.
+CHANGE_NOTES: dict[str, str] = {
+    "Thread.cancel": "Until then a lease another process holds is branch_busy (HTTP 409), not "
+    "CancelAccepted (HTTP 202).",
+    "AskOutcome": "Until then no ask closes failed: the failed variant comes with host members.",
+    "Team.events": "Until then a cursor of any other epoch restarts the feed, follow is not "
+    "supported, and GET /v1/teams/{team}/events is not served.",
+}
+
+
+def _changed() -> dict[Member, str]:
+    """(container, member) of each changed gap, with the sentence its docs page carries."""
+    out: dict[Member, str] = {}
+    for gap in (obj(e) for e in array(load(SPEC / "api-surface-gaps.json"))):
+        if text(gap["kind"]) != "changed":
+            continue
+        name, lane = text(gap["name"]), text(gap["lane"])
+        owner, _, member = name.partition(".")
+        note = CHANGE_NOTES.get(name, "Until then the member keeps its earlier contract.")
+        out[(owner, member or None)] = f"{marker(lane)}: {note}"
+    return out
+
+
+CHANGED: dict[Member, str] = _changed()
+CHANGED_NAMES: frozenset[str] = frozenset(
+    f"{owner}.{member}" if member else owner for owner, member in CHANGED
+)
 
 _MISSING = _missing()
 NOT_BUILT: frozenset[Member] = frozenset(m for m, ls in _MISSING.items() if ls == {"ts", "py"})

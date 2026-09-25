@@ -6,6 +6,7 @@ from threads.log import Event, Header, ParseError, UnknownEvent
 from threads.reduce import (
     rules_loaded,
     rules_misc,
+    rules_phase2,
     rules_requested,
     rules_team,
     rules_tools,
@@ -40,7 +41,11 @@ def apply(fold: Fold, event: Event | UnknownEvent) -> ParseError | None:
     error = _envelope_error(fold, event)
     if error is None and not isinstance(event, UnknownEvent):
         handler = _HANDLERS.get(type(event))
-        error = rules_team.check(fold, event) or (None if handler is None else handler(fold, event))
+        error = (
+            rules_phase2.not_yet(event)
+            or rules_team.check(fold, event)
+            or (None if handler is None else handler(fold, event))
+        )
     if error is not None:
         return error
     fold.seq = event.seq

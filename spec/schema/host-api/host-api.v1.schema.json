@@ -438,6 +438,72 @@
       "required": ["event_id"],
       "properties": { "event_id": { "$ref": "urn:threads:schema:events:v1#/$defs/EventId" } }
     },
+    "CancelAccepted": {
+      "description": "A cancel another process will apply: the durable inbox control item (channel api) its lease holder applies at its next step boundary or dispatch fence, once. HTTP 202.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item_key"],
+      "properties": { "item_key": { "$ref": "urn:threads:schema:events:v1#/$defs/Uuid" } }
+    },
+    "TeamCursor": {
+      "description": "A position in a team feed: its epoch (a rebuilt feed starts a new one) and offset. The SSE id is <epoch>:<offset>.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["epoch", "offset"],
+      "properties": {
+        "epoch": { "$ref": "urn:threads:schema:events:v1#/$defs/Int" },
+        "offset": { "$ref": "urn:threads:schema:events:v1#/$defs/Int" }
+      }
+    },
+    "TeamSource": {
+      "description": "Which log a feed item came from: a member's, one operator request's events in the team log, or the team log's own events.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "member"],
+          "properties": { "kind": { "const": "member" }, "member": { "$ref": "urn:threads:schema:events:v1#/$defs/MemberRef" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "principal", "request"],
+          "properties": {
+            "kind": { "const": "operator" },
+            "principal": { "$ref": "urn:threads:schema:events:v1#/$defs/Principal" },
+            "request": { "$ref": "urn:threads:schema:events:v1#/$defs/RequestId" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "const": "team" } }
+        }
+      ]
+    },
+    "TeamItem": {
+      "description": "The data of one SSE message on a lead team's stream (GET /v1/teams/{team}/events): a committed event with its cursor and source, or epoch_restarted, after which the route closes so the client reconnects with the new cursor.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "cursor", "source", "event"],
+          "properties": {
+            "kind": { "const": "event" },
+            "cursor": { "$ref": "#/$defs/TeamCursor" },
+            "source": { "$ref": "#/$defs/TeamSource" },
+            "event": { "$ref": "urn:threads:schema:events:v1#/$defs/Event" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "cursor"],
+          "properties": { "kind": { "const": "epoch_restarted" }, "cursor": { "$ref": "#/$defs/TeamCursor" } }
+        }
+      ]
+    },
     "UsageTotals": {
       "$ref": "urn:threads:schema:events:v1#/$defs/UsageTotals"
     },

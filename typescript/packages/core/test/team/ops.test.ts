@@ -27,7 +27,7 @@ import {
 const OPERATOR_LATER: ReadonlySet<string> = new Set(["ask", "wait", "cancel"]);
 
 const runs = (v: Vector): boolean =>
-  !(v.by === "team" && OPERATOR_LATER.has(v.op));
+  v.lane === undefined && !(v.by === "team" && OPERATOR_LATER.has(v.op));
 
 async function materializeOp(fx: Fixture, v: Vector): Promise<unknown> {
   const rebind = z

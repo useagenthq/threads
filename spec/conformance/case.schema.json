@@ -156,6 +156,27 @@
                 "$ref": "#/$defs/HostRequest"
               }
             },
+            "deleted": {
+              "description": "team (Teams Phase 2): caller threads that were deleted. Their logs are gone, and a mail or ask naming one as caller is not rebuilt.",
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "feed": {
+              "description": "team (Teams Phase 2): team.events reads of the rebuilt feed (epoch 1), each after an optional cursor.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "after": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["epoch", "offset"],
+                    "properties": { "epoch": { "type": "integer" }, "offset": { "type": "integer" } }
+                  }
+                }
+              }
+            },
             "logs": {
               "description": "team: the labels of the team's logs, each exported at logs/<label>.jsonl (every member log and the team log).",
               "type": "array",
@@ -590,6 +611,11 @@
               }
             }
           }
+        },
+        "feed": {
+          "description": "team (Teams Phase 2): one answer per input.feed read: its items ({kind: event, cursor, source, branch_id, seq} or {kind: epoch_restarted, cursor}), or {error: invalid_cursor}.",
+          "type": "array",
+          "items": { "type": "object" }
         },
         "messages": {
           "description": "ui: the stock client's messages after the frames, in canonical form (spec/conformance/README.md, ui).",

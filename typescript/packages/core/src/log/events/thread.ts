@@ -13,6 +13,7 @@ import {
   BranchId,
   CallId,
   EventId,
+  MemberName,
   SandboxId,
   SnapshotId,
   TeamId,
@@ -80,7 +81,25 @@ export const TeamSettings: Strict<{
     "Set on the thread of an agent defined with team (a lead). Its first append also opens the team log and inserts the teams row and the lead's team_members row (role lead, generation 1).",
   );
 
-export const ThreadStartedData: Strict<{
+/** A host member's thread: a root thread that belongs to its tenant's host team (Phase 2). */
+export const HostMemberOf: Strict<{
+  team: typeof TeamId;
+  name: typeof MemberName;
+  generation: typeof PosInt;
+}> = z
+  .strictObject({ team: TeamId, name: MemberName, generation: PosInt })
+  .describe(
+    "Set on a host member's thread (Phase 2), opened at materialize: the host team, the member's name (its agent name) and generation. A host member has no parent and no team of its own.",
+  );
+
+const THREAD_STARTED_RULE = {
+  if: { required: ["host_member"] },
+  then: {
+    not: { anyOf: [{ required: ["parent"] }, { required: ["team"] }] },
+  },
+} as const;
+/** thread_started's fields, before its rule: materialize picks line 0's from them. */
+export const ThreadStartedFields: Strict<{
   agent_name: typeof NonEmpty;
   config_hash: typeof Sha256;
   model: typeof ModelRef;
@@ -92,6 +111,7 @@ export const ThreadStartedData: Strict<{
   policy: Opt<typeof Policy>;
   parent: Opt<typeof ThreadParent>;
   team: Opt<typeof TeamSettings>;
+  host_member: Opt<typeof HostMemberOf>;
 }> = z.strictObject({
   agent_name: NonEmpty,
   config_hash: Sha256.describe(
@@ -112,7 +132,12 @@ export const ThreadStartedData: Strict<{
   policy: Policy.optional(),
   parent: ThreadParent.optional(),
   team: TeamSettings.optional(),
+  host_member: HostMemberOf.optional(),
 });
+export const ThreadStartedData: Ruled<
+  typeof ThreadStartedFields,
+  typeof THREAD_STARTED_RULE
+> = withRule(ThreadStartedFields, THREAD_STARTED_RULE);
 export const ThreadStarted: EventDef<
   "thread_started",
   typeof ThreadStartedData,

@@ -491,8 +491,36 @@
                           "enum": [
                             "unauthenticated",
                             "forbidden",
+                            "not_found"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "SubscribeTeamError": {
+        "description": "Typed failure of subscribeTeam: 401, 404 (no such lead team in the principal's tenant, or the host team) and 400 for a malformed cursor, one from a later epoch, or one past the head, in both languages.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ErrorBody"
+                },
+                {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "unauthenticated",
                             "not_found",
-                            "branch_busy"
+                            "invalid_cursor"
                           ]
                         }
                       }
@@ -894,6 +922,19 @@
           },
           "branch_id": {
             "$ref": "#/components/schemas/events_BranchId"
+          }
+        }
+      },
+      "CancelAccepted": {
+        "description": "A cancel another process will apply: the durable inbox control item (channel api) its lease holder applies at its next step boundary or dispatch fence, once. HTTP 202.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "item_key"
+        ],
+        "properties": {
+          "item_key": {
+            "$ref": "#/components/schemas/events_Uuid"
           }
         }
       },
@@ -1445,6 +1486,121 @@
               },
               "until": {
                 "$ref": "#/components/schemas/events_TimeMs"
+              }
+            }
+          }
+        ]
+      },
+      "TeamCursor": {
+        "description": "A position in a team feed: its epoch (a rebuilt feed starts a new one) and offset. The SSE id is <epoch>:<offset>.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "epoch",
+          "offset"
+        ],
+        "properties": {
+          "epoch": {
+            "$ref": "#/components/schemas/events_Int"
+          },
+          "offset": {
+            "$ref": "#/components/schemas/events_Int"
+          }
+        }
+      },
+      "TeamItem": {
+        "description": "The data of one SSE message on a lead team's stream (GET /v1/teams/{team}/events): a committed event with its cursor and source, or epoch_restarted, after which the route closes so the client reconnects with the new cursor.",
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "cursor",
+              "source",
+              "event"
+            ],
+            "properties": {
+              "kind": {
+                "const": "event"
+              },
+              "cursor": {
+                "$ref": "#/components/schemas/TeamCursor"
+              },
+              "source": {
+                "$ref": "#/components/schemas/TeamSource"
+              },
+              "event": {
+                "$ref": "#/components/schemas/events_Event"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "cursor"
+            ],
+            "properties": {
+              "kind": {
+                "const": "epoch_restarted"
+              },
+              "cursor": {
+                "$ref": "#/components/schemas/TeamCursor"
+              }
+            }
+          }
+        ]
+      },
+      "TeamSource": {
+        "description": "Which log a feed item came from: a member's, one operator request's events in the team log, or the team log's own events.",
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "member"
+            ],
+            "properties": {
+              "kind": {
+                "const": "member"
+              },
+              "member": {
+                "$ref": "#/components/schemas/events_MemberRef"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "principal",
+              "request"
+            ],
+            "properties": {
+              "kind": {
+                "const": "operator"
+              },
+              "principal": {
+                "$ref": "#/components/schemas/events_Principal"
+              },
+              "request": {
+                "$ref": "#/components/schemas/events_RequestId"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "team"
               }
             }
           }
@@ -5256,6 +5412,37 @@
         "pattern": "^[A-Za-z0-9_.-]{1,128}$",
         "type": "string"
       },
+      "events_CallerAddress": {
+        "additionalProperties": false,
+        "description": "A thread outside the host team (Phase 2). It may only send and ask a host member, and a host member answers it only by reply or bounce.",
+        "properties": {
+          "caller": {
+            "additionalProperties": false,
+            "properties": {
+              "agent": {
+                "$ref": "#/components/schemas/events_Name",
+                "description": "The caller thread's agent: a host rule's from, and the deciding rule's key."
+              },
+              "branch_id": {
+                "$ref": "#/components/schemas/events_BranchId"
+              },
+              "thread_id": {
+                "$ref": "#/components/schemas/events_ThreadId"
+              }
+            },
+            "required": [
+              "thread_id",
+              "branch_id",
+              "agent"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "caller"
+        ],
+        "type": "object"
+      },
       "events_CancelledResult": {
         "additionalProperties": false,
         "properties": {
@@ -5735,6 +5922,9 @@
               },
               {
                 "$ref": "#/components/schemas/events_ev_answer_rejected"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_supervisor_decided"
               }
             ]
           }
@@ -5788,11 +5978,12 @@
                 "description": "Required exactly when scope is ancestor: the ancestor thread whose budget refused the reservation."
               },
               "scope": {
-                "description": "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id.",
+                "description": "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id. hop (Phase 2): the host rule's per-hop cap on a host member's turn, budget id hop:<branch_id>:<turn opener event_id>; only that turn ends.",
                 "enum": [
                   "run",
                   "thread",
-                  "ancestor"
+                  "ancestor",
+                  "hop"
                 ]
               }
             },
@@ -6065,7 +6256,7 @@
         "type": "object"
       },
       "events_MailAddress": {
-        "description": "A member at one generation, or the team log (the operator's replies and notifications).",
+        "description": "A member at one generation, the team log (the operator's replies and notifications), or a caller thread outside the host team.",
         "oneOf": [
           {
             "additionalProperties": false,
@@ -6085,6 +6276,9 @@
           },
           {
             "const": "team_log"
+          },
+          {
+            "$ref": "#/components/schemas/events_CallerAddress"
           }
         ]
       },
@@ -6214,6 +6408,22 @@
           },
           {
             "if": {
+              "required": [
+                "error"
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "bounce"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
               "properties": {
                 "kind": {
                   "enum": [
@@ -6318,6 +6528,12 @@
           {
             "if": {
               "properties": {
+                "code": {
+                  "enum": [
+                    "stale_member",
+                    "member_ended"
+                  ]
+                },
                 "kind": {
                   "const": "bounce"
                 }
@@ -6330,6 +6546,88 @@
               "required": [
                 "result"
               ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "code": {
+                  "const": "turn_failed"
+                }
+              },
+              "required": [
+                "code"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "result"
+                ]
+              },
+              "required": [
+                "ask_id",
+                "error"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "error"
+              ]
+            },
+            "then": {
+              "properties": {
+                "code": {
+                  "const": "turn_failed"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "from": {
+                  "required": [
+                    "caller"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "message",
+                    "ask"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "to": {
+                  "not": {
+                    "const": "team_log"
+                  },
+                  "required": [
+                    "caller"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "reply",
+                    "bounce"
+                  ]
+                }
+              }
             }
           },
           {
@@ -6425,7 +6723,7 @@
         "properties": {
           "ask_id": {
             "$ref": "#/components/schemas/events_AskId",
-            "description": "ask: its own mail_id. reply: the ask it answers. bounce: the open ask it closes as member_ended."
+            "description": "ask: its own mail_id. reply: the ask it answers. bounce: the open ask it closes as member_ended, or as failed for turn_failed."
           },
           "body": {
             "$ref": "#/components/schemas/events_TextBody"
@@ -6435,11 +6733,20 @@
             "description": "The request or event that caused this mail: the call's tool_call, the operator_request, the member's idle or end event, or the refused mail's mail_refused."
           },
           "code": {
-            "$ref": "#/components/schemas/events_BounceCode"
+            "description": "bounce: why. stale_member and member_ended answer a mail_refused; turn_failed (Phase 2) answers an ask a host member's failed turn took.",
+            "enum": [
+              "stale_member",
+              "member_ended",
+              "turn_failed"
+            ]
           },
           "deadline": {
             "$ref": "#/components/schemas/events_TimeMs",
             "description": "ask: now + timeoutMs."
+          },
+          "error": {
+            "$ref": "#/components/schemas/events_TurnFailure",
+            "description": "turn_failed only: why the host member's turn failed; the ask closes failed with it."
           },
           "from": {
             "$ref": "#/components/schemas/events_MailSender"
@@ -6499,13 +6806,16 @@
         "type": "string"
       },
       "events_MailSender": {
-        "description": "The sending member, or the operator request. Written by the fenced writer; never an actor.",
+        "description": "The sending member, the operator request, or a caller thread. Written by the fenced writer; never an actor.",
         "oneOf": [
           {
             "$ref": "#/components/schemas/events_MemberRef"
           },
           {
             "$ref": "#/components/schemas/events_OperatorSender"
+          },
+          {
+            "$ref": "#/components/schemas/events_CallerAddress"
           }
         ]
       },
@@ -7219,6 +7529,17 @@
         ],
         "type": "object"
       },
+      "events_RestartWindowMs": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/events_Int"
+          },
+          {
+            "minimum": 1000
+          }
+        ],
+        "description": "A restart window: at least 1000 ms."
+      },
       "events_ResultPart": {
         "description": "Ordered, mixed text and media of a tool result. No tool_use.",
         "oneOf": [
@@ -7551,6 +7872,39 @@
         ],
         "type": "object"
       },
+      "events_TurnFailure": {
+        "additionalProperties": false,
+        "description": "Why a host member's turn failed (Phase 2). Only that turn ends: its unanswered asks close failed and the member goes back to idle.",
+        "properties": {
+          "code": {
+            "description": "Mapped from the failed turn's turn_completed: its reason (max_turns, max_output, stop_hook_limit, context_exhausted, output_invalid, input_denied, model_unavailable, budget_exhausted for the hop cap or the caller's run budget, interrupted for a turn recovery closed), or for reason error its code (content_unsupported, continuation_unsupported, transport_fence_unsupported, secret_in_provider_output), else model_error.",
+            "enum": [
+              "model_error",
+              "content_unsupported",
+              "continuation_unsupported",
+              "transport_fence_unsupported",
+              "secret_in_provider_output",
+              "max_turns",
+              "max_output",
+              "stop_hook_limit",
+              "context_exhausted",
+              "output_invalid",
+              "input_denied",
+              "model_unavailable",
+              "budget_exhausted",
+              "interrupted"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
       "events_Usage": {
         "additionalProperties": false,
         "description": "Per-field measured-or-unknown usage. input_tokens and output_tokens are always present and null when unknown (a stream that broke before its usage report). input_tokens excludes cache reads and writes; output_tokens includes reasoning tokens. A cache field is absent when the adapter's usage profile has no such billing category, and null when it has one but the value did not arrive.",
@@ -7855,7 +8209,7 @@
                 "$ref": "#/components/schemas/events_AskId"
               },
               "outcome": {
-                "description": "Decided in order: a reply, then a member_ended bounce, then a cancel or team close, else the deadline.",
+                "description": "Decided in order: a reply, then a bounce naming the ask (member_ended, or failed for a host member's turn_failed), then a cancel or team close, else the deadline.",
                 "oneOf": [
                   {
                     "additionalProperties": false,
@@ -7911,6 +8265,23 @@
                     },
                     "required": [
                       "status"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "error": {
+                        "$ref": "#/components/schemas/events_TurnFailure",
+                        "description": "Byte for byte the turn_failed bounce's error, received in this same append (Phase 2: a host member's turn failed)."
+                      },
+                      "status": {
+                        "const": "failed"
+                      }
+                    },
+                    "required": [
+                      "status",
+                      "error"
                     ],
                     "type": "object"
                   }
@@ -7986,11 +8357,12 @@
                 "description": "Required exactly when scope is ancestor: the ancestor thread whose budget refused the reservation."
               },
               "scope": {
-                "description": "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id.",
+                "description": "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id. hop (Phase 2): the host rule's per-hop cap on a host member's turn, budget id hop:<branch_id>:<turn opener event_id>; only that turn ends.",
                 "enum": [
                   "run",
                   "thread",
-                  "ancestor"
+                  "ancestor",
+                  "hop"
                 ]
               }
             },
@@ -8065,11 +8437,12 @@
             "description": "Required exactly when scope is ancestor: the ancestor thread whose budget refused the reservation."
           },
           "scope": {
-            "description": "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id.",
+            "description": "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id. hop (Phase 2): the host rule's per-hop cap on a host member's turn, budget id hop:<branch_id>:<turn opener event_id>; only that turn ends.",
             "enum": [
               "run",
               "thread",
-              "ancestor"
+              "ancestor",
+              "hop"
             ]
           }
         },
@@ -9325,21 +9698,34 @@
         "type": "object"
       },
       "events_ev_member_idle": {
-        "description": "In the member's log, with the turn_completed that ends its task: the row becomes idle with this result, and each settle monitor and an unfired task monitor fires in the same append.",
+        "description": "In the member's log, with the turn_completed that ends its task: the row becomes idle with this result, and each settle monitor and an unfired task monitor fires in the same append. A host member's failed turn records turn_failed instead, and fires nothing.",
         "properties": {
           "critical": {
             "const": true
           },
           "data": {
             "additionalProperties": false,
+            "oneOf": [
+              {
+                "required": [
+                  "result"
+                ]
+              },
+              {
+                "required": [
+                  "turn_failed"
+                ]
+              }
+            ],
             "properties": {
               "result": {
                 "$ref": "#/components/schemas/events_CompletedResult"
+              },
+              "turn_failed": {
+                "$ref": "#/components/schemas/events_TurnFailure",
+                "description": "Phase 2, a host member only: its turn failed and only that turn ended. The row goes back to idle and keeps its last result."
               }
             },
-            "required": [
-              "result"
-            ],
             "type": "object"
           },
           "type": {
@@ -9424,6 +9810,22 @@
           },
           "data": {
             "additionalProperties": false,
+            "else": {
+              "not": {
+                "required": [
+                  "restart_of"
+                ]
+              },
+              "required": [
+                "parent",
+                "provenance"
+              ]
+            },
+            "if": {
+              "required": [
+                "host_member"
+              ]
+            },
             "properties": {
               "agent": {
                 "$ref": "#/components/schemas/events_NonEmpty"
@@ -9440,6 +9842,10 @@
                 "$ref": "#/components/schemas/events_MemberDefine",
                 "description": "Present exactly when the agent is a dynamic agent: what its starter chose. config_hash binds it."
               },
+              "host_member": {
+                "const": true,
+                "description": "Phase 2: a host member, in a host team's log, named by its agent. No task mail and no task monitor go with it; it has no parent and its thread is a root."
+              },
               "label": {
                 "$ref": "#/components/schemas/events_NonEmpty",
                 "description": "A display name the starter gave (1-64 code points, no control or format characters; semantic rule 46). Never hashed, never rendered to a model."
@@ -9449,7 +9855,7 @@
               },
               "parent": {
                 "additionalProperties": false,
-                "description": "The structural parent the member's thread_started will carry: the lead's member_started, or the lead's thread_started for an operator start.",
+                "description": "The structural parent the member's thread_started will carry: the lead's member_started, or the lead's thread_started for an operator start. Absent exactly for a host member, a root thread.",
                 "properties": {
                   "branch_id": {
                     "$ref": "#/components/schemas/events_BranchId"
@@ -9473,7 +9879,12 @@
                 "type": "object"
               },
               "provenance": {
-                "$ref": "#/components/schemas/events_Provenance"
+                "$ref": "#/components/schemas/events_Provenance",
+                "description": "Required unless host_member. A host member's start has one only when an operator restarts it."
+              },
+              "restart_of": {
+                "$ref": "#/components/schemas/events_PosInt",
+                "description": "host_member only: the generation this start replaces (semantic rule 51)."
               },
               "thread_id": {
                 "$ref": "#/components/schemas/events_ThreadId",
@@ -9484,10 +9895,34 @@
               "member",
               "agent",
               "config_hash",
-              "thread_id",
-              "parent",
-              "provenance"
+              "thread_id"
             ],
+            "then": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "parent"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "define"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "label"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "budget"
+                    ]
+                  }
+                ]
+              }
+            },
             "type": "object"
           },
           "type": {
@@ -11043,6 +11478,96 @@
         ],
         "type": "object"
       },
+      "events_ev_supervisor_decided": {
+        "description": "Phase 2: the host team log's one decision on an ended host member generation (semantic rule 51).",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "description": "restart: a member_started of the next generation follows in this append. stop: the name stays ended until an operator starts it.",
+                "enum": [
+                  "restart",
+                  "stop"
+                ]
+              },
+              "ended": {
+                "additionalProperties": false,
+                "description": "Its member_ended, in its own log.",
+                "properties": {
+                  "branch_id": {
+                    "$ref": "#/components/schemas/events_BranchId"
+                  },
+                  "seq": {
+                    "$ref": "#/components/schemas/events_PosInt"
+                  }
+                },
+                "required": [
+                  "branch_id",
+                  "seq"
+                ],
+                "type": "object"
+              },
+              "member": {
+                "$ref": "#/components/schemas/events_MemberRef",
+                "description": "The ended host member generation."
+              },
+              "policy": {
+                "additionalProperties": false,
+                "description": "The host's members option for this name when it decided.",
+                "properties": {
+                  "max_restarts": {
+                    "$ref": "#/components/schemas/events_Int"
+                  },
+                  "restart": {
+                    "enum": [
+                      "on_failure",
+                      "never"
+                    ]
+                  },
+                  "within_ms": {
+                    "$ref": "#/components/schemas/events_RestartWindowMs"
+                  }
+                },
+                "required": [
+                  "restart",
+                  "max_restarts",
+                  "within_ms"
+                ],
+                "type": "object"
+              },
+              "restarts_in_window": {
+                "$ref": "#/components/schemas/events_Int",
+                "description": "The team log's earlier restart decisions for this name within policy.within_ms of this event's time. Recorded, so no reader recounts it."
+              }
+            },
+            "required": [
+              "member",
+              "ended",
+              "action",
+              "restarts_in_window",
+              "policy"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "supervisor_decided"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
       "events_ev_team_message": {
         "description": "An addressed message between members. message_id is unique; delivery into a member's thread is injected{source: agent, origin.id: message_id}, deduplicated by that id.",
         "properties": {
@@ -11097,14 +11622,42 @@
         "type": "object"
       },
       "events_ev_team_opened": {
-        "description": "The team log's first event, in place of thread_started: opened in the lead's first append. The team log never renders to a model, never parks and never opens a turn.",
+        "description": "The team log's first event, in place of thread_started: opened in the lead's first append, or for a host team by the first append that addresses one of its host members. The team log never renders to a model, never parks and never opens a turn.",
         "properties": {
           "critical": {
             "const": true
           },
           "data": {
             "additionalProperties": false,
+            "else": {
+              "not": {
+                "required": [
+                  "tenant"
+                ]
+              },
+              "required": [
+                "lead",
+                "lead_thread_id"
+              ]
+            },
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "host"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
             "properties": {
+              "kind": {
+                "description": "Absent or lead: a lead's team, with lead and lead_thread_id. host (Phase 2): a tenant's host team, which has no lead, holds the tenant's host members and never closes.",
+                "enum": [
+                  "lead",
+                  "host"
+                ]
+              },
               "lead": {
                 "$ref": "#/components/schemas/events_MemberRef"
               },
@@ -11113,13 +11666,34 @@
               },
               "team": {
                 "$ref": "#/components/schemas/events_TeamId"
+              },
+              "tenant": {
+                "$ref": "#/components/schemas/events_NonEmpty",
+                "description": "host only: the tenant whose host team this is (its teams row's tenant_id)."
               }
             },
             "required": [
-              "team",
-              "lead",
-              "lead_thread_id"
+              "team"
             ],
+            "then": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "lead"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "lead_thread_id"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "tenant"
+              ]
+            },
             "type": "object"
           },
           "type": {
@@ -11270,6 +11844,11 @@
           },
           "data": {
             "additionalProperties": false,
+            "if": {
+              "required": [
+                "host_member"
+              ]
+            },
             "properties": {
               "adapter": {
                 "$ref": "#/components/schemas/events_AdapterRef"
@@ -11280,6 +11859,27 @@
               "config_hash": {
                 "$ref": "#/components/schemas/events_Sha256",
                 "description": "sha256 of the RFC 8785 bytes of the resolved, secret-free agent config."
+              },
+              "host_member": {
+                "additionalProperties": false,
+                "description": "Set on a host member's thread (Phase 2), opened at materialize: the host team, the member's name (its agent name) and generation. A host member has no parent and no team of its own.",
+                "properties": {
+                  "generation": {
+                    "$ref": "#/components/schemas/events_PosInt"
+                  },
+                  "name": {
+                    "$ref": "#/components/schemas/events_MemberName"
+                  },
+                  "team": {
+                    "$ref": "#/components/schemas/events_TeamId"
+                  }
+                },
+                "required": [
+                  "team",
+                  "name",
+                  "generation"
+                ],
+                "type": "object"
               },
               "instructions": {
                 "description": "The full pinned system text: base instructions, extension instructions in order, skill listing, memory guidance.",
@@ -11366,6 +11966,22 @@
               "instructions",
               "tools"
             ],
+            "then": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "parent"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "team"
+                    ]
+                  }
+                ]
+              }
+            },
             "type": "object"
           },
           "type": {
@@ -12196,6 +12812,59 @@
         "summary": "Stream a run's events"
       }
     },
+    "/v1/teams/{team}/events": {
+      "get": {
+        "operationId": "subscribeTeam",
+        "x-api": [
+          "Team.events"
+        ],
+        "x-error-codes": [
+          "unauthenticated",
+          "not_found",
+          "invalid_cursor"
+        ],
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "description": "A lead team in the principal's tenant. The host team's id is not_found: it has no HTTP route.",
+            "schema": {
+              "$ref": "#/components/schemas/events_TeamId"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "description": "Resume after this cursor, <epoch>:<offset>. The Last-Event-ID header wins when both are sent.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+:[0-9]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-sent events of the team feed; the route always follows. Each message's data is one TeamItem as RFC 8785 JSON, its id <epoch>:<offset>. A ': keepalive' comment every 15 s moves no cursor. On epoch_restarted the route sends that item, with the new cursor as its id, and closes.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-sse-data": {
+                  "$ref": "#/components/schemas/TeamItem"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/SubscribeTeamError"
+          }
+        },
+        "description": "**Phase 2, not yet available** (lane 29-teams-phase2-29b): Until then a cursor of any other epoch restarts the feed, follow is not supported, and GET /v1/teams/{team}/events is not served."
+      }
+    },
     "/v1/threads/{thread_id}/timeline": {
       "get": {
         "operationId": "getTimeline",
@@ -12577,8 +13246,7 @@
         "x-error-codes": [
           "unauthenticated",
           "forbidden",
-          "not_found",
-          "branch_busy"
+          "not_found"
         ],
         "parameters": [
           {
@@ -12592,11 +13260,22 @@
           "200": {
             "$ref": "#/components/responses/Appended"
           },
+          "202": {
+            "description": "Another process holds the branch: a durable inbox control item (channel api, address the thread id) it applies at its next step boundary. Where this used to be 409 branch_busy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelAccepted"
+                }
+              }
+            }
+          },
           "4XX": {
             "$ref": "#/components/responses/CancelError"
           }
         },
-        "summary": "Cancel a thread"
+        "summary": "Cancel a thread",
+        "description": "**Phase 2, not yet available** (lane 29-teams-phase2-29f): Until then a lease another process holds is branch_busy (HTTP 409), not CancelAccepted (HTTP 202)."
       }
     },
     "/v1/threads/{thread_id}/settings": {

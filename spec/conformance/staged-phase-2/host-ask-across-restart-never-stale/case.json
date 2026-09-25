@@ -1,0 +1,17 @@
+{
+  "name": "host-ask-across-restart-never-stale",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Teams Phase 2 (E, the stale negative): support's ask is pending when billing's generation 1 ends. Its end append refuses the ask (mail_refused{member_ended}, the row returned) and bounces it to the caller with the result; the supervisor restarts generation 2. The ask closes member_ended; no mail is ever stale, since a sender binds the current generation and an end refuses every pending row.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "billing2",
+      "support"
+    ]
+  }
+}

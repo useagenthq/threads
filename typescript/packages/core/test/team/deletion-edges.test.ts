@@ -62,13 +62,14 @@ const SPARE = ThreadIdSchema.parse("0192a000-0000-7000-8000-000000000001");
 async function rowsOnly(t: Team, lead: string, tenant: string): Promise<void> {
   await exec(
     t.db,
-    "INSERT INTO teams (team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at) VALUES (?, ?, ?, ?, NULL)",
+    "INSERT INTO teams (team_id, tenant_id, kind, lead_thread_id, team_log_branch_id, closed_at) VALUES (?, ?, 'lead', ?, ?, NULL)",
     [OTHER_TEAM, tenant, lead, "0192b000-0000-7000-8000-0000000000ee"],
   );
   await exec(
     t.db,
-    `INSERT INTO mail (mail_id, team_id, kind, to_name, to_generation, principal_key, root_request,
-       envelope, created_at, state) VALUES ('m1', ?, 'message', 'x-1', 1, 'k', 'r', ?, 0, 'pending')`,
+    `INSERT INTO mail (mail_id, team_id, kind, to_kind, to_name, to_generation, principal_key,
+       root_request, envelope, created_at, state)
+       VALUES ('m1', ?, 'message', 'member', 'x-1', 1, 'k', 'r', ?, 0, 'pending')`,
     [OTHER_TEAM, BRACES],
   );
 }

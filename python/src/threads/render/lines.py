@@ -7,6 +7,7 @@ from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import (
+    CallerAddress,
     CompactedEvent,
     CompletedResult,
     Event,
@@ -103,7 +104,11 @@ def _mail(read: ReadArtifact, event: MessageReceivedEvent) -> Ok[Line | None] | 
         return body
     sender = env.from_
     # No member name can produce operator="true".
-    who = 'operator="true"' if isinstance(sender, OperatorSender) else f'from="{esc(sender.name)}"'
+    if isinstance(sender, OperatorSender):
+        who = 'operator="true"'
+    else:
+        name = sender.caller.agent if isinstance(sender, CallerAddress) else sender.name
+        who = f'from="{esc(name)}"'
     ask = f' ask_id="{esc(env.ask_id)}"' if env.kind == "ask" and env.ask_id is not MISSING else ""
     head = f'<message {who} kind="{env.kind}"{ask} untrusted="true">'
     return Ok(Line(user_line(f"{head}\n{esc(body.value)}\n</message>")))

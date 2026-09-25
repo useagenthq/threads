@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from .common import obj, text
 from .dynamic_rules import member_matches
+from .ref_host_cross import caller_key, host_clause, reply_to_caller, turn_failed_bounce
 from .ref_rules import Check
 from .turn_open import mail_renders
 
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 
     from .jcs import JsonValue, Obj
 
-OURS = re.compile(r"^Rule (3[1-9]|4[0-6])\b")
+OURS = re.compile(r"^Rule (3[1-9]|4[0-6]|5[0-5])\b")
 type Found = tuple[str, int, str] | None  # (log label, seq, why)
 
 
@@ -57,6 +58,8 @@ def _sent(logs: dict[str, list[Obj]]) -> dict[str, Obj]:
 
 
 def _bounce(events: list[Obj], env: Obj, sent: dict[str, Obj]) -> str | None:
+    if env.get("code") == "turn_failed":
+        return turn_failed_bounce(events, env, sent)
     cause = obj(env["causal"])["event_id"]
     refusal = next((e for e in events if e["event_id"] == cause), None)
     if refusal is None or refusal["type"] != "mail_refused":
@@ -80,10 +83,15 @@ def _identities(logs: dict[str, list[Obj]]) -> dict[str, set[str]]:
     """Who each log speaks for: `team_log`, or `<team>/<name>/<generation>` (a nested lead has
     two: its member ref in the parent team and its lead ref in its own)."""
     by_thread = {text(es[0]["thread_id"]): label for label, es in logs.items() if es}
-    out: dict[str, set[str]] = {label: set() for label in logs}
+    out: dict[str, set[str]] = {
+        label: {caller_key(es[0]) if es else ""} for label, es in logs.items()
+    }
     for label, es in logs.items():
         for e in es:
             d, t = obj(e["data"]), e["type"]
+            if t == "thread_started" and "host_member" in d:
+                hm = obj(d["host_member"])
+                out[label].add(_key(hm["team"], hm["name"], hm["generation"]))
             if t == "team_opened":
                 out[label].add("team_log")
             elif t == "thread_started" and "team" in d:
@@ -105,14 +113,20 @@ def _addressed(e: Obj, own: set[str], sent: dict[str, Obj]) -> str | None:
         if d["mail_id"] in sent and sent[text(d["mail_id"])] != env:
             return "43: a receipt differs from its sender's mail"
         to = env["to"]
-        want = (
-            "team_log"
-            if to == "team_log"
-            else _key(env["team"], obj(to)["name"], obj(to)["generation"])
-        )
+        if to == "team_log":
+            want = "team_log"
+        elif "caller" in obj(to):
+            want = caller_key(obj(to)["caller"])
+        else:
+            want = _key(env["team"], obj(to)["name"], obj(to)["generation"])
         return None if want in own else "43: a receipt is not in the log `to` names"
     frm = obj(env["from"])
-    want = "team_log" if "operator" in frm else _key(frm["team"], frm["name"], frm["generation"])
+    if "caller" in frm:
+        want = caller_key(frm["caller"])
+    elif "operator" in frm:
+        want = "team_log"
+    else:
+        want = _key(frm["team"], frm["name"], frm["generation"])
     return None if want in own else "43: a mail is not in the log `from` names"
 
 
@@ -133,7 +147,7 @@ def _cross_one(
     events: list[Obj], logs: dict[str, list[Obj]], sent: dict[str, Obj], own: set[str]
 ) -> tuple[int, str] | None:
     started = {
-        obj(e["data"])["thread_id"]: obj(e["data"])["parent"]
+        obj(e["data"])["thread_id"]: obj(e["data"]).get("parent")
         for es in logs.values()
         for e in es
         if e["type"] == "member_started"
@@ -145,9 +159,9 @@ def _cross_one(
         if t == "team_opened":
             why = _team_log_named(e, logs)
         elif t in ("message_received", "message_sent"):
-            why = _addressed(e, own, sent)
-            if why is None and t == "message_sent" and obj(d["envelope"])["kind"] == "bounce":
-                why = _bounce(events, obj(d["envelope"]), sent)
+            why = _mail_clauses(e, events, own, sent)
+        elif (host := host_clause(e, logs)) is not None:
+            why = host
         elif (
             t == "thread_started"
             and e["thread_id"] in started
@@ -163,6 +177,16 @@ def _cross_one(
         if why is not None:
             return (int(str(e["seq"])), why)
     return None
+
+
+def _mail_clauses(e: Obj, events: list[Obj], own: set[str], sent: dict[str, Obj]) -> str | None:
+    why = _addressed(e, own, sent)
+    env = obj(obj(e["data"])["envelope"])
+    if why is None and e["type"] == "message_sent" and env["kind"] == "bounce":
+        why = _bounce(events, env, sent)
+    if why is None and e["type"] == "message_sent":
+        why = reply_to_caller(env, sent)
+    return why
 
 
 def _defined(logs: dict[str, list[Obj]]) -> dict[str, tuple[Obj, str]]:

@@ -52,6 +52,9 @@ type TeamLogRef = { readonly thread: string; readonly branch: string };
 const TEAM_LOG = "team_log";
 const member = (team: TeamId, name: string, generation: number): string =>
   `${team}/${name}/${generation}`;
+// A caller (Phase 2) speaks for no log of a Phase 1 team: its mail is refused before this rule.
+const caller = (c: { readonly branch_id: string }): string =>
+  `caller/${c.branch_id}`;
 
 function facts(logs: readonly TeamLogEvents[]): Facts {
   const known = {
@@ -256,7 +259,9 @@ function received(
   const to =
     env.to === TEAM_LOG
       ? TEAM_LOG
-      : member(env.team, env.to.name, env.to.generation);
+      : "caller" in env.to
+        ? caller(env.to.caller)
+        : member(env.team, env.to.name, env.to.generation);
   return own.has(to) ? undefined : "a receipt is not in the log `to` names";
 }
 
@@ -270,7 +275,9 @@ function sent(
   const from =
     "operator" in env.from
       ? TEAM_LOG
-      : member(env.from.team, env.from.name, env.from.generation);
+      : "caller" in env.from
+        ? caller(env.from.caller)
+        : member(env.from.team, env.from.name, env.from.generation);
   if (!own.has(from)) return "a mail is not in the log `from` names";
   return env.kind === "bounce" ? bounce(env, log, known) : undefined;
 }

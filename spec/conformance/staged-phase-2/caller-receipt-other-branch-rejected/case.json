@@ -1,0 +1,16 @@
+{
+  "name": "caller-receipt-other-branch-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 52: a receipt to a caller is in that caller's log. support records a reply addressed to the sales thread: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "host-member-reply-after-bounce-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rules 35 and 53: an ask a failed turn bounced is answered. A later reply to it is invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

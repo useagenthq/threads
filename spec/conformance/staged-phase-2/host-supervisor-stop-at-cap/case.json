@@ -1,0 +1,16 @@
+{
+  "name": "host-supervisor-stop-at-cap",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Teams Phase 2 (E): with maxRestarts 1, generation 1 fails and is restarted; generation 2 fails within the window, so restarts_in_window is 1 and the decision is stop. The name stays ended: no generation 3.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "billing2"
+    ]
+  }
+}

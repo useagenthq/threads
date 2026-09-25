@@ -42,7 +42,9 @@ def owner_of(opened: Opened) -> ThreadId | None:
     """The thread `opened` can't outlive: a child's parent, a team log's lead."""
     e = opened.event
     if isinstance(e, TeamOpenedEvent):
-        return e.data.lead_thread_id
+        # A host team (Phase 2) has no lead: it goes only with its tenant.
+        lead = e.data.lead_thread_id
+        return None if lead is MISSING else lead
     parent = e.data.parent
     if parent is MISSING or parent.relation not in ("subagent", "team_member"):
         return None

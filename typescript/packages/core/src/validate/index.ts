@@ -16,6 +16,7 @@ import {
   checkToolResult,
 } from "./calls";
 import { checkModeChanged, checkOutput, checkToolsChanged } from "./config";
+import { checkNotYetPhase2 } from "./phase2";
 import {
   checkCause,
   checkCompactionRequested,
@@ -61,7 +62,10 @@ export function validateNext(
   if (fold.eventIds.has(event.event_id))
     return fail(`event_id ${event.event_id} repeats on the chain`, event.seq);
   if (line.kind === "unknown_event") return ok(undefined);
-  const violation = checkTeamLog(fold, line.event) ?? check(fold, line.event);
+  const violation =
+    checkNotYetPhase2(line.event) ??
+    checkTeamLog(fold, line.event) ??
+    check(fold, line.event);
   return violation === undefined
     ? ok(undefined)
     : err(logError(violation.code, violation.message, event.seq));
@@ -188,6 +192,8 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "operator_refused":
     case "message_policy_decided":
       return checkOperator(fold, e);
+    case "supervisor_decided":
+      return undefined; // refused by checkNotYetPhase2 until the Phase 2 build
     default:
       return assertNever(e);
   }

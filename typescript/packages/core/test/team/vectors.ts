@@ -32,6 +32,8 @@ type WorldLog = {
 };
 export type Vector = {
   readonly name: string;
+  /** Teams Phase 2: the sub-lane whose build runs it; skipped until then. */
+  readonly lane?: string | undefined;
   readonly op: string;
   readonly by: string;
   readonly now: number;
@@ -69,6 +71,7 @@ const Doc: z.ZodType<Doc> = z.object({
   vectors: z.array(
     z.object({
       name: z.string(),
+      lane: z.string().optional(),
       op: z.string(),
       by: z.string(),
       now: z.int(),

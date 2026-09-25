@@ -10,6 +10,7 @@ from .jcs import JsonValue, Obj
 
 CASES = pathlib.Path(__file__).resolve().parents[2] / "conformance" / "cases"
 STAGED = CASES.parent / "staged"
+STAGED_PHASE_2_DIR = CASES.parent / "staged-phase-2"
 THREAD = "0192a000-0000-7000-8000-000000000001"
 BRANCH = "0192b000-0000-7000-8000-000000000001"
 CHILD = "0192b000-0000-7000-8000-000000000002"

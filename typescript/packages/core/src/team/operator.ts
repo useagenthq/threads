@@ -265,7 +265,7 @@ function outcomeOf(
             ...(e.data.detail === undefined ? {} : { detail: e.data.detail }),
           };
     case "member_started":
-      return e.data.provenance.root_request.event_id === requestEvent
+      return e.data.provenance?.root_request.event_id === requestEvent
         ? { member: e.data.member, status: "started" }
         : undefined;
     case "message_sent":
@@ -281,7 +281,8 @@ function outcomeOf(
 /** An operator's own mail: its send's message, or its cancel's request. */
 function mailOutcome(env: MailEnvelope, team: TeamRow): Recorded | undefined {
   if (env.kind === "message") return { id: env.mail_id, status: "sent" };
-  if (env.kind !== "cancel" || env.to === "team_log") return undefined;
+  if (env.kind !== "cancel" || env.to === "team_log" || "caller" in env.to)
+    return undefined;
   const member = { tenant: team.tenant_id, team: env.team, ...env.to };
   return { member, status: "cancel_requested" };
 }

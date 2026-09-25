@@ -26,6 +26,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from factory_coverage import factory_evidence
+from surface_changed import check_changed
 from surface_contract import Gap, Member, members, obj, parse_gaps
 from surface_coverage import Owed, check_coverage
 
@@ -88,7 +89,9 @@ def check_baseline(
 
     errs: list[str] = []
     for g in gaps:
-        if g.lang != lang or g.key in before or g.name not in base_contract:
+        if g.kind == "changed" or g.lang != lang or g.key in before:
+            continue  # a changed gap is surface_changed.py's
+        if g.name not in base_contract:
             continue
         allowed = lanes(g.name)
         if not allowed:
@@ -110,7 +113,7 @@ def check_python(
     from surface_py import Package, PythonSurface  # noqa: PLC0415 - imports threads
 
     found = PythonSurface(contract, Package(entries)).findings()
-    listed = {(g.name, g.kind, g.at): g for g in gaps if g.lang == "py"}
+    listed = {(g.name, g.kind, g.at): g for g in gaps if g.lang == "py" and g.kind != "changed"}
     errs = [
         f"surface gate: {name} (py) is {_kind(kind, at)} and not listed in {GAPS_IN_GIT}; "
         "fix the package, or list the gap with its owning lane"
@@ -148,6 +151,19 @@ def _baseline(args: argparse.Namespace, gaps: list[Gap], lang: str) -> list[str]
     return errs or check_baseline(gaps, base_gaps, base_contract, lang)
 
 
+def _base(args: argparse.Namespace) -> tuple[Json, list[Gap]] | None:
+    """The base commit's api.json and gaps, when the gate runs against a baseline."""
+    baseline: pathlib.Path | None = args.baseline
+    baseline_api: pathlib.Path | None = args.baseline_api
+    if baseline is None or baseline_api is None:
+        return None
+    base_api, errs = _read(baseline_api)
+    base_doc, more = _read(baseline)
+    if errs or more:
+        return None
+    return base_api, parse_gaps(base_doc, members(base_api), f"{baseline}")[0]
+
+
 def run(args: argparse.Namespace) -> list[str]:
     lang: str = args.lang
     errs = _mode(args)
@@ -162,6 +178,7 @@ def run(args: argparse.Namespace) -> list[str]:
     if errs:
         return errs
     errs += _baseline(args, gaps, lang)
+    errs += check_changed(gaps, api, _base(args))
     if lang == "py":
         entries = {k: str(obj(v).get("py")) for k, v in obj(obj(api).get("packages")).items()}
         errs += check_python(contract, gaps, entries)

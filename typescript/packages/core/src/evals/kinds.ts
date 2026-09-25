@@ -146,6 +146,7 @@ const FRAMEWORK_EVENTS = [
   "message_policy_decided",
   "answer_rejected",
   "tools_loaded",
+  "supervisor_decided",
 ] as const;
 const SCRIPTABLE_SOURCES = ["hook", "memory", "knowledge"] as const;
 const FRAMEWORK_SOURCES = [

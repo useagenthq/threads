@@ -72,7 +72,7 @@ def test_a_leads_first_append_opens_the_team_log_the_teams_row_and_its_row() -> 
             "data": {"team": TEAM, "lead": lead, "lead_thread_id": LEAD},
         }
         teams = await store.run(_rows("SELECT * FROM teams"))
-        assert teams == [(TEAM, TENANT, LEAD, LOG_BRANCH, None)]
+        assert teams == [(TEAM, TENANT, "lead", LEAD, LOG_BRANCH, None)]
         members = await store.run(_rows("SELECT name, generation, role, state FROM team_members"))
         assert members == [("lead", 1, "lead", "running")]
         feed = await store.run(

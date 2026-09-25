@@ -177,8 +177,11 @@ function mail(ctx: LineContext, e: EventOf<"message_received">): Line {
   const body = mailText(ctx.read, env, e.seq);
   if (!body.ok) return body;
   // No member name can produce operator="true".
+  const { from } = env;
   const who =
-    "operator" in env.from ? 'operator="true"' : `from="${esc(env.from.name)}"`;
+    "operator" in from
+      ? 'operator="true"'
+      : `from="${esc("caller" in from ? from.caller.agent : from.name)}"`;
   const ask =
     env.kind === "ask" && env.ask_id !== undefined
       ? ` ask_id="${esc(env.ask_id)}"`

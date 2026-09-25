@@ -18,6 +18,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import (
     BranchId,
+    CallerAddress,
     Event,
     MailEnvelope,
     MailRefusedEvent,
@@ -189,7 +190,8 @@ def _check(e: Event, log: TeamLogEvents, mine: frozenset[Identity], team: _Team)
     if isinstance(e, ThreadStartedEvent):
         start = team.started.get(e.thread_id)
         parent = None if e.data.parent is MISSING else e.data.parent
-        if start is not None and _link(parent) != _link(start.data.parent):
+        want = None if start is None or start.data.parent is MISSING else start.data.parent
+        if start is not None and _link(parent) != _link(want):
             return "a member's parent is not its member_started's"
     if isinstance(e, UserInputEvent) and e.data.mail_id is not MISSING:
         task = team.sent.get(e.data.mail_id)
@@ -210,12 +212,23 @@ def _link(p: Parent | Parent1 | None) -> tuple[str, str, str, str] | None:
     return None if p is None else (p.relation, p.thread_id, p.branch_id, p.event_id)
 
 
+def _caller(c: CallerAddress) -> Identity:
+    """A caller (Phase 2) speaks for no log of a Phase 1 team: its mail is refused before this
+    rule."""
+    return f"caller/{c.caller.branch_id}"
+
+
 def _to(env: MailEnvelope) -> Identity:
-    return "team_log" if isinstance(env.to, str) else (env.team, env.to.name, env.to.generation)
+    to = env.to
+    if isinstance(to, str):
+        return "team_log"
+    return _caller(to) if isinstance(to, CallerAddress) else (env.team, to.name, to.generation)
 
 
 def _from(env: MailEnvelope) -> Identity:
     f = env.from_
+    if isinstance(f, CallerAddress):
+        return _caller(f)
     return (f.team, f.name, f.generation) if isinstance(f, MemberRef) else "team_log"
 
 

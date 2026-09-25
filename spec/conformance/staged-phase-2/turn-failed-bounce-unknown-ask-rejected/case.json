@@ -1,0 +1,16 @@
+{
+  "name": "turn-failed-bounce-unknown-ask-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 53: a turn_failed bounce names an unanswered ask its failed turn took. billing's bounce names an ask it never received: invalid_transition at the bounce.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

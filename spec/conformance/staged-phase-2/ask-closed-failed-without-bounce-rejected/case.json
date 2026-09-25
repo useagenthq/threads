@@ -1,0 +1,16 @@
+{
+  "name": "ask-closed-failed-without-bounce-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 54: an ask closes failed only on a turn_failed bounce this log received, with its error. support received billing's reply and closes the ask failed: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

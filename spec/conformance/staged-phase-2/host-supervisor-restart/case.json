@@ -1,0 +1,16 @@
+{
+  "name": "host-supervisor-restart",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Teams Phase 2 (E): billing's generation 1 fails its rebind (member_ended{failed pin_unavailable}). The host team log's writer decides once: supervisor_decided{restart, restarts_in_window 0} and, in the same append, member_started of generation 2 with restart_of 1. Generation 2 opens a new, empty thread and is idle.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "billing2"
+    ]
+  }
+}

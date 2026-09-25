@@ -23,6 +23,8 @@ KINDS: dict[str, frozenset[Role]] = {
     "missing": frozenset({"function", "option", "type", "property", "field", "method"}),
     "required_mismatch": frozenset({"option", "property", "field", "method"}),
     "placement": frozenset({"type", "method"}),
+    # A member that exists but whose contract changed ahead of its build (surface_changed.py).
+    "changed": frozenset({"function", "type", "method"}),
 }
 # The owning lane: its file name under plans/specs/lanes/ (NN-name). Every gap has an owner.
 LANE = re.compile(r"^\d\d-[a-z0-9-]+$")

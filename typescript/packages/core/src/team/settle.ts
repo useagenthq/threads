@@ -187,10 +187,13 @@ function bounce(
   why: string,
   result: Result,
 ): Envelope {
+  const { from } = mail;
   const back: Envelope["to"] =
-    "operator" in mail.from
+    "operator" in from
       ? "team_log"
-      : { name: mail.from.name, generation: mail.from.generation };
+      : "caller" in from
+        ? { caller: from.caller }
+        : { name: from.name, generation: from.generation };
   return {
     mail_id: mailId(ctx),
     kind: "bounce",

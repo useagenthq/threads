@@ -14,6 +14,7 @@ export * from "./ids";
 export { canonicalize, type JcsError, type Json } from "./jcs";
 export { type JsonParseError, parseStrictJson } from "./json";
 export { KnownTag, LogLine, UnknownEvent } from "./line";
+export * from "./mail";
 export {
   MAX_LINE_BYTES,
   type ParsedLine,

@@ -385,6 +385,146 @@
       "name": "message_policy_decided op wait",
       "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"call_id\":\"c1\",\"decision\":\"allow\",\"op\":\"wait\",\"source\":\"team\",\"target\":\"researcher-1\"},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"message_policy_decided\",\"type_version\":1}",
       "valid": false
+    },
+    {
+      "name": "team_opened of a host team",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"kind\":\"host\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"team_opened\",\"type_version\":1}",
+      "valid": true
+    },
+    {
+      "name": "team_opened of a host team without its tenant",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"kind\":\"host\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\"},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"team_opened\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "team_opened of a host team with a lead",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"kind\":\"host\",\"lead\":{\"generation\":1,\"name\":\"lead\",\"team\":\"0192c000-0000-7000-8000-000000000001\",\"tenant\":\"acme\"},\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"team_opened\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "team_opened of a lead team with a tenant",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"lead\":{\"generation\":1,\"name\":\"lead\",\"team\":\"0192c000-0000-7000-8000-000000000001\",\"tenant\":\"acme\"},\"lead_thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"team_opened\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "member_started of a host member",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"agent\":\"billing\",\"config_hash\":\"5800e46921bd898ffefe26cbb45e8038fd946b9719bd1f0e155c1d94aa9f459b\",\"host_member\":true,\"member\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"thread_id\":\"0192a000-0000-7000-8000-0000000000c1\"},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"member_started\",\"type_version\":1}",
+      "valid": true
+    },
+    {
+      "name": "member_started of a host member restarting generation 1",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"agent\":\"billing\",\"config_hash\":\"5800e46921bd898ffefe26cbb45e8038fd946b9719bd1f0e155c1d94aa9f459b\",\"host_member\":true,\"member\":{\"generation\":2,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"restart_of\":1,\"thread_id\":\"0192a000-0000-7000-8000-0000000000c2\"},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"member_started\",\"type_version\":1}",
+      "valid": true
+    },
+    {
+      "name": "member_started of a host member with a parent",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"agent\":\"billing\",\"config_hash\":\"5800e46921bd898ffefe26cbb45e8038fd946b9719bd1f0e155c1d94aa9f459b\",\"host_member\":true,\"member\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"parent\":{\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"relation\":\"team_member\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"thread_id\":\"0192a000-0000-7000-8000-0000000000c1\"},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"member_started\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "member_started of a host member with a budget",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"agent\":\"billing\",\"budget\":{\"max_turns\":4},\"config_hash\":\"5800e46921bd898ffefe26cbb45e8038fd946b9719bd1f0e155c1d94aa9f459b\",\"host_member\":true,\"member\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"thread_id\":\"0192a000-0000-7000-8000-0000000000c1\"},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"member_started\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "member_started with restart_of but no host_member",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"agent\":\"billing\",\"config_hash\":\"5800e46921bd898ffefe26cbb45e8038fd946b9719bd1f0e155c1d94aa9f459b\",\"member\":{\"generation\":2,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"restart_of\":1,\"thread_id\":\"0192a000-0000-7000-8000-0000000000c2\"},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"member_started\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "thread_started of a host member",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"agent_name\":\"billing\",\"config_hash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"host_member\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\"},\"instructions\":\"\",\"model\":{\"name\":\"s\",\"provider\":\"scripted\"},\"model_params\":{},\"tools\":[]},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"thread_started\",\"type_version\":1}",
+      "valid": true
+    },
+    {
+      "name": "thread_started of a host member with a parent",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"adapter\":{\"name\":\"scripted\",\"settings\":{},\"version\":\"1\"},\"agent_name\":\"billing\",\"config_hash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"host_member\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\"},\"instructions\":\"\",\"model\":{\"name\":\"s\",\"provider\":\"scripted\"},\"model_params\":{},\"parent\":{\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"relation\":\"team_member\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"tools\":[]},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"thread_started\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "a caller's ask",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"envelope\":{\"ask_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"body\":{\"text\":\"?\"},\"causal\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"deadline\":1790000120000,\"from\":{\"caller\":{\"agent\":\"support\",\"branch_id\":\"0192b000-0000-7000-8000-0000000000d1\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000d1\"}},\"kind\":\"ask\",\"mail_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"provenance\":{\"principal\":{\"issuer\":\"api\",\"subject\":\"alice\",\"tenant\":\"acme\"},\"root_request\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"via\":[]},\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"to\":{\"generation\":1,\"name\":\"billing\"}}},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"message_sent\",\"type_version\":1}",
+      "valid": true
+    },
+    {
+      "name": "a caller's reply",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"envelope\":{\"ask_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"body\":{\"text\":\"?\"},\"causal\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"deadline\":1790000120000,\"from\":{\"caller\":{\"agent\":\"support\",\"branch_id\":\"0192b000-0000-7000-8000-0000000000d1\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000d1\"}},\"kind\":\"reply\",\"mail_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"provenance\":{\"principal\":{\"issuer\":\"api\",\"subject\":\"alice\",\"tenant\":\"acme\"},\"root_request\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"via\":[]},\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"to\":{\"generation\":1,\"name\":\"billing\"}}},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"message_sent\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "a host member's reply to a caller",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"envelope\":{\"ask_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"body\":{\"text\":\"Paid.\"},\"causal\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"from\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"kind\":\"reply\",\"mail_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"provenance\":{\"principal\":{\"issuer\":\"api\",\"subject\":\"alice\",\"tenant\":\"acme\"},\"root_request\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"via\":[]},\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"to\":{\"caller\":{\"agent\":\"support\",\"branch_id\":\"0192b000-0000-7000-8000-0000000000d1\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000d1\"}}}},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"message_sent\",\"type_version\":1}",
+      "valid": true
+    },
+    {
+      "name": "a host member's message to a caller",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"envelope\":{\"ask_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"body\":{\"text\":\"Paid.\"},\"causal\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"from\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"kind\":\"message\",\"mail_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"provenance\":{\"principal\":{\"issuer\":\"api\",\"subject\":\"alice\",\"tenant\":\"acme\"},\"root_request\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"via\":[]},\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"to\":{\"caller\":{\"agent\":\"support\",\"branch_id\":\"0192b000-0000-7000-8000-0000000000d1\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000d1\"}}}},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"message_sent\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "a turn_failed bounce",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"envelope\":{\"ask_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"causal\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"code\":\"turn_failed\",\"error\":{\"code\":\"model_error\",\"message\":\"billing's turn failed\"},\"from\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"kind\":\"bounce\",\"mail_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"provenance\":{\"principal\":{\"issuer\":\"api\",\"subject\":\"alice\",\"tenant\":\"acme\"},\"root_request\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"via\":[]},\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"to\":{\"caller\":{\"agent\":\"support\",\"branch_id\":\"0192b000-0000-7000-8000-0000000000d1\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000d1\"}}}},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"message_sent\",\"type_version\":1}",
+      "valid": true
+    },
+    {
+      "name": "a turn_failed bounce to a member",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"envelope\":{\"ask_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"causal\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"code\":\"turn_failed\",\"error\":{\"code\":\"model_error\",\"message\":\"billing's turn failed\"},\"from\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"kind\":\"bounce\",\"mail_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"provenance\":{\"principal\":{\"issuer\":\"api\",\"subject\":\"alice\",\"tenant\":\"acme\"},\"root_request\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"via\":[]},\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"to\":{\"generation\":1,\"name\":\"ledger\"}}},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"message_sent\",\"type_version\":1}",
+      "valid": true
+    },
+    {
+      "name": "a receipt to a caller",
+      "line": "{\"actor\":{\"kind\":\"host\",\"principal\":{\"issuer\":\"api\",\"subject\":\"alice\",\"tenant\":\"acme\"}},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"envelope\":{\"ask_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"body\":{\"text\":\"Paid.\"},\"causal\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"from\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"kind\":\"reply\",\"mail_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"provenance\":{\"principal\":{\"issuer\":\"api\",\"subject\":\"alice\",\"tenant\":\"acme\"},\"root_request\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"via\":[]},\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"to\":{\"caller\":{\"agent\":\"support\",\"branch_id\":\"0192b000-0000-7000-8000-0000000000d1\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000d1\"}}},\"mail_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\"},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"message_received\",\"type_version\":1}",
+      "valid": true
+    },
+    {
+      "name": "a turn_failed bounce without its error",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"envelope\":{\"ask_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"causal\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"code\":\"turn_failed\",\"from\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"kind\":\"bounce\",\"mail_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"provenance\":{\"principal\":{\"issuer\":\"api\",\"subject\":\"alice\",\"tenant\":\"acme\"},\"root_request\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"via\":[]},\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"to\":{\"caller\":{\"agent\":\"support\",\"branch_id\":\"0192b000-0000-7000-8000-0000000000d1\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000d1\"}}}},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"message_sent\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "a turn_failed bounce with a result",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"envelope\":{\"ask_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"causal\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"code\":\"turn_failed\",\"error\":{\"code\":\"model_error\",\"message\":\"billing's turn failed\"},\"from\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"kind\":\"bounce\",\"mail_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"provenance\":{\"principal\":{\"issuer\":\"api\",\"subject\":\"alice\",\"tenant\":\"acme\"},\"root_request\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"via\":[]},\"result\":{\"member\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"output\":{\"text\":\"Paid.\"},\"status\":\"completed\"},\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"to\":{\"caller\":{\"agent\":\"support\",\"branch_id\":\"0192b000-0000-7000-8000-0000000000d1\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000d1\"}}}},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"message_sent\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "an error on a member_ended bounce",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"envelope\":{\"ask_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"causal\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"code\":\"member_ended\",\"error\":{\"code\":\"model_error\",\"message\":\"billing's turn failed\"},\"from\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"kind\":\"bounce\",\"mail_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"provenance\":{\"principal\":{\"issuer\":\"api\",\"subject\":\"alice\",\"tenant\":\"acme\"},\"root_request\":{\"event_id\":\"0192e000-0000-7000-8000-000000000001\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\"},\"via\":[]},\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"to\":{\"caller\":{\"agent\":\"support\",\"branch_id\":\"0192b000-0000-7000-8000-0000000000d1\",\"thread_id\":\"0192a000-0000-7000-8000-0000000000d1\"}}}},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"message_sent\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "member_idle{turn_failed}",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"turn_failed\":{\"code\":\"model_error\",\"message\":\"billing's turn failed\"}},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"member_idle\",\"type_version\":1}",
+      "valid": true
+    },
+    {
+      "name": "member_idle with both result and turn_failed",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"result\":{\"member\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"output\":{\"text\":\"Paid.\"},\"status\":\"completed\"},\"turn_failed\":{\"code\":\"model_error\",\"message\":\"billing's turn failed\"}},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"member_idle\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "member_idle with neither",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"member_idle\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "ask_closed failed",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"ask_id\":\"0192b000-0000-7000-8000-0000000000b1:c1\",\"outcome\":{\"error\":{\"code\":\"model_error\",\"message\":\"billing's turn failed\"},\"status\":\"failed\"}},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"ask_closed\",\"type_version\":1}",
+      "valid": true
+    },
+    {
+      "name": "supervisor_decided",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"action\":\"restart\",\"ended\":{\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"seq\":3},\"member\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"policy\":{\"max_restarts\":3,\"restart\":\"on_failure\",\"within_ms\":60000},\"restarts_in_window\":0},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"supervisor_decided\",\"type_version\":1}",
+      "valid": true
+    },
+    {
+      "name": "supervisor_decided with a window under one second",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"action\":\"restart\",\"ended\":{\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"seq\":3},\"member\":{\"generation\":1,\"name\":\"billing\",\"team\":\"e34fb000-e656-8122-a748-65b36a92d548\",\"tenant\":\"acme\"},\"policy\":{\"max_restarts\":3,\"restart\":\"on_failure\",\"within_ms\":999},\"restarts_in_window\":0},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"supervisor_decided\",\"type_version\":1}",
+      "valid": false
+    },
+    {
+      "name": "budget_exceeded of a hop cap",
+      "line": "{\"actor\":{\"kind\":\"host\"},\"branch_id\":\"0192b000-0000-7000-8000-0000000000b1\",\"critical\":true,\"data\":{\"limit\":\"max_turns\",\"limit_value\":3,\"observed\":3,\"observed_is_upper_bound\":false,\"scope\":\"hop\"},\"epoch\":1,\"event_id\":\"0192e000-0000-7000-8000-000000000002\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":2,\"thread_id\":\"0192a000-0000-7000-8000-0000000000b1\",\"time\":1790000000000,\"type\":\"budget_exceeded\",\"type_version\":1}",
+      "valid": true
     }
   ]
 }

@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from .json_access import Json, Obj, load, obj
-from .tables import DEV_SERVER, NOT_BUILT_ROUTES, SPEC, SUMMARIES
+from .tables import CHANGED, CHANGED_NAMES, DEV_SERVER, NOT_BUILT_ROUTES, SPEC, SUMMARIES
 
 HOST_OPENAPI = (SPEC / "schema" / "host-api" / "openapi.json").resolve()
 
@@ -84,6 +84,17 @@ class Bundler:
         return out
 
 
+def _mark_changed(op: Obj) -> None:
+    """An operation of a changed member says so first, as its reference page does."""
+    names = op.get("x-api")
+    listed = names if isinstance(names, list) else []
+    for name in (n for n in listed if isinstance(n, str) and n in CHANGED_NAMES):
+        owner, _, member = name.partition(".")
+        note = CHANGED[(owner, member or None)]
+        described = op.get("description")
+        op["description"] = note if not isinstance(described, str) else f"{note}\n\n{described}"
+
+
 def built_paths(paths: Obj) -> Obj:
     """Routes without the operations that are not built, with readable summaries."""
     out: Obj = {}
@@ -98,6 +109,7 @@ def built_paths(paths: Obj) -> Obj:
                 op_id = op.get("operationId")
                 if isinstance(op_id, str) and op_id in SUMMARIES:
                     op["summary"] = SUMMARIES[op_id]
+                _mark_changed(op)
         if any(isinstance(o, dict) and "operationId" in o for o in ops.values()):
             out[route] = ops
     return out

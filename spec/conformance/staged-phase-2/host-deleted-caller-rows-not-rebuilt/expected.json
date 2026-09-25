@@ -1,0 +1,180 @@
+{
+  "outcome": "ok",
+  "states": {
+    "team": {
+      "thread_id": "b2dcea03-0894-8cd6-846a-5f134ed1bacd",
+      "branch_id": "34c8bb75-7146-872c-a9d6-f1fd978fd58c",
+      "epoch": 1,
+      "turns_completed": 0,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "unknown_responses": 0
+      },
+      "transcript": [],
+      "status": "idle",
+      "head": {
+        "seq": 2,
+        "hash": "2d78c7dbde7dc6a7227458b92f9b1790f8f90c43b908758e7d7ef400c9603272"
+      }
+    },
+    "billing": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000c1",
+      "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+      "epoch": 1,
+      "turns_completed": 1,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 170,
+        "output_tokens": 30,
+        "unknown_responses": 0
+      },
+      "transcript": [
+        {
+          "role": "context",
+          "event_id": "0192e001-0000-7000-8000-000000000002"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-000000000004"
+        },
+        {
+          "role": "tool",
+          "event_id": "0192e001-0000-7000-8000-000000000008"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-00000000000a"
+        }
+      ],
+      "status": "idle",
+      "head": {
+        "seq": 12,
+        "hash": "667b89b310259905256d97ee1be820fe4fe19f0666c3c0b730698fba0220022c"
+      }
+    }
+  },
+  "index": {
+    "teams": [
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "tenant_id": "acme",
+        "kind": "host",
+        "lead_thread_id": null,
+        "team_log_branch_id": "34c8bb75-7146-872c-a9d6-f1fd978fd58c",
+        "closed_at": null
+      }
+    ],
+    "team_members": [
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "name": "billing",
+        "generation": 1,
+        "role": "host_member",
+        "agent": "billing",
+        "config_hash": "5800e46921bd898ffefe26cbb45e8038fd946b9719bd1f0e155c1d94aa9f459b",
+        "thread_id": "0192a000-0000-7000-8000-0000000000c1",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "provenance": null,
+        "state": "idle",
+        "result": {
+          "member": {
+            "tenant": "acme",
+            "team": "e34fb000-e656-8122-a748-65b36a92d548",
+            "name": "billing",
+            "generation": 1
+          },
+          "status": "completed",
+          "output": {
+            "text": "Answered support."
+          }
+        },
+        "updated_seq": 12
+      }
+    ],
+    "mail": [],
+    "asks": [],
+    "monitors": [],
+    "operator_receipts": [],
+    "team_feed": [
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 1
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 2
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 3
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 4
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 5
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 6
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 7
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 8
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 9
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 10
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 11
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 12
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "34c8bb75-7146-872c-a9d6-f1fd978fd58c",
+        "seq": 1
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "34c8bb75-7146-872c-a9d6-f1fd978fd58c",
+        "seq": 2
+      }
+    ],
+    "pending_wakes": []
+  }
+}

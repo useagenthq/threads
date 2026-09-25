@@ -1,0 +1,15 @@
+{
+  "name": "supervisor-restarts-miscounted-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 51: restarts_in_window is the log's count of earlier restart decisions for the name within the window. The first decision records 1 where the log holds none: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing"
+    ]
+  }
+}

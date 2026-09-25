@@ -145,7 +145,7 @@ async def members() -> Sequence[TeamMember]
 
 ### events
 
-The team's audit feed: every committed event of every team log, as stored (results keep their artifact refs, so this never raises StoreCorruptError). A pure read that drives nothing.
+**Phase 2, not yet available** (lane 29-teams-phase2-29b): Until then a cursor of any other epoch restarts the feed, follow is not supported, and GET /v1/teams/&#123;team&#125;/events is not served. The team's audit feed: every committed event of every team log, as stored (results keep their artifact refs, so this never raises StoreCorruptError). A pure read that drives nothing.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -153,7 +153,7 @@ The team's audit feed: every committed event of every team log, as stored (resul
 ```ts
 events(options?: {
   after?: TeamCursor;
-}): Promise<AsyncIterable<TeamItem>>
+}): Promise<Result<AsyncIterable<TeamItem>>>
 ```
 
 </Tab>
@@ -163,12 +163,14 @@ events(options?: {
 async def events(
     *,
     after: TeamCursor | None = None,
-) -> AsyncIterator[TeamItem]
+) -> Ok[AsyncIterator[TeamItem]] | Err[Failure]
 ```
 
 </Tab>
 </Tabs>
 
 <Field name="after" type={"TeamCursor"}>
-  Resume after this cursor. Omitted: from the start. See [TeamCursor](/docs/reference/types/TeamCursor).
+  Resume after this cursor. A cursor of an older epoch first yields epoch_restarted; one from a later epoch, or past the head of the current one, is invalid_cursor. Omitted: from the start. See [TeamCursor](/docs/reference/types/TeamCursor).
 </Field>
+
+**Returns an error value** with one of these codes: `invalid_cursor`.

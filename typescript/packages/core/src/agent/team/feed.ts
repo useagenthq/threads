@@ -182,7 +182,9 @@ class Sources {
       case "message_policy_decided":
         return e.data.request_id;
       case "member_started":
-        return this.#requests.get(e.data.provenance.root_request.event_id);
+        return this.#requests.get(
+          e.data.provenance?.root_request.event_id ?? "",
+        );
       case "message_sent":
         return "operator" in e.data.envelope.from
           ? e.data.envelope.from.operator

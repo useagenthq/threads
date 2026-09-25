@@ -2,15 +2,10 @@ import { z } from "zod";
 import { ActorWithPrincipal, Principal } from "../common";
 import { type EventDef, event, eventWithActor } from "../envelope";
 import { AskId, CallId, MailId, RequestId } from "../ids";
+import { BounceCode, MailEnvelope } from "../mail";
 import { Name, NonEmpty, Sha256 } from "../primitives";
 import { type Ruled, withRule } from "../rules";
-import {
-  BounceCode,
-  EndedResult,
-  MailEnvelope,
-  Provenance,
-  TeamRefusal,
-} from "../team";
+import { EndedResult, Provenance, TeamRefusal, TurnFailure } from "../team";
 import type { EnumOf, Lit, Opt, Strict } from "../zod-types";
 import { InvalidDefinition } from "./team";
 
@@ -83,6 +78,12 @@ const memberEnded = z.strictObject({
   result: EndedResult,
 });
 const askCancelled = z.strictObject({ status: z.literal("cancelled") });
+const askFailed = z.strictObject({
+  status: z.literal("failed"),
+  error: TurnFailure.describe(
+    "Byte for byte the turn_failed bounce's error, received in this same append (Phase 2: a host member's turn failed).",
+  ),
+});
 export const AskClosedData: Strict<{
   ask_id: typeof AskId;
   outcome: z.ZodDiscriminatedUnion<
@@ -94,6 +95,7 @@ export const AskClosedData: Strict<{
         result: typeof EndedResult;
       }>,
       Strict<{ status: Lit<"cancelled"> }>,
+      Strict<{ status: Lit<"failed">; error: typeof TurnFailure }>,
     ],
     "status"
   >;
@@ -105,9 +107,10 @@ export const AskClosedData: Strict<{
       timedOut,
       memberEnded,
       askCancelled,
+      askFailed,
     ])
     .describe(
-      "Decided in order: a reply, then a member_ended bounce, then a cancel or team close, else the deadline.",
+      "Decided in order: a reply, then a bounce naming the ask (member_ended, or failed for a host member's turn_failed), then a cancel or team close, else the deadline.",
     ),
 });
 export const AskClosed: EventDef<"ask_closed", typeof AskClosedData, true> =

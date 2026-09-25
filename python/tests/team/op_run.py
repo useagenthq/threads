@@ -6,6 +6,7 @@ import json
 from collections.abc import Callable, Sequence
 
 from pydantic import JsonValue
+from pydantic.experimental.missing_sentinel import MISSING
 from team.vectors import Obj, agents, obj, vector_mint
 
 from threads.agents.outcome import output_text
@@ -220,7 +221,9 @@ async def _settle(w: Writer, v: Obj) -> JsonValue:
     if not idle:
         return {"status": "ended"}
     settled = next(e for e in reversed(w.fold.events) if isinstance(e, MemberIdleEvent))
-    return {"status": "idle", "result": to_json(settled.data.result)}
+    result = settled.data.result
+    assert result is not MISSING, "a Phase 1 member_idle has a result"
+    return {"status": "idle", "result": to_json(result)}
 
 
 async def run_on(w: Writer, v: Obj) -> JsonValue:

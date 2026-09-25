@@ -228,7 +228,9 @@ class _View:
         if not mail_renders(env, _settle_monitors(self.events)):
             return None
         sender = obj(env["from"])
-        who = 'operator="true"' if "operator" in sender else f'from="{esc(text(sender["name"]))}"'
+        # A caller (Teams Phase 2) is named by its agent, as a member is by its name.
+        name = obj(sender["caller"])["agent"] if "caller" in sender else sender.get("name")
+        who = 'operator="true"' if "operator" in sender else f'from="{esc(text(name))}"'
         ask = f' ask_id="{esc(text(env["ask_id"]))}"' if kind == "ask" else ""
         head = f'<message {who} kind="{kind}"{ask} untrusted="true">'
         return user_line(f"{head}\n{esc(self._mail_text(env))}\n</message>")

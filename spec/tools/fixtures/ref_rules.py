@@ -1,7 +1,8 @@
 # pyright: strict
-"""Reference `validate_next` for semantic rules 31-42 and 44-46 on one log (spec/schema/README.md,
-"Semantic rules"). Stdlib only, like the reference reducer: `ref_check` runs it over every case,
-so a new rule that contradicts an accepted case fails `gen_fixtures.py --check`."""
+"""Reference `validate_next` for semantic rules 31-42, 44-46 and 50-55 on one log
+(spec/schema/README.md, "Semantic rules"). Stdlib only, like the reference reducer: `ref_check`
+runs it over every case, so a new rule that contradicts an accepted case fails
+`gen_fixtures.py --check`."""
 
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ from typing import TYPE_CHECKING
 from .common import arr, obj, text
 from .dynamic_rules import rule_46
 from .ref_fold import advance, joins, mail_run
+from .ref_host import HostCheck
 from .turn_open import mail_opens_turn, mail_renders
 
 if TYPE_CHECKING:
@@ -22,7 +24,7 @@ TEAM_LOG = frozenset(
     {
         "operator_request", "operator_refused", "message_policy_decided", "member_started",
         "message_sent", "message_received", "mail_refused", "ask_closed", "wait_started",
-        "member_observed", "wait_finished",
+        "member_observed", "wait_finished", "supervisor_decided",
     }
 )  # fmt: skip
 
@@ -61,6 +63,7 @@ class Check:
         self.barred: set[str] = set()  # background calls a thread or tree cancel followed
         self.ended_runs: set[Run] = set()  # runs with a turn that ended but end_turn
         self.ended = self.idle_ok = self.inputs = False
+        self.host = HostCheck()  # rules 50-55 (Teams Phase 2)
 
     # ---------- one event: the first broken rule, then the fold step ----------
     def step(self, e: Obj) -> str | None:
@@ -82,8 +85,9 @@ class Check:
         repair = t == "fork" and d.get("reason") == "repair"
         if self.team_log and t not in TEAM_LOG and not repair:
             return f"33: a team log takes no {t}"
+        why = self.host.check(e, d, t)
         handler = CHECKS.get(t)
-        return handler(self, e, d) if handler else None
+        return why or (handler(self, e, d) if handler else None)
 
     # rule 31, 34, 45: receipts
     def rule_received(self, e: Obj, d: Obj) -> str | None:
@@ -140,9 +144,11 @@ class Check:
     def rule_ended(self, _e: Obj, _d: Obj) -> str | None:
         return "37: member_ended twice" if self.ended else None
 
-    def rule_idle(self, _e: Obj, _d: Obj) -> str | None:
+    def rule_idle(self, _e: Obj, d: Obj) -> str | None:
         if self.ended:
             return "37: member_idle after member_ended"
+        if "turn_failed" in d:
+            return None  # a host member's failed turn: rule 53
         return None if self.idle_ok else "38: member_idle without its task's turn end"
 
     # rules 39-40: waits, monitors and parks
@@ -204,8 +210,8 @@ class Check:
 
     def rule_started(self, e: Obj, d: Obj) -> str | None:
         why = rule_46(d)
-        if why is not None:
-            return why
+        if why is not None or d.get("host_member") is True:
+            return why  # a host member's start is rule 51's
         parent = obj(d["parent"])
         if self.team_log:
             if parent["thread_id"] != self.lead_thread:
@@ -241,6 +247,7 @@ class Check:
         return any(self.trailing.get(c) in self.barred for c in causes)
 
     def _fold(self, e: Obj, d: Obj, t: str) -> None:
+        self.host.advance(e, d, t, self.first)
         advance(self, e, d, t)
         if t == "tool_result_late":
             self.trailing[text(e["event_id"])] = text(d["call_id"])

@@ -1133,7 +1133,8 @@
           "required": false,
           "doc": "Maps an HTTP API request to a principal, or null for 401. Omitted: every /v1 route answers 401; channel webhooks still work."
         },
-        {"name": "message_policy", "kind": "option", "type": {"array": {"$ref": "#/types/MessagePolicyRule"}}, "required": false, "default": [], "doc": "Rules that let one host agent start, send to, ask, monitor or cancel another beyond what a team grants (wait is decided as monitor). Each (from, to) pair appears once (a repeat is refused at setup with duplicate_name), so a logged decision names its rule by from and to. Default []: everything else is denied. Every decision is logged as message_policy_decided."}
+        {"name": "message_policy", "kind": "option", "type": {"array": {"$ref": "#/types/MessagePolicyRule"}}, "required": false, "default": [], "doc": "Rules that let one host agent start, send to, ask, monitor or cancel another beyond what a team grants (wait is decided as monitor). They decide after a team's grant and before default deny, for every op of every sender, and only add. Each (from, to) pair appears once (a repeat is refused at setup with duplicate_name), so a logged decision names its rule by from and to. A from or to that names no host agent is refused at setup (invalid_config); so is an empty allow, a rule to a host member that allows start, monitor or cancel, and a rule between host members that allows anything but send or ask (invalid_config, naming the rule). An agent gets the team tools only for the ops some rule with it as from allows. A rule that allows start makes its from a lead; one whose rules target only host members makes it a caller, in no team. Default []: everything else is denied. Every decision is logged as message_policy_decided."},
+        {"name": "members", "kind": "option", "type": {"map": {"$ref": "#/types/HostMemberOptions"}}, "required": false, "default": {}, "doc": "Host agents that run as one long-lived member per tenant, keyed by agent name. A host member is shared by every conversation in the tenant, its history included, so user-private work belongs in a started member instead. Every thread of the tenant may address one by its name, as messagePolicy allows. One turn that parks it (an approval, ask_user, an effect in doubt) holds every other conversation's mail until it resumes, so keep effectful tools off shared members. A restart starts a new thread with empty history. A caller's turn failure ends only that turn, and each unanswered ask closes failed. When the turn ends the member instead (its own lifetime budget, a failed rebind), the asks that turn took stay open until their deadline. A host member with handoffs is refused at setup (handoff_in_team, naming members.<name>). So is one with team, whose context policy turns compaction off, or with a tool that can need approval (or ask_user) but no approvers (invalid_config, naming members.<name>; for approvers: \"a host member is shared by every conversation in the tenant, so its approvals need approvers; add approvers to agent '<name>'\"). Default {}: none."}
       ],
       "returns": {"$ref": "#/types/Host"}
     },
@@ -2773,7 +2774,7 @@
         "cancel": {
           "ts": "cancel",
           "py": "cancel",
-          "doc": "Durable cancel_requested; unsettled effects park. Tree-wide: every descendant subagent without agent_finished gets cancel_requested{scope: tree} too, recursively, and the parent records each child's agent_finished{cancelled} before its own cancelled (spec/schema/README.md, Subagent cancellation and parking). A control appends through the run's own writer when this process runs the branch; otherwise it takes the branch lease for the one append. A lease another process holds is branch_busy and nothing is appended.",
+          "doc": "Durable cancel_requested; unsettled effects park. Tree-wide: every descendant subagent without agent_finished gets cancel_requested{scope: tree} too, recursively, and the parent records each child's agent_finished{cancelled} before its own cancelled (spec/schema/README.md, Subagent cancellation and parking). A control appends through the run's own writer when this process runs the branch, or takes the branch lease for the one append (Appended). When another process holds the lease it writes a durable inbox control item instead, which the holder applies at its next step boundary or dispatch fence (CancelAccepted, with the item's key). Authority is checked before either is written.",
           "async": true,
           "params": [
             {
@@ -2784,7 +2785,7 @@
               "doc": "Who takes this action; recorded as the event's actor and authorized by the host."
             }
           ],
-          "returns": {"result": {"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, "errors": ["forbidden", "branch_busy"]}
+          "returns": {"result": {"union": [{"$ref": "urn:threads:schema:host-api:v1#/$defs/Appended"}, {"$ref": "urn:threads:schema:host-api:v1#/$defs/CancelAccepted"}]}, "errors": ["forbidden"]}
         },
         "compact": {
           "ts": "compact",
@@ -4975,6 +4976,7 @@
         }
       },
       "methods": {
+        "team": {"ts": "team", "py": "team", "doc": "The host team of the principal's tenant, as a Team: it holds the tenant's host members, has no lead, never closes and has no HTTP route, so only trusted code reaches it. For a host member's name, start means its next generation after a stop, and cancel stops it for good.", "async": true, "params": [{"name": "principal", "kind": "option", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Principal"}, "required": true, "doc": "Who acts through the handle; its tenant picks the host team. A host with no members option answers not_found."}], "returns": {"result": {"$ref": "#/types/Team"}, "errors": ["not_found"]}},
         "startRun": {
           "ts": "startRun",
           "py": "start_run",
@@ -5370,7 +5372,7 @@
                 "$ref": "#/types/TeamCursor"
               },
               "required": false,
-              "doc": "Resume after this cursor. Omitted: from the start."
+              "doc": "Resume after this cursor. A cursor of an older epoch first yields epoch_restarted; one from a later epoch, or past the head of the current one, is invalid_cursor. Omitted: from the start."
             },
             {
               "name": "follow",
@@ -5380,13 +5382,14 @@
               },
               "required": false,
               "default": false,
-              "doc": "true keeps the stream open for new events until the team closes; false yields what is committed, then ends."
+              "doc": "true keeps the stream open for new events until the team closes, after the items of the append that closed it (a host team never closes, so its follower ends only when the caller stops); false yields what is committed, then ends. A commit wakes an in-process follower at once; otherwise it polls every 250 ms in one process and 1 s across processes."
             }
           ],
           "returns": {
             "stream": {
               "$ref": "#/types/TeamItem"
-            }
+            },
+            "errors": ["invalid_cursor"]
           }
         },
         "askStatus": {
@@ -5955,7 +5958,8 @@
             }
           },
           "casing": "api"
-        }
+        },
+        {"object": {"status": {"type": {"literal": "failed"}, "required": true, "doc": "\"failed\": a host member's turn failed and only that turn ended; the member lives on."}, "ask_id": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/AskId"}, "required": true, "doc": "The ask."}, "error": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/TurnFailure"}, "required": true, "doc": "Why the turn failed: a TurnFailure, its code mapped from the turn's end (spec/schema/README.md, Teams Phase 2): budget_exhausted when the hop cap or the caller's run budget ended it."}}, "casing": "api"}
       ],
       "doc": "How an ask ended."
     },
@@ -6667,7 +6671,7 @@
                 "literal": "team"
               },
               "required": true,
-              "doc": "\"team\": the team log's own team_opened."
+              "doc": "\"team\": the team log's own events: its team_opened, and in a host team a host member's start without provenance and supervisor_decided."
             }
           },
           "casing": "api"
@@ -6797,10 +6801,21 @@
             "$ref": "urn:threads:schema:events:v1#/$defs/Budget"
           },
           "required": false,
-          "doc": "Caps each member from starts; a member's budget is the smaller of this and start's. Omitted: no cap beyond the agent's own."
+          "doc": "Caps each member from starts, whose budget is the smaller of this and start's; and caps each turn that a send or ask to a host member opens, reserved under hop:<member branch_id>:<turn opener event_id> beside the member's and the request's own budgets (a hop cap ends only that turn). A host member reserves against no caller's thread budget: the caller pays through its run budget. Omitted: no cap beyond the agent's own."
         }
       },
       "doc": "One host messagePolicy rule. Anything no rule or team grant allows is denied."
+    },
+    "HostMemberOptions": {
+      "kind": "object",
+      "package": "host",
+      "casing": "api",
+      "fields": {
+        "restart": {"type": {"enum": ["on_failure", "never"]}, "required": false, "default": "on_failure", "doc": "on_failure restarts the member after it ends failed (a failed rebind; a caller's turn failure never ends it). An end by its own budget, a lifetime cap, or a cancel never restarts. Every end gets one supervisor_decided."},
+        "max_restarts": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Int"}, "required": false, "default": 3, "doc": "At most this many restarts within within_ms; one more stops the member until an operator starts it (Host.team)."},
+        "within_ms": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Int"}, "required": false, "default": 60000, "doc": "The sliding window of max_restarts, at least 1000 (less is refused at setup, invalid_config)."}
+      },
+      "doc": "How the host supervises one host member (the members option)."
     }
   },
   "cli": [

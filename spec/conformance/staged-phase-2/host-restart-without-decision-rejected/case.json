@@ -1,0 +1,14 @@
+{
+  "name": "host-restart-without-decision-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 51: a restart (member_started{restart_of}) follows the supervisor's restart decision on that generation, or an operator's request after a stop. Generation 2 starts with no decision on generation 1: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team"
+    ]
+  }
+}

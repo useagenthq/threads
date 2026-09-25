@@ -52,15 +52,16 @@ def _forged_team(events: list[Line]) -> list[Line]:
 
 def _other_tenants_team(c: Conn) -> None:
     c.execute(
-        "INSERT INTO teams (team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at)"
-        " VALUES (?, 'other', '0192a000-0000-7000-8000-0000000000ef',"
+        "INSERT INTO teams"
+        " (team_id, tenant_id, kind, lead_thread_id, team_log_branch_id, closed_at)"
+        " VALUES (?, 'other', 'lead', '0192a000-0000-7000-8000-0000000000ef',"
         " '0192b000-0000-7000-8000-0000000000ef', NULL)",
         (OTHER_TEAM,),
     )
     c.execute(
-        "INSERT INTO mail (mail_id, team_id, kind, to_name, to_generation, principal_key,"
+        "INSERT INTO mail (mail_id, team_id, kind, to_kind, to_name, to_generation, principal_key,"
         " root_request, envelope, created_at, state)"
-        " VALUES ('m1', ?, 'message', 'x-1', 1, 'k', 'r', X'7B7D', 0, 'pending')",
+        " VALUES ('m1', ?, 'message', 'member', 'x-1', 1, 'k', 'r', X'7B7D', 0, 'pending')",
         (OTHER_TEAM,),
     )
 

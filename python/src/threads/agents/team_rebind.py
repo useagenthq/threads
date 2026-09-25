@@ -12,7 +12,7 @@ from threads.agents.config import ConfigError, UnboundError
 from threads.agents.definition import Definition
 from threads.agents.dynamic_agent import member_definition
 from threads.agents.store import now_ms
-from threads.log import MailEnvelope, MemberStartedEvent, OperatorSender
+from threads.log import MailEnvelope, MemberRef, MemberStartedEvent
 from threads.loop.team_runtime import TeamAgentPin
 from threads.store.lines import uuid7
 from threads.team.dynamic import OPERATOR
@@ -27,7 +27,9 @@ def bound(
     define = started.data.define
     if found is None or define is MISSING:
         return found
-    starter = OPERATOR if isinstance(task.from_, OperatorSender) else task.from_.name
+    # A caller never sends a task (the envelope's rule), so a nameless sender is the operator.
+    sender = task.from_
+    starter = sender.name if isinstance(sender, MemberRef) else OPERATOR
     try:
         return member_definition(found, define, starter)
     except ConfigError:

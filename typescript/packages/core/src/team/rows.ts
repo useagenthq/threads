@@ -19,15 +19,19 @@ import type { Tx } from "../store/driver";
 const utf8 = new TextDecoder();
 const json = (bytes: Uint8Array): unknown => JSON.parse(utf8.decode(bytes));
 
+// A lead's team only: a host team's row (Phase 2, no lead) is never written by this version, whose
+// readers refuse team_opened{kind: host}, so reading one is a broken invariant.
 const TeamRow: Strict<{
   team_id: typeof TeamId;
   tenant_id: z.ZodString;
+  kind: z.ZodLiteral<"lead">;
   lead_thread_id: typeof ThreadId;
   team_log_branch_id: typeof BranchId;
   closed_at: z.ZodNullable<z.ZodInt>;
 }> = z.strictObject({
   team_id: TeamId,
   tenant_id: z.string(),
+  kind: z.literal("lead"),
   lead_thread_id: ThreadId,
   team_log_branch_id: BranchId,
   closed_at: z.int().nullable(),
@@ -90,7 +94,7 @@ export async function teamRow(
     .array(TeamRow)
     .parse(
       await tx.all(
-        "SELECT team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at FROM teams WHERE team_id = ?",
+        "SELECT team_id, tenant_id, kind, lead_thread_id, team_log_branch_id, closed_at FROM teams WHERE team_id = ?",
         [team],
       ),
     )[0];
@@ -105,7 +109,7 @@ export async function teamOfLog(
     .array(TeamRow)
     .parse(
       await tx.all(
-        "SELECT team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at FROM teams WHERE team_log_branch_id = ?",
+        "SELECT team_id, tenant_id, kind, lead_thread_id, team_log_branch_id, closed_at FROM teams WHERE team_log_branch_id = ?",
         [branch],
       ),
     )[0];

@@ -272,12 +272,15 @@ export function checkStarted(
 ): Violation {
   const defined = checkDefine(e.data);
   if (defined !== undefined) return defined;
-  const { parent } = e.data;
+  const { parent, provenance } = e.data;
+  // Only a host member's start (Phase 2, refused first by checkNotYetPhase2) has neither.
+  if (parent === undefined || provenance === undefined)
+    return invalid("a member_started without a parent is a host member's");
   const { team } = fold;
   if (team.teamLog) {
     if (parent.thread_id !== team.leadThread)
       return invalid("an operator start's parent is not the lead's thread");
-    const root = e.data.provenance.root_request;
+    const root = provenance.root_request;
     const ours =
       root.thread_id === e.thread_id && team.requestEvents.has(root.event_id);
     return ours

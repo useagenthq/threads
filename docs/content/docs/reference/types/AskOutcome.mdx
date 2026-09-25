@@ -4,6 +4,8 @@ description: "How an ask ended."
 icon: "Braces"
 ---
 
+**Phase 2, not yet available** (lane 29-teams-phase2-29d): Until then no ask closes failed: the failed variant comes with host members.
+
 A union discriminated by `status`.
 
 ### answered
@@ -80,4 +82,18 @@ A union discriminated by `status`.
 
 <Field name="askId / ask_id" type={"AskId"} required>
   The ask.
+</Field>
+
+### failed
+
+<Field name="status" type={"\"failed\""} required>
+  "failed": a host member's turn failed and only that turn ended; the member lives on.
+</Field>
+
+<Field name="askId / ask_id" type={"AskId"} required>
+  The ask.
+</Field>
+
+<Field name="error" type={"TurnFailure"} required>
+  Why the turn failed: a TurnFailure, its code mapped from the turn's end: budget_exhausted when the hop cap or the caller's run budget ended it.
 </Field>

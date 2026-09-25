@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from pydantic import JsonValue
+from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import (
     AgentFinishedEvent,
@@ -126,7 +127,8 @@ class _Run:
     def _members(self, event: Event) -> None:
         """Run-owned members, by their task monitors, and the waits' settle monitors."""
         if isinstance(event, MemberStartedEvent):
-            if event.data.provenance.root_request.event_id == self.request:
+            prov = event.data.provenance
+            if prov is not MISSING and prov.root_request.event_id == self.request:
                 self.monitors.add(monitor_id(event, "task"))
         elif isinstance(event, MessageReceivedEvent):
             env = event.data.envelope

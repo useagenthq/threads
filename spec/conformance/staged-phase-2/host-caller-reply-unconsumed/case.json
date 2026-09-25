@@ -1,0 +1,16 @@
+{
+  "name": "host-caller-reply-unconsumed",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Teams Phase 2 replay (D.4): billing's reply is committed and support hasn't consumed it: the to_kind caller mail is rebuilt pending from billing's log, and support's ask stays open and parked.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

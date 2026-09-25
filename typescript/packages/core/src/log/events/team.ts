@@ -3,12 +3,14 @@ import { ActorWithPrincipal, Budget } from "../common";
 import { type EventDef, event, eventWithActor } from "../envelope";
 import { BranchId, EventId, MonitorId, TeamId, ThreadId, WaitId } from "../ids";
 import { Name, NonEmpty, PosInt, Sha256, TimeMs } from "../primitives";
+import { type Ruled, withRule } from "../rules";
 import {
   CompletedResult,
   EndedResult,
   MemberRef,
   Provenance,
   StoredMemberResult,
+  TurnFailure,
 } from "../team";
 import type { Arr, EnumOf, Lit, Opt, Strict } from "../zod-types";
 import { ParkReason } from "./control";
@@ -16,21 +18,47 @@ import { ParkReason } from "./control";
 // A team's lifecycle, waits, monitors and wakes (spec/schema/README.md, "Teams"). Each event
 // holds every byte of the index rows it writes, so a fold over the team's logs rebuilds them.
 
-export const TeamOpenedData: Strict<{
-  team: typeof TeamId;
-  lead: typeof MemberRef;
-  lead_thread_id: typeof ThreadId;
-}> = z.strictObject({
-  team: TeamId,
-  lead: MemberRef,
-  lead_thread_id: ThreadId,
-});
+const TEAM_KINDS = ["lead", "host"] as const;
+const TEAM_OPENED_RULE = {
+  if: { properties: { kind: { const: "host" } }, required: ["kind"] },
+  then: {
+    required: ["tenant"],
+    not: { anyOf: [{ required: ["lead"] }, { required: ["lead_thread_id"] }] },
+  },
+  else: { required: ["lead", "lead_thread_id"], not: { required: ["tenant"] } },
+} as const;
+export const TeamOpenedData: Ruled<
+  Strict<{
+    team: typeof TeamId;
+    kind: Opt<EnumOf<typeof TEAM_KINDS>>;
+    lead: Opt<typeof MemberRef>;
+    lead_thread_id: Opt<typeof ThreadId>;
+    tenant: Opt<typeof NonEmpty>;
+  }>,
+  typeof TEAM_OPENED_RULE
+> = withRule(
+  z.strictObject({
+    team: TeamId,
+    kind: z
+      .enum(TEAM_KINDS)
+      .describe(
+        "Absent or lead: a lead's team, with lead and lead_thread_id. host (Phase 2): a tenant's host team, which has no lead, holds the tenant's host members and never closes.",
+      )
+      .optional(),
+    lead: MemberRef.optional(),
+    lead_thread_id: ThreadId.optional(),
+    tenant: NonEmpty.describe(
+      "host only: the tenant whose host team this is (its teams row's tenant_id).",
+    ).optional(),
+  }),
+  TEAM_OPENED_RULE,
+);
 export const TeamOpened: EventDef<"team_opened", typeof TeamOpenedData, true> =
   event({
     type: "team_opened",
     critical: true,
     description:
-      "The team log's first event, in place of thread_started: opened in the lead's first append. The team log never renders to a model, never parks and never opens a turn.",
+      "The team log's first event, in place of thread_started: opened in the lead's first append, or for a host team by the first append that addresses one of its host members. The team log never renders to a model, never parks and never opens a turn.",
     data: TeamOpenedData,
   });
 
@@ -88,39 +116,75 @@ export const InvalidDefinition: Strict<{
       "Why a start's chosen fields (label, instructions, tools, model) were refused: its invalid_definition detail.",
   });
 
-export const MemberStartedData: Strict<{
-  member: typeof MemberRef;
-  agent: typeof NonEmpty;
-  config_hash: typeof Sha256;
-  thread_id: typeof ThreadId;
-  parent: typeof TeamMemberParent;
-  provenance: typeof Provenance;
-  budget: Opt<typeof Budget>;
-  define: Opt<typeof MemberDefine>;
-  label: Opt<typeof NonEmpty>;
-}> = z.strictObject({
-  member: MemberRef,
-  agent: NonEmpty,
-  config_hash: Sha256.describe(
-    "The pinned definition, whose canonical bytes are stored before this append; materialize rebinds against it.",
-  ),
-  thread_id: ThreadId.describe(
-    "The member's thread, opened at materialize (the starting window has no branch).",
-  ),
-  parent: TeamMemberParent.describe(
-    "The structural parent the member's thread_started will carry: the lead's member_started, or the lead's thread_started for an operator start.",
-  ),
-  provenance: Provenance,
-  budget: Budget.describe(
-    "The member's own budget: the minimum of start's budget and the matching messagePolicy rule's.",
-  ).optional(),
-  define: MemberDefine.describe(
-    "Present exactly when the agent is a dynamic agent: what its starter chose. config_hash binds it.",
-  ).optional(),
-  label: NonEmpty.describe(
-    "A display name the starter gave (1-64 code points, no control or format characters; semantic rule 46). Never hashed, never rendered to a model.",
-  ).optional(),
-});
+const MEMBER_STARTED_RULE = {
+  if: { required: ["host_member"] },
+  then: {
+    not: {
+      anyOf: [
+        { required: ["parent"] },
+        { required: ["define"] },
+        { required: ["label"] },
+        { required: ["budget"] },
+      ],
+    },
+  },
+  else: {
+    required: ["parent", "provenance"],
+    not: { required: ["restart_of"] },
+  },
+} as const;
+export const MemberStartedData: Ruled<
+  Strict<{
+    member: typeof MemberRef;
+    agent: typeof NonEmpty;
+    config_hash: typeof Sha256;
+    thread_id: typeof ThreadId;
+    parent: Opt<typeof TeamMemberParent>;
+    provenance: Opt<typeof Provenance>;
+    budget: Opt<typeof Budget>;
+    define: Opt<typeof MemberDefine>;
+    label: Opt<typeof NonEmpty>;
+    host_member: Opt<Lit<true>>;
+    restart_of: Opt<typeof PosInt>;
+  }>,
+  typeof MEMBER_STARTED_RULE
+> = withRule(
+  z.strictObject({
+    member: MemberRef,
+    agent: NonEmpty,
+    config_hash: Sha256.describe(
+      "The pinned definition, whose canonical bytes are stored before this append; materialize rebinds against it.",
+    ),
+    thread_id: ThreadId.describe(
+      "The member's thread, opened at materialize (the starting window has no branch).",
+    ),
+    parent: TeamMemberParent.describe(
+      "The structural parent the member's thread_started will carry: the lead's member_started, or the lead's thread_started for an operator start. Absent exactly for a host member, a root thread.",
+    ).optional(),
+    provenance: Provenance.describe(
+      "Required unless host_member. A host member's start has one only when an operator restarts it.",
+    ).optional(),
+    budget: Budget.describe(
+      "The member's own budget: the minimum of start's budget and the matching messagePolicy rule's.",
+    ).optional(),
+    define: MemberDefine.describe(
+      "Present exactly when the agent is a dynamic agent: what its starter chose. config_hash binds it.",
+    ).optional(),
+    label: NonEmpty.describe(
+      "A display name the starter gave (1-64 code points, no control or format characters; semantic rule 46). Never hashed, never rendered to a model.",
+    ).optional(),
+    host_member: z
+      .literal(true)
+      .describe(
+        "Phase 2: a host member, in a host team's log, named by its agent. No task mail and no task monitor go with it; it has no parent and its thread is a root.",
+      )
+      .optional(),
+    restart_of: PosInt.describe(
+      "host_member only: the generation this start replaces (semantic rule 51).",
+    ).optional(),
+  }),
+  MEMBER_STARTED_RULE,
+);
 export const MemberStarted: EventDef<
   "member_started",
   typeof MemberStartedData,
@@ -133,14 +197,30 @@ export const MemberStarted: EventDef<
   data: MemberStartedData,
 });
 
-export const MemberIdleData: Strict<{ result: typeof CompletedResult }> =
-  z.strictObject({ result: CompletedResult });
+const MEMBER_IDLE_RULE = {
+  oneOf: [{ required: ["result"] }, { required: ["turn_failed"] }],
+} as const;
+export const MemberIdleData: Ruled<
+  Strict<{
+    result: Opt<typeof CompletedResult>;
+    turn_failed: Opt<typeof TurnFailure>;
+  }>,
+  typeof MEMBER_IDLE_RULE
+> = withRule(
+  z.strictObject({
+    result: CompletedResult.optional(),
+    turn_failed: TurnFailure.describe(
+      "Phase 2, a host member only: its turn failed and only that turn ended. The row goes back to idle and keeps its last result.",
+    ).optional(),
+  }),
+  MEMBER_IDLE_RULE,
+);
 export const MemberIdle: EventDef<"member_idle", typeof MemberIdleData, true> =
   event({
     type: "member_idle",
     critical: true,
     description:
-      "In the member's log, with the turn_completed that ends its task: the row becomes idle with this result, and each settle monitor and an unfired task monitor fires in the same append.",
+      "In the member's log, with the turn_completed that ends its task: the row becomes idle with this result, and each settle monitor and an unfired task monitor fires in the same append. A host member's failed turn records turn_failed instead, and fires nothing.",
     data: MemberIdleData,
   });
 
@@ -280,3 +360,13 @@ export const Woken: EventDef<
   data: WokenData,
   actor: ActorWithPrincipal,
 });
+
+/** The tenant a team_opened indexes its team under: its lead's, or a host team's own. */
+export function openedTenant(d: z.infer<typeof TeamOpenedData>): string {
+  const tenant = d.lead?.tenant ?? d.tenant;
+  if (tenant === undefined)
+    throw new Error(
+      "team_opened names no tenant: its schema rule was bypassed",
+    );
+  return tenant;
+}

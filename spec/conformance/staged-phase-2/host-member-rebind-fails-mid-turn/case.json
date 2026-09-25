@@ -1,0 +1,17 @@
+{
+  "name": "host-member-rebind-fails-mid-turn",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Teams Phase 2 (rule 53's scope): billing's rebind fails with a turn open, the turn that took support's ask. The append is the failed rebind's: turn_completed{error, pin_unavailable} then member_ended{failed}, so rule 53 does not apply and the taken ask waits for its deadline. The supervisor restarts generation 2 in a new thread.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "billing2",
+      "support"
+    ]
+  }
+}

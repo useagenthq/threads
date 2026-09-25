@@ -1,0 +1,18 @@
+{
+  "name": "host-deleted-caller-rows-not-rebuilt",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Teams Phase 2 (D.4, R29-1): support asked billing, consumed the reply and was deleted (its log is gone). billing's log still holds the receipt and the reply, but a rebuild skips every mail and ask naming a tombstoned caller, so the rebuilt index equals the one the delete left: no row names the deleted branch.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing"
+    ],
+    "deleted": [
+      "0192a000-0000-7000-8000-0000000000d1"
+    ]
+  }
+}

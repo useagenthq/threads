@@ -38,6 +38,9 @@ from . import (
     guards,
     handoff_transcripts,
     host,
+    host_cases,
+    host_ends,
+    host_rules,
     host_sends,
     integrity,
     ladder,
@@ -89,7 +92,7 @@ from . import (
     wake_bars,
     wakes,
 )
-from .common import CASES, STAGED, sha
+from .common import CASES, STAGED, STAGED_PHASE_2_DIR, sha
 from .integrity import FOREIGN_WRITER
 from .jcs import selftest
 from .log import WRITERS, set_writer
@@ -188,6 +191,9 @@ def _build(out: pathlib.Path) -> None:
 # moved legacy_run and legacy_wake_rows; lane 21D (team run completion) moved run_cases; lane 21E
 # (cancel application) moved team_cancel_rule. None is staged now.
 STAGED_PHASE_1: tuple[Callable[[pathlib.Path], None], ...] = ()
+# Teams Phase 2 (lane 29): its own directory, since both runtimes refuse its forms until the build
+# (unsupported_critical_event) and so can't read these logs as they read staged/.
+STAGED_PHASE_2 = (host_cases.build, host_rules.build, host_ends.build)
 
 
 def _build_staged(out: pathlib.Path) -> None:
@@ -195,6 +201,12 @@ def _build_staged(out: pathlib.Path) -> None:
     corpus, but no runner reads them until the build moves each family into FAMILIES."""
     out.mkdir()
     for build in STAGED_PHASE_1:
+        build(out)
+
+
+def _build_staged_phase_2(out: pathlib.Path) -> None:
+    out.mkdir()
+    for build in STAGED_PHASE_2:
         build(out)
 
 
@@ -264,11 +276,13 @@ def main() -> int:
         _generate(out)
         staged = pathlib.Path(tmp) / "staged"
         _build_staged(staged)
+        phase2 = pathlib.Path(tmp) / "staged-phase-2"
+        _build_staged_phase_2(phase2)
         traces = pathlib.Path(tmp) / "otel"
         otel.build(traces)
         built_evals = pathlib.Path(tmp) / "evals"
         _build_evals(built_evals)
-        problems = coverage.check(out) + ref_team.ref_check(out, staged)
+        problems = coverage.check(out) + ref_team.ref_check(out, staged, phase2)
         if sys.argv[1:] == ["--check"]:
             problems += (
                 tool_inputs.check() + tool_groups.check() + team_wire.check() + team_ops.check()
@@ -284,6 +298,7 @@ def main() -> int:
             return 1
         if sys.argv[1:] == ["--check"]:
             diffs = _diff(out, CASES) + [f"staged/{d}" for d in _diff(staged, STAGED)]
+            diffs += [f"staged-phase-2/{d}" for d in _diff(phase2, STAGED_PHASE_2_DIR)]
             for part in otel.PARTS:
                 diffs += [f"otel/{part}/{d}" for d in _diff(traces / part, otel.OTEL / part)]
             diffs += [f"evals/{d}" for d in _diff(built_evals, EVALS)] + eval_vectors.check()
@@ -307,7 +322,8 @@ def main() -> int:
         otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
         eval_vectors.write()
         evals_out = (built_evals, EVALS)
-        for built, dest in ((out, CASES), (staged, STAGED), evals_out, *otel_parts):
+        staged_all = ((staged, STAGED), (phase2, STAGED_PHASE_2_DIR))
+        for built, dest in ((out, CASES), *staged_all, evals_out, *otel_parts):
             shutil.rmtree(dest, ignore_errors=True)
             shutil.copytree(built, dest)
         print(f"wrote {sum(1 for _ in CASES.iterdir())} cases")

@@ -47,7 +47,8 @@ class Emitter:
 
     def __init__(self, contract: dict[str, Member], gaps: list[Gap]) -> None:
         self.contract = contract
-        self.gaps = {g.name: g for g in gaps}
+        # A changed member exists as the base contract had it: it is checked like any other.
+        self.gaps = {g.name: g for g in gaps if g.kind != "changed"}
         self.lines: list[str] = []
         self.absent_types: dict[str, list[str]] = {}
 

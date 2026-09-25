@@ -342,21 +342,31 @@ CREATE TABLE IF NOT EXISTS tombstones (
 -- wake hints and rebuild as null. JSON columns hold RFC 8785 bytes.
 
 -- team_opened (in the team log, written by the lead's first append) inserts the row; the lead's
--- member_ended sets closed_at to that event's time.
+-- member_ended sets closed_at to that event's time. A host team (kind host, Teams Phase 2) has no
+-- lead: one per tenant, its ids derived from the tenant, opened by the first append that addresses
+-- one of its host members, and never closed.
 CREATE TABLE IF NOT EXISTS teams (
   team_id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
-  lead_thread_id TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('lead', 'host')),
+  lead_thread_id TEXT,
   team_log_branch_id TEXT NOT NULL,
-  closed_at INTEGER
+  closed_at INTEGER,
+  CHECK ((kind = 'lead') = (lead_thread_id IS NOT NULL))
 ) STRICT;
 
 -- A team log belongs to one team; every append asks whether its branch is one.
 CREATE UNIQUE INDEX IF NOT EXISTS teams_log_branch ON teams (team_log_branch_id);
 
+-- One host team per tenant (Teams Phase 2): a second guard beside its ids, which the tenant
+-- derives.
+CREATE UNIQUE INDEX IF NOT EXISTS teams_host_tenant ON teams (tenant_id) WHERE kind = 'host';
+
 -- One row per member generation, the lead included: role lead is inserted by the lead's first
 -- append, from its thread_started{team} and the team log's team_opened (a lead has no
--- provenance); every other row comes from member_started. branch_id is null only in the starting
+-- provenance); every other row comes from member_started. A host member (role host_member, in a
+-- host team) has provenance only when an operator restarted it; its thread_started{host_member}
+-- sets its branch_id and makes it idle, since it opens no task turn. branch_id is null only in the starting
 -- window, before materialize opens the member's branch. state and result
 -- change only in the member's own appends: a turn opener sets running, parked and resumed set
 -- parked and running, member_idle sets idle and result, member_ended sets ended and result.
@@ -365,7 +375,7 @@ CREATE TABLE IF NOT EXISTS team_members (
   team_id TEXT NOT NULL,
   name TEXT NOT NULL,
   generation INTEGER NOT NULL CHECK (generation >= 1),
-  role TEXT NOT NULL CHECK (role IN ('lead', 'member')),
+  role TEXT NOT NULL CHECK (role IN ('lead', 'member', 'host_member')),
   agent TEXT NOT NULL,
   config_hash TEXT NOT NULL,
   thread_id TEXT NOT NULL,
@@ -376,7 +386,7 @@ CREATE TABLE IF NOT EXISTS team_members (
   updated_seq INTEGER NOT NULL,
   PRIMARY KEY (team_id, name, generation),
   CHECK ((state = 'starting') = (branch_id IS NULL)),
-  CHECK ((role = 'lead') = (provenance IS NULL))
+  CHECK (role = 'host_member' OR (role = 'lead') = (provenance IS NULL))
 ) STRICT;
 
 -- Every append asks which team a branch belongs to (its team rows and feed), by thread and branch.
@@ -385,9 +395,11 @@ CREATE INDEX IF NOT EXISTS team_members_thread ON team_members (thread_id, branc
 -- One row per mail, inserted by the sender's message_sent: envelope is that event's envelope
 -- byte for byte, and created_at is its time (the consume order is (created_at, mail_id)). The
 -- recipient's writer moves it once: message_received (or a task's user_input{source: team_task})
--- to consumed, mail_refused to stale (stale_member) or returned (member_ended). A null to_name is
--- the team log. claim_token and claim_expires_at deduplicate wakes among workers and are never
--- needed for correctness.
+-- to consumed, mail_refused to stale (stale_member) or returned (member_ended). to_kind says
+-- which address the envelope's `to` is: a member (to_name, to_generation), the team log, or a
+-- caller thread outside the host team (to_branch_id: a host member's reply or bounce, Teams
+-- Phase 2). claim_token and claim_expires_at deduplicate wakes among workers and are never needed
+-- for correctness. Stores are not migrated before v1, so no older row needs a to_kind.
 CREATE TABLE IF NOT EXISTS mail (
   mail_id TEXT PRIMARY KEY,
   team_id TEXT NOT NULL,
@@ -397,8 +409,10 @@ CREATE TABLE IF NOT EXISTS mail (
       'member_settled', 'member_parked', 'member_ended', 'bounce'
     )
   ),
+  to_kind TEXT NOT NULL CHECK (to_kind IN ('member', 'team_log', 'caller')),
   to_name TEXT,
   to_generation INTEGER,
+  to_branch_id TEXT,
   principal_key TEXT NOT NULL,
   root_request TEXT NOT NULL,
   envelope BLOB NOT NULL,
@@ -407,15 +421,28 @@ CREATE TABLE IF NOT EXISTS mail (
   claim_token TEXT,
   claim_expires_at INTEGER,
   consumed_seq INTEGER,
-  CHECK ((to_name IS NULL) = (to_generation IS NULL))
+  CHECK (
+    (to_kind = 'member' AND to_name IS NOT NULL AND to_generation IS NOT NULL
+      AND to_branch_id IS NULL)
+    OR (to_kind = 'team_log' AND to_name IS NULL AND to_generation IS NULL
+      AND to_branch_id IS NULL)
+    OR (to_kind = 'caller' AND to_name IS NULL AND to_generation IS NULL
+      AND to_branch_id IS NOT NULL)
+  )
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS mail_pending
-  ON mail (team_id, to_name, to_generation, created_at, mail_id)
+  ON mail (team_id, to_kind, to_name, to_generation, created_at, mail_id)
   WHERE state = 'pending';
 
+-- A caller's pending mail (a reply or bounce from a host member), found by the caller's branch.
+CREATE INDEX IF NOT EXISTS mail_pending_caller
+  ON mail (to_branch_id, created_at, mail_id)
+  WHERE state = 'pending' AND to_kind = 'caller';
+
 -- One row per ask, inserted by the ask's message_sent (ask_id = its mail_id); the asker's
--- ask_closed moves it from open to its outcome with one conditional update.
+-- ask_closed moves it from open to its outcome with one conditional update. A caller's ask names
+-- the caller's branch as asker_branch_id; failed is a host member's failed turn (Phase 2).
 CREATE TABLE IF NOT EXISTS asks (
   ask_id TEXT PRIMARY KEY,
   team_id TEXT NOT NULL,
@@ -424,7 +451,7 @@ CREATE TABLE IF NOT EXISTS asks (
   recipient_generation INTEGER NOT NULL,
   deadline INTEGER NOT NULL,
   state TEXT NOT NULL CHECK (
-    state IN ('open', 'answered', 'timed_out', 'member_ended', 'cancelled')
+    state IN ('open', 'answered', 'timed_out', 'member_ended', 'cancelled', 'failed')
   ),
   closed_seq INTEGER
 ) STRICT;
@@ -515,5 +542,7 @@ CREATE INDEX IF NOT EXISTS observer_losses_unreported
 -- tenant-scoped schedule_occurrences with pending and retired rows, and questions (planned as
 -- version 2; the team tables took 4 first, so a version-4 store has the older schedule layout and
 -- is refused). Version 6: lane 23's observers and observer_losses. Version 7: lane 27's
--- branches_root, one root branch per thread.
-PRAGMA user_version = 7;
+-- branches_root, one root branch per thread. Version 8: Teams Phase 2's teams.kind with a
+-- nullable lead_thread_id and one host team per tenant, team_members' host_member role, mail's
+-- to_kind and to_branch_id with the caller index, and asks' failed state.
+PRAGMA user_version = 8;

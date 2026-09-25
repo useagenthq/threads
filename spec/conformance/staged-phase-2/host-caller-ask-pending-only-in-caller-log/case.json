@@ -1,0 +1,16 @@
+{
+  "name": "host-caller-ask-pending-only-in-caller-log",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Teams Phase 2 replay (D.4): support's ask is committed and billing hasn't consumed it. Only the caller's log holds it, so a rebuild finds the pending to_kind member mail and the open asks row (asker_branch_id the caller's branch) through the caller's log.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

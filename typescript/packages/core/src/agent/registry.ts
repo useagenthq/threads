@@ -114,7 +114,7 @@ export type MemberEnv = {
   readonly store: Store;
   readonly thread: ThreadRef;
   /** The member's parent: the lead's member_started (or thread_started). */
-  readonly parent: EventOf<"member_started">["data"]["parent"];
+  readonly parent: NonNullable<EventOf<"member_started">["data"]["parent"]>;
   /** The principal of the member's task: its turns' actor. */
   readonly principal: Principal;
   readonly holder: string;

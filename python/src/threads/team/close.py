@@ -107,6 +107,8 @@ def _ask_value(ctx: CloseContext, ask_id: str, outcome: dict[str, JsonValue]) ->
             "status": status,
             "result": public_result(outcome["result"], ctx.read),
         }
+    if status == "failed":
+        raise AssertionError("ask_closed{failed} is Phase 2: validate_next refuses it")
     return {"ask_id": ask_id, "status": status}
 
 

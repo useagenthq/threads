@@ -213,6 +213,37 @@
       "pattern": "^[A-Za-z0-9_.-]{1,128}$",
       "type": "string"
     },
+    "CallerAddress": {
+      "additionalProperties": false,
+      "description": "A thread outside the host team (Phase 2). It may only send and ask a host member, and a host member answers it only by reply or bounce.",
+      "properties": {
+        "caller": {
+          "additionalProperties": false,
+          "properties": {
+            "agent": {
+              "$ref": "#/$defs/Name",
+              "description": "The caller thread's agent: a host rule's from, and the deciding rule's key."
+            },
+            "branch_id": {
+              "$ref": "#/$defs/BranchId"
+            },
+            "thread_id": {
+              "$ref": "#/$defs/ThreadId"
+            }
+          },
+          "required": [
+            "thread_id",
+            "branch_id",
+            "agent"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "caller"
+      ],
+      "type": "object"
+    },
     "CancelledResult": {
       "additionalProperties": false,
       "properties": {
@@ -755,6 +786,9 @@
             },
             {
               "$ref": "#/$defs/ev_answer_rejected"
+            },
+            {
+              "$ref": "#/$defs/ev_supervisor_decided"
             }
           ]
         }
@@ -808,11 +842,12 @@
               "description": "Required exactly when scope is ancestor: the ancestor thread whose budget refused the reservation."
             },
             "scope": {
-              "description": "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id.",
+              "description": "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id. hop (Phase 2): the host rule's per-hop cap on a host member's turn, budget id hop:<branch_id>:<turn opener event_id>; only that turn ends.",
               "enum": [
                 "run",
                 "thread",
-                "ancestor"
+                "ancestor",
+                "hop"
               ]
             }
           },
@@ -1223,7 +1258,8 @@
             "operator_refused",
             "message_policy_decided",
             "tools_loaded",
-            "answer_rejected"
+            "answer_rejected",
+            "supervisor_decided"
           ]
         },
         "type_version": {
@@ -1253,7 +1289,7 @@
       "type": "object"
     },
     "MailAddress": {
-      "description": "A member at one generation, or the team log (the operator's replies and notifications).",
+      "description": "A member at one generation, the team log (the operator's replies and notifications), or a caller thread outside the host team.",
       "oneOf": [
         {
           "additionalProperties": false,
@@ -1273,6 +1309,9 @@
         },
         {
           "const": "team_log"
+        },
+        {
+          "$ref": "#/$defs/CallerAddress"
         }
       ]
     },
@@ -1402,6 +1441,22 @@
         },
         {
           "if": {
+            "required": [
+              "error"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "bounce"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
             "properties": {
               "kind": {
                 "enum": [
@@ -1506,6 +1561,12 @@
         {
           "if": {
             "properties": {
+              "code": {
+                "enum": [
+                  "stale_member",
+                  "member_ended"
+                ]
+              },
               "kind": {
                 "const": "bounce"
               }
@@ -1518,6 +1579,88 @@
             "required": [
               "result"
             ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "code": {
+                "const": "turn_failed"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "result"
+              ]
+            },
+            "required": [
+              "ask_id",
+              "error"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "error"
+            ]
+          },
+          "then": {
+            "properties": {
+              "code": {
+                "const": "turn_failed"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "from": {
+                "required": [
+                  "caller"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "message",
+                  "ask"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "to": {
+                "not": {
+                  "const": "team_log"
+                },
+                "required": [
+                  "caller"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "reply",
+                  "bounce"
+                ]
+              }
+            }
           }
         },
         {
@@ -1613,7 +1756,7 @@
       "properties": {
         "ask_id": {
           "$ref": "#/$defs/AskId",
-          "description": "ask: its own mail_id. reply: the ask it answers. bounce: the open ask it closes as member_ended."
+          "description": "ask: its own mail_id. reply: the ask it answers. bounce: the open ask it closes as member_ended, or as failed for turn_failed."
         },
         "body": {
           "$ref": "#/$defs/TextBody"
@@ -1623,11 +1766,20 @@
           "description": "The request or event that caused this mail: the call's tool_call, the operator_request, the member's idle or end event, or the refused mail's mail_refused."
         },
         "code": {
-          "$ref": "#/$defs/BounceCode"
+          "description": "bounce: why. stale_member and member_ended answer a mail_refused; turn_failed (Phase 2) answers an ask a host member's failed turn took.",
+          "enum": [
+            "stale_member",
+            "member_ended",
+            "turn_failed"
+          ]
         },
         "deadline": {
           "$ref": "#/$defs/TimeMs",
           "description": "ask: now + timeoutMs."
+        },
+        "error": {
+          "$ref": "#/$defs/TurnFailure",
+          "description": "turn_failed only: why the host member's turn failed; the ask closes failed with it."
         },
         "from": {
           "$ref": "#/$defs/MailSender"
@@ -1687,13 +1839,16 @@
       "type": "string"
     },
     "MailSender": {
-      "description": "The sending member, or the operator request. Written by the fenced writer; never an actor.",
+      "description": "The sending member, the operator request, or a caller thread. Written by the fenced writer; never an actor.",
       "oneOf": [
         {
           "$ref": "#/$defs/MemberRef"
         },
         {
           "$ref": "#/$defs/OperatorSender"
+        },
+        {
+          "$ref": "#/$defs/CallerAddress"
         }
       ]
     },
@@ -2407,6 +2562,17 @@
       ],
       "type": "object"
     },
+    "RestartWindowMs": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Int"
+        },
+        {
+          "minimum": 1000
+        }
+      ],
+      "description": "A restart window: at least 1000 ms."
+    },
     "ResultPart": {
       "description": "Ordered, mixed text and media of a tool result. No tool_use.",
       "oneOf": [
@@ -2736,6 +2902,39 @@
         "call_id",
         "name",
         "input"
+      ],
+      "type": "object"
+    },
+    "TurnFailure": {
+      "additionalProperties": false,
+      "description": "Why a host member's turn failed (Phase 2). Only that turn ends: its unanswered asks close failed and the member goes back to idle.",
+      "properties": {
+        "code": {
+          "description": "Mapped from the failed turn's turn_completed: its reason (max_turns, max_output, stop_hook_limit, context_exhausted, output_invalid, input_denied, model_unavailable, budget_exhausted for the hop cap or the caller's run budget, interrupted for a turn recovery closed), or for reason error its code (content_unsupported, continuation_unsupported, transport_fence_unsupported, secret_in_provider_output), else model_error.",
+          "enum": [
+            "model_error",
+            "content_unsupported",
+            "continuation_unsupported",
+            "transport_fence_unsupported",
+            "secret_in_provider_output",
+            "max_turns",
+            "max_output",
+            "stop_hook_limit",
+            "context_exhausted",
+            "output_invalid",
+            "input_denied",
+            "model_unavailable",
+            "budget_exhausted",
+            "interrupted"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
       ],
       "type": "object"
     },
@@ -3077,7 +3276,7 @@
               "$ref": "#/$defs/AskId"
             },
             "outcome": {
-              "description": "Decided in order: a reply, then a member_ended bounce, then a cancel or team close, else the deadline.",
+              "description": "Decided in order: a reply, then a bounce naming the ask (member_ended, or failed for a host member's turn_failed), then a cancel or team close, else the deadline.",
               "oneOf": [
                 {
                   "additionalProperties": false,
@@ -3133,6 +3332,23 @@
                   },
                   "required": [
                     "status"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "$ref": "#/$defs/TurnFailure",
+                      "description": "Byte for byte the turn_failed bounce's error, received in this same append (Phase 2: a host member's turn failed)."
+                    },
+                    "status": {
+                      "const": "failed"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "error"
                   ],
                   "type": "object"
                 }
@@ -3208,11 +3424,12 @@
               "description": "Required exactly when scope is ancestor: the ancestor thread whose budget refused the reservation."
             },
             "scope": {
-              "description": "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id.",
+              "description": "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id. hop (Phase 2): the host rule's per-hop cap on a host member's turn, budget id hop:<branch_id>:<turn opener event_id>; only that turn ends.",
               "enum": [
                 "run",
                 "thread",
-                "ancestor"
+                "ancestor",
+                "hop"
               ]
             }
           },
@@ -4483,21 +4700,34 @@
       "type": "object"
     },
     "ev_member_idle": {
-      "description": "In the member's log, with the turn_completed that ends its task: the row becomes idle with this result, and each settle monitor and an unfired task monitor fires in the same append.",
+      "description": "In the member's log, with the turn_completed that ends its task: the row becomes idle with this result, and each settle monitor and an unfired task monitor fires in the same append. A host member's failed turn records turn_failed instead, and fires nothing.",
       "properties": {
         "critical": {
           "const": true
         },
         "data": {
           "additionalProperties": false,
+          "oneOf": [
+            {
+              "required": [
+                "result"
+              ]
+            },
+            {
+              "required": [
+                "turn_failed"
+              ]
+            }
+          ],
           "properties": {
             "result": {
               "$ref": "#/$defs/CompletedResult"
+            },
+            "turn_failed": {
+              "$ref": "#/$defs/TurnFailure",
+              "description": "Phase 2, a host member only: its turn failed and only that turn ended. The row goes back to idle and keeps its last result."
             }
           },
-          "required": [
-            "result"
-          ],
           "type": "object"
         },
         "type": {
@@ -4582,6 +4812,22 @@
         },
         "data": {
           "additionalProperties": false,
+          "else": {
+            "not": {
+              "required": [
+                "restart_of"
+              ]
+            },
+            "required": [
+              "parent",
+              "provenance"
+            ]
+          },
+          "if": {
+            "required": [
+              "host_member"
+            ]
+          },
           "properties": {
             "agent": {
               "$ref": "#/$defs/NonEmpty"
@@ -4598,6 +4844,10 @@
               "$ref": "#/$defs/MemberDefine",
               "description": "Present exactly when the agent is a dynamic agent: what its starter chose. config_hash binds it."
             },
+            "host_member": {
+              "const": true,
+              "description": "Phase 2: a host member, in a host team's log, named by its agent. No task mail and no task monitor go with it; it has no parent and its thread is a root."
+            },
             "label": {
               "$ref": "#/$defs/NonEmpty",
               "description": "A display name the starter gave (1-64 code points, no control or format characters; semantic rule 46). Never hashed, never rendered to a model."
@@ -4607,7 +4857,7 @@
             },
             "parent": {
               "additionalProperties": false,
-              "description": "The structural parent the member's thread_started will carry: the lead's member_started, or the lead's thread_started for an operator start.",
+              "description": "The structural parent the member's thread_started will carry: the lead's member_started, or the lead's thread_started for an operator start. Absent exactly for a host member, a root thread.",
               "properties": {
                 "branch_id": {
                   "$ref": "#/$defs/BranchId"
@@ -4631,7 +4881,12 @@
               "type": "object"
             },
             "provenance": {
-              "$ref": "#/$defs/Provenance"
+              "$ref": "#/$defs/Provenance",
+              "description": "Required unless host_member. A host member's start has one only when an operator restarts it."
+            },
+            "restart_of": {
+              "$ref": "#/$defs/PosInt",
+              "description": "host_member only: the generation this start replaces (semantic rule 51)."
             },
             "thread_id": {
               "$ref": "#/$defs/ThreadId",
@@ -4642,10 +4897,34 @@
             "member",
             "agent",
             "config_hash",
-            "thread_id",
-            "parent",
-            "provenance"
+            "thread_id"
           ],
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "parent"
+                  ]
+                },
+                {
+                  "required": [
+                    "define"
+                  ]
+                },
+                {
+                  "required": [
+                    "label"
+                  ]
+                },
+                {
+                  "required": [
+                    "budget"
+                  ]
+                }
+              ]
+            }
+          },
           "type": "object"
         },
         "type": {
@@ -6118,6 +6397,96 @@
       ],
       "type": "object"
     },
+    "ev_supervisor_decided": {
+      "description": "Phase 2: the host team log's one decision on an ended host member generation (semantic rule 51).",
+      "properties": {
+        "critical": {
+          "const": true
+        },
+        "data": {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "description": "restart: a member_started of the next generation follows in this append. stop: the name stays ended until an operator starts it.",
+              "enum": [
+                "restart",
+                "stop"
+              ]
+            },
+            "ended": {
+              "additionalProperties": false,
+              "description": "Its member_ended, in its own log.",
+              "properties": {
+                "branch_id": {
+                  "$ref": "#/$defs/BranchId"
+                },
+                "seq": {
+                  "$ref": "#/$defs/PosInt"
+                }
+              },
+              "required": [
+                "branch_id",
+                "seq"
+              ],
+              "type": "object"
+            },
+            "member": {
+              "$ref": "#/$defs/MemberRef",
+              "description": "The ended host member generation."
+            },
+            "policy": {
+              "additionalProperties": false,
+              "description": "The host's members option for this name when it decided.",
+              "properties": {
+                "max_restarts": {
+                  "$ref": "#/$defs/Int"
+                },
+                "restart": {
+                  "enum": [
+                    "on_failure",
+                    "never"
+                  ]
+                },
+                "within_ms": {
+                  "$ref": "#/$defs/RestartWindowMs"
+                }
+              },
+              "required": [
+                "restart",
+                "max_restarts",
+                "within_ms"
+              ],
+              "type": "object"
+            },
+            "restarts_in_window": {
+              "$ref": "#/$defs/Int",
+              "description": "The team log's earlier restart decisions for this name within policy.within_ms of this event's time. Recorded, so no reader recounts it."
+            }
+          },
+          "required": [
+            "member",
+            "ended",
+            "action",
+            "restarts_in_window",
+            "policy"
+          ],
+          "type": "object"
+        },
+        "type": {
+          "const": "supervisor_decided"
+        },
+        "type_version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "type",
+        "type_version",
+        "critical",
+        "data"
+      ],
+      "type": "object"
+    },
     "ev_team_message": {
       "description": "An addressed message between members. message_id is unique; delivery into a member's thread is injected{source: agent, origin.id: message_id}, deduplicated by that id.",
       "properties": {
@@ -6172,14 +6541,42 @@
       "type": "object"
     },
     "ev_team_opened": {
-      "description": "The team log's first event, in place of thread_started: opened in the lead's first append. The team log never renders to a model, never parks and never opens a turn.",
+      "description": "The team log's first event, in place of thread_started: opened in the lead's first append, or for a host team by the first append that addresses one of its host members. The team log never renders to a model, never parks and never opens a turn.",
       "properties": {
         "critical": {
           "const": true
         },
         "data": {
           "additionalProperties": false,
+          "else": {
+            "not": {
+              "required": [
+                "tenant"
+              ]
+            },
+            "required": [
+              "lead",
+              "lead_thread_id"
+            ]
+          },
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "host"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
           "properties": {
+            "kind": {
+              "description": "Absent or lead: a lead's team, with lead and lead_thread_id. host (Phase 2): a tenant's host team, which has no lead, holds the tenant's host members and never closes.",
+              "enum": [
+                "lead",
+                "host"
+              ]
+            },
             "lead": {
               "$ref": "#/$defs/MemberRef"
             },
@@ -6188,13 +6585,34 @@
             },
             "team": {
               "$ref": "#/$defs/TeamId"
+            },
+            "tenant": {
+              "$ref": "#/$defs/NonEmpty",
+              "description": "host only: the tenant whose host team this is (its teams row's tenant_id)."
             }
           },
           "required": [
-            "team",
-            "lead",
-            "lead_thread_id"
+            "team"
           ],
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "lead"
+                  ]
+                },
+                {
+                  "required": [
+                    "lead_thread_id"
+                  ]
+                }
+              ]
+            },
+            "required": [
+              "tenant"
+            ]
+          },
           "type": "object"
         },
         "type": {
@@ -6345,6 +6763,11 @@
         },
         "data": {
           "additionalProperties": false,
+          "if": {
+            "required": [
+              "host_member"
+            ]
+          },
           "properties": {
             "adapter": {
               "$ref": "#/$defs/AdapterRef"
@@ -6355,6 +6778,27 @@
             "config_hash": {
               "$ref": "#/$defs/Sha256",
               "description": "sha256 of the RFC 8785 bytes of the resolved, secret-free agent config."
+            },
+            "host_member": {
+              "additionalProperties": false,
+              "description": "Set on a host member's thread (Phase 2), opened at materialize: the host team, the member's name (its agent name) and generation. A host member has no parent and no team of its own.",
+              "properties": {
+                "generation": {
+                  "$ref": "#/$defs/PosInt"
+                },
+                "name": {
+                  "$ref": "#/$defs/MemberName"
+                },
+                "team": {
+                  "$ref": "#/$defs/TeamId"
+                }
+              },
+              "required": [
+                "team",
+                "name",
+                "generation"
+              ],
+              "type": "object"
             },
             "instructions": {
               "description": "The full pinned system text: base instructions, extension instructions in order, skill listing, memory guidance.",
@@ -6441,6 +6885,22 @@
             "instructions",
             "tools"
           ],
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "parent"
+                  ]
+                },
+                {
+                  "required": [
+                    "team"
+                  ]
+                }
+              ]
+            }
+          },
           "type": "object"
         },
         "type": {

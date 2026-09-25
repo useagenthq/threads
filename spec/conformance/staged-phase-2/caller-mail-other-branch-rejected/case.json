@@ -1,0 +1,16 @@
+{
+  "name": "caller-mail-other-branch-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 52: a caller's mail names its own log. support's log sends mail whose caller address is the sales thread's: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

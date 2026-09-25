@@ -1,0 +1,16 @@
+{
+  "name": "host-caller-other-tenant-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 52: host team mail belongs to the team its provenance principal's tenant derives. support's ask of acme's billing carries a principal of tenant globex: invalid_transition at the ask.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

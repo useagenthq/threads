@@ -17,6 +17,7 @@ from .ops_world import CONSTANTS
 from .pieces import dump
 from .team_ops_ask import ask_vectors
 from .team_ops_dynamic import dynamic_vectors
+from .team_ops_host import host_vectors
 from .team_ops_life import life_vectors
 from .team_ops_mail import consume_vectors
 from .team_ops_operator import operator_vectors
@@ -46,7 +47,10 @@ DESCRIPTION = (
     "idempotency_key?), "
     "consume, deadline (the worker's step for input.id, an AskId or WaitId), materialize "
     "(input.rebind is what the rebind found), idle and end (the member's own settling "
-    "appends)."
+    "appends). Teams Phase 2 vectors carry a lane (29D, 29E), which runtimes skip until that "
+    "build: send, ask, reply and consume on a host team's world (a caller and a host member, "
+    "decided by given.rules), turn_failure (a host member's failed turn: input.turn, input.error, "
+    "input.hop?), supervise (input.member, input.policy) and delete (a caller's deletion)."
 )
 
 
@@ -64,6 +68,7 @@ def _vectors() -> list[Vec]:
         *wait_vectors(),
         *monitor_vectors(),
         *operator_vectors(),
+        *host_vectors(),
     ]
 
 
@@ -122,6 +127,8 @@ def _doc() -> str:
             "by": v.by,
             "input": v.input,
         }
+        if v.lane is not None:
+            entry["lane"] = v.lane
         got, problems = run(world, entry)
         if problems or got["outcome"] != v.outcome or got["appended"] != v.appended:
             raise AssertionError(

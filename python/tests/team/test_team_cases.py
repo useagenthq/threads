@@ -16,6 +16,7 @@ from threads.result import Err
 from threads.store import LOCAL_TENANT, VerifiedLog
 from threads.store.sql import int_of, text_of
 from threads.team.cross import TeamLogEvents, check_team_logs
+from threads.team.index import opened_tenant as _opened_tenant
 from threads.team.members import PENDING, open_member, team_members
 from threads.team.rebuild import rebuild_team_index
 
@@ -51,9 +52,7 @@ def _leads(logs: dict[str, VerifiedLog]) -> dict[str, tuple[str, VerifiedLog]]:
 def _tenant(logs: dict[str, VerifiedLog]) -> str:
     """The team's tenant, as its team_opened records it."""
     opened = (e for log in logs.values() for e in log.fold.events)
-    return next(
-        (e.data.lead.tenant for e in opened if isinstance(e, TeamOpenedEvent)), LOCAL_TENANT
-    )
+    return next((_opened_tenant(e) for e in opened if isinstance(e, TeamOpenedEvent)), LOCAL_TENANT)
 
 
 def _imported(case: Path) -> tuple[dict[str, bytes], dict[str, VerifiedLog]] | Found:

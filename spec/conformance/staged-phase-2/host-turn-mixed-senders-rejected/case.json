@@ -1,0 +1,16 @@
+{
+  "name": "host-turn-mixed-senders-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 55: a host member's turn takes mail decided by one rule, so of one sender class (a caller agent, a member, or the operator). billing's turn, opened by support's ask, takes a message from the host member ledger of the same request: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

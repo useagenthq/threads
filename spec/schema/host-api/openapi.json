@@ -78,7 +78,11 @@
       },
       "CancelError": {
         "description": "Typed failure of cancel.",
-        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "branch_busy"] } } } } }] } } }
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found"] } } } } }] } } }
+      },
+      "SubscribeTeamError": {
+        "description": "Typed failure of subscribeTeam: 401, 404 (no such lead team in the principal's tenant, or the host team) and 400 for a malformed cursor, one from a later epoch, or one past the head, in both languages.",
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "not_found", "invalid_cursor"] } } } } }] } } }
       },
       "SetModelError": {
         "description": "Typed failure of setModel.",
@@ -124,6 +128,24 @@
             "content": { "text/event-stream": { "schema": { "type": "string" }, "x-sse-data": { "$ref": "host-api.v1.schema.json#/$defs/SseMessage" } } }
           },
           "4XX": { "$ref": "#/components/responses/SubscribeRunError" }
+        }
+      }
+    },
+    "/v1/teams/{team}/events": {
+      "get": {
+        "operationId": "subscribeTeam",
+        "x-api": ["Team.events"],
+        "x-error-codes": ["unauthenticated", "not_found", "invalid_cursor"],
+        "parameters": [
+          { "name": "team", "in": "path", "required": true, "description": "A lead team in the principal's tenant. The host team's id is not_found: it has no HTTP route.", "schema": { "$ref": "../events.v1.schema.json#/$defs/TeamId" } },
+          { "name": "after", "in": "query", "required": false, "description": "Resume after this cursor, <epoch>:<offset>. The Last-Event-ID header wins when both are sent.", "schema": { "type": "string", "pattern": "^[0-9]+:[0-9]+$" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-sent events of the team feed; the route always follows. Each message's data is one TeamItem as RFC 8785 JSON, its id <epoch>:<offset>. A ': keepalive' comment every 15 s moves no cursor. On epoch_restarted the route sends that item, with the new cursor as its id, and closes.",
+            "content": { "text/event-stream": { "schema": { "type": "string" }, "x-sse-data": { "$ref": "host-api.v1.schema.json#/$defs/TeamItem" } } }
+          },
+          "4XX": { "$ref": "#/components/responses/SubscribeTeamError" }
         }
       }
     },
@@ -235,9 +257,16 @@
       "post": {
         "operationId": "cancel",
         "x-api": ["Thread.cancel"],
-        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "branch_busy"],
+        "x-error-codes": ["unauthenticated", "forbidden", "not_found"],
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
-        "responses": { "200": { "$ref": "#/components/responses/Appended" }, "4XX": { "$ref": "#/components/responses/CancelError" } }
+        "responses": {
+          "200": { "$ref": "#/components/responses/Appended" },
+          "202": {
+            "description": "Another process holds the branch: a durable inbox control item (channel api, address the thread id) it applies at its next step boundary. Where this used to be 409 branch_busy.",
+            "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/CancelAccepted" } } }
+          },
+          "4XX": { "$ref": "#/components/responses/CancelError" }
+        }
       }
     },
     "/v1/threads/{thread_id}/settings": {

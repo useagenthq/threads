@@ -1,0 +1,16 @@
+{
+  "name": "host-member-own-budget-ends",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Teams Phase 2 (rule 53's scope): billing's own thread budget, a lifetime cap for a host member, runs out in the turn that took support's ask. The append ends the member (budget_exceeded{scope: thread}, turn_completed{budget_exhausted}, member_ended{budget_exhausted}), so rule 53 does not apply: no turn_failed bounce and no member_idle. The taken ask stays open until its deadline, and support stays parked. The supervisor stops the member: an own-budget end never restarts.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

@@ -17,7 +17,9 @@ from pydantic.experimental.missing_sentinel import MISSING
 from threads.log import (
     AskClosedEvent,
     BranchId,
+    CallerAddress,
     Event,
+    MailAddress,
     MailEnvelope,
     MailRefusedEvent,
     MemberEndedEvent,
@@ -132,11 +134,26 @@ def _on[E](cls: type[E], step: Callable[[_Write, E], None]) -> tuple[type, _Step
     return cls, run
 
 
+def opened_tenant(e: TeamOpenedEvent) -> str:
+    """The tenant a team_opened indexes its team under: its lead's, or a host team's own."""
+    d = e.data
+    tenant = d.tenant if d.lead is MISSING else d.lead.tenant
+    if tenant is MISSING:
+        raise ValueError("team_opened names no tenant: its schema rule was bypassed")
+    return tenant
+
+
 def _opened(w: _Write, e: TeamOpenedEvent) -> None:
     d = e.data
     if w.ours(d.team):
-        row = {"team_id": d.team, "tenant_id": d.lead.tenant, "lead_thread_id": d.lead_thread_id}
-        w.insert("teams", {**row, "team_log_branch_id": w.log.branch_id, "closed_at": None})
+        lead = None if d.lead_thread_id is MISSING else d.lead_thread_id
+        kind = "lead" if d.kind is MISSING else d.kind
+        row = {"team_id": d.team, "tenant_id": opened_tenant(e), "kind": kind}
+        w.insert(
+            "teams",
+            {**row, "lead_thread_id": lead, "team_log_branch_id": w.log.branch_id}
+            | {"closed_at": None},
+        )
 
 
 def _lead(w: _Write, e: ThreadStartedEvent) -> None:
@@ -153,17 +170,23 @@ def _lead(w: _Write, e: ThreadStartedEvent) -> None:
 
 
 def _started(w: _Write, e: MemberStartedEvent) -> None:
+    """A member's row in the starting window, and its starter's task monitor. A host member
+    (Phase 2) has no task, so no monitor."""
     d, m = e.data, e.data.member
     if not w.ours(m.team):
         return
-    key = {"team_id": m.team, "name": m.name, "generation": m.generation, "role": "member"}
+    host = d.host_member is not MISSING
+    role = "host_member" if host else "member"
+    key = {"team_id": m.team, "name": m.name, "generation": m.generation, "role": role}
+    provenance = None if d.provenance is MISSING else json_bytes(d.provenance)
     w.insert(
         "team_members",
         {**key, "agent": d.agent, "config_hash": d.config_hash}
-        | {"thread_id": d.thread_id, "branch_id": None, "provenance": json_bytes(d.provenance)}
+        | {"thread_id": d.thread_id, "branch_id": None, "provenance": provenance}
         | {"state": "starting", "result": None, "updated_seq": e.seq},
     )
-    _monitor(w, f"{w.log.branch_id}:{e.event_id}:task", m, "task")
+    if not host:
+        _monitor(w, f"{w.log.branch_id}:{e.event_id}:task", m, "task")
 
 
 def _monitor(w: _Write, monitor_id: str, m: MemberRef, kind: str, wait: str | None = None) -> None:
@@ -204,19 +227,28 @@ def _mail(w: _Write, e: MessageSentEvent) -> None:
     env = e.data.envelope
     if not w.ours(env.team):
         return
-    to = None if env.to == "team_log" else env.to
-    root = env.provenance.root_request
+    to, root = env.to, env.provenance.root_request
     w.insert(
         "mail",
         {"mail_id": env.mail_id, "team_id": env.team, "kind": env.kind}
-        | {"to_name": None if to is None else to.name}
-        | {"to_generation": None if to is None else to.generation}
+        | _address_columns(to)
         | {"principal_key": principal_key(env.provenance.principal)}
         | {"root_request": f"{root.thread_id}:{root.event_id}", "envelope": json_bytes(env)}
         | {"created_at": e.time, "state": "pending", "consumed_seq": None},
     )
-    if env.kind == "ask" and to is not None:
+    if env.kind == "ask" and not isinstance(to, str | CallerAddress):
         _ask(w, env, to.name, to.generation)
+
+
+def _address_columns(to: MailAddress) -> dict[str, str | int | None]:
+    """mail's to_kind and its columns, from the envelope's `to` (store.sql, mail)."""
+    if isinstance(to, str):
+        return {"to_kind": "team_log", "to_name": None, "to_generation": None, "to_branch_id": None}
+    if isinstance(to, CallerAddress):
+        branch = to.caller.branch_id
+        return {"to_kind": "caller", "to_name": None, "to_generation": None, "to_branch_id": branch}
+    member = {"to_name": to.name, "to_generation": to.generation}
+    return {"to_kind": "member", **member, "to_branch_id": None}
 
 
 def _ask(w: _Write, env: MailEnvelope, name: str, generation: int) -> None:
@@ -256,17 +288,29 @@ def change_rows(
         _own_row(w, event, opened)
 
 
+def _branch_opened(e: Event) -> str | None:
+    """The state a member's thread_started gives its row: running for its task turn, or idle for a
+    host member (Phase 2), which opens no task turn."""
+    if not isinstance(e, ThreadStartedEvent):
+        return None
+    if e.data.host_member is not MISSING:
+        return "idle"
+    return None if e.data.parent is MISSING else "running"
+
+
 def _own_row(w: _Write, e: Event, opened: frozenset[str]) -> None:
     """The log's own team_members rows (a lead's, a member's, or both for a nested lead)."""
     me = w.log.thread_id
     state = "running" if e.event_id in opened else _STATES.get(type(e))
-    if isinstance(e, ThreadStartedEvent) and e.data.parent is not MISSING:
-        sql = "UPDATE team_members SET branch_id = ?, state = 'running', updated_seq = ?"
-        w.scoped(sql + " WHERE thread_id = ?", w.log.branch_id, e.seq, me)
+    opened_as = _branch_opened(e)
+    if opened_as is not None:
+        sql = "UPDATE team_members SET branch_id = ?, state = ?, updated_seq = ?"
+        w.scoped(sql + " WHERE thread_id = ?", w.log.branch_id, opened_as, e.seq, me)
     elif state is not None:
         sql = "UPDATE team_members SET state = ?, updated_seq = ? WHERE thread_id = ?"
         w.scoped(sql, state, e.seq, me)
-    if isinstance(e, MemberIdleEvent | MemberEndedEvent):
+    # A host member's failed turn (member_idle{turn_failed}) keeps its last completed result.
+    if isinstance(e, MemberIdleEvent | MemberEndedEvent) and e.data.result is not MISSING:
         sql = "UPDATE team_members SET result = ? WHERE thread_id = ?"
         w.scoped(sql, json_bytes(e.data.result), me)
     if isinstance(e, MemberEndedEvent):

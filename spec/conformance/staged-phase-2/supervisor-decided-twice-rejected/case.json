@@ -1,0 +1,15 @@
+{
+  "name": "supervisor-decided-twice-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 51: one supervisor_decided per ended generation. A second decision on billing's generation 1 (two hosts racing, the loser not rolled back) is invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing"
+    ]
+  }
+}

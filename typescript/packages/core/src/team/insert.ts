@@ -3,6 +3,7 @@ import {
   type KnownEvent,
   type MailEnvelope,
   type MemberRef,
+  openedTenant,
   principalKey,
   type TeamId,
 } from "../log";
@@ -30,8 +31,14 @@ async function insertOne(
 ): Promise<void> {
   if (e.type === "team_opened" && inScope(scope, e.data.team))
     await tx.run(
-      "INSERT INTO teams (team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at) VALUES (?, ?, ?, ?, NULL)",
-      [e.data.team, e.data.lead.tenant, e.data.lead_thread_id, log.branchId],
+      "INSERT INTO teams (team_id, tenant_id, kind, lead_thread_id, team_log_branch_id, closed_at) VALUES (?, ?, ?, ?, ?, NULL)",
+      [
+        e.data.team,
+        openedTenant(e.data),
+        e.data.kind ?? "lead",
+        e.data.lead_thread_id ?? null,
+        log.branchId,
+      ],
     );
   else if (e.type === "thread_started" && e.data.team !== undefined)
     await insertLead(tx, log, e, scope);
@@ -51,7 +58,7 @@ type MemberRow = {
   readonly team: string;
   readonly name: string;
   readonly generation: number;
-  readonly role: "lead" | "member";
+  readonly role: "lead" | "member" | "host_member";
   readonly agent: string;
   readonly configHash: string;
   readonly threadId: string;
@@ -103,7 +110,10 @@ async function insertLead(
   });
 }
 
-/** A member's row, in the starting window (no branch yet), and its starter's task monitor. */
+/**
+ * A member's row, in the starting window (no branch yet), and its starter's task monitor. A host
+ * member (Phase 2) has no task, so no monitor.
+ */
 async function insertMember(
   tx: Tx,
   log: TeamLog,
@@ -116,7 +126,7 @@ async function insertMember(
     team: m.team,
     name: m.name,
     generation: m.generation,
-    role: "member",
+    role: e.data.host_member === undefined ? "member" : "host_member",
     agent: e.data.agent,
     configHash: e.data.config_hash,
     threadId: e.data.thread_id,
@@ -124,7 +134,8 @@ async function insertMember(
     provenance: e.data.provenance,
     seq: e.seq,
   });
-  await insertMonitor(tx, log, e, m, "task", null, scope);
+  if (e.data.host_member === undefined)
+    await insertMonitor(tx, log, e, m, "task", null, scope);
 }
 
 /** A monitor's id is derived: `<watcher branch>:<registering event_id>:<target name or task>`. */
@@ -162,25 +173,29 @@ async function insertMail(
   scope: Scope,
 ): Promise<void> {
   if (!inScope(scope, env.team)) return;
-  const to = env.to === "team_log" ? undefined : env.to;
+  const to = addressColumns(env.to);
   const root = env.provenance.root_request;
   await tx.run(
-    `INSERT INTO mail (mail_id, team_id, kind, to_name, to_generation, principal_key, root_request,
-       envelope, created_at, state, claim_token, claim_expires_at, consumed_seq)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, NULL)`,
+    `INSERT INTO mail (mail_id, team_id, kind, to_kind, to_name, to_generation, to_branch_id,
+       principal_key, root_request, envelope, created_at, state, claim_token, claim_expires_at,
+       consumed_seq)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, NULL)`,
     [
       env.mail_id,
       env.team,
       env.kind,
-      to?.name ?? null,
-      to?.generation ?? null,
+      to.kind,
+      to.member?.name ?? null,
+      to.member?.generation ?? null,
+      to.branch,
       principalKey(env.provenance.principal),
       `${root.thread_id}:${root.event_id}`,
       jsonBytes(env),
       e.time,
     ],
   );
-  if (env.kind === "ask" && to !== undefined)
+  const recipient = to.member;
+  if (env.kind === "ask" && recipient !== undefined)
     await tx.run(
       `INSERT INTO asks (ask_id, team_id, asker_branch_id, recipient_name, recipient_generation,
          deadline, state, closed_seq) VALUES (?, ?, ?, ?, ?, ?, 'open', NULL)`,
@@ -188,11 +203,23 @@ async function insertMail(
         env.ask_id ?? null,
         env.team,
         log.branchId,
-        to.name,
-        to.generation,
+        recipient.name,
+        recipient.generation,
         env.deadline ?? null,
       ],
     );
+}
+
+/** mail's to_kind and its columns, from the envelope's `to` (store.sql, mail). */
+function addressColumns(to: MailEnvelope["to"]): {
+  readonly kind: "member" | "team_log" | "caller";
+  readonly member?: { readonly name: string; readonly generation: number };
+  readonly branch: string | null;
+} {
+  if (to === "team_log") return { kind: "team_log", branch: null };
+  return "caller" in to
+    ? { kind: "caller", branch: to.caller.branch_id }
+    : { kind: "member", member: to, branch: null };
 }
 
 /** An operator request with an idempotency key, in the team log whose teams row names it. */

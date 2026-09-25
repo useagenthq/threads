@@ -96,6 +96,16 @@
             "mailbox": { "description": "teamLimits.mailbox. Absent: 100.", "type": "integer", "minimum": 1 },
             "concurrent": { "description": "teamLimits.concurrent. Absent: 4.", "type": "integer", "minimum": 1 },
             "headroom": { "description": "Whether every budget covering the recipient has room for one request of its model. Absent: true.", "type": "boolean" },
+            "rules": {
+              "description": "Teams Phase 2: the host's messagePolicy rules, each {from, to, allow}. Absent: none.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["from", "to", "allow"],
+                "properties": { "from": { "type": "string" }, "to": { "type": "string" }, "allow": { "type": "array", "items": { "type": "string" } } }
+              }
+            },
             "templates": {
               "description": "The dynamic agents the team lists, by name: tools, the template's choosable tools in pinned order; models, its keys, the first the default (spec/schema/README.md, Dynamic members). Absent: none.",
               "type": "object",
@@ -112,7 +122,8 @@
           }
         },
         "now": { "description": "The injected clock, epoch ms.", "type": "integer" },
-        "op": { "enum": ["start", "send", "ask", "reply", "cancel", "wait", "monitor", "consume", "deadline", "materialize", "idle", "end"] },
+        "op": { "enum": ["start", "send", "ask", "reply", "cancel", "wait", "monitor", "consume", "deadline", "materialize", "idle", "end", "turn_failure", "supervise", "delete"] },
+        "lane": { "description": "Teams Phase 2: the sub-lane whose build runs this vector (29D, 29E). A runtime skips a vector with a lane until that build lands; gen_fixtures.py --check runs every vector.", "type": "string" },
         "by": { "description": "The label of the log whose writer runs the op (materialize: the new member log's label).", "type": "string" },
         "input": {
           "description": "A model call: call_id and args of a pending tool_call. An operator request: request_id, principal, body (the method's parameters, snake_case, without idempotency_key) and idempotency_key. start adds thread_id, the new member's thread, and for a dynamic agent config_hash, the pin its define gave. deadline: id. materialize: member, label, branch_id, rebind. end: reason, code? (the turn_completed) and result (without member). consume and idle: nothing.",

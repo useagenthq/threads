@@ -1,6 +1,11 @@
 import { expect } from "bun:test";
 import { z } from "zod";
-import { type BranchId, TeamId, type ThreadId } from "../../src/log";
+import {
+  type BranchId,
+  openedTenant,
+  TeamId,
+  type ThreadId,
+} from "../../src/log";
 import { knownEvents, reduce } from "../../src/reduce";
 import type { LogStore } from "../../src/store";
 import { checkTeamLogs } from "../../src/team/cross";
@@ -71,7 +76,7 @@ function leadsOf(logs: readonly Labelled[]): readonly Lead[] {
 function tenantOf(logs: readonly Labelled[]): string {
   for (const l of logs)
     for (const e of knownEvents(l.log))
-      if (e.type === "team_opened") return e.data.lead.tenant;
+      if (e.type === "team_opened") return openedTenant(e.data);
   throw new Error("no team log among the logs");
 }
 

@@ -1,0 +1,197 @@
+{
+  "outcome": "ok",
+  "states": {
+    "team": {
+      "thread_id": "b2dcea03-0894-8cd6-846a-5f134ed1bacd",
+      "branch_id": "34c8bb75-7146-872c-a9d6-f1fd978fd58c",
+      "epoch": 1,
+      "turns_completed": 0,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "unknown_responses": 0
+      },
+      "transcript": [],
+      "status": "idle",
+      "head": {
+        "seq": 2,
+        "hash": "2d78c7dbde7dc6a7227458b92f9b1790f8f90c43b908758e7d7ef400c9603272"
+      }
+    },
+    "billing": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000c1",
+      "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+      "epoch": 1,
+      "turns_completed": 0,
+      "pending_calls": [],
+      "effects": [],
+      "parked": [],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "unknown_responses": 0
+      },
+      "transcript": [],
+      "status": "idle",
+      "head": {
+        "seq": 1,
+        "hash": "0c7faeeaef4bca2a2385c37989a3aedd4ee2d9210f05a520c1cd43b73a89c323"
+      }
+    },
+    "support": {
+      "thread_id": "0192a000-0000-7000-8000-0000000000d1",
+      "branch_id": "0192b000-0000-7000-8000-0000000000d1",
+      "epoch": 1,
+      "turns_completed": 0,
+      "pending_calls": [
+        "c1"
+      ],
+      "effects": [],
+      "parked": [
+        {
+          "kind": "ask",
+          "id": "0192b000-0000-7000-8000-0000000000d1:c1"
+        }
+      ],
+      "fork_points": [],
+      "usage": {
+        "input_tokens": 80,
+        "output_tokens": 20,
+        "unknown_responses": 0
+      },
+      "transcript": [
+        {
+          "role": "user",
+          "event_id": "0192e001-0000-7000-8000-000000000002"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-000000000004"
+        }
+      ],
+      "status": "parked",
+      "head": {
+        "seq": 9,
+        "hash": "5b146172f8d7a104869808d576259085afd7944bf4671de785a0bcb1440c0554"
+      }
+    }
+  },
+  "index": {
+    "teams": [
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "tenant_id": "acme",
+        "kind": "host",
+        "lead_thread_id": null,
+        "team_log_branch_id": "34c8bb75-7146-872c-a9d6-f1fd978fd58c",
+        "closed_at": null
+      }
+    ],
+    "team_members": [
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "name": "billing",
+        "generation": 1,
+        "role": "host_member",
+        "agent": "billing",
+        "config_hash": "5800e46921bd898ffefe26cbb45e8038fd946b9719bd1f0e155c1d94aa9f459b",
+        "thread_id": "0192a000-0000-7000-8000-0000000000c1",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "provenance": null,
+        "state": "idle",
+        "result": null,
+        "updated_seq": 1
+      }
+    ],
+    "mail": [
+      {
+        "mail_id": "0192b000-0000-7000-8000-0000000000d1:c1",
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "kind": "ask",
+        "to_kind": "member",
+        "to_name": "billing",
+        "to_generation": 1,
+        "to_branch_id": null,
+        "principal_key": "api/acme/alice",
+        "root_request": "0192a000-0000-7000-8000-0000000000d1:0192e001-0000-7000-8000-000000000002",
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000d1:c1",
+          "kind": "ask",
+          "team": "e34fb000-e656-8122-a748-65b36a92d548",
+          "from": {
+            "caller": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000d1",
+              "branch_id": "0192b000-0000-7000-8000-0000000000d1",
+              "agent": "support"
+            }
+          },
+          "to": {
+            "name": "billing",
+            "generation": 1
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000d1",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000d1",
+            "event_id": "0192e001-0000-7000-8000-000000000005"
+          },
+          "ask_id": "0192b000-0000-7000-8000-0000000000d1:c1",
+          "deadline": 1790000600000,
+          "body": {
+            "text": "Is INV-1001 paid?"
+          }
+        },
+        "created_at": 1790000008000,
+        "state": "pending",
+        "consumed_seq": null
+      }
+    ],
+    "asks": [
+      {
+        "ask_id": "0192b000-0000-7000-8000-0000000000d1:c1",
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "asker_branch_id": "0192b000-0000-7000-8000-0000000000d1",
+        "recipient_name": "billing",
+        "recipient_generation": 1,
+        "deadline": 1790000600000,
+        "state": "open",
+        "closed_seq": null
+      }
+    ],
+    "monitors": [],
+    "operator_receipts": [],
+    "team_feed": [
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 1
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "34c8bb75-7146-872c-a9d6-f1fd978fd58c",
+        "seq": 1
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "34c8bb75-7146-872c-a9d6-f1fd978fd58c",
+        "seq": 2
+      }
+    ],
+    "pending_wakes": []
+  }
+}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assertNever } from "../assert-never";
 import type { EventOf, ParkAddress } from "../fold/state";
 import {
   type ArtifactRef,
@@ -135,7 +136,7 @@ async function askValue(
   switch (outcome.status) {
     case "answered": {
       const reply = await mailEnvelope(ctx.tx, outcome.reply);
-      if (reply === undefined || "operator" in reply.from)
+      if (reply === undefined || !("name" in reply.from))
         throw new Error(`no member's reply ${outcome.reply}`);
       const text = await textOf(reply.body, ctx.read);
       return { ask_id: askId, status: "answered", member: reply.from, text };
@@ -149,6 +150,12 @@ async function askValue(
     case "timed_out":
     case "cancelled":
       return { ask_id: askId, status: outcome.status };
+    case "failed":
+      throw new Error(
+        "ask_closed{failed} is Phase 2: validate_next refuses it",
+      );
+    default:
+      return assertNever(outcome);
   }
 }
 

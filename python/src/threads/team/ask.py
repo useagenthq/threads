@@ -7,7 +7,13 @@ from dataclasses import dataclass
 
 from pydantic import JsonValue
 
-from threads.log import MailEnvelope, MemberRef, MessageReceivedEvent, MessageSentEvent
+from threads.log import (
+    CallerAddress,
+    MailEnvelope,
+    MemberRef,
+    MessageReceivedEvent,
+    MessageSentEvent,
+)
 from threads.reduce.handlers import to_json
 from threads.team.call import (
     CallContext,
@@ -117,6 +123,8 @@ def reply(ctx: CallContext, ask_id: str, text: str) -> JsonValue:
     to: JsonValue = (
         {"name": sender.name, "generation": sender.generation}
         if isinstance(sender, MemberRef)
+        else to_json(sender)
+        if isinstance(sender, CallerAddress)
         else "team_log"
     )
     mail_id = call_mail_id(ctx)

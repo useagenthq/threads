@@ -73,12 +73,13 @@ describe("a lead's first append", () => {
     expect(
       await rows(
         fx,
-        "SELECT team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at FROM teams",
+        "SELECT team_id, tenant_id, kind, lead_thread_id, team_log_branch_id, closed_at FROM teams",
       ),
     ).toEqual([
       {
         team_id: TEAM,
         tenant_id: TENANT,
+        kind: "lead",
         lead_thread_id: LEAD_THREAD,
         team_log_branch_id: TEAM_LOG,
         closed_at: null,

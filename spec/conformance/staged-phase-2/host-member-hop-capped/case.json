@@ -1,0 +1,16 @@
+{
+  "name": "host-member-hop-capped",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Teams Phase 2 (D.3): billing takes support's ask, and the rule's per-hop cap (budget_exceeded{scope: hop}) ends the turn budget_exhausted. Only the turn ends: the same append bounces the ask turn_failed with the error and records member_idle{turn_failed}; billing's row is idle and keeps no new result, and no member_ended is written. support closes the ask failed with the same error.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

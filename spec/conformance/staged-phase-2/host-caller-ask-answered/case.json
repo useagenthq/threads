@@ -1,0 +1,43 @@
+{
+  "name": "host-caller-ask-answered",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Teams Phase 2: support, a caller in no team, asks billing, a host member of acme's host team (its ids derived from the tenant). The host rule decides the ask (source message_policy); billing's ask turn replies to the caller address and goes idle; support consumes the reply (ask_closed answered, resumed, one tool_result). The index holds a to_kind member mail and a to_kind caller mail, both consumed; the caller's events are in no feed. The feed reads: from the start, after offset 2, an older epoch's cursor (epoch_restarted, then everything), a later epoch's and one past the head (invalid_cursor).",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ],
+    "feed": [
+      {},
+      {
+        "after": {
+          "epoch": 1,
+          "offset": 2
+        }
+      },
+      {
+        "after": {
+          "epoch": 0,
+          "offset": 5
+        }
+      },
+      {
+        "after": {
+          "epoch": 2,
+          "offset": 0
+        }
+      },
+      {
+        "after": {
+          "epoch": 1,
+          "offset": 99
+        }
+      }
+    ]
+  }
+}

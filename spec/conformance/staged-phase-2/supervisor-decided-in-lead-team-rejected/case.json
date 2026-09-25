@@ -1,0 +1,15 @@
+{
+  "name": "supervisor-decided-in-lead-team-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 50: supervisor_decided belongs to a host team's log only; a lead's team log takes none: invalid_transition there, in the team log.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing"
+    ]
+  }
+}

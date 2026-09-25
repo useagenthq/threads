@@ -51,11 +51,15 @@ class World:
     templates: dict[str, Obj] = field(default_factory=dict[str, "Obj"])
     """The dynamic agents the team lists: {tools: choosable in pinned order, models: keys}."""
     headroom: bool = True
+    rules: list[Obj] = field(default_factory=list["Obj"])
+    """Teams Phase 2: the host's messagePolicy rules, {from, to, allow}."""
+    deleted: set[str] = field(default_factory=set[str])
+    """Teams Phase 2: caller threads deleted, whose rows a rebuild skips."""
     stamp: bool = True  # False while building a vector's world: builder times, not the clock
     appended: dict[str, list[str]] = field(default_factory=dict[str, list[str]])
 
     def index(self) -> Obj:
-        return team_index(list(self.logs.values()))
+        return team_index(list(self.logs.values()), frozenset(self.deleted))
 
     def rows(self, table: str) -> list[Obj]:
         return [obj(r) for r in arr(self.index()[table])]
@@ -216,8 +220,12 @@ class World:
 
     def pending(self, to: str) -> list[Obj]:
         """Pending mail to a member's name or the team log, in (created_at, mail_id) order."""
-        name = None if to == TEAM_LOG else to
-        rows = [m for m in self.rows("mail") if m["state"] == "pending" and m["to_name"] == name]
+        kind, name = ("team_log", None) if to == TEAM_LOG else ("member", to)
+        rows = [
+            m
+            for m in self.rows("mail")
+            if m["state"] == "pending" and (m["to_kind"], m["to_name"]) == (kind, name)
+        ]
         return sorted(rows, key=lambda m: (num(m["created_at"]), text(m["mail_id"])))
 
 

@@ -148,7 +148,9 @@ export async function reply(
       to:
         "operator" in asked.from
           ? "team_log"
-          : { name: asked.from.name, generation: asked.from.generation },
+          : "caller" in asked.from
+            ? { caller: asked.from.caller }
+            : { name: asked.from.name, generation: asked.from.generation },
       provenance: asked.provenance,
       causal: causalOf(ctx),
       ask_id: args.ask_id,

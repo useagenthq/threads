@@ -1,23 +1,14 @@
 import { z } from "zod";
 import { ArtifactRef, Principal } from "./common";
-import { BudgetExceededData, ParkReason } from "./events/control";
+import { BudgetExceededData } from "./events/control";
 import { HAS_TEXT_OR_REF } from "./events/one-of";
-import {
-  AskId,
-  EventId,
-  MailId,
-  MemberName,
-  MonitorId,
-  RequestId,
-  TeamId,
-  ThreadId,
-} from "./ids";
-import { NonEmpty, PosInt, TimeMs } from "./primitives";
-import { type Rule, type Ruled, withRule } from "./rules";
+import { EventId, MemberName, TeamId, ThreadId } from "./ids";
+import { NonEmpty, PosInt } from "./primitives";
+import { type Ruled, withRule } from "./rules";
 import type { Arr, EnumOf, Lit, Opt, Strict } from "./zod-types";
 
 // Shapes shared by the team events (spec/schema/README.md, "Teams"): member references,
-// provenance, results and the mail envelope. Every literal a team event records is here.
+// provenance and results (the mail envelope is mail.ts).
 
 export const MemberRef: Strict<{
   tenant: typeof NonEmpty;
@@ -82,7 +73,8 @@ export const TextBody: Ruled<
   },
 );
 
-// The host API RunErrorCode, then the two rebind codes.
+// The host API RunErrorCode, then the two rebind codes. Spelled out: isolatedDeclarations
+// can't infer a spread.
 const MEMBER_ERROR_CODES = [
   "model_unavailable",
   "context_exhausted",
@@ -112,6 +104,42 @@ export const MemberErrorCode: EnumOf<typeof MEMBER_ERROR_CODES> = z
     id: "MemberErrorCode",
     description:
       "A failed member's code: the host API RunErrorCode, plus pin_unavailable and pin_mismatch for a failed rebind, and setup_failed for a member whose setup kept failing.",
+  });
+
+// What a host member's failed turn records, by its turn_completed (spec/schema/README.md, Teams
+// Phase 2, "A host member's failed turn"): the reason, or for error its code, else model_error.
+const TURN_FAILED_CODES = [
+  "model_error",
+  "content_unsupported",
+  "continuation_unsupported",
+  "transport_fence_unsupported",
+  "secret_in_provider_output",
+  "max_turns",
+  "max_output",
+  "stop_hook_limit",
+  "context_exhausted",
+  "output_invalid",
+  "input_denied",
+  "model_unavailable",
+  "budget_exhausted",
+  "interrupted",
+] as const;
+export const TurnFailure: Strict<{
+  code: EnumOf<typeof TURN_FAILED_CODES>;
+  message: z.ZodString;
+}> = z
+  .strictObject({
+    code: z
+      .enum(TURN_FAILED_CODES)
+      .describe(
+        "Mapped from the failed turn's turn_completed: its reason (max_turns, max_output, stop_hook_limit, context_exhausted, output_invalid, input_denied, model_unavailable, budget_exhausted for the hop cap or the caller's run budget, interrupted for a turn recovery closed), or for reason error its code (content_unsupported, continuation_unsupported, transport_fence_unsupported, secret_in_provider_output), else model_error.",
+      ),
+    message: z.string(),
+  })
+  .meta({
+    id: "TurnFailure",
+    description:
+      "Why a host member's turn failed (Phase 2). Only that turn ends: its unanswered asks close failed and the member goes back to idle.",
   });
 
 type Result<S extends string, F extends z.core.$ZodLooseShape> = Strict<
@@ -229,172 +257,3 @@ export const TeamRefusal: EnumOf<typeof TEAM_REFUSALS> = z
       "A refusal an operator request records as operator_refused. A model call records its refusal in its own tool_result.",
   });
 export type TeamRefusal = z.infer<typeof TeamRefusal>;
-
-const BOUNCE_CODES = ["stale_member", "member_ended"] as const;
-export const BounceCode: EnumOf<typeof BOUNCE_CODES> = z
-  .enum(BOUNCE_CODES)
-  .meta({
-    id: "BounceCode",
-    description:
-      "Why a recipient refused pending mail: it was for an older generation, or the member ended.",
-  });
-
-export const MAIL_KINDS = [
-  "message",
-  "ask",
-  "reply",
-  "task",
-  "cancel",
-  "member_settled",
-  "member_parked",
-  "member_ended",
-  "bounce",
-] as const;
-
-export const MailAddress: z.ZodXor<
-  readonly [
-    Strict<{ name: typeof MemberName; generation: typeof PosInt }>,
-    Lit<"team_log">,
-  ]
-> = z
-  .xor([
-    z.strictObject({ name: MemberName, generation: PosInt }),
-    z.literal("team_log"),
-  ])
-  .meta({
-    id: "MailAddress",
-    description:
-      "A member at one generation, or the team log (the operator's replies and notifications).",
-  });
-
-export const MailSender: z.ZodXor<
-  readonly [typeof MemberRef, Strict<{ operator: typeof RequestId }>]
-> = z
-  .xor([
-    MemberRef,
-    z.strictObject({ operator: RequestId }).meta({ id: "OperatorSender" }),
-  ])
-  .meta({
-    id: "MailSender",
-    description:
-      "The sending member, or the operator request. Written by the fenced writer; never an actor.",
-  });
-
-// A field appears only on the kinds that use it, and each kind carries what it needs. Typed as
-// a plain Rule: narrowing the TS type by fifteen if/then branches would be exponential.
-const only = (field: string, kinds: readonly string[]): Rule => ({
-  if: { required: [field] },
-  then: { properties: { kind: { enum: kinds } } },
-});
-const needs = (kinds: readonly string[], fields: readonly string[]): Rule => ({
-  if: { properties: { kind: { enum: kinds } } },
-  then: { required: fields },
-});
-const MEMBER_SENT = [
-  "reply",
-  "member_settled",
-  "member_parked",
-  "member_ended",
-  "bounce",
-] as const;
-const ENVELOPE_RULE: Rule = {
-  allOf: [
-    only("body", ["message", "ask", "reply", "task"]),
-    only("ask_id", ["ask", "reply", "bounce"]),
-    only("deadline", ["ask"]),
-    only("monitor_id", ["member_settled", "member_parked", "member_ended"]),
-    only("reason", ["member_parked"]),
-    only("result", ["member_settled", "member_ended", "bounce"]),
-    only("code", ["bounce"]),
-    needs(["message", "task"], ["body"]),
-    needs(["ask"], ["body", "ask_id", "deadline"]),
-    needs(["reply"], ["body", "ask_id"]),
-    needs(["member_settled", "member_ended"], ["monitor_id", "result"]),
-    needs(["member_parked"], ["monitor_id", "reason"]),
-    needs(["bounce"], ["code"]),
-    // An open ask's bounce closes it member_ended, so it carries the ended member's result.
-    {
-      if: { properties: { kind: { const: "bounce" } }, required: ["ask_id"] },
-      then: { required: ["result"] },
-    },
-    // Only a member replies, notifies or bounces; the team log receives only those.
-    {
-      if: { properties: { kind: { enum: MEMBER_SENT } } },
-      then: { properties: { from: { required: ["name"] } } },
-    },
-    {
-      if: { properties: { to: { const: "team_log" } } },
-      then: { properties: { kind: { enum: MEMBER_SENT } } },
-    },
-    {
-      if: { properties: { kind: { const: "member_settled" } } },
-      then: {
-        properties: {
-          result: { properties: { status: { const: "completed" } } },
-        },
-      },
-    },
-    {
-      if: { properties: { kind: { const: "member_ended" } } },
-      then: {
-        properties: {
-          result: { not: { properties: { status: { const: "completed" } } } },
-        },
-      },
-    },
-  ],
-};
-
-export const MailEnvelope: Ruled<
-  Strict<{
-    mail_id: typeof MailId;
-    kind: EnumOf<typeof MAIL_KINDS>;
-    team: typeof TeamId;
-    from: typeof MailSender;
-    to: typeof MailAddress;
-    provenance: typeof Provenance;
-    causal: typeof RequestRef;
-    ask_id: Opt<typeof AskId>;
-    monitor_id: Opt<typeof MonitorId>;
-    deadline: Opt<typeof TimeMs>;
-    reason: Opt<typeof ParkReason>;
-    code: Opt<typeof BounceCode>;
-    result: Opt<typeof StoredMemberResult>;
-    body: Opt<typeof TextBody>;
-  }>,
-  Rule
-> = withRule(
-  z.strictObject({
-    mail_id: MailId,
-    kind: z.enum(MAIL_KINDS),
-    team: TeamId,
-    from: MailSender,
-    to: MailAddress,
-    provenance: Provenance,
-    causal: RequestRef.describe(
-      "The request or event that caused this mail: the call's tool_call, the operator_request, the member's idle or end event, or the refused mail's mail_refused.",
-    ),
-    ask_id: AskId.describe(
-      "ask: its own mail_id. reply: the ask it answers. bounce: the open ask it closes as member_ended.",
-    ).optional(),
-    monitor_id: MonitorId.describe(
-      "The monitor this notification fires; its row is deleted in the same append.",
-    ).optional(),
-    deadline: TimeMs.describe("ask: now + timeoutMs.").optional(),
-    reason: ParkReason.describe(
-      "member_parked: the member's park reason.",
-    ).optional(),
-    code: BounceCode.optional(),
-    result: StoredMemberResult.describe(
-      "member_settled (completed), member_ended (terminal), or an ask's bounce (the ended member's result).",
-    ).optional(),
-    body: TextBody.optional(),
-  }),
-  ENVELOPE_RULE,
-  {
-    id: "MailEnvelope",
-    description:
-      "One mail, as the sender's message_sent records it and every receipt copies it byte for byte. member_parked is a one-time, non-consuming park notice.",
-  },
-);
-export type MailEnvelope = z.infer<typeof MailEnvelope>;

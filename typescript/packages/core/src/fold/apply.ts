@@ -129,6 +129,7 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
     case "operator_refused":
     case "message_policy_decided":
     case "answer_rejected":
+    case "supervisor_decided":
       return;
     case "tools_loaded":
       for (const t of e.data.tools) fold.loaded.set(t.name, t.spec_ref);

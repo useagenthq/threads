@@ -31,7 +31,7 @@ const TURN_END_REASONS = [
   "model_unavailable",
   "handoff",
 ] as const;
-const BUDGET_SCOPES = ["run", "thread", "ancestor"] as const;
+const BUDGET_SCOPES = ["run", "thread", "ancestor", "hop"] as const;
 const BUDGET_LIMITS = [
   "max_cost_nanos",
   "max_input_tokens",
@@ -196,7 +196,7 @@ export const BudgetExceededData: Ruled<
     scope: z
       .enum(BUDGET_SCOPES)
       .describe(
-        "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id.",
+        "Which budget refused the reservation. run and thread: this thread's own budget (the owner is the envelope thread_id, so owner_thread_id is absent). ancestor: a budget of an ancestor thread in the agent tree, named by owner_thread_id. hop (Phase 2): the host rule's per-hop cap on a host member's turn, budget id hop:<branch_id>:<turn opener event_id>; only that turn ends.",
       ),
     owner_thread_id: ThreadId.describe(
       "Required exactly when scope is ancestor: the ancestor thread whose budget refused the reservation.",

@@ -1,0 +1,14 @@
+{
+  "name": "host-team-ids-not-derived-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 50: a host team's log is at the ids its tenant derives. acme's host team log names globex's team id: invalid_transition at team_opened.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team"
+    ]
+  }
+}

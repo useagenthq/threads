@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from . import ops_host
 from .common import arr, num, obj, sha, text
 from .jcs import JsonValue, canonical
 from .log import Log
@@ -16,6 +17,7 @@ from .ops_member import start
 from .ops_observe import monitor, wait
 from .ops_send import ask, cancel, reply, send
 from .ops_start import materialize
+from .ops_supervise import delete, supervise
 from .ops_world import World
 from .ref_team import check_log, cross
 
@@ -37,6 +39,16 @@ OPS: dict[str, Callable[[World, str, Obj], Obj]] = {
     "start": start,
     "idle": idle,
     "end": end,
+}
+# Teams Phase 2: the same store ops on a host team's world (callers and host members), and its own.
+HOST_OPS: dict[str, Callable[[World, str, Obj], Obj]] = {
+    "send": ops_host.send,
+    "ask": ops_host.ask,
+    "reply": ops_host.reply,
+    "consume": ops_host.consume,
+    "turn_failure": ops_host.turn_failure,
+    "supervise": supervise,
+    "delete": delete,
 }
 # Every table's primary key (store.sql). team_feed is left out: an op adds one feed row per
 # appended event, so the appended types already say which.
@@ -107,12 +119,14 @@ def run(world: Obj, vector: Obj) -> tuple[Obj, list[str]]:
         concurrent=num(given.get("concurrent", 4)),
         headroom=given.get("headroom", True) is True,
         templates={k: obj(v) for k, v in obj(given.get("templates", {})).items()},
+        rules=[obj(r) for r in arr(given.get("rules", []))],
     )
     problems = _validate(w, "world")
     before = rows(w)
     if before != world["rows"]:
         problems.append("the world's rows are not the rows its logs rebuild")
-    outcome = OPS[text(vector["op"])](w, text(vector["by"]), obj(vector["input"]))
+    ops = HOST_OPS if _host(w) else OPS
+    outcome = ops[text(vector["op"])](w, text(vector["by"]), obj(vector["input"]))
     problems += _validate(w, "after the op")
     appended: Obj = {k: list[JsonValue](v) for k, v in w.appended.items()}
     return {
@@ -120,6 +134,13 @@ def run(world: Obj, vector: Obj) -> tuple[Obj, list[str]]:
         "appended": appended,
         "rows": row_changes(before, rows(w)),
     }, problems
+
+
+def _host(w: World) -> bool:
+    """A host team's world: its team log opens with team_opened{kind: host}."""
+    return any(
+        log.events and obj(log.events[0]["data"]).get("kind") == "host" for log in w.logs.values()
+    )
 
 
 def _validate(w: World, when: str) -> list[str]:

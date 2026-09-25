@@ -41,7 +41,7 @@ def mail_run(env: Obj) -> Run:
 def _first(c: Check, e: Obj, d: Obj, t: str) -> None:
     c.branch = text(e["branch_id"])
     if t == "team_opened":
-        c.team_log, c.lead_thread = True, text(d["lead_thread_id"])
+        c.team_log, c.lead_thread = True, str(d.get("lead_thread_id", ""))
     elif t == "thread_started" and "parent" in d:
         c.member = obj(d["parent"])["relation"] == "team_member"
 

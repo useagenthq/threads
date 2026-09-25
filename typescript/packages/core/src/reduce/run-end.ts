@@ -111,7 +111,7 @@ class Run {
   #members(e: KnownEvent): void {
     if (
       e.type === "member_started" &&
-      e.data.provenance.root_request.event_id === this.#request
+      e.data.provenance?.root_request.event_id === this.#request
     )
       this.#monitors.add(`${e.branch_id}:${e.event_id}:task`);
     else if (

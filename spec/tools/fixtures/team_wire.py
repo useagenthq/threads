@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from .common import CASES
 from .pieces import dump
 from .team_wire_events import EVENT_CASES
+from .team_wire_host import HOST_CASES
 from .team_wire_mail import MAIL_CASES
 
 if TYPE_CHECKING:
@@ -21,7 +22,7 @@ VECTOR = CASES.parent / "vectors" / "team-wire.json"
 
 def _vector() -> str:
     cases: list[JsonValue] = [
-        {"name": n, "line": ln, "valid": v} for n, ln, v in (*EVENT_CASES, *MAIL_CASES)
+        {"name": n, "line": ln, "valid": v} for n, ln, v in (*EVENT_CASES, *MAIL_CASES, *HOST_CASES)
     ]
     doc: Obj = {
         "description": (

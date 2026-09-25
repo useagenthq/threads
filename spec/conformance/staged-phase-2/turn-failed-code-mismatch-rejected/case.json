@@ -1,0 +1,16 @@
+{
+  "name": "turn-failed-code-mismatch-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 53: a failed turn's TurnFailure code is its turn end's, and max_turns maps to max_turns. billing's bounce records model_error for a max_turns end: invalid_transition at the bounce.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

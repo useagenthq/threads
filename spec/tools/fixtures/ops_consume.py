@@ -45,6 +45,8 @@ def close_ask(w: World, label: str, ask_id: str, outcome: Obj, cause: str | None
         value |= {"member": env["from"], "text": obj(env["body"])["text"]}
     elif status == "member_ended":
         value["result"] = public(outcome["result"])
+    elif status == "failed":  # a host member's failed turn (Teams Phase 2)
+        value["error"] = outcome["error"]
     if not w.is_team_log(label):
         address: Obj = {"kind": "ask", "id": ask_id}
         if address in arr(w.state(label)["parked"]):

@@ -217,12 +217,17 @@ def _outcome_of(
             if e.data.detail is not MISSING:
                 refused["detail"] = to_json(e.data.detail)
             return refused
-        case MemberStartedEvent() if e.data.provenance.root_request.event_id == request_event:
+        case MemberStartedEvent() if _started_by(e, request_event):
             return {"member": to_json(e.data.member), "status": "started"}
         case MessageSentEvent() if e.data.envelope.from_ == OperatorSender(operator=rid):
             return _mail_outcome(e.data.envelope, team)
         case _:
             return None
+
+
+def _started_by(e: MemberStartedEvent, request_event: str | None) -> bool:
+    prov = e.data.provenance
+    return prov is not MISSING and prov.root_request.event_id == request_event
 
 
 def _mail_outcome(env: MailEnvelope, team: TeamRow) -> dict[str, JsonValue] | None:

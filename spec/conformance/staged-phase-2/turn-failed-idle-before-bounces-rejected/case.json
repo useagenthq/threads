@@ -1,0 +1,16 @@
+{
+  "name": "turn-failed-idle-before-bounces-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 53: a failed turn's append bounces every ask the turn took before member_idle{turn_failed}. billing goes idle with support's ask unanswered: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

@@ -559,7 +559,8 @@
         "operator_refused",
         "message_policy_decided",
         "answer_rejected",
-        "tools_loaded"
+        "tools_loaded",
+        "supervisor_decided"
       ]
     },
     "FrameworkSource": {

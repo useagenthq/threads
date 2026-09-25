@@ -9,7 +9,7 @@ from api_factories import expanded_errors, langs
 from typeexpr_render import Render, camel, ref_name
 
 from .json_access import Json, Obj, array, obj, text
-from .tables import DOC_OVERRIDES, LANG_LABEL, NOT_BUILT, NOTES, ONLY_IN
+from .tables import CHANGED, DOC_OVERRIDES, LANG_LABEL, NOT_BUILT, NOTES, ONLY_IN
 from .text import attr, clean, field
 
 
@@ -32,6 +32,8 @@ def annotate(container: str, members: list[Obj]) -> list[Obj]:
 
 def member_doc(container: str, name: str | None, doc: str | None, lang: str | None) -> str:
     parts: list[str] = []
+    if (container, name) in CHANGED:
+        parts.append(CHANGED[(container, name)])
     if lang:
         parts.append(f"{LANG_LABEL[lang]} only.")
     if doc:

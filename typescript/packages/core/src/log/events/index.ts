@@ -63,6 +63,7 @@ import {
   ModelResponseRecovered,
   RetryScheduled,
 } from "./model";
+import { SupervisorDecided } from "./supervision";
 import {
   MemberEnded,
   MemberIdle,
@@ -167,6 +168,7 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
     typeof MessagePolicyDecided.schema,
     typeof ToolsLoaded.schema,
     typeof AnswerRejected.schema,
+    typeof SupervisorDecided.schema,
   ],
   "type"
 > = z.discriminatedUnion("type", [
@@ -242,6 +244,7 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
   MessagePolicyDecided.schema,
   ToolsLoaded.schema,
   AnswerRejected.schema,
+  SupervisorDecided.schema,
 ]);
 export type KnownEvent = z.infer<typeof KnownEvent>;
 
@@ -319,6 +322,7 @@ export const EVENT_FRAGMENTS: readonly z.ZodType[] = [
   MessagePolicyDecided.fragment,
   ToolsLoaded.fragment,
   AnswerRejected.fragment,
+  SupervisorDecided.fragment,
 ];
 
 export * from "./agents";
@@ -329,6 +333,7 @@ export * from "./input";
 export * from "./mail";
 export * from "./model";
 export * from "./one-of";
+export * from "./supervision";
 export * from "./team";
 export * from "./thread";
 export * from "./tools";

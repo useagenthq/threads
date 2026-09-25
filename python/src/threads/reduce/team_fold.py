@@ -84,7 +84,8 @@ def advance(fold: Fold, event: Event) -> None:
 
 def _log(team: Team, event: Event) -> None:
     if isinstance(event, TeamOpenedEvent):
-        team.team_log, team.lead_thread = True, event.data.lead_thread_id
+        lead = event.data.lead_thread_id
+        team.team_log, team.lead_thread = True, None if lead is MISSING else lead
     elif isinstance(event, ThreadStartedEvent):
         parent = event.data.parent
         team.member = parent is not MISSING and parent.relation == "team_member"

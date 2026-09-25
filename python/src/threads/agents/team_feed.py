@@ -171,7 +171,8 @@ class _Sources:
             case MessagePolicyDecidedEvent():
                 return None if e.data.request_id is MISSING else e.data.request_id
             case MemberStartedEvent():
-                return self.requests.get(e.data.provenance.root_request.event_id)
+                prov = e.data.provenance
+                return None if prov is MISSING else self.requests.get(prov.root_request.event_id)
             case MessageSentEvent():
                 sender = e.data.envelope.from_
                 return sender.operator if isinstance(sender, OperatorSender) else None

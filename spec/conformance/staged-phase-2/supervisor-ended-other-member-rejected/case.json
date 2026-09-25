@@ -1,0 +1,16 @@
+{
+  "name": "supervisor-ended-other-member-rejected",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 51 across the logs: a decision's ended is its own member's member_ended. The decision on generation 2 names generation 1's end: invalid_transition at the decision.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "billing2"
+    ]
+  }
+}

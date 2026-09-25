@@ -55,13 +55,14 @@ _PKS: Mapping[str, str] = {
     "operator_receipts": "tenant_id, team_id, op, idempotency_key",
 }
 _COLUMNS: Mapping[str, tuple[str, ...]] = {
-    "teams": ("team_id", "tenant_id", "lead_thread_id", "team_log_branch_id", "closed_at"),
+    "teams": ("team_id", "tenant_id", "kind", "lead_thread_id", "team_log_branch_id", "closed_at"),
     "team_members": (
         *("team_id", "name", "generation", "role", "agent", "config_hash", "thread_id"),
         *("branch_id", "provenance", "state", "result", "updated_seq"),
     ),
     "mail": (
-        *("mail_id", "team_id", "kind", "to_name", "to_generation", "principal_key"),
+        *("mail_id", "team_id", "kind", "to_kind", "to_name", "to_generation", "to_branch_id"),
+        "principal_key",
         *("root_request", "envelope", "created_at", "state", "consumed_seq"),
     ),
     "asks": (

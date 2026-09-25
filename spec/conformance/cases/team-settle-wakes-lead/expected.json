@@ -104,6 +104,7 @@
       {
         "team_id": "0192c000-0000-7000-8000-000000000001",
         "tenant_id": "acme",
+        "kind": "lead",
         "lead_thread_id": "0192a000-0000-7000-8000-0000000000b1",
         "team_log_branch_id": "0192b000-0000-7000-8000-0000000000b3",
         "closed_at": null
@@ -177,8 +178,10 @@
         "mail_id": "0192b000-0000-7000-8000-0000000000b1:c1",
         "team_id": "0192c000-0000-7000-8000-000000000001",
         "kind": "task",
+        "to_kind": "member",
         "to_name": "researcher-1",
         "to_generation": 1,
+        "to_branch_id": null,
         "principal_key": "api/acme/alice",
         "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
         "envelope": {
@@ -223,8 +226,10 @@
         "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000007",
         "team_id": "0192c000-0000-7000-8000-000000000001",
         "kind": "member_settled",
+        "to_kind": "member",
         "to_name": "lead",
         "to_generation": 1,
+        "to_branch_id": null,
         "principal_key": "api/acme/alice",
         "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
         "envelope": {

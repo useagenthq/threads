@@ -84,6 +84,16 @@ async function moveMonitors(
 }
 
 /**
+ * The state a member's thread_started gives its row: running for its task turn, or idle for a
+ * host member (Phase 2), which opens no task turn.
+ */
+function branchOpened(e: KnownEvent): "running" | "idle" | undefined {
+  if (e.type !== "thread_started") return undefined;
+  if (e.data.host_member !== undefined) return "idle";
+  return e.data.parent === undefined ? undefined : "running";
+}
+
+/**
  * This log's own team_members rows (the lead's, a member's; both for a nested lead): the
  * member's branch at its thread_started, running at a turn opener, then parked, running, idle
  * or ended with the result; a lead's end closes its team.
@@ -97,10 +107,11 @@ async function changeOwnRows(
 ): Promise<void> {
   const own = [log.threadId, ...scoped(scope)];
   const state = opens ? "running" : STATES[e.type];
-  if (e.type === "thread_started" && e.data.parent !== undefined)
+  const opened = branchOpened(e);
+  if (opened !== undefined)
     await tx.run(
-      `UPDATE team_members SET branch_id = ?, state = 'running', updated_seq = ? WHERE thread_id = ? ${SCOPED}`,
-      [log.branchId, e.seq, ...own],
+      `UPDATE team_members SET branch_id = ?, state = ?, updated_seq = ? WHERE thread_id = ? ${SCOPED}`,
+      [log.branchId, opened, e.seq, ...own],
     );
   else if (state !== undefined)
     await tx.run(
@@ -108,10 +119,12 @@ async function changeOwnRows(
       [state, e.seq, ...own],
     );
   if (e.type !== "member_idle" && e.type !== "member_ended") return;
-  await tx.run(
-    `UPDATE team_members SET result = ? WHERE thread_id = ? ${SCOPED}`,
-    [jsonBytes(e.data.result), ...own],
-  );
+  // A host member's failed turn (member_idle{turn_failed}) keeps its last completed result.
+  if (e.data.result !== undefined)
+    await tx.run(
+      `UPDATE team_members SET result = ? WHERE thread_id = ? ${SCOPED}`,
+      [jsonBytes(e.data.result), ...own],
+    );
   if (e.type === "member_ended")
     await tx.run(
       `UPDATE teams SET closed_at = ? WHERE team_id IN

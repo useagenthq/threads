@@ -28,6 +28,22 @@ def principal_key(p: Obj) -> str:
     return "/".join(parts)
 
 
+def opened_tenant(d: Obj) -> JsonValue:
+    """The tenant a team_opened indexes its team under: its lead's, or a host team's own."""
+    return obj(d["lead"])["tenant"] if "lead" in d else d["tenant"]
+
+
+def address_columns(to: JsonValue) -> Obj:
+    """mail's to_kind and its columns, from the envelope's `to` (store.sql, mail)."""
+    if not isinstance(to, dict):
+        return {"to_kind": "team_log", "to_name": None, "to_generation": None, "to_branch_id": None}
+    if "caller" in to:
+        branch = obj(to["caller"])["branch_id"]
+        return {"to_kind": "caller", "to_name": None, "to_generation": None, "to_branch_id": branch}
+    member = {"to_name": to["name"], "to_generation": to["generation"]}
+    return {"to_kind": "member", **member, "to_branch_id": None}
+
+
 class _Index:
     def __init__(self) -> None:
         self.teams: dict[str, Obj] = {}
@@ -41,17 +57,19 @@ class _Index:
     def insert(self, log: Log, e: Obj) -> None:
         d, t = obj(e["data"]), text(e["type"])
         if t == "team_opened":
-            lead = obj(d["lead"])
             self.teams[text(d["team"])] = {
                 "team_id": d["team"],
-                "tenant_id": lead["tenant"],
-                "lead_thread_id": d["lead_thread_id"],
+                "tenant_id": opened_tenant(d),
+                "kind": d.get("kind", "lead"),
+                "lead_thread_id": d.get("lead_thread_id"),
                 "team_log_branch_id": log.branch,
                 "closed_at": None,
             }
         elif t == "thread_started" and "team" in d:
             lead: Obj = {"team": obj(d["team"])["id"], "name": d["agent_name"], "generation": 1}
             self._row(lead, "lead", e, log)
+        elif t == "member_started" and d.get("host_member") is True:
+            self._row(obj(d["member"]), "host_member", e, None)  # no task, no task monitor
         elif t == "member_started":
             m = obj(d["member"])
             self._row(m, "member", e, None)
@@ -103,7 +121,7 @@ class _Index:
 
     def _receipt(self, log: Log, d: Obj) -> None:
         opened = obj(log.events[0]["data"])
-        tenant, team = obj(opened["lead"])["tenant"], opened["team"]
+        tenant, team = opened_tenant(opened), opened["team"]
         key = (text(tenant), text(team), text(d["op"]), text(d["idempotency_key"]))
         self.receipts[key] = {
             "tenant_id": tenant,
@@ -122,8 +140,7 @@ class _Index:
             "mail_id": env["mail_id"],
             "team_id": env["team"],
             "kind": env["kind"],
-            "to_name": obj(to)["name"] if isinstance(to, dict) else None,
-            "to_generation": obj(to)["generation"] if isinstance(to, dict) else None,
+            **address_columns(to),
             "principal_key": principal_key(obj(prov["principal"])),
             "root_request": f"{text(root['thread_id'])}:{text(root['event_id'])}",
             "envelope": env,
@@ -131,7 +148,7 @@ class _Index:
             "state": "pending",
             "consumed_seq": None,
         }
-        if env["kind"] == "ask":
+        if env["kind"] == "ask" and "caller" not in obj(to):
             self.asks[text(env["ask_id"])] = {
                 "ask_id": env["ask_id"],
                 "team_id": env["team"],
@@ -158,23 +175,28 @@ class _Index:
         in the parent team and its lead row in its own)."""
         d, t, seq = obj(e["data"]), text(e["type"]), e["seq"]
         state = "running" if text(e["event_id"]) in opened else STATES.get(t)
-        if t == "thread_started" and "parent" in d:
+        if t == "thread_started" and "host_member" in d:  # a host member opens no task turn
+            row.update(branch_id=log.branch, state="idle", updated_seq=seq)
+        elif t == "thread_started" and "parent" in d:
             row.update(branch_id=log.branch, state="running", updated_seq=seq)
         elif state is not None:
             row.update(state=state, updated_seq=seq)
-        if t in ("member_idle", "member_ended"):
+        if t in ("member_idle", "member_ended") and "result" in d:  # turn_failed keeps it
             row["result"] = d["result"]
         if t == "member_ended" and row["role"] == "lead":
             self.teams[text(row["team_id"])]["closed_at"] = e["time"]
 
     def _moves(self, d: Obj, t: str, seq: JsonValue) -> None:
+        # An update of a row no log inserted (its sender, a deleted caller, is gone) changes
+        # nothing, as SQL's UPDATE does.
         if t == "message_received" or (t == "user_input" and d["source"] == "team_task"):
-            self.mail[text(d["mail_id"])].update(state="consumed", consumed_seq=seq)
+            self.mail.get(text(d["mail_id"]), {}).update(state="consumed", consumed_seq=seq)
         elif t == "mail_refused":
             gone = "stale" if d["code"] == "stale_member" else "returned"
-            self.mail[text(d["mail_id"])].update(state=gone, consumed_seq=seq)
+            self.mail.get(text(d["mail_id"]), {}).update(state=gone, consumed_seq=seq)
         elif t == "ask_closed":
-            self.asks[text(d["ask_id"])].update(state=obj(d["outcome"])["status"], closed_seq=seq)
+            status = obj(d["outcome"])["status"]
+            self.asks.get(text(d["ask_id"]), {}).update(state=status, closed_seq=seq)
         elif t == "message_sent":
             env = obj(d["envelope"])
             if "monitor_id" in env and env["kind"] != "member_parked":
@@ -198,14 +220,19 @@ class _Index:
         return sorted(teams)
 
 
-def team_index(logs: list[Log]) -> Obj:
-    """The team tables' rows (claim columns excluded: they rebuild as null), sorted by key."""
+def team_index(logs: list[Log], deleted: frozenset[str] = frozenset()) -> Obj:
+    """The team tables' rows (claim columns excluded: they rebuild as null), sorted by key. A mail
+    or ask naming a caller thread in `deleted` (tombstoned, Teams Phase 2) is not rebuilt."""
     ix = _Index()
     for log in logs:
         for e in log.events:
             ix.insert(log, e)
     for log in logs:
         ix.change(log)
+    gone = [k for k, m in ix.mail.items() if _names_caller(obj(m["envelope"]), deleted)]
+    for k in gone:
+        del ix.mail[k]
+        ix.asks.pop(k, None)
     return {
         "teams": list[JsonValue](ix.teams[k] for k in sorted(ix.teams)),
         "team_members": list[JsonValue](ix.members[k] for k in sorted(ix.members)),
@@ -216,6 +243,13 @@ def team_index(logs: list[Log]) -> Obj:
         "team_feed": feed_members(logs, ix),
         "pending_wakes": pending_wakes(logs),
     }
+
+
+def _names_caller(env: Obj, threads: frozenset[str]) -> bool:
+    ends = (env["from"], env["to"])
+    return any(
+        isinstance(x, dict) and obj(x.get("caller", {})).get("thread_id") in threads for x in ends
+    )
 
 
 def feed_members(logs: list[Log], ix: _Index) -> list[JsonValue]:

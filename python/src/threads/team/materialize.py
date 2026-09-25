@@ -181,11 +181,9 @@ def _first_events(  # noqa: PLR0913, PLR0917 - one opening: where, of whom, with
     whose actor is the task's principal; after a failed rebind, the turn closes before any model
     request and the member ends failed with everything an end carries."""
     started = s.started.data
-    data: dict[str, JsonValue] = {
-        **pinned,
-        "config_hash": started.config_hash,
-        "parent": to_json(started.parent),
-    }
+    data: dict[str, JsonValue] = {**pinned, "config_hash": started.config_hash}
+    if started.parent is not MISSING:  # a host member (Phase 2) is a root thread
+        data["parent"] = to_json(started.parent)
     if isinstance(rebind, Rebind) and rebind.status == "ok" and rebind.team is not None:
         data["team"] = dict(rebind.team)
     batch.add(Draft("thread_started", data))
