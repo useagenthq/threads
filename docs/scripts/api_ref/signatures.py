@@ -45,17 +45,30 @@ def ts_params(positional: list[Obj], options: list[Obj]) -> str:
 def py_params(name: str, positional: list[Obj], options: list[Obj]) -> list[str]:
     """One line per parameter: positional first, then keyword-only options."""
     r = Render("py")
-    lines = [f"    {text(p['name'])}: {r.expr(obj(p['type']))}," for p in positional]
+    # A positional's declared default isn't spelled (the Python default may be a None stand-in).
+    lines = [
+        _py_param(
+            text(p["name"]),
+            r.expr(obj(p["type"])),
+            {k: v for k, v in p.items() if k != "default"}
+            | {"required": p.get("required") or "default" in p},
+        )
+        for p in positional
+    ]
     if options:
         lines.append("    *,")
     for p in options:
         pname = text(p["name"])
         native = PY_TYPES.get((name, pname))
         ptype = r.expr({"native": {"py": native}} if native else obj(p["type"]))
-        if p.get("required"):
-            lines.append(f"    {pname}: {ptype},")
-        elif "default" in p:
-            lines.append(f"    {pname}: {ptype} = {default_text(p['default'], 'py')},")
-        else:
-            lines.append(f"    {pname}: {ptype} | None = None,")
+        lines.append(_py_param(pname, ptype, p))
     return lines
+
+
+def _py_param(pname: str, ptype: str, p: Obj) -> str:
+    """Required: no default; a declared literal default; else `T | None = None`."""
+    if p.get("required"):
+        return f"    {pname}: {ptype},"
+    if "default" in p:
+        return f"    {pname}: {ptype} = {default_text(p['default'], 'py')},"
+    return f"    {pname}: {ptype} | None = None,"

@@ -25,6 +25,7 @@
     "functions/assertNever",
     "---[Plug]Providers---",
     "functions/otel",
+    "functions/postgres",
     "functions/supermemory",
     "functions/zep",
     "functions/anthropic",

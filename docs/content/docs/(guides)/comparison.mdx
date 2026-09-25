@@ -69,7 +69,7 @@ threads has [subagents](/docs/multi-agent/subagents), [handoffs](/docs/multi-age
 
 ### A host you run yourself
 
-The optional host turns agents into a server: a typed HTTP API with streaming, Slack, WhatsApp and GitHub webhooks, cron schedules, and runs that are safe to retry with an `Idempotency-Key`. Every call carries a principal and a tenant, and memory is scoped per tenant and user. It runs as one process with a SQLite store on one machine. There is no Postgres store and no managed service. If you want someone else to run it, Deep Agents (LangSmith) and Anthropic (Managed Agents) offer hosted options. See [Host server](/docs/host/overview) and [Deploying the host](/docs/production/deploying).
+The optional host turns agents into a server: a typed HTTP API with streaming, Slack, WhatsApp and GitHub webhooks, cron schedules, and runs that are safe to retry with an `Idempotency-Key`. Every call carries a principal and a tenant, and memory is scoped per tenant and user. It runs as one process with a SQLite store, or as several processes on several machines sharing a Postgres store. There is no managed service. If you want someone else to run it, Deep Agents (LangSmith) and Anthropic (Managed Agents) offer hosted options. See [Host server](/docs/host/overview) and [Deploying the host](/docs/production/deploying).
 
 ## Which to choose
 

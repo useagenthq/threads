@@ -1,0 +1,40 @@
+---
+title: "postgres"
+description: "The log and artifact store on Postgres: every host process on every machine points at the same database."
+icon: "Plug"
+---
+
+Opens lazily: nothing connects until first use, which creates the schema in an empty database and refuses one of another store version or a server before Postgres 16 (unsupported_format). Artifacts are rows of the database. localMemory() and localKnowledge() are refused on it.
+
+Import from `@threads/postgres` (TypeScript) or `threads.postgres` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function postgres(url?: string): Store
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def postgres(
+    url: str | None = None,
+) -> Store
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="url" type={"string"}>
+  A postgres:// connection URL. Omitted: DATABASE_URL. With neither, the first use is invalid_config naming DATABASE_URL.
+</Field>
+
+## Returns
+
+[`Store`](/docs/reference/types/Store)
+
+**Throws** `ConfigError` with one of these codes: `invalid_config`.

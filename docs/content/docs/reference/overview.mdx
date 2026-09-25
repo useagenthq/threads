@@ -30,6 +30,7 @@ say so.
 | e2b | `@threads/e2b` | `threads.e2b` |
 | daytona | `@threads/daytona` | `threads.daytona` |
 | modal | `@threads/modal` | `threads.modal` |
+| postgres | `@threads/postgres` | `threads.postgres` |
 | mem0 | `@threads/mem0` | `threads.mem0` |
 | slack | `@threads/slack` | `threads.slack` |
 | github | `@threads/github` | `threads.github` |
@@ -65,6 +66,7 @@ A provider factory connects an agent to an outside service and returns one of th
 | TypeScript | Python | What it does |
 |---|---|---|
 | [`otel`](/docs/reference/functions/otel) | `otel` | An Exporter that sends each span of every thread in the store once, when it closes, to an OpenTelemetry collector over OTLP/HTTP JSON. |
+| [`postgres`](/docs/reference/functions/postgres) | `postgres` | The log and artifact store on Postgres: every host process on every machine points at the same database. |
 | [`supermemory`](/docs/reference/functions/supermemory) | `supermemory` | A MemoryProvider that stores records in Supermemory. |
 | [`zep`](/docs/reference/functions/zep) | `zep` | A MemoryProvider that stores records in Zep. |
 | [`anthropic`](/docs/reference/functions/anthropic) | `anthropic` | A Claude model through the Messages API. |

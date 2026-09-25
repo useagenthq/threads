@@ -26,6 +26,7 @@ python/src/threads/_generated/
 typescript/packages/core/src/store/generated/
 typescript/packages/core/src/model/generated/
 typescript/packages/core/src/tools/generated/
+typescript/packages/postgres/src/generated/
 typescript/packages/core/test/api-surface/generated/
 typescript/packages/*/test/generated/
 python/tests/spec_tools/generated/

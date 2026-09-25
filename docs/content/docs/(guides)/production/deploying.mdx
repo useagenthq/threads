@@ -42,11 +42,46 @@ You can stop or restart the host at any time, including mid-run:
 - On the next start the host picks up waiting messages, resumes runs and sends replies that are still owed.
 - An action that may already have happened is never blindly retried. It is confirmed with the provider or held for a person. See [Durability & crash safety](/docs/production/durability).
 
-## One store, one machine
+## One machine or many
 
-The store is SQLite, so run the host on one machine with the store on local disk. Each thread is owned by one process at a time: if a second process tries to run the same thread, it is refused rather than allowed to write alongside the first. Two hosts pointed at the same store never double-fire a schedule.
+With the default SQLite store, run the host on one machine with the store on local disk. To run hosts on several processes or machines, or to fail over, use the Postgres store: every host points at the same database.
 
-<Callout>SQLite is the only store today. There is no Postgres or other networked store yet.</Callout>
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { host } from "@threads/host";
+import { postgres } from "@threads/postgres";
+
+export default host({
+  store: postgres(), // reads DATABASE_URL; or postgres("postgres://…")
+  agents: { assistant },
+  authenticate,
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads.host import host
+from threads.postgres import postgres  # pip install "threads[postgres]"
+
+app = host(store=postgres(), agents={"assistant": assistant}, authenticate=authenticate)
+```
+
+</Tab>
+</Tabs>
+
+Either way, each thread is owned by one process at a time: if a second process tries to run the same thread, it is refused rather than allowed to write alongside the first. Hosts sharing a store never double-fire a schedule.
+
+On Postgres:
+
+- It needs Postgres 16 or later. The first host to connect creates the tables in an empty database. A database of another store version is refused, as with SQLite; move threads between stores with `threads export` and `threads import`.
+- Artifacts (spilled tool output, request bodies, snapshots) are stored in the database, so every machine can read them. `threads gc` removes the ones nothing refers to.
+- `localMemory()` and `localKnowledge()` need a SQLite store. Use `supermemory()` or `zep()` instead.
+- Keep the machines' clocks synchronized (NTP). Safety never depends on the clock, but a lease is taken over and gc's grace window is measured by it.
+- The CLI's `--store` takes the database URL: `threads gc --store postgres://…`.
 
 ## Housekeeping
 

@@ -1,0 +1,94 @@
+name: postgres
+
+# The Postgres store's own gate (lane 27): the store suite, the whole conformance corpus, the
+# team-op vectors, the multi-process jobs drills and the Postgres drills, on a Postgres service
+# container, in both languages. The Postgres leg is required here: a missing URL fails the job.
+# Postgres 17 on every push and pull request; 16, the supported floor, weekly.
+
+on:
+  push:
+    paths: ["typescript/**", "python/**", "spec/**", "scripts/**", ".github/workflows/postgres.yml"]
+  pull_request:
+    paths: ["typescript/**", "python/**", "spec/**", "scripts/**", ".github/workflows/postgres.yml"]
+  schedule:
+    - cron: "17 3 * * 1"
+
+jobs:
+  typescript:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        postgres: ${{ github.event_name == 'schedule' && fromJSON('["16"]') || fromJSON('["17"]') }}
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: threads
+          POSTGRES_PASSWORD: threads
+          POSTGRES_DB: threads
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U threads" --health-interval 2s --health-timeout 5s
+          --health-retries 30
+    env:
+      THREADS_TEST_POSTGRES_URL: postgresql://threads:threads@localhost:5432/threads
+      THREADS_TEST_POSTGRES_REQUIRED: "1"
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run generate
+      - name: The Postgres drills
+        run: bun test packages/postgres
+      - name: The store suite, conformance corpus, team-op vectors and jobs drills on Postgres
+        env:
+          THREADS_TEST_STORE: postgres
+        run: >-
+          bun test packages/core/test/store packages/core/test/conformance
+          packages/core/test/team packages/host/test/jobs
+
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        postgres: ${{ github.event_name == 'schedule' && fromJSON('["16"]') || fromJSON('["17"]') }}
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: threads
+          POSTGRES_PASSWORD: threads
+          POSTGRES_DB: threads
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U threads" --health-interval 2s --health-timeout 5s
+          --health-retries 30
+    env:
+      THREADS_TEST_POSTGRES_URL: postgresql://threads:threads@localhost:5432/threads
+      THREADS_TEST_POSTGRES_REQUIRED: "1"
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          working-directory: python
+      - run: uv sync --locked --all-extras
+      - name: Generate code from spec/
+        working-directory: .
+        run: ./scripts/generate.sh py
+      - name: The store suite and the Postgres drills
+        run: uv run pytest tests/store tests/postgres
+      - name: The conformance corpus, team-op vectors and jobs drills on Postgres
+        env:
+          THREADS_TEST_STORE: postgres
+        run: >-
+          uv run pytest tests/log/test_conformance.py tests/reduce/test_reduce_cases.py
+          tests/reduce/test_staged_cases.py tests/host/test_host_cases.py
+          tests/host/test_intake_cases.py tests/loop/test_loop_cases.py
+          tests/thread/test_fork_cases.py tests/team/test_team_cases.py
+          tests/team/test_ops_vectors.py tests/jobs
