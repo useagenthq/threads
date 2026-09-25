@@ -14,7 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
-from jobs.stores import drill_open, query
+from jobs.stores import activity, drill_open, query
 from jobs.worker import TEAM, read, rows
 
 from threads.log import EventId
@@ -25,6 +25,8 @@ WORKER: Final = Path(__file__).with_name("worker.py")
 WAIT_S: Final = 20.0
 TESTS: Final = str(Path(__file__).parent.parent)
 _SPAWNED: list[subprocess.Popen[str]] = []
+_DIRS: dict[int, Path] = {}
+"""Each worker's drill directory, by pid: where its log is."""
 
 
 def spawn(role: str, where: Path, script: Path = WORKER, **env: str) -> subprocess.Popen[str]:
@@ -40,6 +42,7 @@ def spawn(role: str, where: Path, script: Path = WORKER, **env: str) -> subproce
             start_new_session=True,
         )
     _SPAWNED.append(worker)
+    _DIRS[worker.pid] = where
     return worker
 
 
@@ -70,11 +73,22 @@ def live_groups(groups: list[int]) -> list[int]:
     return alive
 
 
+def stuck(worker: subprocess.Popen[str]) -> str:
+    """What a worker that ran out of time was doing: it dumps its threads and tasks on SIGUSR1
+    (worker.py) into its log, which a CI failure shows in full."""
+    with contextlib.suppress(ProcessLookupError):
+        worker.send_signal(signal.SIGUSR1)
+    time.sleep(1)
+    logs = sorted(_DIRS[worker.pid].glob("worker-*.log"))
+    dumps = "\n".join(f"--- {p.name}\n{p.read_text()}" for p in logs)
+    return f"{dumps}\n--- sessions\n{activity()}"
+
+
 def wait_at(worker: subprocess.Popen[str], point: str) -> None:
     """Until the worker reports it is blocked at `point`."""
     assert worker.stdout is not None
     ready, _, _ = select.select([worker.stdout], [], [], WAIT_S)
-    assert ready, f"the worker never reached {point}"
+    assert ready, f"the worker never reached {point}\n{stuck(worker)}"
     line = worker.stdout.readline()
     assert line.strip() == f"at {point}", f"the worker ended before {point}: {line!r}"
 
@@ -92,8 +106,11 @@ def expire_leases(where: Path) -> None:
 
 
 def finish(worker: subprocess.Popen[str]) -> None:
-    worker.communicate(timeout=WAIT_S)
-    assert worker.returncode == 0
+    try:
+        worker.communicate(timeout=WAIT_S)
+    except subprocess.TimeoutExpired:
+        raise AssertionError(f"the worker never finished\n{stuck(worker)}") from None
+    assert worker.returncode == 0, stuck(worker)
 
 
 def release(where: Path) -> None:

@@ -88,6 +88,18 @@ def query(where: Path, sql: str, *params: object) -> list[tuple[object, ...]]:
         return cursor.fetchall() if cursor.description is not None else []
 
 
+def activity() -> str:
+    """The server's sessions, for a drill that ran out of time: who waits on what."""
+    if ENGINE != "postgres" or URL is None:
+        return ""
+    with admin(URL) as conn:
+        rows = conn.execute(
+            "SELECT pid, state, wait_event_type, wait_event, now() - xact_start, left(query, 160)"
+            " FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()"
+        ).fetchall()
+    return "\n".join(" | ".join(map(str, row)) for row in rows)
+
+
 def drop(where: Path) -> None:
     if ENGINE == "postgres" and URL is not None:
         drop_schema(URL, _schema(where))

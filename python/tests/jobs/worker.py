@@ -17,14 +17,17 @@ and model request is recorded in `<dir>` with the pid that made it.
 """
 
 import asyncio
+import faulthandler
 import json
 import os
+import signal
 import sys
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
+from types import CoroutineType
 from typing import Final
 
 from jobs.stores import drill_store
@@ -274,7 +277,26 @@ async def _ticked(
     return True
 
 
+def dump() -> None:
+    """On SIGUSR1, from a drill that ran out of time: where every thread and task is."""
+    faulthandler.dump_traceback(all_threads=True)
+    for task in asyncio.all_tasks():
+        print(f"task {task.get_name()}:", file=sys.stderr)
+        # Down the await chain: a task's own stack stops at its outermost coroutine.
+        awaited: object = task.get_coro()
+        while isinstance(awaited, CoroutineType):
+            frame = awaited.cr_frame
+            if frame is not None:
+                print(f"  {frame.f_code.co_filename}:{frame.f_lineno}", file=sys.stderr)
+            awaited = awaited.cr_await
+    sys.stderr.flush()
+
+
+async def main(role: str, where: Path) -> None:
+    asyncio.get_running_loop().add_signal_handler(signal.SIGUSR1, dump)
+    await (serve(where) if role == "serve" else schedule(where))
+
+
 if __name__ == "__main__":
     block_model_requests()
-    role, where = sys.argv[1], Path(sys.argv[2])
-    asyncio.run(serve(where) if role == "serve" else schedule(where))
+    asyncio.run(main(sys.argv[1], Path(sys.argv[2])))
