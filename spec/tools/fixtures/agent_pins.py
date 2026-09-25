@@ -70,7 +70,11 @@ EFFECTS: Obj = {
     "save_memory": {"effect_class": "idempotent", "dedup_window_ms": 2**53 - 1},
     "forget_memory": {"effect_class": "idempotent", "dedup_window_ms": 2**53 - 1},
 }
-FAKE_SANDBOX: Obj = {"provider": "fake", "egress": "enforced", "capture_classes": ["filesystem"]}
+FAKE_SANDBOX: Obj = {
+    "provider": "fake",
+    "egress": "enforced",
+    "capture_classes": ["filesystem"],
+}
 
 
 def _names(agent: Obj, key: str) -> list[str]:
@@ -83,8 +87,16 @@ def _tools(agent: Obj, member: bool) -> list[JsonValue]:
     names += list(SANDBOX_TOOLS) if "sandbox" in agent else []
     names += ["spawn_agent", *TASK_BOARD] if "subagents" in agent else []
     names += ["handoff"] if "handoffs" in agent else []
-    names += ["ask", "monitor", "reply", "send", "start", "wait"] if "team" in agent or member else []
-    names += ["search_memory", "save_memory", "forget_memory"] if "memory_write" in agent else []
+    names += (
+        ["ask", "monitor", "reply", "send", "start", "wait"]
+        if "team" in agent or member
+        else []
+    )
+    names += (
+        ["search_memory", "save_memory", "forget_memory"]
+        if "memory_write" in agent
+        else []
+    )
     names += ["load_skill"] if "skills" in agent else []
     specs = [obj(s) for s in catalog_specs(tuple(names))]
     return [{**s, **obj(EFFECTS.get(text(s["name"]), {}))} for s in specs]
@@ -93,7 +105,9 @@ def _tools(agent: Obj, member: bool) -> list[JsonValue]:
 def _instructions(agent: Obj) -> str:
     skills = [obj(s) for s in arr(agent.get("skills", []))]
     parts = [text(agent["instructions"])]
-    parts += [text(obj(e).get("instructions", "")) for e in arr(agent.get("extensions", []))]
+    parts += [
+        text(obj(e).get("instructions", "")) for e in arr(agent.get("extensions", []))
+    ]
     if skills:
         lines = [f"- {text(s['name'])}: {text(s['description'])}" for s in skills]
         parts.append("\n".join(["Skills you can load with load_skill:", *lines]))
@@ -107,14 +121,20 @@ def _instructions(agent: Obj) -> str:
         names = ", ".join(_names(agent, "team"))
         lines = [_listed(obj(a)) for a in arr(agent["team"]) if "models" in obj(a)]
         parts.append(
-            "\n".join([f"Agents you can start as team members with start: {names}.", *lines])
+            "\n".join(
+                [f"Agents you can start as team members with start: {names}.", *lines]
+            )
         )
     return "\n\n".join(p for p in parts if p)
 
 
 def _choosable(template: Obj) -> list[str]:
     """A template's tools as a member, in pinned order, less the framework set F."""
-    return [n for n in (text(obj(t)["name"]) for t in _tools(template, True)) if n not in KEPT]
+    return [
+        n
+        for n in (text(obj(t)["name"]) for t in _tools(template, True))
+        if n not in KEPT
+    ]
 
 
 def _listed(template: Obj) -> str:
@@ -122,9 +142,7 @@ def _listed(template: Obj) -> str:
     tools = ", ".join(_choosable(template)) or "none"
     keys = [text(obj(m)["key"]) for m in arr(template["models"])]
     models = ", ".join([f"{keys[0]} (default)", *keys[1:]])
-    return (
-        f"{text(template['name'])} (you write its instructions; tools: {tools}; models: {models})"
-    )
+    return f"{text(template['name'])} (you write its instructions; tools: {tools}; models: {models})"
 
 
 def _model(m: Obj) -> Obj:
@@ -169,7 +187,9 @@ def _policy(agent: Obj) -> Obj:
         policy[k] = {**base, **obj(agent.get(k, {}))}
     obj(policy["context"])["cache_ttl_ms"] = _ttl(models, obj(agent.get("context", {})))
     if len(models) > 1:
-        policy["fallback"] = [{**_settings(m), "reasoning_carryover": "keep"} for m in models[1:]]
+        policy["fallback"] = [
+            {**_settings(m), "reasoning_carryover": "keep"} for m in models[1:]
+        ]
     for key in ("budget", "on_unknown_usage", "output_styles"):
         if key in agent:
             policy[key] = agent[key]
@@ -185,8 +205,12 @@ def _hashed(agent: Obj) -> Obj:
         out["extensions"] = [
             {
                 "name": e["name"],
-                "hooks": list[JsonValue](h for h in HOOKS if h in arr(e.get("hooks", []))),
-                "observers": list[JsonValue](sorted(text(o) for o in arr(e.get("observers", [])))),
+                "hooks": list[JsonValue](
+                    h for h in HOOKS if h in arr(e.get("hooks", []))
+                ),
+                "observers": list[JsonValue](
+                    sorted(text(o) for o in arr(e.get("observers", [])))
+                ),
                 "hook_timeout_ms": e.get("hook_timeout_ms", HOOK_TIMEOUT_MS),
             }
             for e in map(obj, arr(agent["extensions"]))
@@ -250,7 +274,9 @@ def _pin(agent: Obj, member: bool, choice: Obj | None) -> Obj:
 
 def _started(agent: Obj, member: str | None, choice: Obj | None) -> Obj:
     return (
-        _pin(agent, False, None) if member is None else _pin(_member(agent, member), True, choice)
+        _pin(agent, False, None)
+        if member is None
+        else _pin(_member(agent, member), True, choice)
     )
 
 
