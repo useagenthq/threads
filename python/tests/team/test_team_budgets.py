@@ -4,6 +4,7 @@ its turn belongs to; start checks headroom first. Mirrors TypeScript's test/team
 
 import asyncio
 
+import pytest
 from team.run_kit import Watched, call, events, member_events, say, sq_of, start, types
 from team.team_kit import assert_team_replays
 
@@ -73,7 +74,13 @@ def test_start_without_headroom_for_one_member_request_is_refused_budget_exceede
     asyncio.run(main())
 
 
-def test_member_requests_reserve_against_the_leads_thread_budget_and_their_turns_run() -> None:
+@pytest.mark.parametrize("wiped", [False, True], ids=["kept", "wiped"])
+def test_member_requests_reserve_against_the_leads_thread_budget_and_their_turns_run(
+    *, wiped: bool
+) -> None:
+    """Wiped: the ledger is lost between the runs; rebuilding it re-enters the first run's
+    attempt against that run's budget too."""
+
     async def main() -> None:
         store = sqlite(":memory:")
         researched = asyncio.Event()
@@ -106,6 +113,9 @@ def test_member_requests_reserve_against_the_leads_thread_budget_and_their_turns
             team=[researcher],
         )
         first = await lead.run("Work.", store=store, budget=Budget(max_model_requests=20))
+        if wiped:
+            sq = await sq_of(store)
+            await sq.run(lambda c: c.execute("DELETE FROM budget_ledger"))
         second = await lead.run(
             "And more.",
             store=store,

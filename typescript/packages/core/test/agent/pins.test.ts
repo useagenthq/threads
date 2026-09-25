@@ -59,11 +59,12 @@ test("RunErrorCode is host-api RunErrorCode", () => {
   expect(schema.$defs.RunErrorCode.enum).toEqual([...RUN_ERROR_CODES]);
 });
 
-test("a member's failure code is RunErrorCode plus the two rebind codes", () => {
+test("a member's failure code is RunErrorCode plus the rebind codes", () => {
   expect(MemberErrorCode.options).toEqual([
     ...RUN_ERROR_CODES,
     "pin_unavailable",
     "pin_mismatch",
+    "setup_failed",
   ]);
 });
 

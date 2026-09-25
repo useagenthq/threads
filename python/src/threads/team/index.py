@@ -278,13 +278,16 @@ def _own_row(w: _Write, e: Event, opened: frozenset[str]) -> None:
 def _consumed(w: _Write, e: MessageReceivedEvent | UserInputEvent) -> None:
     mail_id = e.data.mail_id
     if mail_id is not MISSING:
+        # Mail moves only from pending (a CAS, design §4.7): fencing already keeps a second
+        # consume out, and this keeps a row's first outcome if one ever got through.
         sql = "UPDATE mail SET state = 'consumed', consumed_seq = ? WHERE mail_id = ?"
+        sql += " AND state = 'pending'"
         w.scoped(sql, e.seq, mail_id)
 
 
 def _refused(w: _Write, e: MailRefusedEvent) -> None:
     gone = "stale" if e.data.code == "stale_member" else "returned"
-    sql = "UPDATE mail SET state = ?, consumed_seq = ? WHERE mail_id = ?"
+    sql = "UPDATE mail SET state = ?, consumed_seq = ? WHERE mail_id = ? AND state = 'pending'"
     w.scoped(sql, gone, e.seq, e.data.mail_id)
 
 

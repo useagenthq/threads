@@ -1,3 +1,4 @@
+import { runOpener } from "../fold/openers";
 import type { EventOf, Fold, ModelRef } from "../fold/state";
 import type { JsonObject, KnownEvent, Policy, ThreadId } from "../log";
 import { reservation, settlement, tokenBounds } from "../reduce/cost";
@@ -31,8 +32,7 @@ type View = {
 /** A thread's own budgets as of its `events`: its thread budget and the open run's. */
 export function ownCovering(s: View): readonly Covering[] {
   const thread = s.fold.policy?.budget;
-  // A wake turn is under the budget of the latest run's input, as refusal() counts it.
-  const input = s.events.findLast((e) => e.type === "user_input");
+  const input = runInput(s);
   const run = input?.type === "user_input" ? input.data.budget : undefined;
   return [
     ...(thread === undefined
@@ -57,20 +57,43 @@ export function ownCovering(s: View): readonly Covering[] {
 }
 
 /**
+ * The user_input of the run the last turn belongs to (spec/schema/README.md, "Which run a turn is
+ * charged to"): its opener's own, or, for a turn a receipt opened, the request its provenance
+ * names when that request is in this thread. Before any turn, the latest input's.
+ */
+function runInput(s: View): KnownEvent | undefined {
+  const opener = runOpener(s.events);
+  if (opener === undefined)
+    return s.events.findLast((e) => e.type === "user_input");
+  if (opener.type !== "message_received") return opener;
+  const root = opener.data.envelope.provenance.root_request;
+  return root.thread_id === s.threadId
+    ? s.events.find((e) => e.event_id === root.event_id)
+    : undefined;
+}
+
+/**
  * Every budget covering this thread: its own, then its ancestors'; a team member's turn is also
  * under the run budget of the request it belongs to (spec/schema/README.md, "Teams").
  */
 export async function covering(s: Session): Promise<readonly Covering[]> {
-  const opener = s.events.find((e) => e.seq === s.fold.turnStart);
+  return [
+    ...ownCovering(s),
+    ...(await runCovered(s, runOpener(s.events))),
+    ...(s.config.budgets?.inherited ?? []),
+  ];
+}
+
+/** The run budget of the request a team member's turn, opened by `opener`, belongs to. */
+async function runCovered(
+  s: Session,
+  opener: KnownEvent | undefined,
+): Promise<readonly Covering[]> {
   const run =
     opener === undefined
       ? undefined
       : await s.config.team?.runCovering?.(opener);
-  return [
-    ...ownCovering(s),
-    ...(run === undefined ? [] : [run]),
-    ...(s.config.budgets?.inherited ?? []),
-  ];
+  return run === undefined ? [] : [run];
 }
 
 /**
@@ -228,8 +251,9 @@ function claimsOf(
 /**
  * Re-enters, at its bound, every model_request of this branch the ledger lacks, so a lost,
  * wiped or imported ledger never resets a budget (invariant 1); settleOpen then settles them.
- * ponytail: this branch's attempts only; a finished descendant's are re-entered when it runs again,
- * and a team member's without its request's run budget (re-enter by the turn's root to add it).
+ * Each is claimed against every budget that covered it, a team member's run budget (its turn's
+ * request's) included.
+ * ponytail: this branch's attempts only; a finished descendant's are re-entered when it runs again.
  */
 async function rebuild(s: Session): Promise<void> {
   const budgets = s.config.budgets;
@@ -241,7 +265,11 @@ async function rebuild(s: Session): Promise<void> {
     if (known.has(attempt)) continue;
     const before = s.events.slice(0, i);
     const view = { threadId: s.threadId, fold: s.fold, events: before };
-    const all = [...ownCovering(view), ...budgets.inherited];
+    const all = [
+      ...ownCovering(view),
+      ...(await runCovered(s, runOpener(before))),
+      ...budgets.inherited,
+    ];
     await budgets.ledger.restore(
       attempt,
       claimsOf(all, nextAmounts(s, before)).filter(bounded),

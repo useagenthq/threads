@@ -11,6 +11,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 
 from threads._generated.tools_v1 import (
     AskInput,
+    CancelInput,
     MonitorInput,
     ReplyInput,
     SendInput,
@@ -33,6 +34,7 @@ from threads.store.writer import DecideTx, Refusal
 from threads.team.ask import AskPlan, ask, reply
 from threads.team.batch import Batch
 from threads.team.call import CallContext, call_request, named
+from threads.team.cancel import cancel
 from threads.team.close import reader_of
 from threads.team.constants import TEAM_CONSTANTS
 from threads.team.ops import StartPlan, send, start
@@ -80,8 +82,9 @@ async def start_call(rt: Runtime, state: CallState) -> Halt | None:
     room = pinned is not None and await room_for(rt, pinned)
     thread = uuid7(rt.clock())
     plan = StartPlan(agents, team.limits, lambda _agent: room, thread, got.resolved)
+    big = await _big(rt, args.task)
     return await _decided(
-        rt, call, None, lambda ctx: start(call_request(ctx), args.agent, args.task, plan)
+        rt, call, big, lambda ctx: start(call_request(ctx), args.agent, args.task, plan)
     )
 
 
@@ -168,3 +171,10 @@ async def monitor_call(rt: Runtime, state: CallState) -> Halt | None:
     call = state.call
     args = MonitorInput.model_validate(dict(call.data.input))
     return await _decided(rt, call, None, lambda ctx: monitor(ctx, args.member))
+
+
+async def cancel_call(rt: Runtime, state: CallState) -> Halt | None:
+    """cancel's request: durable intent; the member's writer applies it at its next step."""
+    call = state.call
+    args = CancelInput.model_validate(dict(call.data.input))
+    return await _decided(rt, call, None, lambda ctx: cancel(ctx, args.member))

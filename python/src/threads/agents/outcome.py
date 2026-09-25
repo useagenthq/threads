@@ -81,7 +81,7 @@ def _turn_code(events: Sequence[Event]) -> RunErrorCode | None:
         return None
     code = ended.data.code
     # Only a team member's rebind ends a turn this way, and a member's result is a MemberResult.
-    if code in ("pin_unavailable", "pin_mismatch"):
+    if code in ("pin_unavailable", "pin_mismatch", "setup_failed"):
         raise AssertionError(f"a run's turn can't end {code}: only a member rebinds")
     return code
 

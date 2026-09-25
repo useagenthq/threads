@@ -17,6 +17,7 @@ from threads.store.writer import DecideTx, Refusal
 from threads.team.ask import AskPlan, ask, reply
 from threads.team.batch import Batch
 from threads.team.call import CallContext, call_request, named
+from threads.team.cancel import cancel
 from threads.team.close import reader_of
 from threads.team.consume import ConsumeContext, consume
 from threads.team.deadline import deadline
@@ -109,8 +110,9 @@ def _model_op(ctx: CallContext, v: Obj) -> JsonValue:
             return ask(ctx, str(args["to"]), str(args["question"]), plan_)
         case "reply":
             return reply(ctx, str(args["ask_id"]), str(args["text"]))
-        case "monitor":
-            return monitor(ctx, str(args["member"]))
+        case "monitor" | "cancel":
+            op = monitor if v["op"] == "monitor" else cancel
+            return op(ctx, str(args["member"]))
         case _:
             members = args["members"]
             assert isinstance(members, list)
@@ -226,7 +228,7 @@ async def run_on(w: Writer, v: Obj) -> JsonValue:
     match v["op"]:
         case "send" | "start" if "request_id" in obj(v["input"]):
             return await _operator(w, v)
-        case "send" | "start" | "ask" | "reply" | "wait" | "monitor":
+        case "send" | "start" | "ask" | "reply" | "wait" | "monitor" | "cancel":
             return await _call(w, v)
         case "consume":
             return await _consume(w)

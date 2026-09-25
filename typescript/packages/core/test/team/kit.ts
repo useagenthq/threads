@@ -1,5 +1,5 @@
 import { expect } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { sha256Hex } from "../../src/hash";
@@ -31,6 +31,11 @@ const SPEC: string = join(import.meta.dir, "../../../../../spec/conformance");
 export const CASES: string = join(SPEC, "cases");
 /** Cases still staged for another lane. */
 export const STAGED: string = join(SPEC, "staged");
+
+/** The staged cases' names: none when staged/ is absent (git keeps no empty directory). */
+export function stagedNames(): readonly string[] {
+  return existsSync(STAGED) ? readdirSync(STAGED).toSorted() : [];
+}
 
 /** A team case's log bytes. */
 export function caseLog(name: string, label: string): Uint8Array {

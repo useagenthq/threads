@@ -203,6 +203,19 @@ export async function pendingFor(
   );
 }
 
+/** A cancel is pending for one of the thread's own rows. */
+export async function cancelPendingFor(
+  tx: Tx,
+  thread: ThreadId,
+): Promise<boolean> {
+  const found = await tx.all(
+    `SELECT 1 FROM mail m JOIN team_members t ON m.team_id = t.team_id AND m.to_name = t.name
+        WHERE t.thread_id = ? AND m.kind = 'cancel' AND m.state = 'pending' LIMIT 1`,
+    [thread],
+  );
+  return found.length > 0;
+}
+
 /** A mail row's envelope, whatever its state. */
 export async function mailEnvelope(
   tx: Tx,

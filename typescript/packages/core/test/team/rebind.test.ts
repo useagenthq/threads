@@ -3,6 +3,7 @@ import { z } from "zod";
 import { agent, type McpServer, scriptedModel, sqlite, tool } from "../../src";
 import { assertTeamReplays } from "./kit";
 import {
+  call,
   events,
   logOf,
   memberEvents,
@@ -17,8 +18,9 @@ import {
 // opens the member's branch and ends it failed; no model request is ever made for it, not then and
 // not on any later run; the task notification wakes the lead.
 
-/** An MCP server whose nth connect lists `connects[n]`'s tool, or throws past the list. */
-function drifting(connects: readonly string[]): McpServer {
+/** An MCP server whose nth connect lists `connects[n]`'s tool, or throws at a null or past the
+ * list. */
+function drifting(connects: readonly (string | null)[]): McpServer {
   let n = 0;
   return {
     kind: "mcp",
@@ -26,7 +28,8 @@ function drifting(connects: readonly string[]): McpServer {
     connect: async () => {
       const name = connects[n];
       n += 1;
-      if (name === undefined) throw new Error("the docs server is gone");
+      if (name === undefined || name === null)
+        throw new Error("the docs server is gone");
       const close = async (): Promise<void> => undefined;
       return {
         tools: [
@@ -48,7 +51,7 @@ function drifting(connects: readonly string[]): McpServer {
 
 async function failedRebind(
   connects: readonly string[],
-  code: "pin_mismatch" | "pin_unavailable",
+  code: "pin_mismatch",
 ): Promise<void> {
   const store = sqlite(":memory:");
   const model = scriptedModel({ responses: [say("never")] });
@@ -101,8 +104,104 @@ describe("a failed rebind", () => {
   test("pin_mismatch: the definition changed between start and materialize", async () => {
     await failedRebind(["read_a", "read_b", "read_b"], "pin_mismatch");
   });
+});
 
-  test("pin_unavailable: the definition can't be set up here", async () => {
-    await failedRebind(["read_a"], "pin_unavailable");
+describe("a member whose setup fails for now (N4)", () => {
+  test("is not ended: it is tried again after a backoff, and runs once its server is back", async () => {
+    const store = sqlite(":memory:");
+    const researcher = agent({
+      name: "researcher",
+      model: scriptedModel({ responses: [say("Read the docs.")] }),
+      // Pinned at start, gone once at materialize, then back.
+      tools: [drifting(["read_a", null, "read_a", "read_a", "read_a"])],
+    });
+    const lead = agent({
+      name: "lead",
+      model: scriptedModel({
+        responses: [
+          start("c1", "researcher", "Read the docs."),
+          say("Started."),
+          say("The researcher read the docs."),
+        ],
+      }),
+      team: [researcher],
+    });
+    const r = await lead.run("Work.", { store });
+    expect(r.status === "completed" && r.output).toBe(
+      "The researcher read the docs.",
+    );
+    const member = await memberEvents(store, r.team.ref.id, "researcher-1");
+    expect(types(member)).toContain("member_idle");
+    expect(types(member)).not.toContain("member_ended");
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
+
+  test("that never recovers ends the member setup_failed after Setup attempts tries", async () => {
+    const store = sqlite(":memory:");
+    const researcher = agent({
+      name: "researcher",
+      model: scriptedModel({ responses: [say("never")] }),
+      // Pinned at start; the server is down for good after that.
+      tools: [drifting(["read_a"])],
+    });
+    const lead = agent({
+      name: "lead",
+      model: scriptedModel({
+        responses: [
+          start("c1", "researcher", "Read the docs."),
+          say("Started."),
+          say("The researcher could not start."),
+        ],
+      }),
+      team: [researcher],
+    });
+    const r = await lead.run("Work.", { store });
+    expect(r.status === "completed" && r.output).toBe(
+      "The researcher could not start.",
+    );
+    const member = await memberEvents(store, r.team.ref.id, "researcher-1");
+    const ended = member.find((e) => e.type === "member_ended");
+    expect(ended?.type === "member_ended" && ended.data.result).toMatchObject({
+      status: "failed",
+      error: { code: "setup_failed" },
+    });
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
+  }, 20_000);
+
+  test("can still be cancelled: its cancel ends it without its setup", async () => {
+    const store = sqlite(":memory:");
+    const researcher = agent({
+      name: "researcher",
+      model: scriptedModel({ responses: [say("never")] }),
+      tools: [drifting(["read_a"])],
+    });
+    const lead = agent({
+      name: "lead",
+      model: scriptedModel({
+        responses: [
+          start("c1", "researcher", "Read the docs."),
+          call("c2", "cancel", { member: "researcher-1" }),
+          say("Cancelled it."),
+          say("The researcher was cancelled."),
+        ],
+      }),
+      team: [researcher],
+    });
+    const r = await lead.run("Work.", { store });
+    expect(r.status === "completed" && r.output).toBe(
+      "The researcher was cancelled.",
+    );
+    const member = await memberEvents(store, r.team.ref.id, "researcher-1");
+    expect(types(member)).toEqual([
+      "thread_started",
+      "user_input",
+      "message_received",
+      "cancel_requested",
+      "cancelled",
+      "turn_completed",
+      "member_ended",
+      "message_sent",
+    ]);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
+  }, 20_000);
 });

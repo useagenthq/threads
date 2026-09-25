@@ -77,6 +77,8 @@ class Team:
     """thread_started.parent.relation is team_member (rule 41)."""
     had_input: bool = False
     ended: bool = False
+    stopped: bool = False
+    """A member's log took a tree cancel: it opens no turn again (rule 37)."""
     last_end: str | None = None
     """The reason of the last turn_completed (rule 38)."""
     turn: TurnRun | None = None

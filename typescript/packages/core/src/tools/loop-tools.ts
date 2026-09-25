@@ -14,6 +14,7 @@ export const LOOP_TOOLS = [
   "todo_write",
   "tool_search",
   "ask",
+  "cancel",
   "monitor",
   "reply",
   "send",
@@ -24,10 +25,11 @@ export type LoopTool = (typeof LOOP_TOOLS)[number];
 
 /**
  * The team tools among them: the loop runs them only in a team thread, and elsewhere a user tool
- * may take the name. Lane 21E.2 adds cancel.
+ * may take the name.
  */
 export const TEAM_LOOP_TOOLS: ReadonlySet<LoopTool> = new Set<LoopTool>([
   "ask",
+  "cancel",
   "monitor",
   "reply",
   "send",

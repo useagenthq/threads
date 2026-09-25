@@ -26,6 +26,7 @@ _ENTRIES: Final = TypeAdapter(list[_Entry]).validate_python(json.loads(tools_v1.
 MODELS: Final[Mapping[str, type[StrictModel]]] = {
     "ask": tools_v1.AskInput,
     "ask_user": tools_v1.AskUserInput,
+    "cancel": tools_v1.CancelInput,
     "bash": tools_v1.BashInput,
     "computer": tools_v1.ComputerInput,
     "computer_screenshot": tools_v1.ComputerScreenshotInput,

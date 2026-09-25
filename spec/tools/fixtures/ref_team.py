@@ -247,7 +247,8 @@ def _judge(name: str, meta: Obj, expected: Obj, logs: dict[str, list[Obj]]) -> s
 def ref_check(*roots: pathlib.Path) -> list[str]:
     problems: list[str] = []
     for root in roots:
-        for d in sorted(root.iterdir()):
+        # An empty staged/ is absent (git keeps no empty directory).
+        for d in sorted(root.iterdir()) if root.exists() else []:
             meta = obj(json.loads((d / "case.json").read_text()))
             expected_path = d / "expected.json"
             if meta["kind"] not in ("reduce", "render", "team") or not expected_path.exists():

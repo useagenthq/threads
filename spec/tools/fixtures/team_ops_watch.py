@@ -20,7 +20,7 @@ from .team_ops_worlds import (
     team,
     writer_asks,
 )
-from .team_pieces import LEAD_BRANCH, LOG_BRANCH, RESEARCHER, WRITER, failed
+from .team_pieces import LEAD_BRANCH, LOG_BRANCH, RESEARCHER, WRITER, WRITER_BRANCH, failed
 
 if TYPE_CHECKING:
     from .jcs import JsonValue, Obj
@@ -145,6 +145,26 @@ def _deadlines() -> list[Vec]:
             {"id": WAIT},
             _waited([PRICES], [], timed_out=False),
             {"lead": ["message_received", "wait_finished", "resumed", R]},
+            DUE,
+        )
+    )
+    w = _both()
+    dispatch(w, "writer", "wait", {"members": ["researcher-1"]}, "c1")
+    dispatch(w, "lead", "cancel", {"member": "writer-1"}, "c3")
+    writer_wait = f"{WRITER_BRANCH}:c1"
+    out.append(
+        Vec(
+            "wait-deadline-cancel-pending",
+            "4.12, 4.14",
+            "At the wait's deadline the writer's cancel is pending: the step applies the cancel "
+            "(receipt and barrier), which finishes the wait with what has settled, as a consume "
+            "would, rather than leaving the cancel for the next one.",
+            w,
+            "deadline",
+            "writer",
+            {"id": writer_wait},
+            {"wait_id": writer_wait, "status": "cancelled"},
+            {"writer": ["message_received", "cancel_requested", "wait_finished", "resumed", R]},
             DUE,
         )
     )

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { agent, scriptedModel, sqlite } from "../../src";
+import { TEAM_CONSTANTS } from "../../src/team/constants";
 import { teamRow } from "../../src/team/rows";
 import { assertTeamReplays, reading } from "./kit";
 import {
@@ -173,6 +174,34 @@ describe("a team lead's run", () => {
       e.type === "tool_result" ? [e.data.preview] : [],
     );
     expect(previews[1]).toBe('{"code":"concurrency_cap","status":"refused"}');
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
+  });
+
+  test("a task over the inline cap is an artifact ref in the lead's log; the member reads it whole", async () => {
+    const store = sqlite(":memory:");
+    const task = "x".repeat(TEAM_CONSTANTS.inlineCapBytes + 1);
+    const lead = agent({
+      name: "lead",
+      model: scriptedModel({
+        responses: [
+          start("c1", "researcher", task),
+          say("Started."),
+          say("Done."),
+        ],
+      }),
+      team: [researcher("Read it.")],
+    });
+    const r = await lead.run("Work.", { store });
+    expect(r.status).toBe("completed");
+    const sent = (await events(store, r.thread)).find(
+      (e) => e.type === "message_sent" && e.data.envelope.kind === "task",
+    );
+    const body =
+      sent?.type === "message_sent" ? sent.data.envelope.body : undefined;
+    expect(body !== undefined && "ref" in body).toBe(true);
+    const member = await memberEvents(store, r.team.ref.id, "researcher-1");
+    const input = member.find((e) => e.type === "user_input");
+    expect(input?.type === "user_input" && input.data.text).toBe(task);
     await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 });

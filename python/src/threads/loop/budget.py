@@ -19,6 +19,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 from threads.log import (
     Budget,
     Event,
+    MessageReceivedEvent,
     Model,
     ModelRef,
     ModelRequestEvent,
@@ -36,7 +37,7 @@ from threads.loop.drafts import draft
 from threads.loop.runtime import Failed, Runtime, lost
 from threads.loop.team_runtime import TeamAgentPin, TeamRecipient
 from threads.reduce.fold import Fold
-from threads.reduce.openers import turn_start
+from threads.reduce.openers import run_opener
 from threads.reduce.projections import bound, dispositions, output_bound
 from threads.result import Err
 from threads.store import Draft
@@ -51,16 +52,31 @@ _LIMITS: tuple[LimitName, ...] = (
 
 
 def own(thread_id: ThreadId, events: Sequence[Event]) -> list[Covering]:
-    """This thread's pinned budget and the budget of the run its latest input started."""
+    """This thread's pinned budget and the budget of the run its last turn belongs to."""
     out: list[Covering] = []
     started = next((e for e in events if isinstance(e, ThreadStartedEvent)), None)
     pinned = None if started is None else started.data.policy
     if pinned is not None and pinned is not MISSING and pinned.budget is not MISSING:
         out.append(Covering(f"thread:{thread_id}", pinned.budget, "thread"))
-    run = next((e for e in reversed(events) if isinstance(e, UserInputEvent)), None)
+    run = _run_input(thread_id, events)
     if run is not None and run.data.budget is not MISSING:
         out.append(Covering(f"run:{thread_id}:{run.event_id}", run.data.budget, "run"))
     return out
+
+
+def _run_input(thread_id: ThreadId, events: Sequence[Event]) -> UserInputEvent | None:
+    """The user_input of the run the last turn belongs to (spec/schema/README.md, "Which run a
+    turn is charged to"): its opener's own, or, for a turn a receipt opened, the request its
+    provenance names when that request is in this thread. Before any turn, the latest input's."""
+    opener = run_opener(events)
+    if opener is None:
+        return next((e for e in reversed(events) if isinstance(e, UserInputEvent)), None)
+    if isinstance(opener, MessageReceivedEvent):
+        root = opener.data.envelope.provenance.root_request
+        if root.thread_id != thread_id:
+            return None
+        opener = next((e for e in events if e.event_id == root.event_id), None)
+    return opener if isinstance(opener, UserInputEvent) else None
 
 
 def inherited(thread_id: ThreadId, fold: Fold, ancestors: Sequence[Covering]) -> list[Covering]:
@@ -152,7 +168,8 @@ def _output(usage: Usage | None, reserve: int) -> int:
 async def _sync(rt: Runtime, ancestors: Sequence[Covering]) -> None:
     """This branch's ledger rows agree with its log: a resolved attempt is settled, a reservation
     whose request never reached the log is dropped, and an attempt the ledger never saw (an
-    imported log, a lost cache) is entered settled."""
+    imported log, a lost cache) is entered settled, against every budget that covered it, a team
+    member's run budget included."""
     branch = rt.writer.branch_id
     known = await rt.store.budgets.attempts(branch)
     requests = {
@@ -171,7 +188,8 @@ async def _sync(rt: Runtime, ancestors: Sequence[Covering]) -> None:
         key = f"{branch}:{seq}"
         if key not in known:
             before = [e for e in rt.events if e.seq < seq]
-            covers = _covers([*own(thread_id, before), *ancestors])
+            run = await _run_of(rt, before)
+            covers = _covers([*own(thread_id, before), *run, *ancestors])
             amounts = _settled(rt.fold, request) or _known(_reserve(rt.fold))
             await rt.store.budgets.record(key, covers, amounts)
 
@@ -228,12 +246,16 @@ async def covering_of(rt: Runtime) -> list[Covering]:
     thread_id = rt.writer.fold.thread_id
     if thread_id is None:
         raise AssertionError("an acquired branch has a thread")
-    run: list[Covering] = []
-    team, start = rt.team, turn_start(rt.events)
-    if team is not None and team.run_covering is not None and start is not None:
-        found = await team.run_covering(rt.events[start])
-        run = [] if found is None else [found]
-    return [*own(thread_id, rt.events), *run, *rt.budgets]
+    return [*own(thread_id, rt.events), *await _run_of(rt, rt.events), *rt.budgets]
+
+
+async def _run_of(rt: Runtime, events: Sequence[Event]) -> list[Covering]:
+    """A team member's turn, the last of `events`: the run budget of the request it belongs to."""
+    team, opener = rt.team, run_opener(events)
+    if team is None or team.run_covering is None or opener is None:
+        return []
+    found = await team.run_covering(opener)
+    return [] if found is None else [found]
 
 
 async def inherited_by(rt: Runtime) -> list[Covering]:

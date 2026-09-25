@@ -20,7 +20,8 @@ _JSON: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 
 def _recorded() -> list[Path]:
     """Every team case that pins an index: its logs are a team's whole write history."""
-    dirs = sorted([*CASES.iterdir(), *STAGED.iterdir()])
+    staged = STAGED.iterdir() if STAGED.exists() else iter(())
+    dirs = sorted([*CASES.iterdir(), *staged])
     return [
         d
         for d in dirs

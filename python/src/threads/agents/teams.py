@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.agents.config import ConfigError
+from threads.agents.config import UnboundError
 from threads.agents.definition import Definition
 from threads.agents.dynamic_agent import member_definition
 from threads.agents.pinned import outside_any_branch
@@ -19,13 +19,14 @@ from threads.agents.store import Store
 from threads.agents.team_budgets import recipient_of, run_covering
 from threads.agents.team_check import agents_of
 from threads.agents.team_worker import MemberRun, TeamWorker, WorkerEnv
-from threads.log import ModelRef, Policy, ThreadStartedEvent
+from threads.log import ModelRef, Policy, Principal, ThreadStartedEvent
 from threads.log.digest import sha256_hex
 from threads.loop.team_runtime import TeamAgentPin, TeamRuntime
 from threads.loop.teams import settled
 from threads.store import SqliteStore, Writer
 from threads.store.lines import uuid7
 from threads.team.dynamic import KEPT, Choice, Template
+from threads.team.rows import cancel_pending_for
 
 
 def lead_started[D](
@@ -52,7 +53,7 @@ async def member_pin[D](definition: Definition[D]) -> TeamAgentPin:
     if definition.dynamic is not None:
         gone = [t for t in definition.dynamic.define.tools if t not in names]
         if gone:
-            raise ConfigError("invalid_config", f"{definition.name} no longer has {gone[0]}")
+            raise UnboundError("invalid_config", f"{definition.name} no longer has {gone[0]}")
     template = None
     if definition.models and definition.dynamic is None:
         choosable = tuple(n for n in names if n not in KEPT)
@@ -115,11 +116,21 @@ def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs 
     store: Store,
     sq: SqliteStore,
     run: Callable[[Definition[None], MemberRun], Awaitable[None]],
+    principal: Principal,
 ) -> TeamSide | None:
-    """A team thread's runtime and what stops it; None for any other thread."""
+    """A team thread's runtime and what stops it; None for any other thread. One run, one
+    authority (design §2.6): its ordinary mail is its own principal's; mail of another waits for
+    a run under that one."""
     if definition.team is None and member is None:
         return None
     pin, limits = pins(definition), definition.team_limits
+    thread = writer.fold.thread_id
+    if thread is None:
+        raise AssertionError("an acquired branch has a thread")
+
+    async def cancel_pending() -> bool:
+        return await sq.run(lambda c: cancel_pending_for(c, thread))
+
     if member is not None:
         runtime = TeamRuntime(
             pin,
@@ -129,6 +140,8 @@ def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs 
             principal=member.principal,
             run_covering=run_covering(sq),
             recipient=recipient_of(sq),
+            cancel_pending=cancel_pending,
+            abort=member.abort,
         )
         return TeamSide(runtime, _nothing)
     if definition.team is None:
@@ -147,7 +160,9 @@ def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs 
         settled,
         worker.notify,
         worker.progress,
+        principal=principal,
         busy=worker.busy,
         recipient=recipient_of(sq),
+        cancel_pending=cancel_pending,
     )
     return TeamSide(runtime, worker.stop)

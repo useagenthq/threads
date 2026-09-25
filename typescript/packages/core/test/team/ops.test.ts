@@ -23,29 +23,15 @@ import {
 // through this runtime's own store ops reaches the reference's outcome, appends the same event
 // types per log and makes the same row changes; the team then replays.
 
-/** Applying and requesting a cancel is lane 21E.2's. */
-const CANCELS: ReadonlySet<string> = new Set([
-  "ask-deadline-cancel-pending",
-  "cancel-applied-running-member",
-  "cancel-applied-parked-asker",
-  "cancel-applied-asker-with-pending-reply",
-  "cancel-applied-waiter",
-  "cancel-applied-waiter-counts-committed-settlement-cancel-first",
-  "cancel-applied-waiter-counts-committed-settlement-settlement-first",
-  "cancel-stops-new-work",
-]);
-
-/** The operator's ask and wait wait for their Team methods (lane 21F follow-up). */
-const OPERATOR_LATER: ReadonlySet<string> = new Set(["ask", "wait"]);
+/** The operator's ask, wait and cancel wait for their Team methods (lane 21F follow-up). */
+const OPERATOR_LATER: ReadonlySet<string> = new Set(["ask", "wait", "cancel"]);
 
 const runs = (v: Vector): boolean =>
-  v.op !== "cancel" &&
-  !CANCELS.has(v.name) &&
   !(v.by === "team" && OPERATOR_LATER.has(v.op));
 
 async function materializeOp(fx: Fixture, v: Vector): Promise<unknown> {
   const rebind = z
-    .enum(["ok", "pin_unavailable", "pin_mismatch"])
+    .enum(["ok", "pin_unavailable", "pin_mismatch", "setup_failed"])
     .parse(v.input["rebind"]);
   const got = unwrap(
     await materialize(fx.store, TEAM, z.string().parse(v.input["member"]), {
@@ -106,16 +92,16 @@ async function appended(
 describe("team op vectors, run by this runtime", () => {
   const mine = DOC.vectors.filter(runs);
 
-  test("cover every op but cancel, and the operator's ask and wait", () => {
+  test("cover every op, but the operator's ask, wait and cancel", () => {
     expect(new Set(mine.map((v) => v.op))).toEqual(
       new Set([
-        ...["start", "send", "ask", "reply", "wait", "monitor"],
+        ...["start", "send", "ask", "reply", "wait", "monitor", "cancel"],
         ...["deadline", "consume"],
         ...["materialize", "idle", "end"],
       ]),
     );
     // Pinned: a vector that drops out of the selection fails here, not silently.
-    expect(mine).toHaveLength(83);
+    expect(mine).toHaveLength(96);
     expect(mine.filter((v) => v.by === "team")).toHaveLength(18);
   });
 

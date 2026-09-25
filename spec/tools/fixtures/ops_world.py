@@ -25,6 +25,7 @@ CONSTANTS: Obj = {
     "ask_wait_default_ms": 120_000,
     "wake_poll_in_process_ms": 250,
     "wake_poll_cross_process_ms": 1_000,
+    "setup_attempts": 5,
 }
 DEFAULT_MS = num(CONSTANTS["ask_wait_default_ms"])
 TEAM_LOG = "team_log"

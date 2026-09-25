@@ -28,6 +28,11 @@ class ConfigError(Exception):
         self.message = message
 
 
+class UnboundError(ConfigError):
+    """A dynamic member's recorded choice names a tool or model its template no longer has here:
+    its rebind fails pin_unavailable, unlike a setup that failed for now."""
+
+
 @dataclass(frozen=True, slots=True)
 class Failure:
     """A setup failure as a value (spec/api.json conventions.results): what `Agent.check`

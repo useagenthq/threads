@@ -762,6 +762,25 @@
             "effect_class": "read_only"
           },
           {
+            "description": "Cancel a member you started. It stops at its next step and ends cancelled.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "member": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "member"
+              ],
+              "type": "object"
+            },
+            "name": "cancel",
+            "effect_class": "read_only"
+          },
+          {
             "description": "Get a message when a member ends, with its result. An idle watcher wakes for it.",
             "input_schema": {
               "additionalProperties": false,
@@ -1058,7 +1077,7 @@
             "server_edits": "disabled"
           }
         },
-        "config_hash": "2b8b5fcedfe6e958df45f810afc6b95c99b5b105607fa885aff37fbfab60a776"
+        "config_hash": "d1536bedab793f32a26957e276766be93882c05164d183a7b94afbbc9132ca37"
       }
     },
     {
@@ -1115,6 +1134,25 @@
               "type": "object"
             },
             "name": "ask",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Cancel a member you started. It stops at its next step and ends cancelled.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "member": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "member"
+              ],
+              "type": "object"
+            },
+            "name": "cancel",
             "effect_class": "read_only"
           },
           {
@@ -1414,7 +1452,7 @@
             "server_edits": "disabled"
           }
         },
-        "config_hash": "e0675c25428efcbfd51190a3b3f4fb907ef030fdbf3e59f2547864743d47891e"
+        "config_hash": "0e3ffd1f0921288f28252381766b32c7a6dd0871e77ec16b17e1d81a6f6c338b"
       }
     },
     {
@@ -4088,6 +4126,25 @@
             "effect_class": "read_only"
           },
           {
+            "description": "Cancel a member you started. It stops at its next step and ends cancelled.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "member": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "member"
+              ],
+              "type": "object"
+            },
+            "name": "cancel",
+            "effect_class": "read_only"
+          },
+          {
             "description": "Get a message when a member ends, with its result. An idle watcher wakes for it.",
             "input_schema": {
               "additionalProperties": false,
@@ -4384,7 +4441,7 @@
             "server_edits": "disabled"
           }
         },
-        "config_hash": "cbdcb7a1a2b97448f3da657ee4926b93fc4a24124f2ba5d7b0d680059135e7d1"
+        "config_hash": "48d4c74435e7182f53fb27236aaae3c8660b96c7d539ebbd01162866a4319b96"
       }
     },
     {
@@ -4467,6 +4524,25 @@
               "type": "object"
             },
             "name": "ask",
+            "effect_class": "read_only"
+          },
+          {
+            "description": "Cancel a member you started. It stops at its next step and ends cancelled.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "member": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "member"
+              ],
+              "type": "object"
+            },
+            "name": "cancel",
             "effect_class": "read_only"
           },
           {
@@ -4835,7 +4911,7 @@
           }
         },
         "sandbox_provider": "fake",
-        "config_hash": "067996c56179fc5f8739c5ebce6e698474065d635eb7d01798d4e1b680bbe0c3"
+        "config_hash": "6b8abc0eda8dd593a0c2004dd135840ba428c90b7b6897fa54430ea77d26d3c1"
       }
     },
     {
@@ -4939,6 +5015,25 @@
             },
             "name": "bash",
             "effect_class": "sandbox_local"
+          },
+          {
+            "description": "Cancel a member you started. It stops at its next step and ends cancelled.",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "member": {
+                  "description": "A member's name, such as researcher-1.",
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "member"
+              ],
+              "type": "object"
+            },
+            "name": "cancel",
+            "effect_class": "read_only"
           },
           {
             "description": "Get a message when a member ends, with its result. An idle watcher wakes for it.",
@@ -5238,7 +5333,7 @@
           }
         },
         "sandbox_provider": "fake",
-        "config_hash": "a773eb73b2fdeb0b85e993ef5b2f1c6dbe2b496b2dbab20c7037c7a1304321ee"
+        "config_hash": "c08a89cc017da17c4a72a541f9bc45eee88387a816927f0810555247681d848e"
       }
     }
   ]

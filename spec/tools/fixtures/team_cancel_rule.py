@@ -1,7 +1,7 @@
 # pyright: strict
-"""The staged post-cancel cases (spec/schema/README.md, rule 37): after a tree cancel reaches a
-team member, its log opens no new turn; a cancelled lead still takes a later run's input. Staged
-until the runtimes check the member half (lane 21E)."""
+"""The post-cancel cases (spec/schema/README.md, rule 37): after a tree cancel reaches a team
+member, its log opens no new turn; a cancelled lead still takes a later run's input. In the corpus
+since lane 21E, when both runtimes check the member half."""
 
 from __future__ import annotations
 

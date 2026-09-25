@@ -3,7 +3,7 @@ import { z } from "zod";
 import { agent, type Model, scriptedModel, sqlite } from "../../src";
 import type { Principal } from "../../src/log";
 import { markTestKit } from "../../src/model/guard";
-import { assertTeamReplays, query } from "./kit";
+import { assertTeamReplays, exec, query } from "./kit";
 import {
   call,
   events,
@@ -129,58 +129,69 @@ describe("team budgets", () => {
     await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
-  test("a member's requests reserve against the lead's thread budget, and each turn against its own request's run budget", async () => {
-    const store = sqlite(":memory:");
-    const bob: Principal = { issuer: "api", tenant: "local", subject: "bob" };
-    const researched = Promise.withResolvers<void>();
-    let requests = 0;
-    const researcher = agent({
-      name: "researcher",
-      model: reporting([say("Task done."), say("Message done.")], () => {
-        requests += 1;
-        if (requests === 2) researched.resolve();
-      }),
-    });
-    const lead = agent({
-      name: "lead",
-      budget: { max_model_requests: 50 },
-      // Its last answer waits until the researcher has taken the second run's message.
-      model: waitsOn(
-        5,
-        [
-          start("c1", "researcher", "Go."),
-          say("Started."),
-          say("Reported."),
-          call("c2", "send", { to: "researcher-1", text: "One more." }),
-          say("Sent."),
-        ],
-        researched.promise,
-      ),
-      team: [researcher],
-    });
-    const first = await lead.run("Work.", {
-      store,
-      budget: { max_model_requests: 20 },
-    });
-    const second = await lead.run("And more.", {
-      store,
-      thread: first.thread,
-      principal: bob,
-      budget: { max_model_requests: 30 },
-    });
-    expect(second.status === "completed" && second.output).toBe("Sent.");
-    const inputs = (await events(store, first.thread)).flatMap((e) =>
-      e.type === "user_input" ? [e.event_id] : [],
-    );
-    const member = await memberEvents(store, first.team.ref.id, "researcher-1");
-    const branch = member[0]?.branch_id ?? "";
-    const lead0 = first.thread.id;
-    expect(await reservedFor(store, branch)).toEqual([
-      `run:${lead0}:${inputs[0]}`,
-      `thread:${lead0}`,
-      `run:${lead0}:${inputs[1]}`,
-      `thread:${lead0}`,
-    ]);
-    await assertTeamReplays(await logOf(store), first.team.ref.id);
-  });
+  // Wiped: the ledger is lost between the runs; rebuilding it re-enters the first run's attempt
+  // against that run's budget too.
+  test.each([false, true])(
+    "a member's requests reserve against the lead's thread budget, and each turn against its own request's run budget (wiped: %p)",
+    async (wiped) => {
+      const store = sqlite(":memory:");
+      const bob: Principal = { issuer: "api", tenant: "local", subject: "bob" };
+      const researched = Promise.withResolvers<void>();
+      let requests = 0;
+      const researcher = agent({
+        name: "researcher",
+        model: reporting([say("Task done."), say("Message done.")], () => {
+          requests += 1;
+          if (requests === 2) researched.resolve();
+        }),
+      });
+      const lead = agent({
+        name: "lead",
+        budget: { max_model_requests: 50 },
+        // Its last answer waits until the researcher has taken the second run's message.
+        model: waitsOn(
+          5,
+          [
+            start("c1", "researcher", "Go."),
+            say("Started."),
+            say("Reported."),
+            call("c2", "send", { to: "researcher-1", text: "One more." }),
+            say("Sent."),
+          ],
+          researched.promise,
+        ),
+        team: [researcher],
+      });
+      const first = await lead.run("Work.", {
+        store,
+        budget: { max_model_requests: 20 },
+      });
+      if (wiped)
+        await exec((await logOf(store)).driver, "DELETE FROM budget_ledger");
+      const second = await lead.run("And more.", {
+        store,
+        thread: first.thread,
+        principal: bob,
+        budget: { max_model_requests: 30 },
+      });
+      expect(second.status === "completed" && second.output).toBe("Sent.");
+      const inputs = (await events(store, first.thread)).flatMap((e) =>
+        e.type === "user_input" ? [e.event_id] : [],
+      );
+      const member = await memberEvents(
+        store,
+        first.team.ref.id,
+        "researcher-1",
+      );
+      const branch = member[0]?.branch_id ?? "";
+      const lead0 = first.thread.id;
+      expect(await reservedFor(store, branch)).toEqual([
+        `run:${lead0}:${inputs[0]}`,
+        `thread:${lead0}`,
+        `run:${lead0}:${inputs[1]}`,
+        `thread:${lead0}`,
+      ]);
+      await assertTeamReplays(await logOf(store), first.team.ref.id);
+    },
+  );
 });

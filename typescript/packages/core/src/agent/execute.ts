@@ -153,8 +153,19 @@ export async function execute<Deps, Output>(
       def.decode,
     );
   } finally {
+    await stopAll(team, stop);
+  }
+}
+
+/** Stops the team worker, where a member run's bug surfaces, then releases the lease whatever. */
+async function stopAll(
+  team: { readonly stop: () => Promise<void> } | undefined,
+  release: () => Promise<void>,
+): Promise<void> {
+  try {
     await team?.stop();
-    await stop();
+  } finally {
+    await release();
   }
 }
 

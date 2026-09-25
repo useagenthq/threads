@@ -30,9 +30,24 @@ def team_rows(conn: Conn, a: Appended) -> ParseError | None:
     opens = any(isinstance(e, ThreadStartedEvent | TeamOpenedEvent) for e in a.events)
     if not opens and not _teams_of(conn, a):
         return None
+    taken = _taken_team(conn, a)
+    if taken is not None:
+        message = f"team {taken} already exists; a lead's first append opens it"
+        return ParseError("invalid_transition", message)
     log = TeamLog(a.thread_id, a.branch_id)
     insert_rows(conn, log, a.events)
     change_rows(conn, log, a.events, a.opened)
+    return None
+
+
+def _taken_team(conn: Conn, a: Appended) -> str | None:
+    """A team a lead's thread_started names that the store already holds: a second root for it."""
+    for e in a.events:
+        if not isinstance(e, ThreadStartedEvent) or e.data.team is MISSING:
+            continue
+        found = conn.execute("SELECT 1 FROM teams WHERE team_id = ?", (e.data.team.id,)).fetchone()
+        if found is not None:
+            return e.data.team.id
     return None
 
 

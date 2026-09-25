@@ -14,7 +14,9 @@ import { READ_ONLY, type Tx } from "../store/driver";
 import { uuidv7 } from "../store/encode";
 import { type LogError, logError } from "../verify/error";
 import { Batch, MINT, type Mint } from "./batch";
+import { startCancelled } from "./cancel-start";
 import type { DynamicChoice } from "./dynamic";
+import type { RebindCode } from "./rebind";
 import {
   type MemberRow,
   mailEnvelope,
@@ -38,15 +40,18 @@ export type Rebind =
       /** A nested lead's own team, which its first append opens. */
       readonly team?: z.input<typeof TeamSettings>;
     }
-  | { readonly status: "pin_unavailable" | "pin_mismatch" };
+  | { readonly status: RebindCode };
 
 export type Materialized =
   | { readonly status: "materialized"; readonly writer: Writer }
   | { readonly status: "not_starting" }
-  | {
-      readonly status: "rebind_failed";
-      readonly code: "pin_unavailable" | "pin_mismatch";
-    };
+  | { readonly status: "cancelled" }
+  | { readonly status: "rebind_failed"; readonly code: RebindCode };
+
+/** How the branch opens: a rebind's outcome, or a pending cancel that ends it without one. */
+type Opening =
+  | Rebind
+  | { readonly status: "cancelled"; readonly cancel: MailEnvelope };
 
 export type MaterializeOptions = {
   readonly artifacts: ArtifactStore;
@@ -96,11 +101,23 @@ export async function materialize(
   if (!found.ok) return found;
   if (found.value === undefined) return ok({ status: "not_starting" });
   const { started, task } = found.value;
-  const rebind = await o.rebind(
-    started.data.agent,
-    started.data.config_hash,
-    choiceOf(started, task),
+  const text = await taskText(task, o.artifacts);
+  if (!text.ok) return text;
+  // A pending cancel ends the member without a rebind, so a setup that can't succeed never
+  // stands in its way.
+  const pending = await store.driver.transaction(
+    (tx) => pendingTo(tx, team, name),
+    READ_ONLY,
   );
+  const cancel = pending.find((m) => m.kind === "cancel");
+  const rebind: Opening =
+    cancel !== undefined
+      ? { status: "cancelled", cancel }
+      : await o.rebind(
+          started.data.agent,
+          started.data.config_hash,
+          choiceOf(started, task),
+        );
   const config = await o.artifacts.get(started.data.config_hash);
   if (!config.ok) return config;
   const pinned = Pinned.parse(
@@ -115,14 +132,10 @@ export async function materialize(
     )
       return ok(undefined);
     const batch = new Batch(0, now, o.mint ?? MINT);
-    await firstEvents(
-      tx,
-      batch,
-      { ...found.value, row },
-      pinned,
-      rebind,
+    await firstEvents(tx, batch, { ...found.value, row }, pinned, rebind, {
       branchId,
-    );
+      text: text.value,
+    });
     return ok({
       threadId: started.data.thread_id,
       branchId,
@@ -137,9 +150,22 @@ export async function materialize(
   const writer = opened.value;
   if (writer === undefined || writer === "already_open")
     return ok({ status: "not_starting" });
-  return rebind.status === "ok"
-    ? ok({ status: "materialized", writer })
+  if (rebind.status === "ok") return ok({ status: "materialized", writer });
+  return rebind.status === "cancelled"
+    ? ok({ status: "cancelled" })
     : ok({ status: "rebind_failed", code: rebind.status });
+}
+
+/** A task's text: inline, or read from the artifact a body over the inline cap became. */
+async function taskText(
+  task: MailEnvelope,
+  artifacts: ArtifactStore,
+): Promise<Result<string, LogError>> {
+  const body = task.body;
+  if (body === undefined) throw new Error(`task ${task.mail_id} has no body`);
+  if ("text" in body) return ok(body.text);
+  const got = await artifacts.get(body.ref.sha256);
+  return got.ok ? ok(new TextDecoder().decode(got.value)) : got;
 }
 
 /**
@@ -152,13 +178,11 @@ async function firstEvents(
   batch: Batch,
   s: Starting,
   pinned: z.infer<typeof Pinned>,
-  rebind: Rebind,
-  branchId: string,
+  rebind: Opening,
+  at: { readonly branchId: string; readonly text: string },
 ): Promise<void> {
   const { started, task } = s;
-  // start writes a task's body inline.
-  const text = task.body?.text;
-  if (text === undefined) throw new Error(`task ${task.mail_id} has no text`);
+  const { branchId, text } = at;
   const nested = rebind.status === "ok" ? rebind.team : undefined;
   batch.add({
     type: "thread_started",
@@ -184,6 +208,11 @@ async function firstEvents(
     },
   });
   if (rebind.status === "ok") return;
+  const ctx = { tx, batch, threadId: started.data.thread_id, branchId };
+  if (rebind.status === "cancelled") {
+    await startCancelled(ctx, task, rebind.cancel);
+    return;
+  }
   const code = rebind.status;
   batch.add({
     type: "turn_completed",
@@ -194,10 +223,7 @@ async function firstEvents(
   });
   await settle(
     {
-      tx,
-      batch,
-      threadId: started.data.thread_id,
-      branchId,
+      ...ctx,
       provenance: task.provenance,
       put: async () => {
         throw new Error("a failed rebind's result has no text");

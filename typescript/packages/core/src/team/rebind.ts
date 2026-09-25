@@ -14,7 +14,7 @@ import { type AppendContext, settle } from "./settle";
 // effect never began or was settled not done), an open turn closes {error, code}, and the
 // member ends failed as any end does.
 
-export type RebindCode = "pin_unavailable" | "pin_mismatch";
+export type RebindCode = "pin_unavailable" | "pin_mismatch" | "setup_failed";
 
 type Ctx = AppendContext & { readonly chain: Chain };
 

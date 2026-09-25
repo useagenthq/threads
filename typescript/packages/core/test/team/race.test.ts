@@ -237,4 +237,45 @@ describe("two-process races", () => {
     }
     expect(seen.size).toBe(2);
   }, 600_000);
+
+  test(`cancel versus the member's end: refused member_ended, or sent and refused by the end (${SCHEDULES} schedules)`, async () => {
+    const world = vector("cancel-requested");
+    const ended = {
+      reason: "error",
+      result: {
+        status: "failed",
+        error: { code: "model_error", message: "stopped" },
+      },
+    };
+    const seen = new Set<string>();
+    for (let n = 0; n < SCHEDULES; n += 1) {
+      const { fx, logs } = await schedule(
+        n,
+        world,
+        { label: "lead", op: world, now: world.now },
+        {
+          label: "researcher",
+          op: { ...world, op: "end", input: ended },
+          now: world.now,
+        },
+      );
+      const lead = logs.get("lead") ?? [];
+      const cancels = sent(lead, "cancel");
+      const refused = lead.some(
+        (e) =>
+          e.type === "tool_result" &&
+          e.data.preview.includes('"code":"member_ended"'),
+      );
+      const bounced = (logs.get("researcher") ?? []).some(
+        (e) =>
+          e.type === "mail_refused" && e.data.mail_id === cancels[0]?.mail_id,
+      );
+      // The cancel was sent iff the member was not ended yet, and then its end refuses it.
+      expect(cancels.length === 1).toBe(!refused);
+      expect(bounced).toBe(!refused);
+      seen.add(refused ? "refused" : "sent");
+      if (n % 50 === 0) await assertTeamReplays(fx.store, TEAM);
+    }
+    expect(seen.size).toBe(2);
+  }, 600_000);
 });

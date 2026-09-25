@@ -4,7 +4,7 @@ runs."""
 
 from dataclasses import replace
 
-from threads.agents.config import ConfigError
+from threads.agents.config import UnboundError
 from threads.agents.definition import Definition, Dynamic
 from threads.log import MemberDefine
 from threads.team.dynamic import KEPT
@@ -37,7 +37,7 @@ def member_definition[D](
     model = dict(template.models).get(define.model)
     if model is None:
         why = f"dynamic agent {template.name} has no model {define.model}"
-        raise ConfigError("invalid_config", why)
+        raise UnboundError("invalid_config", why)
     return replace(
         template,
         model=model,

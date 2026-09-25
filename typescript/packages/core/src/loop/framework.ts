@@ -9,6 +9,7 @@ import { spawnAgent } from "./agents/spawn";
 import { teamTool } from "./agents/team";
 import {
   askTool,
+  cancelTool,
   monitorTool,
   replyTool,
   sendTool,
@@ -48,6 +49,7 @@ const HANDLERS: Readonly<Record<LoopTool, Handler>> = {
   reply: replyTool,
   wait: waitTool,
   monitor: monitorTool,
+  cancel: cancelTool,
 };
 
 /**

@@ -11,15 +11,18 @@ import type { WorkerEnv } from "./worker";
 // ended member refusing the mail that still reaches it. Each takes the member's lease, appends
 // once and hands the lease back; a lease held elsewhere means its holder does it.
 
-/** A member whose definition can't be rebound here ends failed, under its own writer. */
+/**
+ * A member whose definition can't be rebound here ends failed, under its own writer. False: its
+ * lease is held elsewhere, and its holder does it.
+ */
 export async function endUnbound(
   env: WorkerEnv,
   branch: string,
   holder: string,
   code: RebindCode,
-): Promise<void> {
+): Promise<boolean> {
   const writer = await env.log.acquire(BranchId.parse(branch), holder);
-  if (!writer.ok) return;
+  if (!writer.ok) return false;
   const w = writer.value;
   const header = w.chain.segments[0]?.header;
   if (header === undefined) throw new Error("a writer's chain has a header");
@@ -41,18 +44,19 @@ export async function endUnbound(
   await w.release();
   if (isRefusal(ended)) throw new Error("a failed rebind never refuses");
   if (!ended.ok) throw new Error(`member end: ${ended.error.message}`);
+  return true;
 }
 
-/** An ended member's writer refuses the mail that still reaches it. */
+/** An ended member's writer refuses the mail that still reaches it. False: its lease is held. */
 export async function refuseEnded(
   env: WorkerEnv,
   branch: string,
-): Promise<void> {
+): Promise<boolean> {
   const writer = await env.log.acquire(
     BranchId.parse(branch),
     `team-${crypto.randomUUID()}`,
   );
-  if (!writer.ok) return;
+  if (!writer.ok) return false;
   const w = writer.value;
   const header = w.chain.segments[0]?.header;
   if (header === undefined) throw new Error("a writer's chain has a header");
@@ -69,4 +73,5 @@ export async function refuseEnded(
     return ok(batch.drafts);
   });
   await w.release();
+  return true;
 }

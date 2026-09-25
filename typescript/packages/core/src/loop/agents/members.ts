@@ -7,6 +7,8 @@ import { readerOf } from "../../team/close";
 import { TEAM_CONSTANTS } from "../../team/constants";
 import { type ConsumeContext, consume } from "../../team/consume";
 import { deadline, dueIds } from "../../team/deadline";
+import { turnProvenance } from "../../team/provenance";
+import { settle } from "../../team/settle";
 import type { LoopEnd } from "../run";
 import type { Session } from "../session";
 import { BARRED, type Halt, type TeamRuntime } from "../types";
@@ -41,10 +43,12 @@ export async function teamTurns(
   const team = teamOf(s);
   let end = first;
   while (end.kind === "idle" || (end.kind === "parked" && onTeam(s.fold))) {
-    // Taken before the checks, so progress made after them still wakes the wait.
+    // Taken before the checks, so progress made after them still wakes the wait. A worker bug
+    // rejects it: the wait below rethrows it, and a progress never waited on is dropped quietly.
     const progress = team.progress?.();
+    progress?.catch(() => undefined);
     const moved = s.moved();
-    const halted = await teamStep(s);
+    const halted = (await teamStep(s)) ?? (await endCancelled(s));
     if (halted !== undefined) return { kind: "halted", halt: halted };
     if (s.fold.turnOpen && loopParked(s.fold).length === 0) end = await turn();
     else if (progress === undefined || !waits(s, team)) return idleOrParked(s);
@@ -85,6 +89,32 @@ async function teamStep(s: Session): Promise<Halt | undefined> {
         await deadline(ctx, id);
     })
   );
+}
+
+/**
+ * A member whose tree cancel was applied while no turn was open ends cancelled (the barrier
+ * rules): member_ended{cancelled}, with its notifications and refusals, in one append. An open
+ * turn ends through the loop's cancellation step instead.
+ */
+async function endCancelled(s: Session): Promise<Halt | undefined> {
+  const { team } = s.fold;
+  if (!team.stopped || team.ended || s.fold.turnOpen) return undefined;
+  return decided(s, async (ctx) => {
+    const provenance = await turnProvenance(ctx.tx, ctx.chain);
+    if (provenance === undefined)
+      throw new Error("a member's task opened a turn");
+    const put = (text: string) => s.store(text, "text/plain");
+    await settle({ ...ctx, provenance, put }, { status: "cancelled" });
+  });
+}
+
+/**
+ * At a step boundary, a live holder applies a cancel that reached it (design §4.14): the consume
+ * takes it as control mail and leaves the barrier, so nothing new starts. Undefined: none pending.
+ */
+export async function takeCancels(s: Session): Promise<Halt | undefined> {
+  const pending = await s.config.team?.cancelPending?.();
+  return pending === true ? consumeMail(s) : undefined;
 }
 
 /** mail.consume under this writer: a receipt that opens a turn leaves the loop a turn to run. */

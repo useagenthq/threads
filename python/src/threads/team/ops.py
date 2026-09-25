@@ -80,7 +80,7 @@ def start(req: Request, agent: str, task: str, plan: StartPlan) -> dict[str, Jso
         "to": {"name": member["name"], "generation": 1},
         "provenance": req.provenance,
         "causal": req.causal,
-        "body": {"text": task},
+        "body": body_of(task, req.put),
     }
     req.batch.add(sent(task_mail))
     return req.done({"member": member, "status": "started"})

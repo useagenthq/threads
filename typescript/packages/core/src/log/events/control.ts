@@ -146,6 +146,7 @@ const TURN_ERROR_CODES = [
   "secret_in_provider_output",
   "pin_unavailable",
   "pin_mismatch",
+  "setup_failed",
 ] as const;
 const TURN_COMPLETED_DATA_RULE = {
   if: { required: ["code"] },
@@ -163,7 +164,7 @@ export const TurnCompletedData: Ruled<
     code: z
       .enum(TURN_ERROR_CODES)
       .describe(
-        "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried); or the response held a registered secret in provider material that is replayed byte-exact and so can't be redacted (secret_in_provider_output: nothing of it is stored, never retried); or a team member's rebind failed before its first model request: its definition, a tool or a model is not registered here (pin_unavailable), or the rebuilt config_hash differs (pin_mismatch).",
+        "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried); or the response held a registered secret in provider material that is replayed byte-exact and so can't be redacted (secret_in_provider_output: nothing of it is stored, never retried); or a team member's rebind failed before its first model request: its definition, a tool or a model is not registered here (pin_unavailable), the rebuilt config_hash differs (pin_mismatch), or setting it up kept failing (setup_failed).",
       )
       .optional(),
   }),

@@ -1,6 +1,7 @@
 import { assertNever } from "../assert-never";
 import { type EventOf, loopPending } from "../fold/state";
 import { settleBackground } from "./agents/background";
+import { takeCancels } from "./agents/members";
 import { parkOn } from "./agents/park";
 import { finish as record, runChild, spawnedFor } from "./agents/spawn";
 import { closeUnrecorded } from "./calls";
@@ -23,7 +24,7 @@ export type LoopEnd =
 
 export async function runLoop(s: Session): Promise<LoopEnd> {
   for (;;) {
-    const settled = await settleBackground(s);
+    const settled = (await settleBackground(s)) ?? (await takeCancels(s));
     if (settled !== undefined) return { kind: "halted", halt: settled };
     const seq = s.fold.seq;
     const step = nextStep(s.events, s.fold);

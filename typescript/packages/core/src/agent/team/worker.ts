@@ -1,22 +1,16 @@
 import { BranchId, type MailEnvelope, type TeamId } from "../../log";
 import { knownEvents } from "../../reduce";
-import { LEASE_TTL_MS, type LogStore } from "../../store";
+import type { LogStore } from "../../store";
 import type { ArtifactStore } from "../../store/artifacts";
 import { reading, type StoreDriver } from "../../store/driver";
-import { uuidv7 } from "../../store/encode";
-import { getLease } from "../../store/tables";
 import type { Mint } from "../../team/batch";
 import { claimMail } from "../../team/claim";
 import { TEAM_CONSTANTS } from "../../team/constants";
-import { consumable, mayResume } from "../../team/consume";
-import { nextDeadline } from "../../team/deadline";
+import { mayResume } from "../../team/consume";
 import type { DynamicChoice } from "../../team/dynamic";
+import { type Rebind, recordedChoice } from "../../team/materialize";
 import {
-  materialize,
-  type Rebind,
-  recordedChoice,
-} from "../../team/materialize";
-import {
+  cancelPendingFor,
   type MemberRow,
   memberRows,
   ownRows,
@@ -27,7 +21,14 @@ import { memberEntry } from "../registry";
 import type { Store } from "../sqlite";
 import { ancestorsOf } from "./budgets";
 import { takeTeamLogMail } from "./log-mail";
-import { closed, pinnedOrUnavailable, principalOf, teamsUnder } from "./scan";
+import {
+  closed,
+  deadlineDue,
+  leaseFree,
+  principalOf,
+  teamsUnder,
+} from "./scan";
+import { materializeOrLater, rebindMember } from "./setup";
 import { endUnbound, refuseEnded } from "./units";
 
 // The in-process team worker (spec/schema/README.md, "Teams"; decision 17): while a lead's run
@@ -35,6 +36,11 @@ import { endUnbound, refuseEnded } from "./units";
 // runs each member whose mail is pending, refuses mail that reaches an ended member, and resumes
 // a member whose turn was left open with its lease free (hostless recovery). The lead consumes
 // its own mail in its run. One member branch runs at a time; members run concurrently.
+//
+// A cancel for a member in flight aborts its model call at once (design §4.14): the worker owns
+// that run's abort signal, and the member applies the cancel at its next step boundary. A member
+// whose setup failed for now (an MCP connect, an adapter's setup) is left as it is and tried again
+// with backoff, never ended.
 
 export type WorkerEnv = {
   readonly store: Store;
@@ -49,12 +55,26 @@ export type WorkerEnv = {
   readonly claimTtlMs?: number;
   /** The lead's resolved defer_tools, which its members inherit unless they set their own. */
   readonly deferTools?: DeferTools;
+  /** How many setup failures in a row end a member setup_failed; tests inject fewer. */
+  readonly setupAttempts?: number;
 };
+
+/** The first and the longest wait before a member whose unit did nothing is tried again. */
+const BACKOFF = { firstMs: 250, maxMs: TEAM_CONSTANTS.claimTtlMs } as const;
+
+type Unit = (signal: AbortSignal) => Promise<boolean>;
 
 export class TeamWorker {
   readonly #env: WorkerEnv;
-  /** Member runs in flight, by member thread. */
-  readonly #running = new Map<string, Promise<void>>();
+  /** Member runs in flight, by member thread, with the abort each one's signal follows. */
+  readonly #running = new Map<
+    string,
+    { readonly done: Promise<void>; readonly abort: AbortController }
+  >();
+  /** How many times in a row each member's setup has failed for now. */
+  readonly #setups = new Map<string, number>();
+  /** Members whose last unit did nothing: not before `at`, then twice the wait. */
+  readonly #backoff = new Map<string, { at: number; waitMs: number }>();
   #changed = Promise.withResolvers<void>();
   #failure: { readonly error: unknown } | undefined;
   #stopped = false;
@@ -97,15 +117,19 @@ export class TeamWorker {
   }
 
   /**
-   * Stops looking for work and waits for the member runs in flight, unless the lead closed its
-   * team: those members are being cancelled, and the run returns without them.
+   * Stops looking for work and waits for the member runs in flight, then throws a member run's
+   * bug if there was one. When the lead closed its team those runs are aborted first: each
+   * applies its cancel at its next step and ends.
    */
   async stop(): Promise<void> {
     this.#stopped = true;
     this.notify();
     await this.#loop;
-    if (!(await closed(this.#env.log.driver, this.#env.team)))
-      await Promise.allSettled(this.#running.values());
+    if (await closed(this.#env.log.driver, this.#env.team))
+      for (const run of this.#running.values()) run.abort.abort();
+    await Promise.allSettled([...this.#running.values()].map((r) => r.done));
+    // A member run's bug is never lost, whatever the lead's run was waiting on when it ended.
+    if (this.#failure !== undefined) throw this.#failure.error;
   }
 
   async #run(): Promise<void> {
@@ -133,6 +157,7 @@ export class TeamWorker {
 
   async #pass(recovering: boolean): Promise<void> {
     const db = this.#env.log.driver;
+    const now = this.#env.log.now();
     for (const team of await teamsUnder(db, this.#env.team)) {
       await takeTeamLogMail(
         this.#env.log,
@@ -140,12 +165,31 @@ export class TeamWorker {
         team,
         this.#env.mint,
       );
-      for (const row of await reading(db, (tx) => memberRows(tx, team))) {
-        if (row.role !== "member" || this.#running.has(row.thread_id)) continue;
-        const work = await this.#work(db, row, recovering);
-        if (work !== undefined) this.#launch(row.thread_id, work);
-      }
+      for (const row of await reading(db, (tx) => memberRows(tx, team)))
+        if (row.role === "member") await this.#visit(db, row, recovering, now);
     }
+  }
+
+  async #visit(
+    db: StoreDriver,
+    row: MemberRow,
+    recovering: boolean,
+    now: number,
+  ): Promise<void> {
+    const cancelled = await reading(db, (tx) =>
+      cancelPendingFor(tx, row.thread_id),
+    );
+    const running = this.#running.get(row.thread_id);
+    if (running !== undefined) {
+      // A cancel reached a member in flight: stop its model call now.
+      if (cancelled) running.abort.abort();
+      return;
+    }
+    // A pending cancel is applied at once, backoff or not: it never needs the member's setup.
+    const waiting = (this.#backoff.get(row.thread_id)?.at ?? 0) > now;
+    if (waiting && !cancelled) return;
+    const work = await this.#work(db, row, recovering, cancelled);
+    if (work !== undefined) this.#launch(row.thread_id, work);
   }
 
   /** What a member needs now, if anything. */
@@ -153,40 +197,42 @@ export class TeamWorker {
     db: StoreDriver,
     row: MemberRow,
     recovering: boolean,
-  ): Promise<(() => Promise<void>) | undefined> {
-    // A closed team's members are being cancelled: none starts or resumes.
-    if (row.state !== "ended" && (await closed(db, row.team_id)))
+    cancelled: boolean,
+  ): Promise<Unit | undefined> {
+    // A closed team's members start or resume only to apply the lead's cancel.
+    if (row.state !== "ended" && (await closed(db, row.team_id)) && !cancelled)
       return undefined;
-    if (row.state === "starting") return () => this.#materialize(row);
+    if (row.state === "starting")
+      return (signal) => this.#materialize(row, signal);
     const branch = row.branch_id;
     if (branch === null) return undefined;
     const pending = await reading(db, async (tx) =>
       pendingFor(tx, await ownRows(tx, row.thread_id)),
     );
+    const run: Unit = (signal) => this.#member(row, branch, signal);
     // A parked member runs again at a run's start (what it waits on may be answered by now), for
     // mail that may resume it, and once an ask or a wait it parked on is due. Waking on a due
     // deadline or on mail to refuse waits for a free lease: its holder does that work, and a
     // launch that can't acquire would relaunch at once, never yielding.
     if (row.state === "parked") {
       const wake = recovering || (await this.#wakesParked(db, branch, pending));
-      return wake ? () => this.#member(row, branch) : undefined;
+      return wake ? run : undefined;
     }
-    if (row.state === "ended") return this.#refusing(db, branch, pending);
+    if (row.state === "ended") return this.#refusing(branch, pending);
     // A turn left open with its lease free is resumed (hostless recovery).
     const stranded =
-      row.state === "running" && (recovering || (await this.#free(db, branch)));
-    const woken = await this.#claim(db, pending.filter(consumable));
-    return woken || stranded ? () => this.#member(row, branch) : undefined;
+      row.state === "running" &&
+      (recovering || (await leaseFree(this.#env.log, branch)));
+    return (await this.#claim(db, pending)) || stranded ? run : undefined;
   }
 
   /** An ended member's pending mail is refused, once its lease is free. */
   async #refusing(
-    db: StoreDriver,
     branch: BranchId,
     pending: readonly MailEnvelope[],
-  ): Promise<(() => Promise<void>) | undefined> {
-    return pending.length > 0 && (await this.#free(db, branch))
-      ? async () => refuseEnded(this.#env, branch)
+  ): Promise<Unit | undefined> {
+    return pending.length > 0 && (await leaseFree(this.#env.log, branch))
+      ? () => refuseEnded(this.#env, branch)
       : undefined;
   }
 
@@ -198,7 +244,8 @@ export class TeamWorker {
   ): Promise<boolean> {
     return (
       (await this.#claim(db, pending.filter(mayResume))) ||
-      ((await this.#free(db, branch)) && (await this.#due(db, branch)))
+      ((await leaseFree(this.#env.log, branch)) &&
+        (await deadlineDue(this.#env.log, branch)))
     );
   }
 
@@ -220,92 +267,69 @@ export class TeamWorker {
   }
 
   /**
-   * An ask or a wait the parked member waits on is due: its writer closes it.
-   * ponytail: reads the member's log each pass; keep its next deadline per head if parked members
-   * grow many.
+   * Runs one unit for a member. One that did nothing (its lease held elsewhere, its setup failed
+   * for now) backs off, so a pass never relaunches it at once; one that did something wakes the
+   * next pass.
    */
-  async #due(db: StoreDriver, branch: BranchId): Promise<boolean> {
-    const read = await this.#env.log.read(branch);
-    if (!read.ok) return false;
-    const chain = read.value;
-    const next = await reading(db, (tx) =>
-      nextDeadline({ tx, chain, branchId: branch }),
-    );
-    return next !== undefined && next <= this.#env.log.now();
-  }
-
-  async #free(db: StoreDriver, branch: string): Promise<boolean> {
-    const lease = await reading(db, (tx) => getLease(tx, branch));
-    return lease.ok && (lease.value?.expires_at ?? 0) <= this.#env.log.now();
-  }
-
-  #launch(thread: string, work: () => Promise<void>): void {
-    const running = (async () => {
+  #launch(thread: string, unit: Unit): void {
+    const abort = new AbortController();
+    const done = (async () => {
       try {
-        await work();
+        if (await unit(abort.signal)) {
+          this.#backoff.delete(thread);
+          this.notify();
+        } else this.#later(thread);
       } catch (error) {
         this.#failure ??= { error };
+        this.notify();
       } finally {
         this.#running.delete(thread);
-        this.notify();
       }
     })();
-    this.#running.set(thread, running);
+    this.#running.set(thread, { done, abort });
   }
 
-  async #materialize(row: MemberRow): Promise<void> {
+  #later(thread: string): void {
+    const last = this.#backoff.get(thread)?.waitMs ?? 0;
+    const waitMs = Math.min(Math.max(last * 2, BACKOFF.firstMs), BACKOFF.maxMs);
+    this.#backoff.set(thread, { at: this.#env.log.now() + waitMs, waitMs });
+  }
+
+  async #materialize(row: MemberRow, signal: AbortSignal): Promise<boolean> {
     const holder = `team-${crypto.randomUUID()}`;
-    const got = await materialize(this.#env.log, row.team_id, row.name, {
-      artifacts: this.#env.artifacts,
-      rebind: (agent, configHash, choice) =>
-        this.#rebind(agent, configHash, choice),
-      holder,
-      ttlMs: LEASE_TTL_MS,
-      ...(this.#env.mint === undefined ? {} : { mint: this.#env.mint }),
-    });
+    const got = await materializeOrLater(this.#env, row, holder, (...pin) =>
+      this.#rebind(row.thread_id, ...pin),
+    );
+    if (got === "later") return false;
     if (!got.ok)
       throw new Error(`materialize ${row.name}: ${got.error.message}`);
     this.notify();
-    if (got.value.status !== "materialized") return;
+    if (got.value.status !== "materialized") return true;
     const branch = got.value.writer.lease.branchId;
-    await this.#member(row, branch, holder);
+    return this.#member(row, branch, signal, holder);
   }
 
-  /**
-   * Rebinds a member's definition by name in this process (design §4.10, prework); a dynamic
-   * member's with its recorded choice, never re-resolved.
-   */
-  async #rebind(
+  /** The member's definition rebound here (setup.ts), its setup failures counted. */
+  #rebind(
+    thread: string,
     agent: string,
     configHash: string,
     choice: DynamicChoice | undefined,
-  ): Promise<Rebind> {
-    const handle = this.#env.agents.get(agent);
-    const entry = handle === undefined ? undefined : memberEntry(handle);
-    if (entry === undefined) return { status: "pin_unavailable" };
-    const pinned = await pinnedOrUnavailable(() =>
-      entry.pinned(this.#env.deferTools, choice),
-    );
-    if (pinned === undefined) return { status: "pin_unavailable" };
-    if (pinned.configHash !== configHash) return { status: "pin_mismatch" };
-    if (entry.team === undefined) return { status: "ok" };
-    const now = this.#env.log.now();
-    return {
-      status: "ok",
-      team: {
-        id: uuidv7(now),
-        log_thread_id: uuidv7(now),
-        log_branch_id: uuidv7(now),
-      },
-    };
+  ): Promise<Rebind | "later"> {
+    return rebindMember(this.#env, this.#setups, thread, {
+      agent,
+      configHash,
+      choice,
+    });
   }
 
   /** Runs a member branch until it is idle, parked or ended. */
   async #member(
     row: MemberRow,
     branch: string,
+    signal: AbortSignal,
     holder = `team-${crypto.randomUUID()}`,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const read = await this.#env.log.read(BranchId.parse(branch));
     if (!read.ok) throw new Error(`member ${row.name}: ${read.error.message}`);
     const events = knownEvents(read.value);
@@ -319,10 +343,12 @@ export class TeamWorker {
     const entry = handle === undefined ? undefined : memberEntry(handle);
     const choice = await recordedChoice(this.#env.log, row, task.data.mail_id);
     const rebind = await this.#rebind(
+      row.thread_id,
       row.agent,
       started?.data.config_hash ?? "",
       choice,
     );
+    if (rebind === "later") return false;
     if (entry === undefined || rebind.status !== "ok")
       return endUnbound(
         this.#env,
@@ -330,6 +356,7 @@ export class TeamWorker {
         holder,
         rebind.status === "ok" ? "pin_unavailable" : rebind.status,
       );
+    const user = this.#env.signal;
     await entry.run({
       store: this.#env.store,
       thread: {
@@ -344,11 +371,12 @@ export class TeamWorker {
       holder,
       notify: this.notify,
       covering: await ancestorsOf(this.#env.log, parent),
-      ...(this.#env.signal === undefined ? {} : { signal: this.#env.signal }),
+      signal: user === undefined ? signal : AbortSignal.any([user, signal]),
       ...(choice === undefined ? {} : { dynamic: choice }),
       ...(this.#env.deferTools === undefined
         ? {}
         : { deferTools: this.#env.deferTools }),
     });
+    return true;
   }
 }

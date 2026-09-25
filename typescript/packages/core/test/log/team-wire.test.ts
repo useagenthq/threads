@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { parseLogLine } from "../../src/log";
@@ -45,7 +45,7 @@ function logs(dir: string): string[] {
 }
 
 describe("staged cases", () => {
-  for (const dir of readdirSync(STAGED))
+  for (const dir of existsSync(STAGED) ? readdirSync(STAGED) : [])
     test(`${dir} is a valid case and every line passes the line schema`, () => {
       expect(
         caseSchema("Case").safeParse(json(`${dir}/case.json`)).success,

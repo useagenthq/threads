@@ -28,14 +28,15 @@
       "description": "The Teams constants (spec/schema/README.md, Teams, Constants). Both runtimes pin them as named constants and let tests inject others.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["inline_cap_bytes", "busy_bound_ms", "claim_ttl_ms", "ask_wait_default_ms", "wake_poll_in_process_ms", "wake_poll_cross_process_ms"],
+      "required": ["inline_cap_bytes", "busy_bound_ms", "claim_ttl_ms", "ask_wait_default_ms", "wake_poll_in_process_ms", "wake_poll_cross_process_ms", "setup_attempts"],
       "properties": {
         "inline_cap_bytes": { "const": 16384 },
         "busy_bound_ms": { "const": 5000 },
         "claim_ttl_ms": { "const": 30000 },
         "ask_wait_default_ms": { "const": 120000 },
         "wake_poll_in_process_ms": { "const": 250 },
-        "wake_poll_cross_process_ms": { "const": 1000 }
+        "wake_poll_cross_process_ms": { "const": 1000 },
+        "setup_attempts": { "const": 5 }
       }
     },
     "World": {
@@ -122,7 +123,7 @@
           "additionalProperties": false,
           "required": ["outcome", "appended", "rows"],
           "properties": {
-            "outcome": { "description": "The op's result: the tool's or Team method's result, or consumed / refused (an ended recipient's mail) / nothing_pending, materialized / not_starting / rebind_failed, waiting, open, not_due, idle, ended.", "type": "object", "required": ["status"] },
+            "outcome": { "description": "The op's result: the tool's or Team method's result, or consumed / refused (an ended recipient's mail) / nothing_pending, materialized / not_starting / cancelled / rebind_failed, waiting, open, not_due, idle, ended.", "type": "object", "required": ["status"] },
             "appended": {
               "description": "Per log label, the types of the events the op appended, in order. A log with none is absent.",
               "type": "object",

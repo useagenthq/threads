@@ -54,7 +54,7 @@ TEAM_LOG = frozenset(
         "wait_finished",
     }
 )
-_ENDED = "an ended member's log opens a turn"
+_ENDED = "an ended or cancelled member's log opens a turn"
 
 
 def check(fold: Fold, event: Event) -> ParseError | None:
@@ -90,7 +90,8 @@ def _joins(fold: Fold, event: MessageReceivedEvent) -> str | None:
     joins = joins_turn(team.turn, mail_run(env)) or not mail_renders(env, team.settle)
     if fold.in_turn and not joins:
         return "mail of another request joins the open turn"
-    return _ENDED if fold.team.ended and mail_opens_turn(fold, env) else None
+    stopped = fold.team.ended or fold.team.stopped
+    return _ENDED if stopped and mail_opens_turn(fold, env) else None
 
 
 def _refused(fold: Fold, event: MailRefusedEvent) -> ParseError | None:
@@ -174,11 +175,11 @@ def _parked(fold: Fold, event: ParkedEvent) -> ParseError | None:
 
 def _input(fold: Fold, event: UserInputEvent) -> ParseError | None:
     """Rules 31, 37 and 41: a member's task is its first input and only it; an ended log opens
-    no turn."""
+    no turn, nor does a cancelled member's."""
     team, mail = fold.team, event.data.mail_id
     task = event.data.source == "team_task"
     why: str | None = None
-    if team.ended:
+    if team.ended or team.stopped:
         why = _ENDED
     elif mail is not MISSING and mail in team.mail_done:
         why = f"task {mail} is taken twice"
@@ -190,8 +191,8 @@ def _input(fold: Fold, event: UserInputEvent) -> ParseError | None:
 
 
 def _woken(fold: Fold, event: WokenEvent) -> ParseError | None:
-    """Rule 37: an ended log is never woken."""
-    return reject(event, _ENDED) if fold.team.ended else None
+    """Rule 37: an ended or cancelled member's log is never woken."""
+    return reject(event, _ENDED) if fold.team.ended or fold.team.stopped else None
 
 
 def _request(_fold: Fold, event: OperatorRequestEvent) -> ParseError | None:

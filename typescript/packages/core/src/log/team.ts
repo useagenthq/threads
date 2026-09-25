@@ -104,13 +104,14 @@ const MEMBER_ERROR_CODES = [
   "branch_not_runnable",
   "pin_unavailable",
   "pin_mismatch",
+  "setup_failed",
 ] as const;
 export const MemberErrorCode: EnumOf<typeof MEMBER_ERROR_CODES> = z
   .enum(MEMBER_ERROR_CODES)
   .meta({
     id: "MemberErrorCode",
     description:
-      "A failed member's code: the host API RunErrorCode, plus pin_unavailable and pin_mismatch for a failed rebind.",
+      "A failed member's code: the host API RunErrorCode, plus pin_unavailable and pin_mismatch for a failed rebind, and setup_failed for a member whose setup kept failing.",
   });
 
 type Result<S extends string, F extends z.core.$ZodLooseShape> = Strict<

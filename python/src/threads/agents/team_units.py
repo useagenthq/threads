@@ -20,12 +20,12 @@ from threads.team.settle import AppendContext
 
 async def end_unbound(
     sq: SqliteStore, mint: Mint | None, branch: BranchId, holder: str, code: RebindCode
-) -> None:
-    """A member whose definition can't be rebound here ends failed, under its own writer."""
+) -> bool:
+    """A member whose definition can't be rebound here ends failed, under its own writer. False:
+    its lease is held elsewhere, and its holder does it."""
     got = await sq.acquire(branch, holder, now_ms)
-    # Held elsewhere: its holder runs it.
     if isinstance(got, Err):
-        return
+        return False
     w = got.value
     thread = w.fold.thread_id
     if thread is None:
@@ -40,13 +40,15 @@ async def end_unbound(
     await w.release()
     if not isinstance(ended, Ok):
         raise AssertionError(f"member end: {ended}")
+    return True
 
 
-async def refuse_ended(sq: SqliteStore, mint: Mint | None, branch: BranchId) -> None:
-    """An ended member's writer refuses the mail that still reaches it."""
+async def refuse_ended(sq: SqliteStore, mint: Mint | None, branch: BranchId) -> bool:
+    """An ended member's writer refuses the mail that still reaches it. False: its lease is
+    held elsewhere."""
     got = await sq.acquire(branch, f"team-{uuid.uuid4().hex}", now_ms)
     if isinstance(got, Err):
-        return
+        return False
     w = got.value
     thread = w.fold.thread_id
     if thread is None:
@@ -59,3 +61,4 @@ async def refuse_ended(sq: SqliteStore, mint: Mint | None, branch: BranchId) -> 
 
     await w.append_decided(decide)
     await w.release()
+    return True

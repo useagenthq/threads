@@ -117,6 +117,37 @@ async def team_step(rt: Runtime) -> Halt | None:
     return stopped if stopped is not None else await _decided(rt, deadlines)
 
 
+async def take_cancels(rt: Runtime) -> Halt | None:
+    """At a step boundary, a live holder applies a cancel that reached it (design §4.14): the
+    consume takes it as control mail and leaves the barrier, so nothing new starts."""
+    team = rt.team
+    if team is None or team.cancel_pending is None or not await team.cancel_pending():
+        return None
+    return await _decided(rt, consume)
+
+
+async def _end_cancelled(rt: Runtime) -> Halt | None:
+    """A member whose tree cancel was applied while no turn was open ends cancelled (the barrier
+    rules): member_ended{cancelled}, with its notifications and refusals, in one append. An open
+    turn ends through the loop's cancellation step instead."""
+    fold = rt.fold
+    if not fold.team.stopped or fold.team.ended or fold.in_turn:
+        return None
+
+    def ended(ctx: ConsumeContext) -> None:
+        provenance = turn_provenance(ctx.conn, ctx.fold.events)
+        if provenance is None:
+            raise AssertionError("a member's task opened a turn")
+        at = SettleContext(ctx.conn, ctx.batch, ctx.thread_id, ctx.branch_id, provenance, _no_put)
+        settle(at, {"status": "cancelled"})
+
+    return await _decided(rt, ended)
+
+
+def _no_put(_text: str) -> JsonValue:
+    raise AssertionError("a cancelled end stores no text")
+
+
 _TEAM_PARKS = frozenset({"member", "ask", "wait"})
 """Parks that team mail or a deadline resolves: on a member, an ask or a wait."""
 
@@ -137,7 +168,7 @@ async def team_turns(rt: Runtime, halt: Halt, turn: Callable[[], Awaitable[Halt]
         waits = [] if team.progress is None else [team.progress(), rt.writer.moved()]
         tasks = [asyncio.ensure_future(w) for w in waits]
         try:
-            stopped = await team_step(rt)
+            stopped = await team_step(rt) or await _end_cancelled(rt)
             if stopped is not None:
                 return stopped
             if rt.fold.in_turn and not loop_parked(rt.fold):

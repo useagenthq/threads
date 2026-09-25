@@ -27,28 +27,9 @@ from threads.result import Err, Ok
 from threads.store import SqliteStore, Writer
 from threads.team.materialize import MaterializeOptions, Rebind, materialize
 
-CANCELS = frozenset(
-    {
-        "ask-deadline-cancel-pending",
-        "cancel-applied-running-member",
-        "cancel-applied-parked-asker",
-        "cancel-applied-asker-with-pending-reply",
-        "cancel-applied-waiter",
-        "cancel-applied-waiter-counts-committed-settlement-cancel-first",
-        "cancel-applied-waiter-counts-committed-settlement-settlement-first",
-        "cancel-stops-new-work",
-    }
-)
-"""Applying and requesting a cancel is lane 21E.2's."""
-OPERATOR_LATER = frozenset({"ask", "wait"})
-"""The operator's ask and wait wait for their Team methods (lane 21F follow-up)."""
-MINE = [
-    v
-    for v in vectors()
-    if v["op"] != "cancel"
-    and v["name"] not in CANCELS
-    and not (v["by"] == "team" and v["op"] in OPERATOR_LATER)
-]
+OPERATOR_LATER = frozenset({"ask", "wait", "cancel"})
+"""The operator's ask, wait and cancel wait for their Team methods (lane 21F follow-up)."""
+MINE = [v for v in vectors() if not (v["by"] == "team" and v["op"] in OPERATOR_LATER)]
 
 
 def _clock(v: Obj) -> Callable[[], int]:
@@ -67,7 +48,7 @@ async def _writer(store: SqliteStore, v: Obj) -> Writer:
 async def _materialize(store: SqliteStore, v: Obj) -> JsonValue:
     inp = obj(v["input"])
     status = inp["rebind"]
-    assert status in ("ok", "pin_unavailable", "pin_mismatch")
+    assert status in ("ok", "pin_unavailable", "pin_mismatch", "setup_failed")
 
     async def rebind(_started: MemberStartedEvent, _task: MailEnvelope) -> Rebind:
         return Rebind(status)
@@ -109,12 +90,12 @@ async def _appended(store: SqliteStore, v: Obj, heads: dict[str, int]) -> Obj:
 
 def test_the_selection_covers_this_builds_ops() -> None:
     assert {str(v["op"]) for v in MINE} == {
-        *("start", "send", "ask", "reply", "wait", "monitor"),
+        *("start", "send", "ask", "reply", "wait", "monitor", "cancel"),
         *("deadline", "consume"),
         *("materialize", "idle", "end"),
     }
     # Pinned: a vector that drops out of the selection fails here, not silently.
-    assert len(MINE) == 83  # noqa: PLR2004 - the pinned selection size
+    assert len(MINE) == 96  # noqa: PLR2004 - the pinned selection size
     assert sum(v["by"] == "team" for v in MINE) == 18  # noqa: PLR2004 - of them, the operator's
 
 

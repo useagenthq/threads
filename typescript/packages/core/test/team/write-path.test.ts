@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync } from "node:fs";
 import { CASE_NAMES, loadCase, plain } from "../conformance/cases";
 import { fixture } from "../store/helpers";
 import {
   assertTeamReplays,
   STAGED,
+  stagedNames,
   TENANT,
   teamIndexRows,
   teamsOf,
@@ -18,7 +18,7 @@ import { reappend } from "./writes";
 
 const recorded = [
   ...CASE_NAMES.map((name) => loadCase(name)),
-  ...readdirSync(STAGED).map((name) => loadCase(name, STAGED)),
+  ...stagedNames().map((name) => loadCase(name, STAGED)),
 ].filter(
   (c) =>
     c.kind === "team" && c.error === undefined && c.team.index !== undefined,

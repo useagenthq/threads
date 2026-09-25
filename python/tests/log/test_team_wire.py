@@ -48,7 +48,9 @@ def _logs(case: Path) -> list[Path]:
     return [single] if single.exists() else sorted((case / "logs").glob("*.jsonl"))
 
 
-@pytest.mark.parametrize("case", sorted(STAGED.iterdir()), ids=lambda p: p.name)
+@pytest.mark.parametrize(
+    "case", sorted(STAGED.iterdir()) if STAGED.exists() else [], ids=lambda p: p.name
+)
 def test_a_staged_case_is_valid_and_its_lines_pass_the_schema(case: Path) -> None:
     assert valid(json.loads((case / "case.json").read_text()), f"{CASE_ID}#/$defs/Case")
     assert valid(json.loads((case / "expected.json").read_text()), f"{CASE_ID}#/$defs/Expected")

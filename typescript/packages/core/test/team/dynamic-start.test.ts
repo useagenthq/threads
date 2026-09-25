@@ -80,6 +80,7 @@ describe("a lead defines a member of a dynamic agent", () => {
     const pinned = member[0];
     expect(toolNames(pinned)).toEqual([
       "ask",
+      "cancel",
       "monitor",
       "read_tool_result",
       "reply",

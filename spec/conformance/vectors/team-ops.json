@@ -6,7 +6,8 @@
     "claim_ttl_ms": 30000,
     "ask_wait_default_ms": 120000,
     "wake_poll_in_process_ms": 250,
-    "wake_poll_cross_process_ms": 1000
+    "wake_poll_cross_process_ms": 1000,
+    "setup_attempts": 5
   },
   "vectors": [
     {
@@ -5949,11 +5950,11 @@
       }
     },
     {
-      "name": "failed-rebind-with-queued-cancel-and-wait",
-      "section": "4.10, 4.11",
-      "description": "While researcher-1 was starting, the lead requested its cancel and writer-1 waits on it. The failed rebind fires the lead's task monitor and the writer's settle monitor (member_ended, monitor_id order), and returns the queued cancel with a bounce.",
+      "name": "materialize-cancel-pending-ends-cancelled",
+      "section": "4.10, 4.14",
+      "description": "While researcher-1 was starting, the lead requested its cancel and writer-1 waits on it. Materialize finds the cancel pending and never tries the rebind (here it would fail): one append opens the branch, takes the cancel, closes the task turn cancelled and ends the member cancelled, firing the lead's task monitor and the writer's settle monitor (member_ended, monitor_id order).",
       "given": {
-        "world": "failed-rebind-with-queued-cancel-and-wait"
+        "world": "materialize-cancel-pending-ends-cancelled"
       },
       "now": 1790000100000,
       "op": "materialize",
@@ -5966,18 +5967,18 @@
       },
       "expect": {
         "outcome": {
-          "status": "rebind_failed",
-          "code": "pin_unavailable"
+          "status": "cancelled"
         },
         "appended": {
           "researcher": [
             "thread_started",
             "user_input",
+            "message_received",
+            "cancel_requested",
+            "cancelled",
             "turn_completed",
             "member_ended",
             "message_sent",
-            "message_sent",
-            "mail_refused",
             "message_sent"
           ]
         },
@@ -6013,143 +6014,25 @@
                     "name": "researcher-1",
                     "generation": 1
                   },
-                  "status": "failed",
-                  "error": {
-                    "code": "pin_unavailable",
-                    "message": "rebind failed: pin_unavailable"
-                  }
+                  "status": "cancelled"
                 },
-                "updated_seq": 4
+                "updated_seq": 7
               }
             ]
           },
           "mail": {
             "insert": [
               {
-                "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000005",
-                "team_id": "0192c000-0000-7000-8000-000000000001",
-                "kind": "member_ended",
-                "to_name": "lead",
-                "to_generation": 1,
-                "principal_key": "api/acme/alice",
-                "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
-                "envelope": {
-                  "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000005",
-                  "kind": "member_ended",
-                  "team": "0192c000-0000-7000-8000-000000000001",
-                  "from": {
-                    "tenant": "acme",
-                    "team": "0192c000-0000-7000-8000-000000000001",
-                    "name": "researcher-1",
-                    "generation": 1
-                  },
-                  "to": {
-                    "name": "lead",
-                    "generation": 1
-                  },
-                  "provenance": {
-                    "principal": {
-                      "issuer": "api",
-                      "tenant": "acme",
-                      "subject": "alice"
-                    },
-                    "root_request": {
-                      "thread_id": "0192a000-0000-7000-8000-0000000000b1",
-                      "event_id": "0192e001-0000-7000-8000-000000000002"
-                    },
-                    "via": []
-                  },
-                  "causal": {
-                    "thread_id": "0192a000-0000-7000-8000-0000000000b2",
-                    "event_id": "0192e001-0000-7000-8000-000000000004"
-                  },
-                  "monitor_id": "0192b000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000008:task",
-                  "result": {
-                    "member": {
-                      "tenant": "acme",
-                      "team": "0192c000-0000-7000-8000-000000000001",
-                      "name": "researcher-1",
-                      "generation": 1
-                    },
-                    "status": "failed",
-                    "error": {
-                      "code": "pin_unavailable",
-                      "message": "rebind failed: pin_unavailable"
-                    }
-                  }
-                },
-                "created_at": 1790000100000,
-                "state": "pending",
-                "consumed_seq": null
-              },
-              {
-                "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000006",
-                "team_id": "0192c000-0000-7000-8000-000000000001",
-                "kind": "member_ended",
-                "to_name": "writer-1",
-                "to_generation": 1,
-                "principal_key": "api/acme/alice",
-                "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
-                "envelope": {
-                  "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000006",
-                  "kind": "member_ended",
-                  "team": "0192c000-0000-7000-8000-000000000001",
-                  "from": {
-                    "tenant": "acme",
-                    "team": "0192c000-0000-7000-8000-000000000001",
-                    "name": "researcher-1",
-                    "generation": 1
-                  },
-                  "to": {
-                    "name": "writer-1",
-                    "generation": 1
-                  },
-                  "provenance": {
-                    "principal": {
-                      "issuer": "api",
-                      "tenant": "acme",
-                      "subject": "alice"
-                    },
-                    "root_request": {
-                      "thread_id": "0192a000-0000-7000-8000-0000000000b1",
-                      "event_id": "0192e001-0000-7000-8000-000000000002"
-                    },
-                    "via": []
-                  },
-                  "causal": {
-                    "thread_id": "0192a000-0000-7000-8000-0000000000b2",
-                    "event_id": "0192e001-0000-7000-8000-000000000004"
-                  },
-                  "monitor_id": "0192b000-0000-7000-8000-0000000000b4:0192e001-0000-7000-8000-000000000008:researcher-1",
-                  "result": {
-                    "member": {
-                      "tenant": "acme",
-                      "team": "0192c000-0000-7000-8000-000000000001",
-                      "name": "researcher-1",
-                      "generation": 1
-                    },
-                    "status": "failed",
-                    "error": {
-                      "code": "pin_unavailable",
-                      "message": "rebind failed: pin_unavailable"
-                    }
-                  }
-                },
-                "created_at": 1790000100000,
-                "state": "pending",
-                "consumed_seq": null
-              },
-              {
                 "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000008",
                 "team_id": "0192c000-0000-7000-8000-000000000001",
-                "kind": "bounce",
+                "kind": "member_ended",
                 "to_name": "lead",
                 "to_generation": 1,
                 "principal_key": "api/acme/alice",
                 "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
                 "envelope": {
                   "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000008",
-                  "kind": "bounce",
+                  "kind": "member_ended",
                   "team": "0192c000-0000-7000-8000-000000000001",
                   "from": {
                     "tenant": "acme",
@@ -6177,7 +6060,69 @@
                     "thread_id": "0192a000-0000-7000-8000-0000000000b2",
                     "event_id": "0192e001-0000-7000-8000-000000000007"
                   },
-                  "code": "member_ended"
+                  "monitor_id": "0192b000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000008:task",
+                  "result": {
+                    "member": {
+                      "tenant": "acme",
+                      "team": "0192c000-0000-7000-8000-000000000001",
+                      "name": "researcher-1",
+                      "generation": 1
+                    },
+                    "status": "cancelled"
+                  }
+                },
+                "created_at": 1790000100000,
+                "state": "pending",
+                "consumed_seq": null
+              },
+              {
+                "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000009",
+                "team_id": "0192c000-0000-7000-8000-000000000001",
+                "kind": "member_ended",
+                "to_name": "writer-1",
+                "to_generation": 1,
+                "principal_key": "api/acme/alice",
+                "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+                "envelope": {
+                  "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000009",
+                  "kind": "member_ended",
+                  "team": "0192c000-0000-7000-8000-000000000001",
+                  "from": {
+                    "tenant": "acme",
+                    "team": "0192c000-0000-7000-8000-000000000001",
+                    "name": "researcher-1",
+                    "generation": 1
+                  },
+                  "to": {
+                    "name": "writer-1",
+                    "generation": 1
+                  },
+                  "provenance": {
+                    "principal": {
+                      "issuer": "api",
+                      "tenant": "acme",
+                      "subject": "alice"
+                    },
+                    "root_request": {
+                      "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+                      "event_id": "0192e001-0000-7000-8000-000000000002"
+                    },
+                    "via": []
+                  },
+                  "causal": {
+                    "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+                    "event_id": "0192e001-0000-7000-8000-000000000007"
+                  },
+                  "monitor_id": "0192b000-0000-7000-8000-0000000000b4:0192e001-0000-7000-8000-000000000008:researcher-1",
+                  "result": {
+                    "member": {
+                      "tenant": "acme",
+                      "team": "0192c000-0000-7000-8000-000000000001",
+                      "name": "researcher-1",
+                      "generation": 1
+                    },
+                    "status": "cancelled"
+                  }
                 },
                 "created_at": 1790000100000,
                 "state": "pending",
@@ -6271,8 +6216,8 @@
                   }
                 },
                 "created_at": 1790000024000,
-                "state": "returned",
-                "consumed_seq": 7
+                "state": "consumed",
+                "consumed_seq": 3
               }
             ]
           },
@@ -6283,6 +6228,197 @@
               },
               {
                 "monitor_id": "0192b000-0000-7000-8000-0000000000b4:0192e001-0000-7000-8000-000000000008:researcher-1"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "failed-rebind-setup-failed",
+      "section": "4.10",
+      "description": "researcher-1's setup failed Setup attempts times in a row (its MCP server stays down): the member ends as a failed rebind with code setup_failed.",
+      "given": {
+        "world": "materialize-opens-branch"
+      },
+      "now": 1790000100000,
+      "op": "materialize",
+      "by": "researcher",
+      "input": {
+        "member": "researcher-1",
+        "label": "researcher",
+        "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+        "rebind": "setup_failed"
+      },
+      "expect": {
+        "outcome": {
+          "status": "rebind_failed",
+          "code": "setup_failed"
+        },
+        "appended": {
+          "researcher": [
+            "thread_started",
+            "user_input",
+            "turn_completed",
+            "member_ended",
+            "message_sent"
+          ]
+        },
+        "rows": {
+          "team_members": {
+            "update": [
+              {
+                "team_id": "0192c000-0000-7000-8000-000000000001",
+                "name": "researcher-1",
+                "generation": 1,
+                "role": "member",
+                "agent": "researcher",
+                "config_hash": "b311ed218c5a9d883ff1d2208f22b6b7939e1ab3b15c3c5a733732f698f1dd7c",
+                "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+                "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+                "provenance": {
+                  "principal": {
+                    "issuer": "api",
+                    "tenant": "acme",
+                    "subject": "alice"
+                  },
+                  "root_request": {
+                    "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+                    "event_id": "0192e001-0000-7000-8000-000000000002"
+                  },
+                  "via": []
+                },
+                "state": "ended",
+                "result": {
+                  "member": {
+                    "tenant": "acme",
+                    "team": "0192c000-0000-7000-8000-000000000001",
+                    "name": "researcher-1",
+                    "generation": 1
+                  },
+                  "status": "failed",
+                  "error": {
+                    "code": "setup_failed",
+                    "message": "rebind failed: setup_failed"
+                  }
+                },
+                "updated_seq": 4
+              }
+            ]
+          },
+          "mail": {
+            "insert": [
+              {
+                "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000005",
+                "team_id": "0192c000-0000-7000-8000-000000000001",
+                "kind": "member_ended",
+                "to_name": "lead",
+                "to_generation": 1,
+                "principal_key": "api/acme/alice",
+                "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+                "envelope": {
+                  "mail_id": "0192b000-0000-7000-8000-0000000000b2:0192e001-0000-7000-8000-000000000005",
+                  "kind": "member_ended",
+                  "team": "0192c000-0000-7000-8000-000000000001",
+                  "from": {
+                    "tenant": "acme",
+                    "team": "0192c000-0000-7000-8000-000000000001",
+                    "name": "researcher-1",
+                    "generation": 1
+                  },
+                  "to": {
+                    "name": "lead",
+                    "generation": 1
+                  },
+                  "provenance": {
+                    "principal": {
+                      "issuer": "api",
+                      "tenant": "acme",
+                      "subject": "alice"
+                    },
+                    "root_request": {
+                      "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+                      "event_id": "0192e001-0000-7000-8000-000000000002"
+                    },
+                    "via": []
+                  },
+                  "causal": {
+                    "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+                    "event_id": "0192e001-0000-7000-8000-000000000004"
+                  },
+                  "monitor_id": "0192b000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000008:task",
+                  "result": {
+                    "member": {
+                      "tenant": "acme",
+                      "team": "0192c000-0000-7000-8000-000000000001",
+                      "name": "researcher-1",
+                      "generation": 1
+                    },
+                    "status": "failed",
+                    "error": {
+                      "code": "setup_failed",
+                      "message": "rebind failed: setup_failed"
+                    }
+                  }
+                },
+                "created_at": 1790000100000,
+                "state": "pending",
+                "consumed_seq": null
+              }
+            ],
+            "update": [
+              {
+                "mail_id": "0192b000-0000-7000-8000-0000000000b1:c1",
+                "team_id": "0192c000-0000-7000-8000-000000000001",
+                "kind": "task",
+                "to_name": "researcher-1",
+                "to_generation": 1,
+                "principal_key": "api/acme/alice",
+                "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+                "envelope": {
+                  "mail_id": "0192b000-0000-7000-8000-0000000000b1:c1",
+                  "kind": "task",
+                  "team": "0192c000-0000-7000-8000-000000000001",
+                  "from": {
+                    "tenant": "acme",
+                    "team": "0192c000-0000-7000-8000-000000000001",
+                    "name": "lead",
+                    "generation": 1
+                  },
+                  "to": {
+                    "name": "researcher-1",
+                    "generation": 1
+                  },
+                  "provenance": {
+                    "principal": {
+                      "issuer": "api",
+                      "tenant": "acme",
+                      "subject": "alice"
+                    },
+                    "root_request": {
+                      "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+                      "event_id": "0192e001-0000-7000-8000-000000000002"
+                    },
+                    "via": []
+                  },
+                  "causal": {
+                    "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+                    "event_id": "0192e001-0000-7000-8000-000000000005"
+                  },
+                  "body": {
+                    "text": "Your task, researcher."
+                  }
+                },
+                "created_at": 1790000009000,
+                "state": "consumed",
+                "consumed_seq": 2
+              }
+            ]
+          },
+          "monitors": {
+            "delete": [
+              {
+                "monitor_id": "0192b000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000008:task"
               }
             ]
           }
@@ -8529,6 +8665,120 @@
                 "created_at": 1790000008000,
                 "state": "consumed",
                 "consumed_seq": 26
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "wait-deadline-cancel-pending",
+      "section": "4.12, 4.14",
+      "description": "At the wait's deadline the writer's cancel is pending: the step applies the cancel (receipt and barrier), which finishes the wait with what has settled, as a consume would, rather than leaving the cancel for the next one.",
+      "given": {
+        "world": "cancel-applied-waiter"
+      },
+      "now": 1790000220000,
+      "op": "deadline",
+      "by": "writer",
+      "input": {
+        "id": "0192b000-0000-7000-8000-0000000000b4:c1"
+      },
+      "expect": {
+        "outcome": {
+          "wait_id": "0192b000-0000-7000-8000-0000000000b4:c1",
+          "status": "cancelled"
+        },
+        "appended": {
+          "writer": [
+            "message_received",
+            "cancel_requested",
+            "wait_finished",
+            "resumed",
+            "tool_result"
+          ]
+        },
+        "rows": {
+          "team_members": {
+            "update": [
+              {
+                "team_id": "0192c000-0000-7000-8000-000000000001",
+                "name": "writer-1",
+                "generation": 1,
+                "role": "member",
+                "agent": "writer",
+                "config_hash": "c7c8a3b65717c17e2d722696a05c7f899ad28b17c9c4f6f7109103b4f75ff8bd",
+                "thread_id": "0192a000-0000-7000-8000-0000000000b4",
+                "branch_id": "0192b000-0000-7000-8000-0000000000b4",
+                "provenance": {
+                  "principal": {
+                    "issuer": "api",
+                    "tenant": "acme",
+                    "subject": "alice"
+                  },
+                  "root_request": {
+                    "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+                    "event_id": "0192e001-0000-7000-8000-000000000002"
+                  },
+                  "via": []
+                },
+                "state": "running",
+                "result": null,
+                "updated_seq": 14
+              }
+            ]
+          },
+          "mail": {
+            "update": [
+              {
+                "mail_id": "0192b000-0000-7000-8000-0000000000b1:c3",
+                "team_id": "0192c000-0000-7000-8000-000000000001",
+                "kind": "cancel",
+                "to_name": "writer-1",
+                "to_generation": 1,
+                "principal_key": "api/acme/alice",
+                "root_request": "0192a000-0000-7000-8000-0000000000b1:0192e001-0000-7000-8000-000000000002",
+                "envelope": {
+                  "mail_id": "0192b000-0000-7000-8000-0000000000b1:c3",
+                  "kind": "cancel",
+                  "team": "0192c000-0000-7000-8000-000000000001",
+                  "from": {
+                    "tenant": "acme",
+                    "team": "0192c000-0000-7000-8000-000000000001",
+                    "name": "lead",
+                    "generation": 1
+                  },
+                  "to": {
+                    "name": "writer-1",
+                    "generation": 1
+                  },
+                  "provenance": {
+                    "principal": {
+                      "issuer": "api",
+                      "tenant": "acme",
+                      "subject": "alice"
+                    },
+                    "root_request": {
+                      "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+                      "event_id": "0192e001-0000-7000-8000-000000000002"
+                    },
+                    "via": []
+                  },
+                  "causal": {
+                    "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+                    "event_id": "0192e001-0000-7000-8000-000000000015"
+                  }
+                },
+                "created_at": 1790000024000,
+                "state": "consumed",
+                "consumed_seq": 11
+              }
+            ]
+          },
+          "monitors": {
+            "delete": [
+              {
+                "monitor_id": "0192b000-0000-7000-8000-0000000000b4:0192e001-0000-7000-8000-000000000008:researcher-1"
               }
             ]
           }
@@ -13521,7 +13771,7 @@
         "pending_wakes": []
       }
     },
-    "failed-rebind-with-queued-cancel-and-wait": {
+    "materialize-cancel-pending-ends-cancelled": {
       "logs": {
         "lead": {
           "thread_id": "0192a000-0000-7000-8000-0000000000b1",

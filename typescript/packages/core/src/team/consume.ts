@@ -1,6 +1,7 @@
 import { assertNever } from "../assert-never";
 import { loopParked } from "../fold/state";
 import { type MailEnvelope, type Principal, principalKey } from "../log";
+import { applyCancel } from "./cancel";
 import { type CloseContext, takeAnswer, takeWaitNotice } from "./close";
 import { received } from "./mail";
 import { takeParkNotice } from "./park";
@@ -22,9 +23,6 @@ import { parkedOn } from "./view";
 // began, as one batch of one (principal, root_request): mid-turn the open turn's, else the first
 // row's, ending at the first row of another. Mail reaching a member that already ended is refused
 // under its writer. Reference: spec/tools/fixtures/ops_consume.py.
-//
-// Applying a cancel is lane 21E.2's: until then a cancel stays pending, and it stops the ordinary
-// mail behind it (a member being cancelled takes no new work).
 
 export type ConsumeContext = CloseContext & {
   /** A member run's principal: ordinary mail of another waits for a run under that one. */
@@ -51,19 +49,12 @@ type Pass = {
 };
 
 /**
- * Mail a consume can take now, so the worker wakes its recipient for it: all but a cancel, which
- * lane 21E.2 applies.
- */
-export function consumable(env: MailEnvelope): boolean {
-  return env.kind !== "cancel";
-}
-
-/**
- * Mail that may be control mail for a parked recipient (an answer, a notice, a park notice), so
- * the worker wakes a parked member for it. Its consume decides.
+ * Mail that may be control mail for a parked recipient (a cancel, an answer, a notice, a park
+ * notice), so the worker wakes a parked member for it. Its consume decides.
  */
 export function mayResume(env: MailEnvelope): boolean {
   return (
+    env.kind === "cancel" ||
     env.kind === "reply" ||
     env.kind === "member_settled" ||
     env.kind === "member_ended" ||
@@ -86,7 +77,8 @@ export async function consume(ctx: ConsumeContext): Promise<Consumed> {
     : undefined;
   const pass: Pass = {
     turn: open === undefined ? undefined : pairOf(open),
-    blocked: loopParked(fold).length > 0,
+    // A cancelled member takes no new work, even before its end.
+    blocked: loopParked(fold).length > 0 || fold.team.stopped,
     batch: undefined,
   };
   // In order: each row's take reads what the rows before it took.
@@ -113,8 +105,8 @@ async function consumeTeamLog(ctx: ConsumeContext): Promise<Consumed> {
       mailIds.push(env.mail_id);
       continue;
     }
+    // A cancel is only ever addressed to a member, never to the team log.
     const control = await controlOf(ctx, env);
-    if (control === "later") continue;
     if (control === "park") await takeParkNotice(ctx, env, true);
     else if (control === "ordinary") ctx.batch.add(received(env));
     mailIds.push(env.mail_id);
@@ -131,9 +123,10 @@ async function take(
   // An earlier control row of this pass took it (an ask's reply, a wait's notice).
   if (ctx.batch.taken().has(env.mail_id)) return true;
   const control = await controlOf(ctx, env);
-  if (control === "later") {
+  if (control === "cancel") {
+    // A cancelled member takes no new work: the ordinary mail behind it waits for its end.
     pass.blocked = true;
-    return false;
+    return true;
   }
   if (control === "taken") return true;
   if (control === "park") {
@@ -165,19 +158,20 @@ function underRun(ctx: ConsumeContext, env: MailEnvelope): boolean {
 }
 
 /**
- * Control mail, the exhaustive list, applied now ("taken"; a park notice is "park"): a reply or
- * an ask's bounce, a wait's notice, and a task or end notice resolving a `{kind: member}` park. A
- * cancel waits for lane 21E.2 ("later"); anything else is ordinary.
+ * Control mail, the exhaustive list, applied now: a cancel, a reply or an ask's bounce, a wait's
+ * notice, a task or end notice resolving a `{kind: member}` park, and a park notice. Anything
+ * else is ordinary.
  */
 async function controlOf(
   ctx: ConsumeContext,
   env: MailEnvelope,
-): Promise<"taken" | "park" | "later" | "ordinary"> {
+): Promise<"taken" | "park" | "cancel" | "ordinary"> {
   switch (env.kind) {
     case "member_parked":
       return "park";
     case "cancel":
-      return "later";
+      await applyCancel(ctx, env);
+      return "cancel";
     case "reply":
       await takeAnswer(ctx, env);
       return "taken";

@@ -3,7 +3,7 @@ import { ThreadStartedData } from "../../log";
 import { knownEvents } from "../../reduce";
 import { type DynamicChoice, KEPT_TOOLS } from "../../team/dynamic";
 import type { Agent } from "../agent";
-import { ConfigError } from "../errors";
+import { Unbound } from "../errors";
 import { execute } from "../execute";
 import { pin } from "../pin";
 import { type MemberEntry, memberEntry } from "../registry";
@@ -150,7 +150,7 @@ export function memberDef<Deps, Output>(
 ): Resolved<Deps, Output> {
   const model = def.models?.find(([k]) => k === choice.define.model)?.[1];
   if (model === undefined)
-    throw new ConfigError(
+    throw new Unbound(
       "invalid_config",
       `dynamic agent ${def.name} has no model ${choice.define.model}`,
     );

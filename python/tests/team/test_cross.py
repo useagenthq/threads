@@ -1,5 +1,5 @@
-"""Semantic rule 43 across a team's logs: every accepted team case passes, and each rule-43
-case breaks it exactly at its pinned log and seq."""
+"""Semantic rule 43 across a team's logs: every accepted team case passes, and each rejected
+team case breaks exactly at its pinned log and seq, whether one log's rules or rule 43 catch it."""
 
 import json
 from collections.abc import Callable
@@ -18,7 +18,10 @@ def _check(logs: dict[str, bytes]) -> tuple[str, int] | None:
     team: list[TeamLogEvents] = []
     for label in sorted(logs):
         log = verified(logs[label])
-        assert isinstance(log, Ok), label
+        if not isinstance(log, Ok):
+            # A one-log rule broke first (rule 37's member half is a team case).
+            assert log.error.seq is not None, label
+            return (label, log.error.seq)
         branch = log.value.segments[-1].header.branch_id
         assert log.value.fold.thread_id is not None
         by_branch[branch] = label

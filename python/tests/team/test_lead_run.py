@@ -6,11 +6,13 @@ test/team/lead-run.test.ts."""
 import asyncio
 
 from pydantic import JsonValue
+from pydantic.experimental.missing_sentinel import MISSING
 from team.run_kit import USAGE, call, events, member_events, receipts, say, sq_of, start, types
 from team.team_kit import assert_team_replays
 
 from threads import Agent, Completed, Failed, agent, scripted_model, sqlite
-from threads.log import ToolResultEvent
+from threads.log import MessageSentEvent, ToolResultEvent, UserInputEvent
+from threads.team.constants import TEAM_CONSTANTS
 from threads.team.rows import team_row
 
 
@@ -173,3 +175,31 @@ def test_team_limits_concurrent_caps_the_members_starting_and_running_at_once() 
 def _list(value: JsonValue) -> list[JsonValue]:
     assert isinstance(value, list)
     return value
+
+
+def test_a_task_over_the_inline_cap_is_an_artifact_ref_and_the_member_reads_it_whole() -> None:
+    async def main() -> None:
+        store = sqlite(":memory:")
+        task = "x" * (TEAM_CONSTANTS.inline_cap_bytes + 1)
+        script: list[JsonValue] = [start("c1", "researcher", task), say("Started."), say("Done.")]
+        lead = agent(
+            name="lead",
+            model=scripted_model({"responses": script}),
+            team=[_researcher("Read it.")],
+        )
+        r = await lead.run("Work.", store=store)
+        assert isinstance(r, Completed)
+        sent = next(
+            e
+            for e in await events(store, r.thread)
+            if isinstance(e, MessageSentEvent) and e.data.envelope.kind == "task"
+        )
+        body = sent.data.envelope.body
+        assert body is not MISSING
+        assert body.text is MISSING
+        member = await member_events(store, r.team.ref.id, "researcher-1")
+        given = next(e for e in member if isinstance(e, UserInputEvent))
+        assert given.data.text == task
+        await assert_team_replays(await sq_of(store), r.team.ref.id)
+
+    asyncio.run(main())

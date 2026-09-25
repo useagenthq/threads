@@ -5,8 +5,8 @@ from typing import Final
 
 TEAM: Final = frozenset({"send_message", "team_task_claim", "team_task_create", "team_task_update"})
 """Offered to a team: an agent with subagents, and every child it spawns."""
-PINNED_MEMBERS: Final = frozenset({"ask", "monitor", "reply", "send", "start", "wait"})
-"""The team tools pinned and run so far: lane 21E pins ask, reply, wait, monitor and cancel."""
+PINNED_MEMBERS: Final = frozenset({"ask", "cancel", "monitor", "reply", "send", "start", "wait"})
+"""The team tools, pinned for a lead and its members."""
 FRAMEWORK: Final = TEAM | PINNED_MEMBERS | {"todo_write", "handoff", "spawn_agent", "ask_user"}
 """Log-only tools: `read_only` is exact, since only log state changes."""
 FINAL_OUTPUT: Final = "final_output"

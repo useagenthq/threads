@@ -2,8 +2,10 @@ import { z } from "zod";
 import type { TeamAgentPin, TeamRuntime } from "../../loop";
 import { knownEvents } from "../../reduce";
 import type { EventDraft, Writer } from "../../store";
+import { reading } from "../../store/driver";
 import { uuidv7 } from "../../store/encode";
 import { TEAM_TOOLS } from "../../team/constants";
+import { cancelPendingFor } from "../../team/rows";
 import type { DeferTools } from "../defer";
 import { ConfigError } from "../errors";
 import { memberEntry } from "../registry";
@@ -61,10 +63,17 @@ export function teamOf<Deps, Output>(
   if (def.team === undefined && plan.member === undefined) return undefined;
   // Members inherit the lead's resolved defer_tools unless they set their own.
   const deferTools = writer.chain.fold.policy?.context?.defer_tools;
+  const thread = writer.chain.segments[0]?.header.thread_id;
+  if (thread === undefined) throw new Error("a writer's chain has a header");
   const base = {
     pin: pins(def.members, deferTools),
     limits: def.teamLimits,
     recipient: recipientOf(opened.log, opened.artifacts),
+    cancelPending: () =>
+      reading(opened.log.driver, (tx) => cancelPendingFor(tx, thread)),
+    // One run, one authority (design §2.6): its ordinary mail is its own principal's; mail of
+    // another waits for a run under that one.
+    principal: plan.principal,
   };
   if (plan.member !== undefined)
     return {
@@ -72,7 +81,6 @@ export function teamOf<Deps, Output>(
         ...base,
         notify: plan.member.notify,
         runCovering: runCovering(opened.log),
-        principal: plan.principal,
       },
       stop: async () => undefined,
     };

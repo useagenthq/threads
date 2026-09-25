@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .common import obj, text
+from .ops_consume import apply_cancel
 from .ops_life import ended
 from .team_pieces import member_log
 
@@ -49,10 +50,26 @@ def materialize(w: World, _label: str, inp: Obj) -> Obj:
     task_text = obj(env["body"])["text"]
     data: Obj = {"source": "team_task", "text": task_text, "mail_id": env["mail_id"]}
     w.add(label, "user_input", data, who=who)
+    cancel = next(
+        (m for m in w.rows("mail") if m["to_name"] == name and m["kind"] == "cancel"), None
+    )
+    if cancel is not None and cancel["state"] == "pending":
+        _cancelled(w, label, obj(cancel["envelope"]))
+        return {"status": "cancelled"}
     if rebind == "ok":
         return {"status": "materialized"}
     _end(w, label, rebind)
     return {"status": "rebind_failed", "code": rebind}
+
+
+def _cancelled(w: World, label: str, env: Obj) -> None:
+    """A cancel for a starting member ends it without a rebind: the cancel is taken, the task turn
+    closes as the cancellation step does, and the member ends cancelled."""
+    apply_cancel(w, label, env)
+    barrier = next(e for e in reversed(w.logs[label].events) if e["type"] == "cancel_requested")
+    w.add(label, "cancelled", {"request_event_id": barrier["event_id"]})
+    w.add(label, "turn_completed", {"reason": "cancelled"})
+    ended(w, label, {"status": "cancelled"})
 
 
 def _end(w: World, label: str, code: str) -> None:

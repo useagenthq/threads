@@ -25,6 +25,14 @@ export async function teamRows(a: Appended): Promise<Result<void, LogError>> {
     if (!teams.ok) return teams;
     if (teams.value.length === 0) return ok(undefined);
   }
+  const taken = await takenTeam(a);
+  if (taken !== undefined)
+    return err(
+      logError(
+        "invalid_transition",
+        `team ${taken} already exists; a lead's first append opens it`,
+      ),
+    );
   const log = { threadId: a.threadId, branchId: a.branchId };
   await insertRows(a.tx, log, a.events);
   await changeRows(a.tx, log, a.events, a.opened);
@@ -77,6 +85,19 @@ export async function openTeamLog(
       );
   }
   return ok(undefined);
+}
+
+/** A team a lead's thread_started names that the store already holds: a second root for it. */
+async function takenTeam(a: Appended): Promise<string | undefined> {
+  for (const e of a.events) {
+    const team = e.type === "thread_started" ? e.data.team : undefined;
+    if (team === undefined) continue;
+    const found = await a.tx.all("SELECT 1 FROM teams WHERE team_id = ?", [
+      team.id,
+    ]);
+    if (found.length > 0) return team.id;
+  }
+  return undefined;
 }
 
 const TeamRow = z.strictObject({ team_id: z.string() });

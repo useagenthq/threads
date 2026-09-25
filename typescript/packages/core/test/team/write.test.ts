@@ -6,6 +6,7 @@ import { BranchId, type KnownEvent, ThreadId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import type { Writer } from "../../src/store";
 import { ALREADY_OPEN } from "../../src/store/open";
+import { changeRows } from "../../src/team/change";
 import { claimMail } from "../../src/team/claim";
 import { TEAM_CONSTANTS } from "../../src/team/constants";
 import { plain } from "../conformance/cases";
@@ -20,7 +21,7 @@ import {
   teamOf,
   verified,
 } from "./kit";
-import { draftOf } from "./writes";
+import { draftOf, reappend } from "./writes";
 
 // The index hooks on a live writer: a lead's first append opens its team whole, a failing hook
 // rolls the append back, every appended event gets one feed row, and mail.claim's CAS.
@@ -124,6 +125,64 @@ describe("a lead's first append", () => {
       expect(await rows(fx, `SELECT * FROM ${table}`)).toEqual([]);
     expect((await fx.store.branchState(LEAD_BRANCH)).ok).toBe(false);
   });
+
+  test("a second root naming an existing team id is refused, not an integrity error", async () => {
+    const fx = await fixture(TENANT);
+    await openLead(fx, 2);
+    const [started, input] = lead;
+    if (started?.type !== "thread_started" || started.data.team === undefined)
+      throw new Error("the recorded lead names its team");
+    const again = draftOf({
+      ...started,
+      data: {
+        ...started.data,
+        team: {
+          id: started.data.team.id,
+          log_thread_id: ThreadId.parse("0192a000-0000-7000-8000-0000000000c3"),
+          log_branch_id: BranchId.parse("0192b000-0000-7000-8000-0000000000c3"),
+        },
+      },
+    });
+    const refused = await fx.store.openBranch({
+      threadId: ThreadId.parse("0192a000-0000-7000-8000-0000000000c1"),
+      branchId: BranchId.parse("0192b000-0000-7000-8000-0000000000c1"),
+      lease: { holderId: "lead-2", ttlMs: 30_000 },
+      drafts: [again, ...(input === undefined ? [] : [draftOf(input)])],
+    });
+    expect(refused.ok ? "ok" : refused.error.code).toBe("invalid_transition");
+    expect(await rows(fx, "SELECT team_id FROM teams")).toEqual([
+      { team_id: TEAM },
+    ]);
+    await assertTeamReplays(fx.store, TEAM);
+  });
+});
+
+describe("mail moves only from pending", () => {
+  test("a second receipt of a consumed mail keeps its first consume", async () => {
+    const logs = ["lead", "researcher", "team"].map((label) =>
+      verified(caseLog("team-settle-wakes-lead", label)),
+    );
+    const fx = await fixture(TENANT);
+    await reappend(fx, logs);
+    const received = lead.find((e) => e.type === "message_received");
+    if (received?.type !== "message_received")
+      throw new Error("the lead received the settlement");
+    const before = await rows(
+      fx,
+      "SELECT mail_id, state, consumed_seq FROM mail",
+    );
+    await fx.db.transaction((tx) =>
+      changeRows(
+        tx,
+        { threadId: LEAD_THREAD, branchId: LEAD_BRANCH },
+        [{ ...received, seq: 999 }],
+        new Set(),
+      ),
+    );
+    expect(
+      await rows(fx, "SELECT mail_id, state, consumed_seq FROM mail"),
+    ).toEqual(before);
+  });
 });
 
 describe("the feed", () => {
@@ -218,6 +277,7 @@ describe("the Teams constants", () => {
       ask_wait_default_ms: TEAM_CONSTANTS.askWaitDefaultMs,
       wake_poll_in_process_ms: TEAM_CONSTANTS.wakePollInProcessMs,
       wake_poll_cross_process_ms: TEAM_CONSTANTS.wakePollCrossProcessMs,
+      setup_attempts: TEAM_CONSTANTS.setupAttempts,
     });
   });
 });

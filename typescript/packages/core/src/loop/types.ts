@@ -356,6 +356,8 @@ export type TeamRuntime = {
   readonly progress?: () => Promise<void>;
   /** The worker is running a member now: a lead parked on its members waits for it. */
   readonly busy?: () => boolean;
+  /** A cancel waits for this thread: the loop applies it at its next step boundary. */
+  readonly cancelPending: () => Promise<boolean>;
   /** The event ids of team appends; tests inject deterministic ones. */
   readonly mint?: (seq: number, now: number) => string;
 };

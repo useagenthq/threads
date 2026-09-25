@@ -9,6 +9,7 @@ import pathlib
 import shutil
 import sys
 import tempfile
+from typing import TYPE_CHECKING
 
 from . import (
     agent_pins,
@@ -93,6 +94,9 @@ from .integrity import FOREIGN_WRITER
 from .jcs import selftest
 from .log import WRITERS, set_writer
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 FAMILIES = (
     integrity,
     effects,
@@ -142,6 +146,7 @@ FAMILIES = (
     team_rebind,
     team_operator,
     team_nested,
+    team_cancel_rule,
     legacy_run,
     legacy_wake_rows,
     run_cases,
@@ -154,6 +159,9 @@ FAMILIES = (
 
 
 def _diff(generated: pathlib.Path, committed: pathlib.Path) -> list[str]:
+    # git keeps no empty directory: a committed directory with nothing in it is absent.
+    if not committed.exists():
+        return [f"{n}: only in generated" for n in sorted(p.name for p in generated.iterdir())]
     diffs: list[str] = []
 
     def walk(c: filecmp.dircmp[str], rel: str) -> None:
@@ -176,10 +184,10 @@ def _build(out: pathlib.Path) -> None:
         family.build(out)
 
 
-# Staged families, by the phase whose build moves them into FAMILIES: the Teams Phase 1 read side
-# (lanes 21A and 21B). Phase 0 (the legacy wake) moved legacy_run and legacy_wake_rows; lane 21D
-# (team run completion) moved run_cases.
-STAGED_PHASE_1 = (team_cancel_rule.build,)
+# Staged families, by the phase whose build moves them into FAMILIES. Phase 0 (the legacy wake)
+# moved legacy_run and legacy_wake_rows; lane 21D (team run completion) moved run_cases; lane 21E
+# (cancel application) moved team_cancel_rule. None is staged now.
+STAGED_PHASE_1: tuple[Callable[[pathlib.Path], None], ...] = ()
 
 
 def _build_staged(out: pathlib.Path) -> None:

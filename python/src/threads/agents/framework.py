@@ -11,6 +11,7 @@ from threads.agents.background import Background, settle
 from threads.agents.handoff import handoff
 from threads.agents.members import (
     ask_call,
+    cancel_call,
     monitor_call,
     reply_call,
     send_call,
@@ -28,6 +29,7 @@ from threads.loop.drafts import draft
 from threads.loop.drive import drive, parked
 from threads.loop.history import CallState, open_cancel
 from threads.loop.runtime import Halt, Idle, Runtime, lost
+from threads.loop.teams import take_cancels
 from threads.reduce.fold import loop_parked
 from threads.reduce.handlers import to_json
 from threads.reduce.run_end import ended_otherwise
@@ -46,6 +48,7 @@ _MEMBER_CALLS: Final[Mapping[str, Callable[[Runtime, CallState], Awaitable[Halt 
     "reply": reply_call,
     "wait": wait_call,
     "monitor": monitor_call,
+    "cancel": cancel_call,
 }
 """The team tools, each one decided append under the caller's writer (agents/members.py)."""
 
@@ -79,7 +82,11 @@ class Agents[D]:
     async def flush(self, rt: Runtime) -> Halt | None:
         """At a step boundary: first every child the branch is parked on runs again, and one
         that no longer ends parked is resumed; then a background child a crash left running is
-        restarted, and the background ends this boundary may record are recorded."""
+        restarted, and the background ends this boundary may record are recorded. A cancel that
+        reached a team thread is applied first."""
+        applied = await take_cancels(rt)
+        if applied is not None:
+            return applied
         for at in [a for a in rt.fold.parked if a.kind == "child"]:
             spawned = next(
                 e

@@ -224,7 +224,7 @@ def materialize_vectors() -> list[Vec]:
             {"researcher": [*REBUILT, S, S]},
         )
     )
-    return [*out, _queued_cancel_and_wait(), _bounce_keeps_its_request()]
+    return [*out, _queued_cancel_and_wait(), _setup_failed(), _bounce_keeps_its_request()]
 
 
 def _queued_cancel_and_wait() -> Vec:
@@ -233,17 +233,47 @@ def _queued_cancel_and_wait() -> Vec:
     dispatch(w, "lead", "cancel", {"member": "researcher-1"}, "c3")
     dispatch(w, "writer", "wait", {"members": ["researcher-1"]}, "c1")
     return Vec(
-        "failed-rebind-with-queued-cancel-and-wait",
-        "4.10, 4.11",
+        "materialize-cancel-pending-ends-cancelled",
+        "4.10, 4.14",
         "While researcher-1 was starting, the lead requested its cancel and writer-1 waits on "
-        "it. The failed rebind fires the lead's task monitor and the writer's settle monitor "
-        "(member_ended, monitor_id order), and returns the queued cancel with a bounce.",
+        "it. Materialize finds the cancel pending and never tries the rebind (here it would fail): "
+        "one append opens the branch, takes the cancel, closes the task turn cancelled and ends "
+        "the member cancelled, firing the lead's task monitor and the writer's settle monitor "
+        "(member_ended, monitor_id order).",
         w,
         "materialize",
         "researcher",
         _inp("pin_unavailable"),
-        {"status": "rebind_failed", "code": "pin_unavailable"},
-        {"researcher": [*REBUILT, S, S, "mail_refused", S]},
+        {"status": "cancelled"},
+        {
+            "researcher": [
+                "thread_started",
+                "user_input",
+                "message_received",
+                "cancel_requested",
+                "cancelled",
+                "turn_completed",
+                "member_ended",
+                S,
+                S,
+            ]
+        },
+    )
+
+
+def _setup_failed() -> Vec:
+    w = team()
+    return Vec(
+        "failed-rebind-setup-failed",
+        "4.10",
+        "researcher-1's setup failed Setup attempts times in a row (its MCP server stays down): "
+        "the member ends as a failed rebind with code setup_failed.",
+        w,
+        "materialize",
+        "researcher",
+        _inp("setup_failed"),
+        {"status": "rebind_failed", "code": "setup_failed"},
+        {"researcher": [*REBUILT, S]},
     )
 
 

@@ -231,6 +231,10 @@ def deadline(w: World, label: str, inp: Obj) -> Obj:
     )
     if w.now < num(obj(started["data"])["deadline"]) or key not in _waits(w, label).values():
         return {"status": "not_due"}
+    cancel = next((e for e in _mine(w, label) if e["kind"] == "cancel"), None)
+    if cancel is not None:
+        apply_cancel(w, label, cancel)  # the barrier finishes the wait with what has settled
+        return {"wait_id": key, "status": "cancelled"}
     _committed(w, label, key)
     return finish(w, label, key, None, deadline=True)
 

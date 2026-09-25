@@ -1723,7 +1723,7 @@
       "type": "object"
     },
     "MemberErrorCode": {
-      "description": "A failed member's code: the host API RunErrorCode, plus pin_unavailable and pin_mismatch for a failed rebind.",
+      "description": "A failed member's code: the host API RunErrorCode, plus pin_unavailable and pin_mismatch for a failed rebind, and setup_failed for a member whose setup kept failing.",
       "enum": [
         "model_unavailable",
         "context_exhausted",
@@ -1744,7 +1744,8 @@
         "branch_busy",
         "branch_not_runnable",
         "pin_unavailable",
-        "pin_mismatch"
+        "pin_mismatch",
+        "setup_failed"
       ]
     },
     "MemberName": {
@@ -6834,14 +6835,15 @@
           },
           "properties": {
             "code": {
-              "description": "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried); or the response held a registered secret in provider material that is replayed byte-exact and so can't be redacted (secret_in_provider_output: nothing of it is stored, never retried); or a team member's rebind failed before its first model request: its definition, a tool or a model is not registered here (pin_unavailable), or the rebuilt config_hash differs (pin_mismatch).",
+              "description": "Only with reason error: the request needed a part the model doesn't declare (content_unsupported) or another provider's continuation (continuation_unsupported), found before any model_request; or the adapter refused the send because its transport bypasses the fence (transport_fence_unsupported, never retried); or the response held a registered secret in provider material that is replayed byte-exact and so can't be redacted (secret_in_provider_output: nothing of it is stored, never retried); or a team member's rebind failed before its first model request: its definition, a tool or a model is not registered here (pin_unavailable), the rebuilt config_hash differs (pin_mismatch), or setting it up kept failing (setup_failed).",
               "enum": [
                 "content_unsupported",
                 "continuation_unsupported",
                 "transport_fence_unsupported",
                 "secret_in_provider_output",
                 "pin_unavailable",
-                "pin_mismatch"
+                "pin_mismatch",
+                "setup_failed"
               ]
             },
             "reason": {

@@ -53,7 +53,7 @@ def settlement_of(turn: Sequence[Event], batch: Sequence[Draft]) -> Settlement |
 
 def _failure(reason: str, code: JsonValue) -> JsonValue:
     """A failed end's code and message: the same as a run's RunResult.failed."""
-    if code in ("pin_unavailable", "pin_mismatch"):
+    if code in ("pin_unavailable", "pin_mismatch", "setup_failed"):
         raise AssertionError(f"a run's turn can't end {code}: only a member rebinds")
     message = FAILED_MESSAGES.get(reason, FAILED_MESSAGES["error"])
     found = code if isinstance(code, str) else FAILED_CODES.get(reason)

@@ -55,8 +55,9 @@ export function checkReceived(
   const joins = joinsTurn(team.turn, run) || !mailRenders(env, team.settle);
   if (fold.turnOpen && !joins)
     return invalid("mail of another request joins the open turn");
-  return fold.team.ended && mailOpensTurn(fold, env)
-    ? invalid("an ended member's log opens a turn")
+  const { ended, stopped } = fold.team;
+  return (ended || stopped) && mailOpensTurn(fold, env)
+    ? invalid("an ended or cancelled member's log opens a turn")
     : undefined;
 }
 
@@ -172,7 +173,8 @@ export function checkTeamInput(
   e: EventOf<"user_input">,
 ): Violation {
   const { team } = fold;
-  if (team.ended) return invalid("an ended member's log opens a turn");
+  if (team.ended || team.stopped)
+    return invalid("an ended or cancelled member's log opens a turn");
   const task = e.data.source === "team_task";
   const mail = e.data.mail_id;
   if (mail !== undefined && team.mailDone.has(mail))
@@ -184,10 +186,10 @@ export function checkTeamInput(
     : undefined;
 }
 
-/** Rule 37: an ended log is never woken. */
+/** Rule 37: an ended or cancelled member's log is never woken. */
 export function checkNotEnded(fold: Fold): Violation {
-  return fold.team.ended
-    ? invalid("an ended member's log opens a turn")
+  return fold.team.ended || fold.team.stopped
+    ? invalid("an ended or cancelled member's log opens a turn")
     : undefined;
 }
 

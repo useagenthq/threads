@@ -28,6 +28,8 @@ export type TeamFold = {
   hadInput: boolean;
   /** member_ended was appended (rule 37). */
   ended: boolean;
+  /** A member's log took a tree cancel: it opens no turn again (rule 37). */
+  stopped: boolean;
   /** The reason of the last turn_completed (rule 38). */
   lastEnd: EventOf<"turn_completed">["data"]["reason"] | undefined;
   /** The run of the open turn (rule 34). */
@@ -67,6 +69,7 @@ export function emptyTeam(): TeamFold {
     member: false,
     hadInput: false,
     ended: false,
+    stopped: false,
     lastEnd: undefined,
     turn: undefined,
     spawns: new Map(),
@@ -177,6 +180,8 @@ function applyLog(team: TeamFold, e: KnownEvent): void {
     team.hadInput = true;
     if (e.data.mail_id !== undefined) team.mailDone.add(e.data.mail_id);
   } else if (e.type === "member_ended") team.ended = true;
+  else if (e.type === "cancel_requested" && e.data.scope === "tree")
+    team.stopped ||= team.member;
   else if (e.type === "operator_request") {
     team.requests.add(e.data.request_id);
     team.requestEvents.add(e.event_id);

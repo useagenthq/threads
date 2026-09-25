@@ -44,7 +44,11 @@ export function failureOf(end: Ended):
   const { reason, code } = end;
   const message = isFailedReason(reason) ? MESSAGES[reason] : MESSAGES.error;
   // Only a team member's rebind ends a turn this way, and it records its own result.
-  if (code === "pin_unavailable" || code === "pin_mismatch")
+  if (
+    code === "pin_unavailable" ||
+    code === "pin_mismatch" ||
+    code === "setup_failed"
+  )
     throw new Error(`a run's turn can't end ${code}: only a member rebinds`);
   if (code !== undefined) return { code, message };
   if (reason === "error" || reason === "interrupted")

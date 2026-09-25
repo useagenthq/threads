@@ -23,7 +23,8 @@ _OPEN = "SELECT COUNT(*) FROM asks WHERE state = 'open'"
 
 def _researcher() -> Agent[None, str]:
     def answer(request: str) -> JsonValue:
-        if ask_ids(request) and '\\"name\\":\\"reply\\"' not in request:
+        # Its own reply (call r1) is in the history once it has replied.
+        if ask_ids(request) and '"call_id":"r1"' not in request:
             return reply_to("r1", request, "Batteries.")
         return say("Done.")
 

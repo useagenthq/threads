@@ -18,6 +18,8 @@ class TeamConstants:
     """The default deadline of `ask` and `wait`, and their cap."""
     wake_poll_in_process_ms: int = 250
     wake_poll_cross_process_ms: int = 1_000
+    setup_attempts: int = 5
+    """How many times in a row a member's setup may fail for now before it ends `setup_failed`."""
 
 
 TEAM_CONSTANTS: Final = TeamConstants()

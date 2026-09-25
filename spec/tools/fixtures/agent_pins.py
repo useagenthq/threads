@@ -89,9 +89,8 @@ def _tools(agent: Obj, member: bool) -> list[JsonValue]:
     names += list(SANDBOX_TOOLS) if "sandbox" in agent else []
     names += ["spawn_agent", *TASK_BOARD] if "subagents" in agent else []
     names += ["handoff"] if "handoffs" in agent else []
-    names += (
-        ["ask", "monitor", "reply", "send", "start", "wait"] if "team" in agent or member else []
-    )
+    team = ["ask", "cancel", "monitor", "reply", "send", "start", "wait"]
+    names += team if "team" in agent or member else []
     names += ["search_memory", "save_memory", "forget_memory"] if "memory_write" in agent else []
     names += ["load_skill"] if "skills" in agent else []
     specs = [obj(s) for s in catalog_specs(tuple(names))]

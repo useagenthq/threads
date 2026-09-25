@@ -27,7 +27,11 @@ export async function changeRows(
   }
 }
 
-/** Mail, asks and monitors another log inserted, moved by this log's event. */
+/**
+ * Mail, asks and monitors another log inserted, moved by this log's event. Mail moves only from
+ * pending (a CAS, design §4.7): fencing already keeps a second consume out, and this keeps a
+ * row's first outcome if one ever got through.
+ */
 async function moveRows(tx: Tx, e: KnownEvent, scope: Scope): Promise<void> {
   const at = scoped(scope);
   if (
@@ -35,12 +39,12 @@ async function moveRows(tx: Tx, e: KnownEvent, scope: Scope): Promise<void> {
     (e.type === "user_input" && e.data.source === "team_task")
   )
     await tx.run(
-      `UPDATE mail SET state = 'consumed', consumed_seq = ? WHERE mail_id = ? ${SCOPED}`,
+      `UPDATE mail SET state = 'consumed', consumed_seq = ? WHERE mail_id = ? AND state = 'pending' ${SCOPED}`,
       [e.seq, e.data.mail_id ?? null, ...at],
     );
   else if (e.type === "mail_refused")
     await tx.run(
-      `UPDATE mail SET state = ?, consumed_seq = ? WHERE mail_id = ? ${SCOPED}`,
+      `UPDATE mail SET state = ?, consumed_seq = ? WHERE mail_id = ? AND state = 'pending' ${SCOPED}`,
       [
         e.data.code === "stale_member" ? "stale" : "returned",
         e.seq,

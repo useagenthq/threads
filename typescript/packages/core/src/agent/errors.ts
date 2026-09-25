@@ -47,3 +47,9 @@ export class StoreCorruptError extends Error {
     this.ref = ref;
   }
 }
+
+/**
+ * A dynamic member's recorded choice names a tool or model its template no longer has here: its
+ * rebind fails pin_unavailable, unlike a setup that failed for now.
+ */
+export class Unbound extends ConfigError {}

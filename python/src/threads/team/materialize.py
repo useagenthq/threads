@@ -30,10 +30,11 @@ from threads.store.lines import Draft, uuid7
 from threads.store.opening import BranchOpening
 from threads.store.worker import Clock
 from threads.team.batch import Batch, Mint
+from threads.team.cancel_start import start_cancelled
 from threads.team.rows import MemberRow, member_named, pending_to, team_row
-from threads.team.settle import SettleContext, settle
+from threads.team.settle import AppendContext, SettleContext, settle
 
-type RebindCode = Literal["pin_unavailable", "pin_mismatch"]
+type RebindCode = Literal["pin_unavailable", "pin_mismatch", "setup_failed"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,13 +42,20 @@ class Rebind:
     """What rebinding the member's definition by name found: ok (with a nested lead's own team,
     which its first append opens), or why not."""
 
-    status: Literal["ok", "pin_unavailable", "pin_mismatch"]
+    status: Literal["ok", "pin_unavailable", "pin_mismatch", "setup_failed"]
     team: Mapping[str, JsonValue] | None = None
 
 
 @dataclass(frozen=True, slots=True)
+class _Cancel:
+    """A pending cancel: the branch opens and ends cancelled, and the rebind is never tried."""
+
+    mail: MailEnvelope
+
+
+@dataclass(frozen=True, slots=True)
 class Materialized:
-    status: Literal["materialized", "not_starting", "rebind_failed"]
+    status: Literal["materialized", "not_starting", "cancelled", "rebind_failed"]
     writer: Writer | None = None
     code: RebindCode | None = None
 
@@ -95,12 +103,15 @@ async def materialize(
     if isinstance(found, Err) or found.value is None:
         return found if isinstance(found, Err) else Ok(Materialized("not_starting"))
     s = found.value
-    rebind = await o.rebind(s.started, s.task)
-    config = await store.get_artifact(s.started.data.config_hash)
-    if isinstance(config, Err):
-        return config
-    raw = _OBJECT.validate_python(json.loads(config.value))
-    pinned = {k: raw[k] for k in _LINE_ZERO if k in raw}
+    read = await _read(store, s)
+    if isinstance(read, Err):
+        return read
+    text, pinned = read.value
+    # A pending cancel ends the member without a rebind, so a setup that can't succeed never
+    # stands in its way.
+    pending = await store.run(lambda c: pending_to(c, team, name))
+    cancel = next((m for m in pending if m.kind == "cancel"), None)
+    rebind = _Cancel(cancel) if cancel is not None else await o.rebind(s.started, s.task)
     branch = o.branch_id or BranchId(uuid7(o.clock()))
 
     def decide(conn: Conn, now: int) -> BranchOpening | None:
@@ -108,8 +119,8 @@ async def materialize(
         if row is None or row.state != "starting" or row.generation != s.row.generation:
             return None
         batch = Batch(0, now, o.mint)
-        _first_events(conn, batch, s, pinned, rebind, branch)
-        ttl = o.ttl_ms if rebind.status == "ok" else 0
+        _first_events(conn, batch, s, pinned, rebind, (branch, text))
+        ttl = o.ttl_ms if isinstance(rebind, Rebind) and rebind.status == "ok" else 0
         held = Lease(o.holder, 1, now + ttl)
         thread = ThreadId(s.started.data.thread_id)
         return BranchOpening("", thread, branch, held, tuple(batch.drafts))
@@ -117,12 +128,45 @@ async def materialize(
     opened = await store.open_checked(decide, o.clock)
     if isinstance(opened, Err):
         return opened
-    writer = opened.value
+    return Ok(_outcome(opened.value, rebind))
+
+
+def _outcome(writer: object, rebind: "Rebind | _Cancel") -> Materialized:
     if not isinstance(writer, Writer):
-        return Ok(Materialized("not_starting"))
+        return Materialized("not_starting")
+    if isinstance(rebind, _Cancel):
+        return Materialized("cancelled")
     if rebind.status == "ok":
-        return Ok(Materialized("materialized", writer))
-    return Ok(Materialized("rebind_failed", code=rebind.status))
+        return Materialized("materialized", writer)
+    return Materialized("rebind_failed", code=rebind.status)
+
+
+async def _read(
+    store: SqliteStore, s: _Starting
+) -> Ok[tuple[str, dict[str, JsonValue]]] | Err[ParseError]:
+    """What the opening needs from the artifact store: the task's text and the pinned config's
+    line-0 fields."""
+    text = await _task_text(store, s.task)
+    if isinstance(text, Err):
+        return text
+    config = await store.get_artifact(s.started.data.config_hash)
+    if isinstance(config, Err):
+        return config
+    raw = _OBJECT.validate_python(json.loads(config.value))
+    return Ok((text.value, {k: raw[k] for k in _LINE_ZERO if k in raw}))
+
+
+async def _task_text(store: SqliteStore, task: MailEnvelope) -> Ok[str] | Err[ParseError]:
+    """A task's text: inline, or read from the artifact a body over the inline cap became."""
+    body = task.body
+    if body is MISSING:
+        raise AssertionError(f"task {task.mail_id} has no body")
+    if body.text is not MISSING:
+        return Ok(body.text)
+    if body.ref is MISSING:
+        raise AssertionError(f"task {task.mail_id} has no text")
+    got = await store.get_artifact(body.ref.sha256)
+    return got if isinstance(got, Err) else Ok(got.value.decode())
 
 
 def _first_events(  # noqa: PLR0913, PLR0917 - one opening: where, of whom, with what
@@ -130,8 +174,8 @@ def _first_events(  # noqa: PLR0913, PLR0917 - one opening: where, of whom, with
     batch: Batch,
     s: _Starting,
     pinned: Mapping[str, JsonValue],
-    rebind: Rebind,
-    branch: BranchId,
+    rebind: "Rebind | _Cancel",
+    at: tuple[BranchId, str],
 ) -> None:
     """thread_started (the pinned config, the member_started's parent) and the task's user_input,
     whose actor is the task's principal; after a failed rebind, the turn closes before any model
@@ -142,14 +186,11 @@ def _first_events(  # noqa: PLR0913, PLR0917 - one opening: where, of whom, with
         "config_hash": started.config_hash,
         "parent": to_json(started.parent),
     }
-    if rebind.status == "ok" and rebind.team is not None:
+    if isinstance(rebind, Rebind) and rebind.status == "ok" and rebind.team is not None:
         data["team"] = dict(rebind.team)
     batch.add(Draft("thread_started", data))
     task = s.task
-    body = task.body
-    if body is MISSING or body.text is MISSING:
-        raise AssertionError(f"task {task.mail_id} has no text")
-    text = body.text
+    branch, text = at
     actor: dict[str, JsonValue] = {"kind": "host", "principal": to_json(task.provenance.principal)}
     user: dict[str, JsonValue] = {
         "source": "team_task",
@@ -157,6 +198,9 @@ def _first_events(  # noqa: PLR0913, PLR0917 - one opening: where, of whom, with
         "mail_id": task.mail_id,
     }
     batch.add(Draft("user_input", user, actor))
+    if isinstance(rebind, _Cancel):
+        start_cancelled(AppendContext(conn, batch, started.thread_id, branch), task, rebind.mail)
+        return
     if rebind.status == "ok":
         return
     code = rebind.status

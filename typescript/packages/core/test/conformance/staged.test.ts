@@ -51,7 +51,8 @@ async function read(
 }
 
 describe("staged cases read", () => {
-  for (const name of readdirSync(STAGED).toSorted()) {
+  const names = existsSync(STAGED) ? readdirSync(STAGED).toSorted() : [];
+  for (const name of names) {
     const dir = join(STAGED, name);
     const expected = Expected.parse(json(join(dir, "expected.json")));
     const { now } = Meta.parse(json(join(dir, "case.json"))).clock;

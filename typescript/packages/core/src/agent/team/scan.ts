@@ -1,7 +1,14 @@
 import { z } from "zod";
-import { type Principal, type TeamId, ThreadId } from "../../log";
+import {
+  type BranchId,
+  type Principal,
+  type TeamId,
+  ThreadId,
+} from "../../log";
+import type { LogStore } from "../../store";
 import { reading, type StoreDriver } from "../../store/driver";
-import { consumable } from "../../team/consume";
+import { getLease } from "../../store/tables";
+import { nextDeadline } from "../../team/deadline";
 import { turnProvenance } from "../../team/provenance";
 import {
   type MemberRow,
@@ -11,10 +18,11 @@ import {
   teamRow,
 } from "../../team/rows";
 import type { VerifiedLog } from "../../verify";
-import { ConfigError } from "../errors";
+import { ConfigError, Unbound } from "../errors";
 
 // What the team worker reads to decide its next pass, each in a read-only transaction of its
-// own: the teams it drives, which are closed, and the principal a member run acts under.
+// own: the teams it drives, which are closed, the principal a member run acts under, a branch's
+// lease, and a parked member's next deadline.
 
 const Row = z.object({ lead_thread_id: ThreadId, team_id: z.string() });
 
@@ -31,18 +39,23 @@ export function principalOf(
   return reading(db, async (tx) => {
     if (log.fold.turnOpen) return (await turnProvenance(tx, log))?.principal;
     const pending = await pendingFor(tx, await ownRows(tx, row.thread_id));
-    return pending.find(consumable)?.provenance.principal;
+    return pending[0]?.provenance.principal;
   });
 }
 
-/** A definition that can't be set up or pinned here is unavailable: a value, not a throw. */
-export async function pinnedOrUnavailable<T>(
+/**
+ * A definition whose setup failed here (an MCP connect, an adapter's setup) is tried again later:
+ * a value, not a throw, and never a failed rebind. A recorded choice naming a tool or model the
+ * template no longer has is unbound.
+ */
+export async function pinnedOrLater<T>(
   pinned: () => Promise<T>,
-): Promise<T | undefined> {
+): Promise<T | "later" | "unbound"> {
   try {
     return await pinned();
   } catch (error) {
-    if (error instanceof ConfigError) return undefined;
+    if (error instanceof Unbound) return "unbound";
+    if (error instanceof ConfigError) return "later";
     throw error;
   }
 }
@@ -73,4 +86,31 @@ export async function teamsUnder(
     teams.push(...led.map((t) => t.team_id));
   }
   return teams;
+}
+
+/** The branch's lease is free: expired or released. */
+export async function leaseFree(
+  log: LogStore,
+  branch: string,
+): Promise<boolean> {
+  const lease = await reading(log.driver, (tx) => getLease(tx, branch));
+  return lease.ok && (lease.value?.expires_at ?? 0) <= log.now();
+}
+
+/**
+ * An ask or a wait the parked member waits on is due: its writer closes it.
+ * ponytail: reads the member's log each pass; keep its next deadline per head if parked members
+ * grow many.
+ */
+export async function deadlineDue(
+  log: LogStore,
+  branch: BranchId,
+): Promise<boolean> {
+  const read = await log.read(branch);
+  if (!read.ok) return false;
+  const chain = read.value;
+  const next = await reading(log.driver, (tx) =>
+    nextDeadline({ tx, chain, branchId: branch }),
+  );
+  return next !== undefined && next <= log.now();
 }

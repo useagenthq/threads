@@ -17,6 +17,11 @@ from threads.store import verify_export
 STAGED = CASES.parent / "staged"
 
 
+def _staged() -> list[Path]:
+    """The staged cases: none when staged/ is absent (git keeps no empty directory)."""
+    return sorted(STAGED.iterdir()) if STAGED.exists() else []
+
+
 def _logs(case: Path) -> list[tuple[str, Path]]:
     single = case / "log.jsonl"
     if single.exists():
@@ -33,7 +38,7 @@ def _want(expected: dict[str, JsonValue], label: str) -> JsonValue:
 
 @pytest.mark.parametrize(
     ("case", "label", "log"),
-    [(c, label, log) for c in sorted(STAGED.iterdir()) for label, log in _logs(c)],
+    [(c, label, log) for c in _staged() for label, log in _logs(c)],
     ids=lambda v: v.name if isinstance(v, Path) and v.is_dir() else str(v),
 )
 def test_a_staged_log_reads(case: Path, label: str, log: Path) -> None:

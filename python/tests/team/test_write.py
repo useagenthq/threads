@@ -4,18 +4,19 @@ rolls the append back, every appended event gets one feed row, and mail.claim's 
 import asyncio
 import json
 from collections.abc import Awaitable, Callable
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 from team.team_kit import CASES, LEAD, TEAM, TEAM_LOG, TENANT, assert_team_replays, branch_of
 from team.team_kit import verified as read
-from team.writes import ReplayClock, draft_of
+from team.writes import ReplayClock, draft_of, reappend
 
-from threads.log import Event
+from threads.log import BranchId, Event, MessageReceivedEvent, ThreadId
 from threads.result import Ok
-from threads.store import SqliteStore, Writer
+from threads.store import SqliteStore, VerifiedLog, Writer
 from threads.store.conn import Conn
 from threads.team.claim import claim_mail
 from threads.team.constants import TEAM_CONSTANTS
+from threads.team.index import TeamLog, change_rows
 
 T0 = 1_790_000_000_000
 LEAD_BRANCH = branch_of(LEAD)
@@ -97,6 +98,52 @@ def test_a_team_log_that_already_exists_refuses_the_append_and_none_of_it_is_wri
         for table in ("teams", "team_members", "team_feed"):
             assert await store.run(_rows(f"SELECT * FROM {table}")) == []  # noqa: S608
         assert not isinstance(await store.branch(LEAD_BRANCH), Ok)
+
+    _run(test)
+
+
+def test_a_second_root_naming_an_existing_team_id_is_refused_not_an_integrity_error() -> None:
+    async def test(store: SqliteStore, clock: ReplayClock) -> None:
+        await _open_lead(store, clock, 2)
+        started, given = (draft_of(e) for e in LEAD_EVENTS[:2])
+        team = started.data["team"]
+        assert isinstance(team, dict)
+        other = {
+            **team,
+            "log_thread_id": "0192a000-0000-7000-8000-0000000000c3",
+            "log_branch_id": "0192b000-0000-7000-8000-0000000000c3",
+        }
+        again = replace(started, data={**started.data, "team": other}, event_id=None)
+        thread = ThreadId("0192a000-0000-7000-8000-0000000000c1")
+        branch = BranchId("0192b000-0000-7000-8000-0000000000c1")
+        refused = await store.open_branch(
+            thread, branch, [again, replace(given, event_id=None)], holder_id="lead-2", clock=clock
+        )
+        assert not isinstance(refused, Ok)
+        assert refused.error.code == "invalid_transition"
+        assert await store.run(_rows("SELECT team_id FROM teams")) == [(TEAM,)]
+        await assert_team_replays(store, TEAM)
+
+    _run(test)
+
+
+def test_a_second_receipt_of_a_consumed_mail_keeps_its_first_consume() -> None:
+    """Mail moves only from pending (a CAS, design §4.7)."""
+
+    async def test(store: SqliteStore, _clock: ReplayClock) -> None:
+        logs: list[VerifiedLog] = []
+        for label in ("lead", "researcher", "team"):
+            log = read((CASES / "team-settle-wakes-lead" / "logs" / f"{label}.jsonl").read_bytes())
+            assert isinstance(log, Ok)
+            logs.append(log.value)
+        await reappend(store, logs)
+        received = next(e for e in LEAD_EVENTS if isinstance(e, MessageReceivedEvent))
+        again = received.model_copy(update={"seq": 999})
+        sql = "SELECT mail_id, state, consumed_seq FROM mail ORDER BY mail_id"
+        before = await store.run(_rows(sql))
+        log = TeamLog(LEAD, LEAD_BRANCH)
+        await store.run(lambda c: change_rows(c, log, [again], frozenset()))
+        assert await store.run(_rows(sql)) == before
 
     _run(test)
 

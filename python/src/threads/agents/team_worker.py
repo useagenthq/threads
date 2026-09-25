@@ -2,60 +2,60 @@
 open, it materializes every starting member of the lead's team (and of each nested team), runs
 each member whose mail is pending, refuses mail that reaches an ended member, and resumes a
 member whose turn was left open with its lease free (hostless recovery). The lead consumes its
-own mail in its run. One member branch runs at a time; members run concurrently."""
+own mail in its run. One member branch runs at a time; members run concurrently.
+
+A cancel for a member in flight stops its run at once (design §4.14): the worker owns that run's
+task and cancels it, and the member applies the cancel at its next step boundary. A member whose
+setup failed for now (an MCP connect, an adapter's setup) is left as it is and tried again with
+backoff, never ended. Mirrors TypeScript's agent/team/worker.ts."""
 
 import asyncio
 import contextlib
 import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Literal
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.agents.config import ConfigError
 from threads.agents.definition import Definition
-from threads.agents.dynamic_agent import member_definition
 from threads.agents.store import Store, now_ms
 from threads.agents.team_budgets import ancestors_of
 from threads.agents.team_log_mail import take_team_log_mail
+from threads.agents.team_rebind import bound, rebind
+from threads.agents.team_scan import closed, members_under, principal_of
 from threads.agents.team_units import end_unbound, refuse_ended
 from threads.log import (
     BranchId,
     MailEnvelope,
     MemberStartedEvent,
-    OperatorSender,
     Parent,
     Principal,
-    Provenance,
     ThreadId,
     ThreadStartedEvent,
 )
 from threads.log import UserInputEvent as _Input
 from threads.loop.covering import Covering
 from threads.loop.team_runtime import TeamAgentPin
-from threads.reduce import Fold
 from threads.result import Err
 from threads.store import SqliteStore, lease
 from threads.store.conn import Conn
-from threads.store.lines import uuid7
-from threads.store.sql import int_of, text_of
+from threads.store.sql import int_of
 from threads.team.batch import Mint
 from threads.team.claim import claim_mail
 from threads.team.constants import TEAM_CONSTANTS
-from threads.team.consume import consumable, may_resume
+from threads.team.consume import may_resume
 from threads.team.deadline import next_deadline
-from threads.team.dynamic import OPERATOR
 from threads.team.materialize import (
     MaterializeOptions,
     Rebind,
     materialize,
     started_by,
 )
-from threads.team.provenance import turn_provenance
 from threads.team.rows import (
     MemberRow,
+    cancel_pending_for,
     mail_envelope,
-    member_rows,
     own_rows,
     pending_for,
     team_row,
@@ -75,6 +75,8 @@ class MemberRun:
     notify: Callable[[], None]
     covering: tuple[Covering, ...]
     """Every ancestor's budget: it covers the member too."""
+    abort: asyncio.Event = field(default_factory=asyncio.Event)
+    """Set when the worker stops this run for a cancel: its model call ends at once."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,29 +91,53 @@ class WorkerEnv:
     run: Callable[[Definition[None], MemberRun], Awaitable[None]]
     mint: Mint | None = None
     claim_ttl_ms: int = TEAM_CONSTANTS.claim_ttl_ms
+    setup_attempts: int = TEAM_CONSTANTS.setup_attempts
+    """How many setup failures in a row end a member setup_failed; tests inject fewer."""
+
+
+type Unit = Callable[[], Awaitable[bool]]
+"""Work on a member: False when it could do nothing (lease held elsewhere, setup failed for now)."""
+
+_FIRST_BACKOFF_MS = 250
+"""The first wait before retrying a member that did nothing; it doubles up to the claim TTL."""
+
+
+class _LaterError(Exception):
+    """A member's setup failed for now: materialize stops, and the member is tried again later."""
 
 
 class TeamWorker:
     def __init__(self, env: WorkerEnv) -> None:
         self._env = env
         self._running: dict[str, asyncio.Task[None]] = {}
+        self._aborts: dict[str, asyncio.Event] = {}
+        """Each member run's stop: set for a pending cancel, it ends the run's model call."""
+        self._applying: set[str] = set()
+        """Member runs launched with a cancel pending: each applies it, so none is stopped."""
+        self._backoff: dict[str, tuple[int, int]] = {}
+        self._setups: dict[str, int] = {}
+        """How many times in a row each member's setup has failed for now."""
+        """Members whose last unit did nothing: (not before, the wait that set it)."""
         self._changed = asyncio.Event()
         self._failure: BaseException | None = None
         self._stopped = False
         self._loop: asyncio.Task[None] | None = None
         self._token = f"worker-{uuid.uuid4().hex}"
         self._recovered = False
+        self._owed = False
 
     def notify(self) -> None:
         """A team thread appended: look for work now, and wake whoever waits on progress."""
+        self._owed = True
         changed, self._changed = self._changed, asyncio.Event()
         changed.set()
 
     def busy(self) -> bool:
         """Whether a member run is in flight, or may be: until the recovery pass has looked,
         a parked member may be about to run on. A failed member run counts, so a lead parked on
-        its members waits on progress, which raises the failure."""
-        return bool(self._running) or not self._recovered or self._failure is not None
+        its members waits on progress, which raises the failure. So does a pass owed since the
+        last append: the work it launches may be what the lead waits on."""
+        return bool(self._running) or self._owed or not self._recovered or self._failure is not None
 
     def progress(self) -> Awaitable[None]:
         """Returns on the team's next progress after this call; raises once a member run failed
@@ -128,21 +154,27 @@ class TeamWorker:
         self._loop = asyncio.get_running_loop().create_task(self._run())
 
     async def stop(self) -> None:
-        """Stops looking for work and waits for the member runs in flight, unless the lead closed
-        its team: those members are being cancelled, and the run returns without them."""
+        """Stops looking for work and waits for the member runs in flight, then raises a member
+        run's bug if there was one. When the lead closed its team those runs are stopped first:
+        each applies its cancel on its next step and ends."""
         self._stopped = True
         self.notify()
         if self._loop is not None:
             await self._loop
         team = self._env.team()
-        if team is None or not await self._env.sq.run(lambda c: _closed(c, team)):
-            await asyncio.gather(*self._running.values(), return_exceptions=True)
+        if team is not None and await self._env.sq.run(lambda c: closed(c, team)):
+            for thread in list(self._running):
+                self._abort(thread)
+        await asyncio.gather(*self._running.values(), return_exceptions=True)
+        # A member run's bug is never lost, whatever the lead's run was waiting on when it ended.
+        if self._failure is not None:
+            raise self._failure
 
     async def _run(self) -> None:
         recovering = True
         # The recovery pass always runs: even a worker stopped at once looks at its members.
         while recovering or not self._stopped:
-            changed = self._changed
+            changed, self._owed = self._changed, False
             await self._pass(recovering=recovering)
             if recovering:
                 recovering, self._recovered = False, True
@@ -155,22 +187,41 @@ class TeamWorker:
         team = self._env.team()
         if team is None:
             return
-        rows = await self._env.sq.run(lambda c: _members(c, team))
+        rows = await self._env.sq.run(lambda c: members_under(c, team))
         for each in sorted({team, *(r.team_id for r in rows)}):
             await take_team_log_mail(self._env.sq, each, self._env.mint)
         for row in rows:
-            if row.thread_id in self._running:
-                continue
-            work = await self._work(row, recovering=recovering)
-            if work is not None:
-                self._launch(row.thread_id, work)
+            await self._visit(row, recovering=recovering)
 
-    async def _work(
-        self, row: MemberRow, *, recovering: bool
-    ) -> Callable[[], Awaitable[None]] | None:
-        """What a member needs now, if anything."""
-        # A closed team's members are being cancelled: none starts or resumes.
-        if row.state != "ended" and await self._env.sq.run(lambda c: _closed(c, row.team_id)):
+    async def _visit(self, row: MemberRow, *, recovering: bool) -> None:
+        thread = row.thread_id
+        cancelled = await self._env.sq.run(lambda c: cancel_pending_for(c, thread))
+        if thread in self._running:
+            # A cancel reached a member in flight: stop its run now, unless the run was launched
+            # to apply it.
+            if cancelled and thread not in self._applying:
+                self._abort(thread)
+            return
+        # A pending cancel is applied at once, backoff or not: it never needs the member's setup.
+        if self._backoff.get(thread, (0, 0))[0] > now_ms() and not cancelled:
+            return
+        work = await self._work(row, recovering=recovering, cancelled=cancelled)
+        if work is not None:
+            if cancelled:
+                self._applying.add(thread)
+            self._launch(thread, work)
+
+    def _abort(self, thread: str) -> None:
+        stop = self._aborts.get(thread)
+        if stop is not None:
+            stop.set()
+
+    async def _work(self, row: MemberRow, *, recovering: bool, cancelled: bool) -> Unit | None:
+        """What a member needs now, if anything. A pending cancel always wakes it: its run
+        applies the cancel (a run stopped for it holds the cancel's claim)."""
+        # A closed team's members start or resume only to apply the lead's cancel.
+        shut = await self._env.sq.run(lambda c: closed(c, row.team_id))
+        if row.state != "ended" and shut and not cancelled:
             return None
         if row.state == "starting":
             return lambda: self._materialize(row)
@@ -185,6 +236,7 @@ class TeamWorker:
         if row.state == "parked":
             wake = (
                 recovering
+                or cancelled
                 or await self._claim([m for m in pending if may_resume(m)])
                 or (await self._free(branch) and await self._due(BranchId(branch)))
             )
@@ -196,8 +248,8 @@ class TeamWorker:
                 else None
             )
         # A turn left open with its lease free is resumed (hostless recovery).
-        stranded = row.state == "running" and (recovering or await self._free(branch))
-        woken = await self._claim([m for m in pending if consumable(m)])
+        stranded = row.state == "running" and (recovering or cancelled or await self._free(branch))
+        woken = await self._claim(pending)
         return (lambda: self._member(row, BranchId(branch))) if woken or stranded else None
 
     async def _claim(self, mail: Sequence[MailEnvelope]) -> bool:
@@ -230,58 +282,63 @@ class TeamWorker:
 
         return await self._env.sq.run(expired)
 
-    def _launch(self, thread: str, work: Callable[[], Awaitable[None]]) -> None:
+    def _launch(self, thread: str, work: Unit) -> None:
+        """Runs one unit for a member. One that did nothing backs off, so a pass never relaunches
+        it at once; one that did something (or was stopped for a cancel) wakes the next pass."""
+
         async def run() -> None:
             try:
-                await work()
+                if await work():
+                    self._backoff.pop(thread, None)
+                    self.notify()
+                else:
+                    self._later(thread)
             except Exception as error:
                 self._failure = self._failure or error
+                self.notify()
             finally:
                 self._running.pop(thread, None)
-                self.notify()
+                self._aborts.pop(thread, None)
+                self._applying.discard(thread)
 
+        self._aborts[thread] = asyncio.Event()
         self._running[thread] = asyncio.get_running_loop().create_task(run())
 
-    async def _materialize(self, row: MemberRow) -> None:
+    def _later(self, thread: str) -> None:
+        last = self._backoff.get(thread, (0, 0))[1]
+        wait = min(max(last * 2, _FIRST_BACKOFF_MS), TEAM_CONSTANTS.claim_ttl_ms)
+        self._backoff[thread] = (now_ms() + wait, wait)
+
+    async def _materialize(self, row: MemberRow) -> bool:
         holder = f"team-{uuid.uuid4().hex}"
-        o = MaterializeOptions(self._rebind, holder, lease.TTL_MS, now_ms, self._env.mint)
-        got = await materialize(self._env.sq, row.team_id, row.name, o)
+        o = MaterializeOptions(self._settled_rebind, holder, lease.TTL_MS, now_ms, self._env.mint)
+        try:
+            got = await materialize(self._env.sq, row.team_id, row.name, o)
+        except _LaterError:
+            return False
         if isinstance(got, Err):
             raise AssertionError(f"materialize {row.name}: {got.error.message}")
         self.notify()
         writer = got.value.writer
         if got.value.status == "materialized" and writer is not None:
-            await self._member(row, writer.branch_id, holder)
+            return await self._member(row, writer.branch_id, holder)
+        return True
 
-    async def _rebind(self, started: MemberStartedEvent, task: MailEnvelope) -> Rebind:
-        """Rebinds a member's definition by name in this process (design §4.10, prework): a
-        dynamic member's from its template with the recorded define and starter."""
-        found = self._bound(started, task)
-        if found is None:
-            return Rebind("pin_unavailable")
-        try:
-            pinned = await self._env.pin(found)
-        except ConfigError:
-            return Rebind("pin_unavailable")
-        if pinned.config_hash != started.data.config_hash:
-            return Rebind("pin_mismatch")
-        if found.team is None:
-            return Rebind("ok")
-        now = now_ms()
-        team = {"id": uuid7(now), "log_thread_id": uuid7(now), "log_branch_id": uuid7(now)}
-        return Rebind("ok", team)
+    async def _settled_rebind(self, started: MemberStartedEvent, task: MailEnvelope) -> Rebind:
+        """materialize's rebind: a setup that failed for now stops it (_LaterError)."""
+        got = self._counted(
+            started.data.thread_id, await rebind(self._env.agents, self._env.pin, started, task)
+        )
+        if got == "later":
+            raise _LaterError
+        return got
 
-    def _bound(self, started: MemberStartedEvent, task: MailEnvelope) -> Definition[None] | None:
-        """The definition a member runs, rebound by its agent's name; None when it is gone."""
-        found = self._env.agents.get(started.data.agent)
-        define = started.data.define
-        if found is None or define is MISSING:
-            return found
-        starter = OPERATOR if isinstance(task.from_, OperatorSender) else task.from_.name
-        try:
-            return member_definition(found, define, starter)
-        except ConfigError:
-            return None
+    def _counted(self, thread: str, got: Rebind | Literal["later"]) -> Rebind | Literal["later"]:
+        """A setup that failed for now, counted: once it has failed Setup attempts times in a row
+        the member ends setup_failed; any other outcome resets the count."""
+        failed = self._setups.get(thread, 0) + 1 if got == "later" else 0
+        self._setups[thread] = failed
+        return Rebind("setup_failed") if failed >= self._env.setup_attempts else got
 
     async def _started(
         self, row: MemberRow, mail_id: str
@@ -296,9 +353,10 @@ class TeamWorker:
             raise AssertionError(f"member {row.name}: {started.error.message}")
         return started.value, task
 
-    async def _member(self, row: MemberRow, branch: BranchId, holder: str | None = None) -> None:
+    async def _member(self, row: MemberRow, branch: BranchId, holder: str | None = None) -> bool:
         """Runs a member branch until it is idle, parked or ended; one whose definition can't be
-        rebound here ends failed instead."""
+        rebound here ends failed instead. False: nothing ran (its setup failed for now, or its
+        lease is held elsewhere)."""
         read = await self._env.sq.read(branch, now_ms())
         if isinstance(read, Err):
             raise AssertionError(f"member {row.name}: {read.error.message}")
@@ -311,12 +369,16 @@ class TeamWorker:
         if task.data.mail_id is MISSING:
             raise AssertionError(f"member {row.name}'s first input is not its task")
         member_started, envelope = await self._started(row, task.data.mail_id)
-        found = self._bound(member_started, envelope)
-        rebind = await self._rebind(member_started, envelope)
-        if found is None or rebind.status != "ok":
-            code = "pin_unavailable" if rebind.status == "ok" else rebind.status
-            await end_unbound(self._env.sq, self._env.mint, branch, holder, code)
-            return
+        found = bound(self._env.agents, member_started, envelope)
+        rebound = self._counted(
+            row.thread_id,
+            await rebind(self._env.agents, self._env.pin, member_started, envelope),
+        )
+        if rebound == "later":
+            return False
+        if found is None or rebound.status != "ok":
+            code = "pin_unavailable" if rebound.status == "ok" else rebound.status
+            return await end_unbound(self._env.sq, self._env.mint, branch, holder, code)
         fold = read.value.fold
         principal = await self._env.sq.run(lambda c: principal_of(c, fold, row))
         run = MemberRun(
@@ -327,37 +389,7 @@ class TeamWorker:
             holder,
             self.notify,
             await ancestors_of(self._env.sq, parent),
+            self._aborts.get(row.thread_id, asyncio.Event()),
         )
         await self._env.run(found, run)
-
-
-def principal_of(conn: Conn, fold: Fold, row: MemberRow) -> Principal | None:
-    """The one principal a member run acts under (design §2.6: one turn, one authority): its open
-    turn's, else that of the first mail it would take. Mail of another principal waits for the
-    next run."""
-    if fold.in_turn:
-        opened = turn_provenance(conn, fold.events)
-        return None if opened is None else Provenance.model_validate(opened).principal
-    first = next(
-        (m for m in pending_for(conn, own_rows(conn, row.thread_id)) if consumable(m)), None
-    )
-    return None if first is None else first.provenance.principal
-
-
-def _closed(conn: Conn, team: str) -> bool:
-    found = team_row(conn, team)
-    return found is not None and found.closed_at is not None
-
-
-def _members(conn: Conn, root: str) -> list[MemberRow]:
-    """The member rows of the team and of every team led by one of its members, recursively."""
-    teams, out = [root], list[MemberRow]()
-    while teams:
-        rows = [r for r in member_rows(conn, teams.pop()) if r.role == "member"]
-        out += rows
-        for r in rows:
-            led = conn.execute(
-                "SELECT team_id FROM teams WHERE lead_thread_id = ?", (r.thread_id,)
-            ).fetchall()
-            teams += [text_of(t) for (t,) in led]
-    return out
+        return True

@@ -25,8 +25,10 @@ from threads.log import AskClosedEvent as _Closed
 from threads.log import (
     BranchId,
     Event,
+    MailRefusedEvent,
     MemberObservedEvent,
     MessageSentEvent,
+    ToolResultEvent,
     WaitFinishedEvent,
     WaitStartedEvent,
 )
@@ -232,3 +234,45 @@ def test_reply_versus_deadline_answered_iff_the_reply_was_sent(
         assert closed == ["answered" if replied else "timed_out"]
         seen.add(closed[0])
     assert seen == {"answered", "timed_out"}
+
+
+def test_cancel_versus_the_members_end_refused_or_sent_and_refused_by_the_end(
+    sides: tuple[_Side, _Side], tmp_path: Path
+) -> None:
+    world = _vector("cancel-requested")
+    template = _template(world, tmp_path)
+    ended: Obj = {
+        "reason": "error",
+        "result": {"status": "failed", "error": {"code": "model_error", "message": "stopped"}},
+    }
+    now = world["now"]
+    assert isinstance(now, int)
+    seen: set[str] = set()
+    for n in range(SCHEDULES):
+        logs = _schedule(
+            sides,
+            world,
+            _copy(template, tmp_path, n),
+            (
+                _job(world, "lead", {}, now),
+                _job(world, "researcher", {"op": "end", "input": ended}, now),
+            ),
+        )
+        cancels = [
+            e.data.envelope.mail_id
+            for e in logs["lead"]
+            if isinstance(e, MessageSentEvent) and e.data.envelope.kind == "cancel"
+        ]
+        refused = any(
+            isinstance(e, ToolResultEvent) and '"code":"member_ended"' in e.data.preview
+            for e in logs["lead"]
+        )
+        bounced = any(
+            isinstance(e, MailRefusedEvent) and e.data.mail_id in cancels
+            for e in logs["researcher"]
+        )
+        # The cancel was sent iff the member was not ended yet, and then its end refuses it.
+        assert (len(cancels) == 1) is not refused
+        assert bounced is not refused
+        seen.add("refused" if refused else "sent")
+    assert seen == {"refused", "sent"}

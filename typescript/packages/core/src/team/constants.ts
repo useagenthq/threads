@@ -14,25 +14,17 @@ export const TEAM_CONSTANTS = {
   askWaitDefaultMs: 120_000,
   wakePollInProcessMs: 250,
   wakePollCrossProcessMs: 1_000,
+  /** How many times in a row a member's setup may fail for now before it ends `setup_failed`. */
+  setupAttempts: 5,
 } as const;
 
-/** The team tools (tools.v1.catalog.json): no tool of a team's agent may take one's name. */
+/**
+ * The team tools (tools.v1.catalog.json), pinned for a lead and its members: no tool of a team's
+ * agent may take one's name.
+ */
 export const TEAM_TOOLS: readonly string[] = [
   "ask",
   "cancel",
-  "monitor",
-  "reply",
-  "send",
-  "start",
-  "wait",
-];
-
-/**
- * The team tools pinned for a lead and its members so far: lane 21E.2 pins cancel with its
- * handler.
- */
-export const TEAM_TOOLS_PINNED: readonly string[] = [
-  "ask",
   "monitor",
   "reply",
   "send",

@@ -4,10 +4,7 @@ whatever its provenance; ordinary mail only when the recipient was not parked wh
 began, as one batch of one (principal, root_request): mid-turn the open turn's, else the first
 row's, ending at the first row of another. A member run takes only ordinary mail of its own
 principal: the rest waits for a run under that one. Mail reaching a member that already ended is
-refused under its writer. Reference: spec/tools/fixtures/ops_consume.py.
-
-Applying a cancel is lane 21E.2's: until then a cancel stays pending, and it stops the ordinary
-mail behind it (a member being cancelled takes no new work)."""
+refused under its writer. Reference: spec/tools/fixtures/ops_consume.py."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -18,6 +15,7 @@ from threads.log.keys import principal_key
 from threads.reduce.fold import loop_parked
 from threads.reduce.handlers import to_json
 from threads.store.lines import Draft
+from threads.team.cancel import apply_cancel
 from threads.team.close import CloseContext, take_answer, take_wait_notice
 from threads.team.mail import received
 from threads.team.park import take_park_notice
@@ -63,17 +61,12 @@ class _Pass:
     taken: list[str] = field(default_factory=list[str])
 
 
-def consumable(env: MailEnvelope) -> bool:
-    """Mail a consume can take now, so the worker wakes its recipient for it: all but a cancel,
-    which lane 21E.2 applies."""
-    return env.kind != "cancel"
-
-
 def may_resume(env: MailEnvelope) -> bool:
-    """Mail that may be control mail for a parked recipient (an answer, a notice, a park notice),
-    so the worker wakes a parked member for it. Its consume decides."""
+    """Mail that may be control mail for a parked recipient (a cancel, an answer, a notice, a park
+    notice), so the worker wakes a parked member for it. Its consume decides."""
     answers = env.kind == "bounce" and isinstance(env.ask_id, str)
-    return answers or env.kind in ("reply", "member_settled", "member_ended", "member_parked")
+    control = ("cancel", "reply", "member_settled", "member_ended", "member_parked")
+    return answers or env.kind in control
 
 
 def consume(ctx: ConsumeContext) -> Consumed:
@@ -90,7 +83,8 @@ def consume(ctx: ConsumeContext) -> Consumed:
     fold = ctx.fold
     opened = turn_provenance(ctx.conn, fold.events) if fold.in_turn else None
     turn = None if opened is None else _pair(Provenance.model_validate(opened))
-    state = _Pass(turn, bool(loop_parked(fold)))
+    # A cancelled member takes no new work, even before its end.
+    state = _Pass(turn, bool(loop_parked(fold)) or fold.team.stopped)
     for env in pending:
         if _take(ctx, state, env):
             state.taken.append(env.mail_id)
@@ -108,9 +102,8 @@ def _consume_team_log(ctx: ConsumeContext) -> Consumed:
     taken: list[str] = []
     for env in pending:
         if env.mail_id not in ctx.batch.taken():
+            # A cancel is only ever addressed to a member, never to the team log.
             control = _control(ctx, env)
-            if control == "later":
-                continue
             if control == "park":
                 take_park_notice(ctx, env, team_log=True)
             elif control == "ordinary":
@@ -125,9 +118,10 @@ def _take(ctx: ConsumeContext, state: _Pass, env: MailEnvelope) -> bool:
     if env.mail_id in ctx.batch.taken():
         return True
     control = _control(ctx, env)
-    if control == "later":
+    if control == "cancel":
+        # A cancelled member takes no new work: the ordinary mail behind it waits for its end.
         state.blocked = True
-        return False
+        return True
     if control == "taken":
         return True
     if control == "park":
@@ -159,16 +153,17 @@ def _under_run(ctx: ConsumeContext, env: MailEnvelope) -> bool:
 
 def _control(
     ctx: ConsumeContext, env: MailEnvelope
-) -> Literal["taken", "park", "later", "ordinary"]:
-    """Control mail, the exhaustive list, applied now ("taken"; a park notice is "park"): a reply
-    or an ask's bounce, a wait's notice, and a task or end notice resolving a `{kind: member}`
-    park. A cancel waits for lane 21E.2 ("later"); anything else is ordinary."""
-    kind: Literal["taken", "park", "later", "ordinary"]
+) -> Literal["taken", "park", "cancel", "ordinary"]:
+    """Control mail, the exhaustive list, applied now: a cancel, a reply or an ask's bounce, a
+    wait's notice, a task or end notice resolving a `{kind: member}` park, and a park notice.
+    Anything else is ordinary."""
+    kind: Literal["taken", "park", "cancel", "ordinary"]
     match env.kind:
         case "member_parked":
             kind = "park"
         case "cancel":
-            kind = "later"
+            apply_cancel(ctx, env)
+            kind = "cancel"
         case "reply":
             take_answer(ctx, env)
             kind = "taken"

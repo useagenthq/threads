@@ -6,11 +6,13 @@ import { isRefusal } from "../../store/writer";
 import { ask, reply } from "../../team/ask";
 import { Batch } from "../../team/batch";
 import { type CallContext, callRequest, named } from "../../team/call";
+import { cancel } from "../../team/cancel";
 import { readerOf } from "../../team/close";
 import { send, start } from "../../team/ops";
 import { monitor, wait } from "../../team/watch";
 import {
   AskInput,
+  CancelInput,
   MonitorInput,
   ReplyInput,
   SendInput,
@@ -152,4 +154,15 @@ export function monitorTool(
 ): Promise<Halt | undefined> {
   const args = MonitorInput.parse(call.data.input);
   return decided(s, call, (ctx) => monitor(ctx, args));
+}
+
+/** cancel's request: durable intent; the member's writer applies it at its next step. */
+export function cancelTool(
+  s: Session,
+  call: EventOf<"tool_call">,
+): Promise<Halt | undefined> {
+  const args = CancelInput.parse(call.data.input);
+  return decided(s, call, async (ctx) => {
+    await cancel(ctx, args);
+  });
 }

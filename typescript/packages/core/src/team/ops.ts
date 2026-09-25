@@ -98,7 +98,7 @@ export async function start(
       to: { name: member.name, generation: 1 },
       provenance: req.provenance,
       causal: req.causal,
-      body: { text: args.task },
+      body: await bodyOf(args.task, req.put),
     }),
   );
   return req.done({ member, status: "started" } satisfies Started);

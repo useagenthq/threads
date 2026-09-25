@@ -14,14 +14,14 @@ import { knowledgeSpecs, memorySpecs } from "../memory/tools";
 import type { Model } from "../model";
 import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
-import { TEAM_TOOLS, TEAM_TOOLS_PINNED } from "../team/constants";
+import { TEAM_TOOLS } from "../team/constants";
 import { type DynamicChoice, KEPT_TOOLS } from "../team/dynamic";
 import { builtins, type Capabilities, type Egress } from "../tools";
 import { frameworkSpec, searchToolSpec } from "../tools/framework";
 import { requireCapabilities } from "../tools/gated";
 import { deferredNames, referenceForm } from "./defer";
 import { checkEnforceable } from "./enforceable";
-import { ConfigError } from "./errors";
+import { ConfigError, Unbound } from "./errors";
 import { DEFAULT_TIMEOUT_MS, type Extension, hookNames } from "./extension";
 import { instructions } from "./instructions";
 import { checkRetries, checkStyles, finalOutput, policy } from "./policy";
@@ -269,7 +269,7 @@ function chosen(
     (t) => !names.has(t) || KEPT_TOOLS.has(t),
   );
   if (gone !== undefined)
-    throw new ConfigError(
+    throw new Unbound(
       "invalid_config",
       `dynamic agent ${dynamic.template} has no tool ${gone} to give its member`,
     );
@@ -338,7 +338,7 @@ function agentTools(
     ...(o.subagents.length > 0 ? ["spawn_agent"] : []),
     ...(o.subagents.length > 0 || subagent ? TEAM : []),
     ...(o.handoffs.length > 0 ? ["handoff"] : []),
-    ...(team ? TEAM_TOOLS_PINNED : []),
+    ...(team ? TEAM_TOOLS : []),
   ];
 }
 

@@ -24,7 +24,8 @@ def _researcher() -> Agent[None, str]:
     """A researcher that replies to an ask it hasn't answered yet, and otherwise reports."""
 
     def answer(request: str) -> JsonValue:
-        if ask_ids(request) and '\\"name\\":\\"reply\\"' not in request:
+        # Its own reply (call r1) is in the history once it has replied.
+        if ask_ids(request) and '"call_id":"r1"' not in request:
             return reply_to("r1", request, "Batteries.")
         return say("Done.")
 

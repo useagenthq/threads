@@ -1,6 +1,7 @@
 """What the loop of a team's lead or member needs from its team (spec/schema/README.md, "Teams"),
 bound by the agents layer."""
 
+import asyncio
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -71,6 +72,10 @@ class TeamRuntime:
     """A member's turn is under the run budget of the root request its opener belongs to."""
     mint: Mint | None = None
     """The event ids of team appends; tests inject deterministic ones."""
+    abort: asyncio.Event | None = None
+    """A member's: set when the worker stops its run for a cancel; its model call ends at once."""
+    cancel_pending: Callable[[], Awaitable[bool]] | None = None
+    """A cancel waits for this thread: the loop applies it at its next step boundary."""
     recipient: "Callable[[MemberRow], Awaitable[TeamRecipient | None]] | None" = None
     """An asked member's budgets, read from its log (or its pinned config while starting); None:
     no budget is known, and ask's headroom holds."""

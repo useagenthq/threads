@@ -7,6 +7,7 @@ import type { EventDraft, Writer } from "../../src/store";
 import { ask, reply } from "../../src/team/ask";
 import { Batch } from "../../src/team/batch";
 import { type CallContext, callRequest, named } from "../../src/team/call";
+import { cancel } from "../../src/team/cancel";
 import { type ConsumeContext, consume } from "../../src/team/consume";
 import { deadline } from "../../src/team/deadline";
 import { resolveDefinition } from "../../src/team/dynamic";
@@ -102,6 +103,8 @@ async function modelOp(c: CallContext, v: Op): Promise<unknown> {
       return reply(c, Args.reply.parse(args));
     case "monitor":
       return monitor(c, Args.monitor.parse(args));
+    case "cancel":
+      return cancel(c, Args.monitor.parse(args));
     default:
       return wait(c, Args.wait.parse(args));
   }
@@ -278,6 +281,7 @@ export function runOn(w: Writer, v: Op): Promise<unknown> {
     case "reply":
     case "wait":
     case "monitor":
+    case "cancel":
       return callOp(w, v);
     case "consume":
       return consumeOp(w);

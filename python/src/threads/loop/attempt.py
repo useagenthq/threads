@@ -6,6 +6,8 @@ The Render v1 bytes are a durable artifact before the `model_request` that names
 persist-before-dispatch guarantee for model calls.
 """
 
+import asyncio
+import contextlib
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, assert_never
@@ -181,6 +183,24 @@ unknown."""
 
 
 async def _collect(rt: Runtime, model: Model, req: ModelRequest, shown: Shown) -> Outcome:
+    """The attempt's outcome. A team member's run the worker stops for a cancel (design §4.14)
+    ends its model call at once, as an unknown outcome; the next step applies the cancel."""
+    abort = None if rt.team is None else rt.team.abort
+    if abort is None:
+        return await _read(rt, model, req, shown)
+    reading = asyncio.ensure_future(_read(rt, model, req, shown))
+    stopping = asyncio.ensure_future(abort.wait())
+    done, _ = await asyncio.wait({reading, stopping}, return_when=asyncio.FIRST_COMPLETED)
+    stopping.cancel()
+    if reading in done:
+        return reading.result()
+    reading.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await reading
+    return None
+
+
+async def _read(rt: Runtime, model: Model, req: ModelRequest, shown: Shown) -> Outcome:
     parts: list[OutputPart] = []
     try:
         async for chunk in model.send(req, WriterContext(rt)):

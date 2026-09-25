@@ -143,17 +143,16 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
     writer, fresh = opened.value
     if intake is not None and intake.servers:
         definition = host_serving(definition, intake.servers)
+    principal = options.get("principal", LOCAL_OPERATOR) if launch is None else launch.principal
     async with _held(writer), AsyncExitStack() as servers:
         definition = await with_servers(definition, servers, fenced(writer))
-        side = team_side(
-            servers, team_of(definition, member, writer, store, sq, _member_runner(store))
-        )
+        runner = _member_runner(store)
+        side = team_side(servers, team_of(definition, member, writer, store, sq, runner, principal))
         thread_id = writer.fold.thread_id
         if thread_id is None:
             raise AssertionError("an acquired branch has a thread")
         sandbox = definition.sandbox or (None if thread is None else thread.sandbox)
         handle = Thread(thread_id, writer.branch_id, store, sandbox=sandbox)
-        principal = options.get("principal", LOCAL_OPERATOR) if launch is None else launch.principal
         ctx = RunContext(deps, handle.id, handle.branch, principal)
         observers = {e.name: e.on for e in definition.extensions}
         pump = ObserverPump(sq.cursors, writer.branch_id, lambda: writer.fold.events, observers)

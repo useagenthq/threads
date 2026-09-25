@@ -175,6 +175,16 @@ def pending_for(conn: Conn, rows: Sequence[MemberRow]) -> list[MailEnvelope]:
     return _envelopes(found)
 
 
+def cancel_pending_for(conn: Conn, thread: str) -> bool:
+    """A cancel is pending for one of the thread's own rows."""
+    found = conn.execute(
+        "SELECT 1 FROM mail m JOIN team_members t ON m.team_id = t.team_id AND m.to_name = t.name"
+        " WHERE t.thread_id = ? AND m.kind = 'cancel' AND m.state = 'pending' LIMIT 1",
+        (thread,),
+    ).fetchone()
+    return found is not None
+
+
 def mail_envelope(conn: Conn, mail_id: str) -> MailEnvelope | None:
     """A mail row's envelope, whatever its state."""
     rows = conn.execute("SELECT envelope FROM mail WHERE mail_id = ?", (mail_id,)).fetchall()

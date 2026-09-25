@@ -94,6 +94,8 @@ def _log(team: Team, event: Event) -> None:
             team.mail_done.add(event.data.mail_id)
     elif isinstance(event, MemberEndedEvent):
         team.ended = True
+    elif isinstance(event, CancelRequestedEvent) and event.data.scope == "tree":
+        team.stopped = team.stopped or team.member
     elif isinstance(event, OperatorRequestEvent):
         team.requests.add(event.data.request_id)
         team.request_events.add(event.event_id)
