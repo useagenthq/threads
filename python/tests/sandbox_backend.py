@@ -1,21 +1,29 @@
 """A provider-agnostic sandbox service for adapter tests: what E2B, Daytona or Modal would hold,
 in memory. Each adapter's test shim speaks its provider's wire protocol and calls into this.
-The shell side emulates the scripts threads runs in a sandbox (adapters/sandboxes/posix.py)
+The shell side emulates the scripts threads runs in a sandbox (adapters/sandboxes/posix.py:
+exec, and the tree export and import as a real tar would run them)
 and a conformance SandboxScript's tools; snapshots named in the script restore to their
 `restore_sandbox_id` with the scripted manifest, and may lose the answer or crash the host."""
 
 import asyncio
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from pydantic import JsonValue, TypeAdapter
 
 from threads.adapters.sandboxes import posix
+from threads.log.digest import sha256_hex
+from threads.result import Err
 from threads.sandbox.fake import FakeCrashError, SandboxScript, SnapshotScript
+from threads.sandbox.fake_trees import MemoryEntry, MemoryFile, MemoryLink, archive_of, extract
 from threads.sandbox.manifest import ManifestEntry, manifest_of
 
 _SCRIPT: TypeAdapter[SandboxScript] = TypeAdapter(SandboxScript)
 KILLED = 137
+TAR_FAILED = 2
+KNOWN = {sha256_hex(body): body for body in (b"# demo\n",)}
+"""The bytes of the files conformance snapshot scripts name only by hash (spec/tools/fixtures
+pieces.py README_BYTES), so an export of a scripted restore can carry them."""
 
 
 class LostAnswerError(Exception):
@@ -51,6 +59,10 @@ class Box:
     """By the provider's record of each (a tag, an exec id)."""
     orphans: list[Proc] = field(default_factory=list[Proc])
     alive: bool = True
+    modes: dict[str, int] = field(default_factory=dict[str, int])
+    """Modes a tree import set, by path; any other file reads as 0o644."""
+    links: dict[str, str] = field(default_factory=dict[str, str])
+    """Symlinks a tree import made: their targets, by path."""
 
 
 @dataclass
@@ -87,6 +99,7 @@ class FakeBackend:
     around_capture: tuple[Callable[[Box], None], Callable[[Box], None]] | None = None
     """Guest writes just before and just after the next capture."""
     _next: int = 0
+    _tasks: set["asyncio.Task[None]"] = field(default_factory=set["asyncio.Task[None]"])
 
     def __post_init__(self) -> None:
         for name, snap in self.script.get("snapshots", {}).items():
@@ -206,9 +219,13 @@ class FakeBackend:
                 seen = {k: env[f"__t_v_{k}"] for k in keep.split() if f"__t_v_{k}" in env}
                 fed = box.files.get(stdin, b"") if stdin else b""
                 proc = self._command(box, command, seen, fed)
-            case ("/bin/sh", "-c", posix.MANIFEST):
-                manifest = box.manifest if box.manifest is not None else _workspace(box.files)
-                proc = _done(0, _nul(manifest))
+            case ("/bin/sh", "-c", posix.EXPORT_TREE):
+                proc = _done(0, archive_of(_tree(box)))
+            case ("/bin/sh", "-c", posix.IMPORT_TREE, _, path):
+                proc = _running()
+                task = asyncio.ensure_future(_import(box, path, proc))
+                self._tasks.add(task)
+                task.add_done_callback(self._tasks.discard)
             case _:
                 proc = _done(127, b"", f"sh: {argv[0]}: not found\n".encode())
         box.processes[tag or self._name("proc")] = proc
@@ -272,10 +289,40 @@ def _workspace(files: Mapping[str, bytes]) -> list[ManifestEntry]:
     return manifest_of({p: d for p, d in files.items() if p.startswith(posix.WORKSPACE + "/")})
 
 
-def _nul(manifest: list[ManifestEntry]) -> bytes:
-    return b"".join(
-        f"{e['path']}\0{e['mode']:o}\0{e['size']}\0{e['sha256']}\0".encode() for e in manifest
-    )
+def _tree(box: Box) -> list[MemoryEntry]:
+    """What `tar -cf - -C /workspace .` sees: the files, a scripted restore's by their known
+    bytes, and the links."""
+    inside = posix.WORKSPACE + "/"
+    files = {p.removeprefix(inside): d for p, d in box.files.items() if p.startswith(inside)}
+    modes = {e["path"]: e["mode"] for e in box.manifest or []}
+    for e in box.manifest or []:
+        if e["path"] not in files:
+            files[e["path"]] = KNOWN[e["sha256"]]
+    tree: list[MemoryEntry] = [
+        MemoryFile(p, box.modes.get(inside + p, modes.get(p, 0o644)), d) for p, d in files.items()
+    ]
+    tree += [MemoryLink(p.removeprefix(inside), t) for p, t in box.links.items()]
+    return tree
+
+
+async def _import(box: Box, path: str, proc: Proc) -> None:
+    """`tar -xpf <path> -C /workspace`, then the upload removed."""
+    data = box.files.pop(path, b"")
+
+    async def source() -> AsyncIterator[bytes]:
+        yield data
+
+    got = await extract(source())
+    if isinstance(got, Err):
+        _end(proc, TAR_FAILED)
+        return
+    for e in got.value:
+        at = f"{posix.WORKSPACE}/{e.path}"
+        if isinstance(e, MemoryLink):
+            box.links[at] = e.target
+        else:
+            box.files[at], box.modes[at] = e.data, e.mode
+    _end(proc, 0)
 
 
 def _done(code: int, stdout: bytes = b"", stderr: bytes = b"") -> Proc:

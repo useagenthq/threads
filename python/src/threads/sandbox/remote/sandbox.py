@@ -7,11 +7,9 @@ driver, so nothing is declared without its proof."""
 from dataclasses import dataclass
 from typing import Literal, assert_never
 
-from threads.adapters.sandboxes import posix
 from threads.log import SnapshotData
 from threads.loop.model import Found, LookupUnknown
 from threads.result import Err, Ok
-from threads.sandbox.manifest import manifest_hash
 from threads.sandbox.protocol import (
     Looked,
     LookupSupport,
@@ -155,10 +153,10 @@ class RemoteSandbox:
     ) -> Ok[SandboxSession] | Err[SandboxError]:
         """The child when its tree hashes to `expected`. Otherwise it is killed before the
         error returns: the ledger reads a typed restore failure as nothing created."""
-        tree = await posix.manifest(child, context)
+        tree = await child.measured(context)
         if isinstance(tree, Err) and is_refusal(tree.error):
             return tree
-        if isinstance(tree, Ok) and manifest_hash(tree.value) == expected:
+        if isinstance(tree, Ok) and tree.value == expected:
             return Ok(child)
         # Never answered as a lost create (unavailable): the ledger would look the child up and
         # use it unverified. A kill that failed leaves it to the provider's expiry.

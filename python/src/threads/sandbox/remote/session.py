@@ -2,7 +2,7 @@
 driver's transport, and everything above the raw provider calls is the shared POSIX kit
 (adapters/sandboxes/posix.py)."""
 
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncIterable, Awaitable, Callable, Mapping, Sequence
 from typing import assert_never
 
 from threads.adapters.sandboxes import posix
@@ -10,7 +10,6 @@ from threads.adapters.sandboxes.fence import dispatch
 from threads.log import SnapshotData
 from threads.loop.tools import Termination
 from threads.result import Err, Ok
-from threads.sandbox.manifest import manifest_hash
 from threads.sandbox.protocol import (
     NO_ENV,
     ExecOutput,
@@ -28,6 +27,7 @@ from threads.sandbox.remote.driver import (
     Taken,
     Unconfirmed,
 )
+from threads.sandbox.trees import tree_hash
 
 
 async def call[T](
@@ -113,6 +113,25 @@ class RemoteSession:
             return bad
         return await call(self._driver, context, lambda: self._driver.read(self._id, path))
 
+    async def export_tree(self, context: SandboxContext) -> Ok[ExecOutput] | Err[SandboxError]:
+        return await posix.export_tree(self, context)
+
+    async def import_tree(
+        self, tar: AsyncIterable[bytes], context: SandboxContext
+    ) -> Ok[None] | Err[SandboxError]:
+        return await posix.import_tree(self, tar, context)
+
+    async def measured(self, context: SandboxContext) -> Ok[str] | Err[SandboxError]:
+        """The manifest hash of /workspace through its export; an archive the sandbox
+        answered that the reader refuses is unavailable."""
+        hashed = await tree_hash(self, context)
+        if isinstance(hashed, Ok):
+            return hashed
+        failed = hashed.error
+        if isinstance(failed, SandboxError):
+            return Err(failed)
+        return Err(SandboxError("unavailable", failed.message))
+
     async def snapshot(
         self, operation_key: str, context: SandboxContext
     ) -> Ok[SnapshotData] | Err[SandboxError]:
@@ -123,15 +142,15 @@ class RemoteSession:
         if capture is None or capture.quiescence == "unconfirmed":
             message = f"{self._provider} has no confirmed quiescent snapshot"
             return Err(SandboxError("unavailable", message))
-        before = await posix.manifest(self, context)
+        before = await self.measured(context)
         if isinstance(before, Err):
             return before
         taken = await call(self._driver, context, lambda: capture.take(self._id, operation_key))
         if isinstance(taken, Err):
             return taken
-        after = await posix.manifest(self, context)
-        hashed = manifest_hash(before.value)
-        if isinstance(after, Ok) and manifest_hash(after.value) == hashed:
+        after = await self.measured(context)
+        hashed = before.value
+        if isinstance(after, Ok) and after.value == hashed:
             return Ok(self._data(capture, taken.value, hashed))
         await call(self._driver, context, lambda: capture.delete(taken.value.ref))
         if isinstance(after, Err):

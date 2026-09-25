@@ -85,7 +85,7 @@ def e2b(  # noqa: PLR0913 - the provider's settings
     """An E2B sandbox provider (spec/api.json conventions.adapters). `api_key` defaults to
     `secret("E2B_API_KEY")`, resolved at setup; it authenticates the control plane only and
     never enters a sandbox.
-    `template` must carry /bin/sh, sed, find, stat and sha256sum (E2B's base does)."""
+    `template` must carry /bin/sh, env and tar (E2B's base does)."""
     if lifetime_ms <= 0:
         raise ConfigError(
             "invalid_config", f"e2b: lifetime_ms must be a positive number of ms, not {lifetime_ms}"

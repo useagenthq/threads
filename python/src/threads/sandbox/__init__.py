@@ -14,6 +14,7 @@ from threads.sandbox.protocol import (
     SandboxId,
     SandboxInfo,
     SandboxSession,
+    Trees,
 )
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "SandboxId",
     "SandboxInfo",
     "SandboxSession",
+    "Trees",
     "fake_sandbox",
     "run_exec",
 ]

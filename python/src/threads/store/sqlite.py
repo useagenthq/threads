@@ -5,11 +5,11 @@ with the default ":memory:" path is the in-memory store tests use: the same code
 """
 
 import sqlite3
-from collections.abc import Callable, Sequence
+from collections.abc import AsyncIterable, Callable, Sequence
 from dataclasses import replace
 from functools import partial
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from threads.log import BranchId, Event, EventId, ParseError, ThreadId
 from threads.log.digest import sha256_hex
@@ -36,6 +36,9 @@ from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
 from threads.store.writer import Writer
 from threads.team.imported import import_indexed
+
+if TYPE_CHECKING:
+    from threads.sandbox.tree.tar import ArchiveInvalid, StoredTree
 
 
 class SqliteStore(BranchStore):
@@ -248,6 +251,19 @@ class SqliteStore(BranchStore):
     async def spill(self) -> Spill:
         """A new artifact written a chunk at a time, never held whole in memory."""
         return Spill(self._worker, await self._worker.free(lambda _: self._artifacts.sink()))
+
+    async def put_tree(self, tar: AsyncIterable[bytes]) -> "Ok[StoredTree] | Err[ArchiveInvalid]":
+        """Reads an untrusted archive into artifacts, its files and then its tree. The reader
+        is async and the sinks are synchronous: every sink call runs on the store's thread, as
+        the other artifact writes do. Tree bytes skip the redacting Spill: redaction would
+        change their hashes (workspace inputs refuse registered secrets instead)."""
+        # threads.sandbox imports the store (its protocol names the store's contexts).
+        from threads.sandbox.tree.tar import store_tar  # noqa: PLC0415 - an import cycle
+
+        return await store_tar(tar, self._artifacts, run=self._offload)
+
+    async def _offload[T](self, job: Callable[[], T]) -> T:
+        return await self._worker.free(lambda _: job())
 
     async def sweep_artifacts(self, keep: frozenset[str], older_than: int) -> tuple[str, ...]:
         """gc's sweep: the artifacts not in `keep` stored before `older_than` (epoch ms)."""

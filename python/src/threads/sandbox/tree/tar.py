@@ -9,7 +9,8 @@ async stream. A small reader gives both languages the same rules.
 
 from collections.abc import AsyncIterable, Callable
 from dataclasses import dataclass, replace
-from typing import Final, Literal
+from functools import partial
+from typing import Final, Literal, Protocol
 
 from threads.result import Err, Ok
 from threads.sandbox.tree.header import BLOCK, Header, Pax, is_zero, parse_header, parse_pax
@@ -84,11 +85,25 @@ class _Pending:
     link: bytes | None = None
 
 
+class Offload(Protocol):
+    """Runs one synchronous artifact call. `inline` for memory artifacts and hashing sinks; a
+    store binds it to its worker thread (SqliteStore.put_tree), so a file sink's disk writes
+    and fsyncs never block the event loop."""
+
+    async def __call__[T](self, job: Callable[[], T], /) -> T: ...
+
+
+async def inline[T](job: Callable[[], T], /) -> T:
+    """Runs `job` right here: for sinks that never touch a disk."""
+    return job()
+
+
 @dataclass(frozen=True, slots=True)
 class _State:
     src: Source
     caps: Caps
     open_sink: Callable[[], ArtifactSink]
+    run: Offload
     paths: PathSet
     entries: dict[str, TreeEntry]
     """By path, in archive order."""
@@ -128,12 +143,19 @@ async def _meta(s: _State, h: Header, pending: _Pending, at: int) -> _Step:
 
 async def _file(s: _State, path: str, size: int, mode: int) -> Ok[TreeEntry] | Err[ArchiveInvalid]:
     """A file's bytes into a new artifact; its tree entry, or why the archive is refused."""
-    sink = s.open_sink()
-    whole = await s.src.take(size, sink.write) and await s.src.take(_padding(size), _skip)
-    if not whole:
-        sink.discard()
+    sink = await s.run(s.open_sink)
+    left = size
+    while left:
+        piece = await s.src.next(left)
+        if piece is None:
+            break
+        await s.run(partial(sink.write, piece))
+        left -= len(piece)
+    if left or not await s.src.take(_padding(size), _skip):
+        await s.run(sink.discard)
         return _invalid("truncated", path, s.src.offset)
-    return Ok(TreeFile(path=path, kind="file", mode=mode, size=size, sha256=sink.commit()))
+    sha256 = await s.run(sink.commit)
+    return Ok(TreeFile(path=path, kind="file", mode=mode, size=size, sha256=sha256))
 
 
 def _linked(
@@ -252,11 +274,15 @@ async def _trailer(s: _State) -> Err[ArchiveInvalid] | None:
 
 
 async def read_tar(
-    source: AsyncIterable[bytes], open_sink: Callable[[], ArtifactSink], caps: Caps = CAPS
+    source: AsyncIterable[bytes],
+    open_sink: Callable[[], ArtifactSink],
+    caps: Caps = CAPS,
+    run: Offload = inline,
 ) -> Ok[Tree] | Err[ArchiveInvalid]:
     """Reads an untrusted tar stream into a tree, each regular file streamed into an artifact
-    from `open_sink`. A refused archive may leave the files it already stored, unreferenced."""
-    s = _State(Source(source), caps, open_sink, PathSet(), {})
+    from `open_sink`, every sink call made through `run`. A refused archive may leave the files
+    it already stored, unreferenced."""
+    s = _State(Source(source), caps, open_sink, run, PathSet(), {})
     pending = _Pending()
     try:
         while True:
@@ -289,12 +315,13 @@ class StoredTree:
 
 
 async def store_tar(
-    source: AsyncIterable[bytes], artifacts: ArtifactStore, caps: Caps = CAPS
+    source: AsyncIterable[bytes], artifacts: ArtifactStore, caps: Caps = CAPS, run: Offload = inline
 ) -> Ok[StoredTree] | Err[ArchiveInvalid]:
     """Reads the archive into `artifacts`: the files first, then the tree artifact that lists
-    them."""
-    match await read_tar(source, artifacts.sink, caps):
+    them. Tree bytes are stored as they are: never redacted, which would change their hashes."""
+    match await read_tar(source, artifacts.sink, caps, run):
         case Err() as failed:
             return failed
         case Ok(value=tree):
-            return Ok(StoredTree(tree, artifacts.put(encode_tree(tree)), tree_manifest_hash(tree)))
+            sha256 = await run(partial(artifacts.put, encode_tree(tree)))
+            return Ok(StoredTree(tree, sha256, tree_manifest_hash(tree)))

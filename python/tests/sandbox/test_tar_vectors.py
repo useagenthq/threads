@@ -12,7 +12,7 @@ from tar_kit import chunkings, vector
 from threads.result import Err, Ok
 from threads.sandbox.tree.build import Owner, build_tar
 from threads.sandbox.tree.tar import CAPS, Caps, read_tar, store_tar
-from threads.sandbox.tree.tree import encode_tree, parse_tree, tree_manifest_hash
+from threads.sandbox.tree.tree import encode_tree, masked, parse_tree, tree_manifest_hash
 from threads.store.artifacts import MemoryArtifacts
 
 
@@ -62,7 +62,7 @@ def test_tree_parses_back_and_rebuilds(case: dict[str, JsonValue]) -> None:
         for p in parts:
             yield p
 
-    assert asyncio.run(read_tar(source(), MemoryArtifacts().sink)) == Ok(parsed.value)
+    assert asyncio.run(read_tar(source(), MemoryArtifacts().sink)) == Ok(masked(parsed.value))
 
 
 @pytest.mark.parametrize("case", BAD_TREES, ids=lambda c: str(c["name"]))

@@ -6,7 +6,7 @@ failures are `SandboxError` values; an adapter raises only for bugs.
 """
 
 import posixpath
-from collections.abc import AsyncIterator, Awaitable, Mapping, Sequence
+from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Final, Literal, NewType, Protocol, assert_never, runtime_checkable
@@ -222,6 +222,24 @@ class Sandbox(Protocol):
         self, ref: str, context: SandboxContext
     ) -> Ok[Literal["released", "already_gone"]] | Err[SandboxError]:
         """Releases a snapshot by its durable ref."""
+        ...
+
+
+@runtime_checkable
+class Trees(Protocol):
+    """spec/api.json `SandboxSession.export_tree` and `import_tree`, an optional capability of a
+    `SandboxSession`: /workspace moved as one tar archive. Core reads every export with the
+    strict tree reader (sandbox/trees.py)."""
+
+    async def export_tree(self, context: SandboxContext) -> Ok[ExecOutput] | Err[SandboxError]:
+        """The archive on stdout, then exit code 0; any other code is a failed export."""
+        ...
+
+    async def import_tree(
+        self, tar: AsyncIterable[bytes], context: SandboxContext
+    ) -> Ok[None] | Err[SandboxError]:
+        """Extracts a host-built archive (modes already masked to 0o777) into /workspace, owner
+        dropped."""
         ...
 
 

@@ -94,8 +94,8 @@ def modal(  # noqa: PLR0913 - the options a Modal sandbox is configured by
     connect: Connect | None = None,
 ) -> ModalSandbox:
     """A Modal sandbox provider (extra `modal`). `image_id` is a built Modal image (`im-...`,
-    for example `modal.Image.debian_slim().build(app)` once at setup); it needs /bin/sh, sed,
-    find, sha256sum and stat. The tokens default to `secret("MODAL_TOKEN_ID")` and
+    for example `modal.Image.debian_slim().build(app)` once at setup); it needs /bin/sh, env
+    and tar. The tokens default to `secret("MODAL_TOKEN_ID")` and
     `secret("MODAL_TOKEN_SECRET")`, are resolved at setup and go only to Modal's control plane.
     `name` is SandboxInfo.provider: rows of another name are never touched."""
     if not image_id:

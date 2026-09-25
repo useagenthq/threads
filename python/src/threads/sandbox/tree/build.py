@@ -11,7 +11,15 @@ from threads.log import ParseError
 from threads.render.artifacts import ReadArtifact
 from threads.result import Err, Ok
 from threads.sandbox.tree.header import BLOCK
-from threads.sandbox.tree.tree import Tree, TreeDir, TreeEntry, TreeFile, TreeSymlink, broken
+from threads.sandbox.tree.tree import (
+    PERMISSIONS,
+    Tree,
+    TreeDir,
+    TreeEntry,
+    TreeFile,
+    TreeSymlink,
+    broken,
+)
 
 _FIELD = 100
 _MAX_ID = 0o7777777
@@ -73,12 +81,13 @@ def _padding(size: int) -> bytes:
 
 
 def _headers(e: TreeEntry, owner: Owner) -> list[bytes]:
-    """The headers of one entry: a pax header first when its name or link is too long."""
+    """The headers of one entry: a pax header first when its name or link is too long. Setuid,
+    setgid and sticky bits never reach an import: a sandbox extracting as root keeps them."""
     match e:
         case TreeFile():
-            f = _Fields(b"0", e.path.encode(), b"", e.mode, e.size)
+            f = _Fields(b"0", e.path.encode(), b"", e.mode & PERMISSIONS, e.size)
         case TreeDir():
-            f = _Fields(b"5", f"{e.path}/".encode(), b"", e.mode, 0)
+            f = _Fields(b"5", f"{e.path}/".encode(), b"", e.mode & PERMISSIONS, 0)
         case TreeSymlink():
             f = _Fields(b"2", e.path.encode(), e.target.encode(), 0o777, 0)
         case _:

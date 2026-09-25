@@ -109,6 +109,7 @@ from threads.sandbox import (  # noqa: E402
     Sandbox,
     SandboxInfo,
     SandboxSession,
+    Trees,
     fake_sandbox,
 )
 from threads.secrets import Secret, secret  # noqa: E402
@@ -217,6 +218,7 @@ __all__ = [
     "TeamStartResult",
     "Thread",
     "Tool",
+    "Trees",
     "Verdict",
     "WaitResult",
     "Waited",

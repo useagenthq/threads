@@ -18,6 +18,7 @@ from threads.sandbox.tree.tree import (
     TreeFile,
     TreeSymlink,
     encode_tree,
+    masked,
     parse_tree,
     sorted_tree,
 )
@@ -69,12 +70,12 @@ def _read(data: bytes, sizes: list[int]) -> Ok[Tree] | Err[ArchiveInvalid]:
 
 @settings(max_examples=150, deadline=None)
 @given(trees(), st.lists(st.integers(0, 700)))
-def test_a_tree_survives_build_then_read(
+def test_a_tree_survives_build_masked_then_read(
     made: tuple[Tree, MemoryArtifacts], sizes: list[int]
 ) -> None:
     tree, artifacts = made
     assert parse_tree(encode_tree(tree)) == Ok(tree)
-    assert _read(_archive(tree, artifacts), [max(1, s) for s in sizes]) == Ok(tree)
+    assert _read(_archive(tree, artifacts), [max(1, s) for s in sizes]) == Ok(masked(tree))
 
 
 @settings(max_examples=300, deadline=None)

@@ -15,6 +15,7 @@ from threads.sandbox.manifest import ManifestEntry, manifest_hash
 from threads.sandbox.tree.paths import PathSet, in_root, is_normal
 
 __all__ = [
+    "PERMISSIONS",
     "Tree",
     "TreeDir",
     "TreeEntry",
@@ -22,6 +23,7 @@ __all__ = [
     "TreeSymlink",
     "broken",
     "encode_tree",
+    "masked",
     "parse_tree",
     "sorted_tree",
     "tree_manifest_hash",
@@ -41,6 +43,21 @@ def encode_tree(tree: Tree) -> bytes:
             return text.encode("utf-8")
         case Err(error=reason):
             raise ValueError(reason)
+
+
+PERMISSIONS = 0o777
+"""The mode bits an import keeps: setuid, setgid and sticky (0o7000) are masked off."""
+
+
+def masked(tree: Tree) -> Tree:
+    """The tree as an import of its built archive leaves it: every file and dir mode masked."""
+    return Tree(
+        tree_version=tree.tree_version,
+        entries=[
+            e if isinstance(e, TreeSymlink) else e.model_copy(update={"mode": e.mode & PERMISSIONS})
+            for e in tree.entries
+        ],
+    )
 
 
 def tree_manifest_hash(tree: Tree) -> str:

@@ -2,7 +2,7 @@
 `tools` (the command's first word names the entry)."""
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from collections.abc import AsyncIterable, AsyncIterator, Callable, Mapping, Sequence
 from typing import Literal, NotRequired, TypedDict
 
 from pydantic import ConfigDict, JsonValue, with_config
@@ -11,6 +11,15 @@ from threads.log import SnapshotData
 from threads.loop.tools import Termination
 from threads.result import Err, Ok
 from threads.sandbox.admit import admit_exec
+from threads.sandbox.fake_trees import (
+    WORKSPACE,
+    MemoryEntry,
+    MemoryFile,
+    MemoryLink,
+    archive_of,
+    exported,
+    extract,
+)
 from threads.sandbox.protocol import (
     NO_ENV,
     ExecOutput,
@@ -45,6 +54,10 @@ class FakeSession:
     ) -> None:
         self._id = ident
         self.files: dict[str, bytes] = dict(files)
+        self.modes: dict[str, int] = {}
+        """Modes an import set, by path; any other file reads as 0o644."""
+        self.links: dict[str, str] = {}
+        """Symlinks an import made: their targets, by path."""
         self._tools = tools
         self._capture = capture
         self._close = close
@@ -115,6 +128,37 @@ class FakeSession:
     ) -> Ok[SnapshotData] | Err[SandboxError]:
         stale = await refused(context)
         return stale or Ok(self._capture(self, operation_key))
+
+    async def export_tree(self, context: SandboxContext) -> Ok[ExecOutput] | Err[SandboxError]:
+        """The fake can't set a setuid bit, so exporting through the (masking) builder reports
+        every mode it holds."""
+        stale = await refused(context)
+        if stale is not None:
+            return stale
+        entries: list[MemoryEntry] = [
+            MemoryFile(p.removeprefix(WORKSPACE), self.modes.get(p, 0o644), data)
+            for p, data in self.files.items()
+            if p.startswith(WORKSPACE)
+        ]
+        entries += [MemoryLink(p.removeprefix(WORKSPACE), t) for p, t in self.links.items()]
+        return Ok(exported(archive_of(entries)))
+
+    async def import_tree(
+        self, tar: AsyncIterable[bytes], context: SandboxContext
+    ) -> Ok[None] | Err[SandboxError]:
+        stale = await refused(context)
+        if stale is not None:
+            return stale
+        got = await extract(tar)
+        if isinstance(got, Err):
+            return Err(SandboxError("unavailable", got.error.message))
+        for e in got.value:
+            at = WORKSPACE + e.path
+            if isinstance(e, MemoryLink):
+                self.links[at] = e.target
+            else:
+                self.files[at], self.modes[at] = e.data, e.mode
+        return Ok(None)
 
     async def close(self, context: SandboxContext) -> Ok[None] | Err[SandboxError]:
         stale = await refused(context)

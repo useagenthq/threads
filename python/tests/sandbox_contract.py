@@ -13,6 +13,7 @@ from typing import Protocol
 
 from sandbox_backend import Box, FakeBackend
 from sandbox_kit import OPEN, KitContext
+from tree_contract import TREE_CHECKS
 
 from threads.adapters.sandboxes.posix import collect
 from threads.loop.model import Found, LookupUnknown, NotFound, NotFoundNonfinal
@@ -285,4 +286,5 @@ CHECKS: tuple[Check, ...] = (
     a_lost_create_is_found_by_its_key,
     attach_then_close_releases,
     a_snapshot_release_is_idempotent,
+    *TREE_CHECKS,
 )

@@ -1,22 +1,22 @@
 """The sandbox-side scripts run in a real `sh`, as a provider runs them, instead of through a
 fake that synthesizes their output."""
 
-import hashlib
-import shlex
+import asyncio
+import os
 import subprocess
-import sys
+from collections.abc import AsyncIterable, AsyncIterator
 from pathlib import Path
 
 import pytest
+from sandbox_kit import OPEN
+from tree_contract import EXECUTABLE, sample_tree
 
-from threads.adapters.sandboxes.posix import (
-    MANIFEST,
-    WORKSPACE,
-    parse_manifest,
-    wrap,
-)
-from threads.result import Ok
-from threads.sandbox.manifest import ManifestEntry, in_order, manifest_hash
+from threads.adapters.sandboxes.posix import EXPORT_TREE, IMPORT_TREE, WORKSPACE, wrap
+from threads.result import Err, Ok
+from threads.sandbox.protocol import ExecOutput, SandboxContext, SandboxError
+from threads.sandbox.tree.tree import Tree
+from threads.sandbox.trees import Misplaced, place_tree, tree_hash
+from threads.store.artifacts import MemoryArtifacts
 
 NOT_FOUND = 127
 
@@ -68,9 +68,10 @@ def test_a_missing_command_or_a_builtin_exits_127_and_says_so(name: str) -> None
     assert f"threads: command not found: {name}".encode() in done.stderr
 
 
-# The tree typescript/packages/core/test/sandbox/remote/scripts-sh.test.ts pins too, so both
-# languages agree on the hash: nested dirs, a non-ASCII name, a space, an executable, an empty
-# file.
+# A fixed tree: nested dirs, a non-ASCII name, a space, an executable, an empty file. Its hash
+# was pinned by the retired in-sandbox manifest script (find, stat, sha256sum), and
+# typescript/packages/core/test/sandbox/remote/scripts-sh.test.ts pins it too: trees hash as
+# manifests did, in both languages.
 TREE = (
     ("a.txt", b"hello\n", 0o644),
     ("dir/sub/run.sh", b"#!/bin/sh\necho hi\n", 0o755),
@@ -79,23 +80,81 @@ TREE = (
     ("empty", b"", 0o644),
 )
 TREE_HASH = "5002ad0ef59bdacdec8326269f3818c29b9f57ec31ff8c1973451a54a5b2a60f"
+# macOS tar would add AppleDouble `._` entries for extended metadata.
+_ENV = {"PATH": "/usr/bin:/bin", "COPYFILE_DISABLE": "1"}
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="needs GNU `stat -c`")
-def test_the_manifest_lists_the_tree_exactly_as_the_host_sees_it(tmp_path: Path) -> None:
+class _Shell:
+    """The kit's tree scripts run by a real `sh` over `root` as /workspace (bsdtar on macOS)."""
+
+    def __init__(self, root: Path) -> None:
+        self._root = root
+
+    def _here(self, script: str) -> str:
+        return script.replace(WORKSPACE, str(self._root))
+
+    async def export_tree(self, context: SandboxContext) -> Ok[ExecOutput] | Err[SandboxError]:
+        del context
+        proc = await asyncio.create_subprocess_exec(
+            "/bin/sh", "-c", self._here(EXPORT_TREE), env=_ENV, stdout=-1, stderr=-1
+        )
+        assert proc.stdout is not None
+        assert proc.stderr is not None
+        return Ok(ExecOutput(proc.wait(), _chunks(proc.stdout), _chunks(proc.stderr)))
+
+    async def import_tree(
+        self, tar: AsyncIterable[bytes], context: SandboxContext
+    ) -> Ok[None] | Err[SandboxError]:
+        del context
+        upload = self._root.parent / f"{self._root.name}.tar"
+        upload.write_bytes(b"".join([chunk async for chunk in tar]))
+        done = subprocess.run(  # noqa: S603 - fixed argv
+            ["/bin/sh", "-c", self._here(IMPORT_TREE), "threads", str(upload)],
+            env=_ENV,
+            capture_output=True,
+            check=False,
+        )
+        assert not upload.exists(), "the import left its archive behind"
+        if done.returncode:
+            return Err(SandboxError("unavailable", done.stderr.decode()))
+        return Ok(None)
+
+
+async def _chunks(stream: asyncio.StreamReader) -> AsyncIterator[bytes]:
+    while chunk := await stream.read(65536):
+        yield chunk
+
+
+def _root(tmp_path: Path) -> Path:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    return root
+
+
+def test_an_export_hashes_a_tree_as_the_retired_manifest_script_did(tmp_path: Path) -> None:
+    root = _root(tmp_path)
     for path, body, mode in TREE:
-        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / path).write_bytes(body)
-        (tmp_path / path).chmod(mode)
-    script = MANIFEST.replace(f"cd {WORKSPACE}", f"cd {shlex.quote(str(tmp_path))}")
-    done = subprocess.run(["/bin/sh", "-c", script], capture_output=True, check=True)  # noqa: S603
-    expected = in_order(
-        ManifestEntry(path=p, mode=m, size=len(b), sha256=hashlib.sha256(b).hexdigest())
-        for p, b, m in TREE
-    )
-    assert parse_manifest(done.stdout) == Ok(expected)
-    assert manifest_hash(expected) == TREE_HASH
+        (root / path).parent.mkdir(parents=True, exist_ok=True)
+        (root / path).write_bytes(body)
+        (root / path).chmod(mode)
+    assert asyncio.run(tree_hash(_Shell(root), OPEN)) == Ok(TREE_HASH)
 
 
-def test_an_empty_mode_field_from_bsd_stat_is_refused() -> None:
-    assert not isinstance(parse_manifest(b"a\0\x001\0" + b"a" * 64 + b"\0"), Ok)
+def test_place_tree_keeps_modes_and_symlinks_and_masks_setuid(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    artifacts = MemoryArtifacts()
+    placed = asyncio.run(place_tree(_Shell(root), sample_tree(artifacts), artifacts.get, OPEN))
+    assert placed == Ok(None)
+    assert (root / "bin/run").stat().st_mode & 0o7777 == EXECUTABLE
+    assert (root / "bin/su").stat().st_mode & 0o7777 == EXECUTABLE
+    assert os.readlink(root / "link") == "bin/run"
+
+
+def test_place_tree_refuses_a_workspace_that_is_not_empty(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    (root / "left").write_bytes(b"x")
+    empty = Tree(tree_version=1, entries=[])
+    placed = asyncio.run(place_tree(_Shell(root), empty, MemoryArtifacts().get, OPEN))
+    assert isinstance(placed, Err)
+    assert isinstance(placed.error, Misplaced)
+    assert placed.error.code == "workspace_not_empty"

@@ -1,21 +1,18 @@
 """A real tree archived by the host's `tar -cf - -C dir .` (GNU tar on Linux, bsdtar on macOS)
-reads as the tree on disk. On Linux the tar-based manifest hash also equals the old MANIFEST
-script's for the same tree, so snapshots taken before trees still verify."""
+reads as the tree on disk. The hash of a tree exported this way equals the retired manifest
+script's (tests/adapters/sandboxes/test_posix_sh.py pins that script's hash)."""
 
 import asyncio
 import hashlib
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 from tar_kit import chunked
 
-from threads.adapters.sandboxes.posix import MANIFEST, parse_manifest
 from threads.result import Ok
-from threads.sandbox.manifest import manifest_hash
 from threads.sandbox.tree.tar import StoredTree, store_tar
 from threads.sandbox.tree.tree import TreeDir, TreeFile, TreeSymlink
 from threads.store.artifacts import MemoryArtifacts
@@ -72,15 +69,3 @@ def test_the_host_tar_reads_as_the_tree_on_disk(tmp_path: Path) -> None:
         ],
         key=lambda e: e.path.encode("utf-16-be"),
     )
-
-
-@pytest.mark.skipif(sys.platform != "linux", reason="the old script needs GNU find and stat")
-def test_the_old_manifest_script_hashes_the_same_tree_the_same(tmp_path: Path) -> None:
-    root = _tree(tmp_path)
-    script = MANIFEST.replace("cd /workspace", f"cd {root}")
-    out = subprocess.run(  # noqa: S603 - fixed argv
-        ["/bin/sh", "-c", script], capture_output=True, check=True, env=dict(os.environ)
-    )
-    manifest = parse_manifest(out.stdout)
-    assert isinstance(manifest, Ok)
-    assert _stored(root).manifest_hash == manifest_hash(manifest.value)
