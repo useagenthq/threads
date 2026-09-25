@@ -94,7 +94,13 @@ def _positional_problems(
             errs.append(
                 f"{got.name}: required is {got.default is EMPTY}, declared {want['required']}"
             )
-        errs += _type_problem(got.name, hints.get(got.name), want, ns)
+        # As for options: an optional positional with no literal default is `T | None = None`.
+        or_none = not want["required"] and "default" not in want
+        errs += _type_problem(got.name, hints.get(got.name), want, ns, or_none=or_none)
+        if or_none and got.default is not EMPTY and got.default is not None:
+            errs.append(
+                f"{got.name}: default {got.default!r} != None (no literal default declared)"
+            )
     return errs
 
 

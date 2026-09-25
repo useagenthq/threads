@@ -1005,6 +1005,30 @@
       "tests/adapters/test_mcp.py::test_a_stdio_server_in_one_line_pins_sorted_namespaced_tools_and_records_calls"
     ]
   },
+  "postgres": {
+    "ts": [
+      "packages/postgres/test/factory.test.ts > postgres() > is lazy: it returns the opaque Store and connects nothing"
+    ],
+    "py": [
+      "tests/postgres/test_pg_factory.py::test_postgres_is_lazy_and_without_a_url_is_invalid_config_at_first_use"
+    ]
+  },
+  "postgres!invalid_config": {
+    "ts": [
+      "packages/postgres/test/factory.test.ts > postgres() > without a URL or DATABASE_URL, the first use is invalid_config naming DATABASE_URL"
+    ],
+    "py": [
+      "tests/postgres/test_pg_factory.py::test_postgres_is_lazy_and_without_a_url_is_invalid_config_at_first_use"
+    ]
+  },
+  "postgres.url=default": {
+    "ts": [
+      "packages/postgres/test/factory.test.ts > postgres() > url defaults to DATABASE_URL"
+    ],
+    "py": [
+      "tests/postgres/test_pg_factory.py::test_url_defaults_to_database_url_without_a_server"
+    ]
+  },
   "mem0": {
     "ts": [
       "packages/mem0/test/mem0.test.ts > mem0() is refused at setup with transport_fence_unsupported"

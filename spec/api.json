@@ -86,6 +86,13 @@
       "provider": "Modal",
       "doc": "Sandboxes on Modal over the official SDK's gRPC protocol (Python extra modal), on channels fenced at every request. The TypeScript package always refuses: Modal's JS SDK sends commands over a transport threads can't fence."
     },
+    "postgres": {
+      "kind": "adapter",
+      "ts": "@threads/postgres",
+      "py": "threads.postgres",
+      "provider": "PostgreSQL",
+      "doc": "The log and artifact store on Postgres 16 or later (Python extra postgres), for hosts on several processes or machines. Dependency reason: Postgres has no official vendor SDK. TypeScript uses pg (node-postgres), the standard pure-JavaScript client, which runs on Bun and Node and has pooling, parameterized queries and SQLSTATE codes. Python uses psycopg 3 (binary), the maintained reference adapter, whose sync connection fits the store's worker thread and whose errors carry typed SQLSTATEs."
+    },
     "mem0": {
       "kind": "adapter",
       "ts": "@threads/mem0",
@@ -251,8 +258,8 @@
     {
       "id": "store-sealed",
       "open": "The draft design lists store among provider interfaces; allows only SQLite in v0.1.",
-      "choice": "Store is opaque in v0.1: sqlite() is the only implementation and no methods are public.",
-      "why": "Don't freeze an interface nobody implements yet."
+      "choice": "Store is opaque: sqlite() and postgres() are the implementations and no methods are public. The driver seam is internal: exported at @threads/core/store-driver / threads.store.driver for the in-repo Postgres package only, excluded from the API reference and from semver.",
+      "why": "Don't freeze an interface nobody else implements yet: one internal seam with two in-repo implementations is not a public store interface."
     },
     {
       "id": "approver-default",
@@ -986,11 +993,30 @@
       ],
       "returns": {"$ref": "#/types/Store"}
     },
+    "postgres": {
+      "ts": "postgres",
+      "py": "postgres",
+      "package": "postgres",
+      "doc": "The log and artifact store on Postgres: every host process on every machine points at the same database. Opens lazily: nothing connects until first use, which creates the schema in an empty database and refuses one of another store version or a server before Postgres 16 (unsupported_format). Artifacts are rows of the database. localMemory() and localKnowledge() are refused on it.",
+      "async": false,
+      "params": [
+        {
+          "name": "url",
+          "kind": "positional",
+          "type": {"prim": "string"},
+          "required": false,
+          "default_doc": "the DATABASE_URL environment variable",
+          "doc": "A postgres:// connection URL. Omitted: DATABASE_URL. With neither, the first use is invalid_config naming DATABASE_URL."
+        }
+      ],
+      "returns": {"$ref": "#/types/Store"},
+      "config_errors": [{"code": "invalid_config"}]
+    },
     "localMemory": {
       "ts": "localMemory",
       "py": "local_memory",
       "package": "core",
-      "doc": "Built-in memory: SQLite FTS5 in the run's store.",
+      "doc": "Built-in memory: SQLite FTS5 in the run's store. Refused on a postgres() store (invalid_config naming supermemory() and zep()).",
       "async": false,
       "params": [],
       "returns": {"$ref": "#/types/MemoryProvider"}
@@ -999,7 +1025,7 @@
       "ts": "localKnowledge",
       "py": "local_knowledge",
       "package": "core",
-      "doc": "Built-in knowledge: SQLite FTS5 over admitted versions stored as artifacts.",
+      "doc": "Built-in knowledge: SQLite FTS5 over admitted versions stored as artifacts. Refused on a postgres() store (invalid_config).",
       "async": false,
       "params": [{"name": "paths", "kind": "option", "type": {"array": {"prim": "string"}}, "required": true, "doc": "Host file paths to admit as knowledge sources. The host reads each file on every run: the same bytes are a no-op, changed bytes a new version, and a file that can't be read is a setup error invalid_config."}],
       "returns": {"$ref": "#/types/KnowledgeProvider"}
@@ -3748,7 +3774,7 @@
     "Store": {
       "kind": "interface",
       "role": "opaque",
-      "doc": "The SQLite log and artifact store (sqlite()). Sealed in v0.1: no public methods."
+      "doc": "The log and artifact store: sqlite() or postgres(). Opaque: no public methods."
     },
     "Principal": {
       "kind": "object",

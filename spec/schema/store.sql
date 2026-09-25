@@ -16,6 +16,21 @@
 -- an existing database of an older nonzero version (unsupported_format: "create a new store"):
 -- stores are not migrated before v1, so a new version never runs on a partly installed layout.
 -- A new, empty database (version 0) is created at this version.
+--
+-- Postgres (lane 27) runs the same tables, translated by spec/tools/store_pg.py, which refuses any
+-- construct it doesn't know:
+--   TEXT is text COLLATE "C" on every column, so ordering and comparison are by bytes, as
+--   SQLite's BINARY, whatever the database's default collation; INTEGER is bigint; BLOB is bytea;
+--   an INTEGER PRIMARY KEY rowid is bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY; STRICT is
+--   dropped; partial indexes and CHECKs are kept. A table without a rowid alias gains SQLite's
+--   implicit rowid as a first column, rowid bigint GENERATED ALWAYS AS IDENTITY, so ORDER BY
+--   rowid (insertion order) is portable; statements name their columns, never SELECT *.
+--   The version pragma is the row ('store_version', '<version>') of threads_meta (key, value).
+--   Artifacts are rows of artifacts (sha256, size, bytes, created_at) rather than files;
+--   created_at is the putting process's clock, refreshed on a re-put, and gc's grace window.
+--   Open takes a session-level pg_advisory_lock keyed by sha256("threads-store" || schema) before
+--   its transaction, so N processes opening one empty database create one schema.
+--   Every statement runs inside an explicit SERIALIZABLE transaction (READ ONLY for reads).
 
 CREATE TABLE IF NOT EXISTS threads (
   thread_id TEXT PRIMARY KEY,
@@ -45,6 +60,12 @@ CREATE TABLE IF NOT EXISTS branches (
   dropped_ref TEXT,
   FOREIGN KEY (thread_id, tenant_id) REFERENCES threads (thread_id, tenant_id)
 ) STRICT;
+
+-- A thread has one root branch, its main branch. A root is inserted with
+-- ON CONFLICT (thread_id) WHERE parent_branch_id IS NULL DO NOTHING: of hosts racing to create
+-- one thread, one inserts it and the others get invalid_transition (an import, branch_exists).
+CREATE UNIQUE INDEX IF NOT EXISTS branches_root ON branches (thread_id)
+  WHERE parent_branch_id IS NULL;
 
 -- line is the event's exact bytes. UNIQUE (branch_id, event_id) is physical only: the
 -- resolved-chain rule (semantic rule 28) is checked by validate_next.
@@ -493,5 +514,6 @@ CREATE INDEX IF NOT EXISTS observer_losses_unreported
 -- Version 4: the team tables and pending_wakes. Version 5: lane 14C's schedule_threads,
 -- tenant-scoped schedule_occurrences with pending and retired rows, and questions (planned as
 -- version 2; the team tables took 4 first, so a version-4 store has the older schedule layout and
--- is refused). Version 6: lane 23's observers and observer_losses.
-PRAGMA user_version = 6;
+-- is refused). Version 6: lane 23's observers and observer_losses. Version 7: lane 27's
+-- branches_root, one root branch per thread.
+PRAGMA user_version = 7;

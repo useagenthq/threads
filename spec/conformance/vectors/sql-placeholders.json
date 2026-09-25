@@ -1,0 +1,53 @@
+{
+  "description": "The portable subset's ? placeholders, rewritten by the Postgres drivers outside quoted literals and identifiers: pg numbers them $1..$n; psycopg writes %s and doubles every literal % (spec/schema/README.md, Storage).",
+  "cases": [
+    {
+      "name": "plain",
+      "sql": "SELECT a FROM t WHERE b = ? AND c = ?",
+      "pg": "SELECT a FROM t WHERE b = $1 AND c = $2",
+      "psycopg": "SELECT a FROM t WHERE b = %s AND c = %s"
+    },
+    {
+      "name": "question mark in a string literal",
+      "sql": "SELECT '?' FROM t WHERE b = ?",
+      "pg": "SELECT '?' FROM t WHERE b = $1",
+      "psycopg": "SELECT '?' FROM t WHERE b = %s"
+    },
+    {
+      "name": "like with a literal percent",
+      "sql": "SELECT a FROM t WHERE b LIKE '%x' AND c = ?",
+      "pg": "SELECT a FROM t WHERE b LIKE '%x' AND c = $1",
+      "psycopg": "SELECT a FROM t WHERE b LIKE '%%x' AND c = %s"
+    },
+    {
+      "name": "percent next to a placeholder",
+      "sql": "SELECT ? || '%' || ?",
+      "pg": "SELECT $1 || '%' || $2",
+      "psycopg": "SELECT %s || '%%' || %s"
+    },
+    {
+      "name": "percent outside a literal",
+      "sql": "SELECT a % ? FROM t",
+      "pg": "SELECT a % $1 FROM t",
+      "psycopg": "SELECT a %% %s FROM t"
+    },
+    {
+      "name": "escaped quote inside a literal",
+      "sql": "SELECT 'it''s ?' FROM t WHERE b = ?",
+      "pg": "SELECT 'it''s ?' FROM t WHERE b = $1",
+      "psycopg": "SELECT 'it''s ?' FROM t WHERE b = %s"
+    },
+    {
+      "name": "question mark in a quoted identifier",
+      "sql": "SELECT \"a?\" FROM t WHERE b = ?",
+      "pg": "SELECT \"a?\" FROM t WHERE b = $1",
+      "psycopg": "SELECT \"a?\" FROM t WHERE b = %s"
+    },
+    {
+      "name": "no placeholders",
+      "sql": "SELECT 1",
+      "pg": "SELECT 1",
+      "psycopg": "SELECT 1"
+    }
+  ]
+}

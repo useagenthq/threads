@@ -17,6 +17,10 @@
       "ts": ["typescript/packages/zep/src"],
       "py": ["python/src/threads/zep.py", "python/src/threads/adapters/memories/zep.py"]
     },
+    "postgres": {
+      "ts": ["typescript/packages/postgres/src"],
+      "py": ["python/src/threads/postgres"]
+    },
     "anthropic": {
       "ts": ["typescript/packages/anthropic/src"],
       "py": ["python/src/threads/anthropic.py", "python/src/threads/adapters/models/anthropic"]
@@ -61,6 +65,7 @@
     "brave": { "owner": "15A", "review_only": { "transport": "Seam: the live transport is the network itself; tests pass a fake one." } },
     "supermemory": { "owner": "15A" },
     "zep": { "owner": "15A" },
+    "postgres": { "owner": "27" },
     "anthropic": { "owner": "06" },
     "openai": { "owner": "06" },
     "aiSdk": { "owner": "06", "pending": "Any AI SDK model (TypeScript only)." },
