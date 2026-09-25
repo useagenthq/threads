@@ -4,29 +4,33 @@ as member_observed (its committed result, copied), any other gets a monitor row 
 end append fires. Never both, never neither. Reference: spec/tools/fixtures/ops_observe.py."""
 
 from collections.abc import Sequence
+from typing import Literal
 
 from pydantic import JsonValue
 
-from threads.log import WaitStartedEvent
+from threads.log import MemberRef, WaitStartedEvent
 from threads.store.lines import Draft
 from threads.team.call import (
     CallContext,
     Refusal,
     addressed,
     call_mail_id,
+    call_request,
     caller_of,
     decide,
+    named,
     recorded,
 )
 from threads.team.close import CloseContext, finish_wait, public_result
 from threads.team.constants import TEAM_CONSTANTS
 from threads.team.park import park_call
+from threads.team.request import Request, Target
 from threads.team.rows import MemberRow, ref_of, settled_of
 
 _SETTLED = frozenset({"idle", "ended"})
 
 
-def _observe(ctx: CallContext, monitor_id: str, row: MemberRow) -> JsonValue:
+def _observe(ctx: CallContext | CloseContext, monitor_id: str, row: MemberRow) -> JsonValue:
     """member_observed: the target's committed result, and where it is."""
     if row.branch_id is None:
         raise AssertionError("a settled member has a branch")
@@ -51,46 +55,75 @@ def _closing(ctx: CallContext) -> CloseContext:
     return CloseContext(ctx.conn, ctx.batch, call.thread_id, call.branch_id, ctx.fold, ctx.read)
 
 
+type WaitMode = Literal["all", "any"] | int
+"""How many listed members must settle: all, any (one), or a count."""
+
+
 def wait(
     ctx: CallContext,
     members: Sequence[str],
     timeout_ms: int = TEAM_CONSTANTS.ask_wait_default_ms,
 ) -> JsonValue:
-    """wait (mode all, the default deadline): the listed members, a repeat dropped, each known at
-    its generation, then one monitor decision each; wait_started, an observation per settled
-    member, and the finish when that meets the mode, else a park. A re-dispatched wait only
-    parks."""
+    """The model's wait (mode all, the default deadline): the listed members, a repeat dropped,
+    then the wait. A re-dispatched wait only parks, and so does one left waiting."""
     caller = caller_of(ctx)
     wait_id = call_mail_id(ctx)
     again = any(
         isinstance(e, WaitStartedEvent) and e.data.wait_id == wait_id for e in ctx.fold.events
     )
-    if again:
-        park_call(ctx, caller.provenance)
-        return {"status": "waiting", "wait_id": wait_id}
-    rows: list[MemberRow] = []
-    for name in dict.fromkeys(members):
-        row = addressed(ctx, caller, name)
-        if isinstance(row, Refusal):
-            return recorded(ctx, row)
-        rows.append(row)
-    for row in rows:
-        decide(ctx, "monitor", row.name, allow=True)
-    cap = TEAM_CONSTANTS.ask_wait_default_ms
-    started_data: dict[str, JsonValue] = {
-        "wait_id": wait_id,
-        "members": [ref_of(caller.team, r) for r in rows],
-        "mode": "all",
-        "deadline": ctx.batch.now + min(timeout_ms, cap),
-    }
-    started = ctx.batch.add(Draft("wait_started", started_data))
-    settled = [r for r in rows if r.state in _SETTLED]
-    for row in settled:
-        _observe(ctx, f"{ctx.call.branch_id}:{started}:{row.name}", row)
-    if len(settled) == len(rows):
-        return finish_wait(_closing(ctx), wait_id, cause=None, deadline=False)
+    if not again:
+        targets = [named(ctx, m) for m in dict.fromkeys(members)]
+        got = open_wait(call_request(ctx), _closing(ctx), targets, "all", timeout_ms)
+        if not isinstance(got, dict) or got.get("status") != "waiting":
+            return got
     park_call(ctx, caller.provenance)
     return {"status": "waiting", "wait_id": wait_id}
+
+
+def wait_members(
+    members: Sequence[MemberRef], mode: WaitMode | None
+) -> tuple[MemberRef, ...] | Literal["invalid_request"]:
+    """An operator wait's members, a repeat dropped (they are frozen at the call);
+    invalid_request when a numeric mode is above their count, which is refused before any writer
+    is taken."""
+    distinct = tuple(dict.fromkeys(members))
+    if isinstance(mode, int) and mode > len(distinct):
+        return "invalid_request"
+    return distinct
+
+
+def open_wait(
+    req: Request,
+    close: CloseContext,
+    targets: Sequence[Target],
+    mode: WaitMode,
+    timeout_ms: int,
+) -> JsonValue:
+    """A wait, for a model call or an operator request: each target known at its generation,
+    then one monitor decision each; wait_started, an observation per settled member, and the
+    finish when that meets the mode. Returns what it recorded, or waiting."""
+    rows: list[MemberRow] = []
+    for target in targets:
+        row = target.row()
+        if isinstance(row, Refusal):
+            return req.refuse(row)
+        rows.append(row)
+    for row in rows:
+        denied = req.decide("monitor", row.name)
+        if denied is not None:
+            return req.refuse(denied)
+    cap = TEAM_CONSTANTS.ask_wait_default_ms
+    started_data: dict[str, JsonValue] = {
+        "wait_id": req.mail_id,
+        "members": [ref_of(req.team, r) for r in rows],
+        "mode": mode,
+        "deadline": req.batch.now + min(timeout_ms, cap),
+    }
+    started = req.batch.add(Draft("wait_started", started_data))
+    for row in rows:
+        if row.state in _SETTLED:
+            _observe(close, f"{close.branch_id}:{started}:{row.name}", row)
+    return finish_wait(close, req.mail_id, cause=None, deadline=False)
 
 
 def monitor(ctx: CallContext, member: str) -> JsonValue:

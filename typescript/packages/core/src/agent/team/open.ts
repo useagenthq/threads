@@ -30,7 +30,8 @@ export async function openTeam(
       code: "forbidden",
       message: `the principal is of tenant ${principal.tenant}, not the team's`,
     });
-  const { log, artifacts } = await openStore(tenantStore(store, ref.tenant));
+  const scoped = tenantStore(store, ref.tenant);
+  const { log, artifacts } = await openStore(scoped);
   const team = await reading(log.driver, (tx) => teamRow(tx, ref.id));
   if (team === undefined || team.tenant_id !== ref.tenant)
     return err({
@@ -40,7 +41,14 @@ export async function openTeam(
   const lead = await rebound(log, ref);
   if (!lead.ok) return lead;
   return ok(
-    await teamHandle({ log, artifacts, ref, principal, lead: lead.value }),
+    teamHandle({
+      log,
+      artifacts,
+      ref,
+      principal,
+      lead: lead.value,
+      store: scoped,
+    }),
   );
 }
 

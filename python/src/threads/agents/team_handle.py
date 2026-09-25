@@ -1,10 +1,9 @@
-"""The operator's handle (spec/api.json Team): each of start and send is one operator request
-decided in one team-log append (design §4.4), by the same ops as the model's tools; members and
-events are pure reads. Lane 21E adds ask, wait, cancel and ask_status as further requests."""
+"""The operator's handle (spec/api.json Team): each of start, send, ask, wait and cancel is one
+operator request decided in one team-log append (design §4.4), by the same ops as the model's tools
+(team_waits.py has ask, wait and cancel); members, events and ask_status are pure reads."""
 
-from collections.abc import AsyncIterator, Callable, Mapping, Sequence
-from dataclasses import dataclass
-from typing import Final, Literal
+from collections.abc import AsyncIterator, Sequence
+from typing import Final
 
 from pydantic import JsonValue
 
@@ -13,7 +12,10 @@ from threads.agents.store import now_ms
 from threads.agents.team_budgets import ancestors_of
 from threads.agents.team_feed import team_events
 from threads.agents.team_handle_types import (
+    AskStatus,
     OperatorRefusal,
+    TeamAskResult,
+    TeamCancelResult,
     TeamCursor,
     TeamItem,
     TeamMember,
@@ -22,43 +24,34 @@ from threads.agents.team_handle_types import (
     TeamSendResult,
     TeamStartRefused,
     TeamStartResult,
+    TeamWaitResult,
 )
-from threads.agents.team_log import BUSY, on_team_log
+from threads.agents.team_log import BUSY
+from threads.agents.team_operator import (
+    KEYED,
+    HandleEnv,
+    code_in,
+    operator,
+    present,
+    stored_text,
+)
+from threads.agents.team_outcomes import ask_status
 from threads.agents.team_roster import roster
 from threads.agents.team_tools import SendRefusal, Sent, Started, StartRefusal
-from threads.agents.teams import Pin
-from threads.log import BranchId, MemberRef, Parent, Principal, ThreadId, ThreadStartedEvent
+from threads.agents.team_waits import ask_member, cancel_member, wait_for
+from threads.log import BranchId, MemberRef, Parent, ThreadId, ThreadStartedEvent
 from threads.loop.budget import start_room
 from threads.result import Err
-from threads.store import SqliteStore
 from threads.store.lines import uuid7
-from threads.store.writer import DecideTx
-from threads.team.batch import Batch, Mint
-from threads.team.constants import TEAM_CONSTANTS
+from threads.team.close import CloseContext
 from threads.team.dynamic import InvalidDefinition
-from threads.team.operator import (
-    OperatorContext,
-    OperatorInput,
-    OperatorOp,
-    Replayed,
-    open_operator,
-    ref_target,
-)
-from threads.team.ops import StartPlan, TeamLimits, send, start
+from threads.team.operator import ref_target
+from threads.team.ops import StartPlan, send, start
 from threads.team.request import Request
-from threads.team.rows import TeamRow, member_rows, team_row
+from threads.team.rows import TeamRow, member_rows
+from threads.team.watch import WaitMode
 
-
-@dataclass(frozen=True, slots=True)
-class HandleEnv:
-    sq: SqliteStore
-    ref: TeamRef
-    principal: Principal
-    pin: Pin
-    """The team of the lead that ran, as this process defines it: the agents start resolves."""
-    limits: TeamLimits
-    busy_bound_ms: int | None = None
-    mint: Mint | None = None
+__all__ = ["HandleEnv", "Team"]
 
 
 class Team:
@@ -94,6 +87,39 @@ class Team:
         """Sends a member a message: its next input, which wakes it if idle."""
         return await _send(self._env, to, text, idempotency_key)
 
+    async def ask(
+        self,
+        to: MemberRef,
+        question: str,
+        *,
+        timeout_ms: int | None = None,
+        idempotency_key: str | None = None,
+    ) -> TeamAskResult:
+        """Asks a member a question and waits for its reply, its end, or the deadline."""
+        return await ask_member(self._env, to, question, timeout_ms, idempotency_key)
+
+    async def wait(
+        self,
+        members: Sequence[MemberRef],
+        *,
+        mode: WaitMode | None = None,
+        timeout_ms: int | None = None,
+        idempotency_key: str | None = None,
+    ) -> TeamWaitResult:
+        """Waits until members settle (become idle or end), or the deadline. mode: all (the
+        default), any, or how many must settle; any never cancels the others."""
+        return await wait_for(self._env, members, mode, timeout_ms, idempotency_key)
+
+    async def cancel(
+        self, member: MemberRef, *, idempotency_key: str | None = None
+    ) -> TeamCancelResult:
+        """Requests a member's cancel: durable at once, applied at the member's next step."""
+        return await cancel_member(self._env, member, idempotency_key)
+
+    async def ask_status(self, ask_id: str) -> AskStatus:
+        """An ask's state from the team log. A pure read; it never closes an ask."""
+        return await ask_status(self._env.sq, self.ref.id, ask_id)
+
     async def members(self) -> tuple[TeamMember, ...]:
         """Every member, the lead included, with its state and, once settled, its result."""
         return await roster(self._env.sq, self.ref.id)
@@ -114,65 +140,31 @@ async def _start(
     )
     listed = {} if pinned is None else {agent: pinned.config_hash}
     plan = StartPlan(listed, env.limits, lambda _a: room, uuid7(now_ms()), got.resolved)
-    body = _present({"agent": agent, "task": task, **_fields(chosen)})
-    done = await _operator(env, "start", body, key, lambda req, _t: start(req, agent, task, plan))
+    body = present({"agent": agent, "task": task, **_fields(chosen)})
+    done = await operator(
+        env, "start", body, key, lambda req, _t, _c: start(req, agent, task, plan)
+    )
     if done == BUSY:
         return TeamStartRefused("busy")
     if done.get("status") == "started":
         member = MemberRef.model_validate(done["member"])
         return Started(member)
-    return TeamStartRefused(_code(_START, done), detail=_detail(done.get("detail")))
+    return TeamStartRefused(code_in(_START, done), detail=_detail(done.get("detail")))
 
 
 async def _send(env: HandleEnv, to: MemberRef, text: str, key: str | None) -> TeamSendResult:
-    big: JsonValue = None
-    if len(text.encode()) > TEAM_CONSTANTS.inline_cap_bytes:
-        data = text.encode()
-        sha = await env.sq.put_artifact(data)
-        big = {"sha256": sha, "bytes": len(data), "media_type": "text/plain"}
+    big = await stored_text(env, text)
     body: dict[str, JsonValue] = {"to": to.model_dump(mode="json"), "text": text}
 
-    def decide(req: Request, team: TeamRow) -> dict[str, JsonValue]:
+    def decide(req: Request, team: TeamRow, _close: CloseContext) -> dict[str, JsonValue]:
         return send(req, ref_target(req.conn, team, to), text, env.limits)
 
-    done = await _operator(env, "send", body, key, decide, big=big)
+    done = await operator(env, "send", body, key, decide, big=big)
     if done == BUSY:
         return TeamSendRefused("busy")
     if done.get("status") == "sent":
         return Sent(str(done["id"]))
-    return TeamSendRefused(_code(_SEND, done))
-
-
-async def _operator(  # noqa: PLR0913 - the request and what it decides
-    env: HandleEnv,
-    op: OperatorOp,
-    body: Mapping[str, JsonValue],
-    key: str | None,
-    decide: Callable[[Request, TeamRow], dict[str, JsonValue]],
-    *,
-    big: JsonValue = None,
-) -> dict[str, JsonValue] | Literal["busy"]:
-    """One operator request under the team-log writer: its key looked up, then `decide` with
-    the op. Returns what the op or the key's replay recorded, or busy."""
-    team = await env.sq.run(lambda c: team_row(c, env.ref.id))
-    if team is None:
-        raise AssertionError(f"no team {env.ref.id}")
-    request = OperatorInput(uuid7(now_ms()), op, env.principal, body, key)
-
-    def run(tx: DecideTx, batch: Batch) -> dict[str, JsonValue]:
-        # Read in the append: the team may have closed since the handle looked.
-        now = team_row(tx.conn, env.ref.id) or team
-        ctx = OperatorContext(tx.conn, tx.fold.events, batch, lambda _text: big, now)
-        opened = open_operator(ctx, request)
-        return opened.outcome if isinstance(opened, Replayed) else decide(opened.request, now)
-
-    return await on_team_log(
-        env.sq,
-        BranchId(team.team_log_branch_id),
-        run,
-        busy_bound_ms=env.busy_bound_ms,
-        mint=env.mint,
-    )
+    return TeamSendRefused(code_in(_SEND, done))
 
 
 async def _lead_parent(env: HandleEnv) -> Parent:
@@ -203,31 +195,17 @@ def _fields(chosen: Chosen) -> dict[str, JsonValue]:
     }
 
 
-def _present(body: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
-    """A body's parameters as api.json names them, an omitted option left out."""
-    return {k: v for k, v in body.items() if v is not None}
-
-
 type StartCode = StartRefusal | OperatorRefusal
 type SendCode = SendRefusal | OperatorRefusal
-_KEYED: Final = ("idempotency_key_reused", "idempotency_key_principal_mismatch")
 _START: Final[tuple[StartCode, ...]] = (
     "forbidden", "unknown_agent", "concurrency_cap", "budget_exceeded", "team_closed",
-    "invalid_definition", *_KEYED,
+    "invalid_definition", *KEYED,
 )  # fmt: skip
 _SEND: Final[tuple[SendCode, ...]] = (
     "forbidden", "unknown_member", "stale_member", "member_ended", "self", "mailbox_full",
-    "team_closed", *_KEYED,
+    "team_closed", *KEYED,
 )  # fmt: skip
 """The codes the team log can record for each op (its key refusals included)."""
-
-
-def _code[C: str](codes: tuple[C, ...], done: Mapping[str, JsonValue]) -> C:
-    code = done.get("code")
-    for known in codes:
-        if code == known:
-            return known
-    raise AssertionError(f"the team log recorded {code}")
 
 
 def _detail(raw: JsonValue) -> InvalidDefinition | None:

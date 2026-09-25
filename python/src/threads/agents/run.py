@@ -146,7 +146,7 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
     principal = options.get("principal", LOCAL_OPERATOR) if launch is None else launch.principal
     async with _held(writer), AsyncExitStack() as servers:
         definition = await with_servers(definition, servers, fenced(writer))
-        runner = _member_runner(store)
+        runner = member_runner(store)
         side = team_side(servers, team_of(definition, member, writer, store, sq, runner, principal))
         thread_id = writer.fold.thread_id
         if thread_id is None:
@@ -358,7 +358,7 @@ def _child_runner(store: Store, stubs: tuple[Stub, ...] | None) -> Execute:
     return run
 
 
-def _member_runner(store: Store) -> Callable[[Definition[None], MemberRun], Awaitable[None]]:
+def member_runner(store: Store) -> Callable[[Definition[None], MemberRun], Awaitable[None]]:
     """How the team worker runs a member branch: this pipeline, as a team member, under the
     member's own lease holder and budgets, until the branch is idle, parked or ended."""
 

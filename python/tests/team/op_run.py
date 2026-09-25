@@ -15,26 +15,29 @@ from threads.reduce.handlers import to_json
 from threads.result import Ok
 from threads.store import Draft, Writer
 from threads.store.writer import DecideTx, Refusal
-from threads.team.ask import AskPlan, ask, reply
+from threads.team.ask import AskPlan, ask, open_ask, reply
 from threads.team.batch import Batch
 from threads.team.call import CallContext, call_request, named
-from threads.team.cancel import cancel
+from threads.team.cancel import cancel, request_cancel
 from threads.team.close import reader_of
+from threads.team.constants import TEAM_CONSTANTS
 from threads.team.consume import ConsumeContext, consume
 from threads.team.deadline import deadline
 from threads.team.dynamic import InvalidDefinition, Resolved, Template, resolve_definition
 from threads.team.operator import (
     OperatorContext,
     OperatorInput,
+    OperatorOp,
     Replayed,
     open_operator,
     ref_target,
 )
 from threads.team.ops import StartPlan, TeamLimits, send, start
 from threads.team.provenance import turn_provenance
-from threads.team.rows import team_of_log
+from threads.team.request import Request
+from threads.team.rows import TeamRow, team_of_log
 from threads.team.settle import Completed, SettleContext, Settlement, settle
-from threads.team.watch import monitor, wait
+from threads.team.watch import WaitMode, monitor, open_wait, wait, wait_members
 
 
 def _no_text(_text: str) -> JsonValue:
@@ -127,12 +130,29 @@ def _plan(v: Obj, args: Obj) -> StartPlan:
     return StartPlan(listed, _limits(v), lambda _a: headroom, str(inp["thread_id"]), resolved)
 
 
+_OPS: dict[str, OperatorOp] = {
+    "start": "start",
+    "send": "send",
+    "ask": "ask",
+    "wait": "wait",
+    "cancel": "cancel",
+}
+
+
+def _refs(raw: JsonValue) -> list[MemberRef]:
+    assert isinstance(raw, list)
+    return [MemberRef.model_validate(m) for m in raw]
+
+
 async def _operator(w: Writer, v: Obj) -> JsonValue:
-    """An operator request's outcome: what the op returns, or what its key replays."""
+    """An operator request's outcome: what the op returns, or what its key replays. A wait's
+    mode above its member count is refused before the writer, as the handle does."""
     inp = obj(v["input"])
     body = obj(inp["body"])
+    op = _OPS[str(v["op"])]
+    if op == "wait" and wait_members(_refs(body["members"]), _mode(body)) == "invalid_request":
+        return {"code": "invalid_request", "status": "refused"}
     key = inp.get("idempotency_key")
-    op = "send" if v["op"] == "send" else "start"
     principal = Principal.model_validate(inp["principal"])
     request = OperatorInput(
         str(inp["request_id"]), op, principal, body, None if key is None else str(key)
@@ -147,14 +167,47 @@ async def _operator(w: Writer, v: Obj) -> JsonValue:
         )
         if isinstance(opened, Replayed):
             out.append(opened.outcome)
-        elif op == "send":
-            to = ref_target(tx.conn, team, MemberRef.model_validate(body["to"]))
-            out.append(send(opened.request, to, str(body["text"]), _limits(v)))
         else:
-            out.append(start(opened.request, str(body["agent"]), str(body["task"]), _plan(v, body)))
+            out.append(_operator_op(_context(w, tx, batch), opened.request, team, v))
 
     await _decided(w, decide)
     return out[0]
+
+
+def _mode(body: Obj) -> WaitMode | None:
+    mode = body.get("mode")
+    if mode is None or isinstance(mode, int):
+        return mode
+    assert mode in ("all", "any")
+    return "all" if mode == "all" else "any"
+
+
+def _operator_op(ctx: ConsumeContext, req: Request, team: TeamRow, v: Obj) -> JsonValue:
+    body = obj(obj(v["input"])["body"])
+    conn = ctx.conn
+    match v["op"]:
+        case "send":
+            to = ref_target(conn, team, MemberRef.model_validate(body["to"]))
+            return send(req, to, str(body["text"]), _limits(v))
+        case "ask":
+            headroom = obj(v["given"]).get("headroom", True) is True
+            timeout = body.get("timeout_ms", TEAM_CONSTANTS.ask_wait_default_ms)
+            assert isinstance(timeout, int)
+            plan = AskPlan(_limits(v), lambda _row: headroom, timeout)
+            to = ref_target(conn, team, MemberRef.model_validate(body["to"]))
+            return open_ask(req, to, str(body["question"]), plan)
+        case "wait":
+            members = wait_members(_refs(body["members"]), _mode(body))
+            assert members != "invalid_request"
+            targets = [ref_target(conn, team, m) for m in members]
+            timeout = body.get("timeout_ms", TEAM_CONSTANTS.ask_wait_default_ms)
+            assert isinstance(timeout, int)
+            return open_wait(req, ctx, targets, _mode(body) or "all", timeout)
+        case "cancel":
+            member = MemberRef.model_validate(body["member"])
+            return request_cancel(req, ref_target(conn, team, member))
+        case _:
+            return start(req, str(body["agent"]), str(body["task"]), _plan(v, body))
 
 
 async def _call(w: Writer, v: Obj) -> JsonValue:
@@ -229,7 +282,7 @@ async def _settle(w: Writer, v: Obj) -> JsonValue:
 async def run_on(w: Writer, v: Obj) -> JsonValue:
     """The op under `w`: its outcome as the vector states it."""
     match v["op"]:
-        case "send" | "start" if "request_id" in obj(v["input"]):
+        case "send" | "start" | "ask" | "wait" | "cancel" if "request_id" in obj(v["input"]):
             return await _operator(w, v)
         case "send" | "start" | "ask" | "reply" | "wait" | "monitor" | "cancel":
             return await _call(w, v)

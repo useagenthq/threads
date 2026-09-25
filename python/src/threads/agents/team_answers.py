@@ -14,6 +14,8 @@ type ReplyRefusal = Literal["unknown_ask", "already_replied", "ask_closed"]
 """Why a reply was refused."""
 type ObserveRefusal = Literal["forbidden", "unknown_member", "stale_member"]
 """Why a wait or monitor was refused."""
+type CancelRefusal = Literal["forbidden", "unknown_member", "stale_member", "member_ended"]
+"""Why a cancel was refused."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,3 +194,22 @@ class MonitoredEnded:
 
 type MonitorResult = Monitoring | MonitoredEnded | ObserveRefused
 """The model's monitor tool result."""
+
+
+@dataclass(frozen=True, slots=True)
+class CancelRequested:
+    """The cancel is accepted and durable, not yet applied; the member ends cancelled at its next
+    step."""
+
+    member: MemberRef
+    status: Literal["cancel_requested"] = "cancel_requested"
+
+
+@dataclass(frozen=True, slots=True)
+class CancelRefused:
+    code: CancelRefusal
+    status: Literal["refused"] = "refused"
+
+
+type CancelResult = CancelRequested | CancelRefused
+"""The model's cancel tool result."""

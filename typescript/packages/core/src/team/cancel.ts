@@ -1,14 +1,10 @@
 import type { EventOf } from "../fold/state";
-import type { MailEnvelope } from "../log";
+import type { MailEnvelope, MemberRef } from "../log";
 import {
-  addressed,
   type CallContext,
-  callerOf,
-  callMailId,
-  causalOf,
-  decide,
-  isRefusal,
-  recorded,
+  callRequest,
+  named,
+  type Refused,
   refusal,
 } from "./call";
 import {
@@ -18,7 +14,8 @@ import {
   finishWait,
 } from "./close";
 import { received, sent } from "./mail";
-import { memberNamed, refOf } from "./rows";
+import type { Request, Target } from "./request";
+import { refOf } from "./rows";
 import { askOpen, openWaits, parksNow } from "./view";
 
 // cancel: durable intent, then application (spec/schema/README.md, "Teams"; design §4.14). The
@@ -27,52 +24,49 @@ import { askOpen, openWaits, parksNow } from "./view";
 // with every park it leaves released in the same append. The barrier rules then end the member
 // cancelled. Reference: spec/tools/fixtures/ops_send.py (cancel) and ops_consume.py.
 
-/** The members a caller started: their member_started is in its own log. */
-function started(ctx: CallContext, name: string): boolean {
-  return ctx.chain.events.some(
-    (l) =>
-      l.kind === "event" &&
-      l.event.type === "member_started" &&
-      l.event.data.member.name === name,
-  );
-}
+/** A cancel accepted: durable, applied at the member's next step. */
+export type CancelRequested = {
+  readonly member: MemberRef;
+  readonly status: "cancel_requested";
+};
 
-/**
- * cancel's request: the target's starter may (Phase 1 policy); the member is known at its
- * generation and not ended. Returns what the call recorded.
- */
+/** The model's cancel: its call as the request, the member it names as the target. */
 export async function cancel(
   ctx: CallContext,
   args: { readonly member: string },
-): Promise<unknown> {
-  const caller = await callerOf(ctx);
-  if (caller === undefined) throw new Error("a team tool call outside a team");
-  const known = await memberNamed(ctx.tx, caller.team.team_id, args.member);
-  const denied = decide(
-    ctx,
-    "cancel",
-    args.member,
-    known !== undefined && started(ctx, args.member),
-  );
-  if (denied !== undefined) return recorded(ctx, denied);
-  const row = await addressed(ctx, caller, args.member);
-  if (isRefusal(row)) return recorded(ctx, row);
-  if (row.state === "ended") return recorded(ctx, refusal("member_ended"));
-  ctx.batch.add(
+): Promise<CancelRequested | Refused> {
+  return requestCancel(await callRequest(ctx), named(ctx, args.member));
+}
+
+/**
+ * cancel's request, for a model call or an operator request: the policy (a model's cancel is its
+ * target's starter's; an operator's, the team's tenant's), then the member known at its
+ * generation and not ended; then the cancel mail.
+ */
+export async function requestCancel(
+  req: Request,
+  to: Target,
+): Promise<CancelRequested | Refused> {
+  const denied = req.decide("cancel", to.name);
+  if (denied !== undefined) return req.refuse(denied);
+  const row = await to.row();
+  if ("refused" in row) return req.refuse(row);
+  if (row.state === "ended") return req.refuse(refusal("member_ended"));
+  req.batch.add(
     sent({
-      mail_id: callMailId(ctx),
+      mail_id: req.mailId,
       kind: "cancel",
-      team: caller.team.team_id,
-      from: caller.ref,
+      team: req.team.team_id,
+      from: req.from,
       to: { name: row.name, generation: row.generation },
-      provenance: caller.provenance,
-      causal: causalOf(ctx),
+      provenance: req.provenance,
+      causal: req.causal,
     }),
   );
-  return recorded(ctx, {
-    member: refOf(caller.team, row),
+  return req.done({
+    member: refOf(req.team, row),
     status: "cancel_requested",
-  });
+  } satisfies CancelRequested);
 }
 
 type Principal = EventOf<"cancel_requested">["actor"]["principal"];

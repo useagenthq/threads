@@ -14,7 +14,7 @@ import type { ReadText } from "./close";
 import type { InvalidDefinition } from "./dynamic";
 import type { PutText } from "./mail";
 import { turnProvenance } from "./provenance";
-import type { Request, Target } from "./request";
+import type { PolicyOp, Request, Target } from "./request";
 import {
   type MemberRow,
   memberNamed,
@@ -112,7 +112,7 @@ export function causalOf(ctx: CallContext): {
  */
 export function decide(
   ctx: CallContext,
-  op: "start" | "send" | "ask" | "monitor" | "cancel",
+  op: PolicyOp,
   target: string,
   allow: boolean,
 ): Refusal | undefined {
@@ -194,9 +194,8 @@ export async function callRequest(ctx: CallContext): Promise<Request> {
     causal: causalOf(ctx),
     mailId: callMailId(ctx),
     self: caller.row,
-    // Phase 1: only a lead starts; members send to one another.
     decide: (op, target) =>
-      decide(ctx, op, target, op !== "start" || caller.row.role === "lead"),
+      decide(ctx, op, target, granted(ctx, caller, op, target)),
     parent: async (startedId) => ({
       thread_id: ctx.call.thread_id,
       branch_id: ctx.call.branch_id,
@@ -209,6 +208,26 @@ export async function callRequest(ctx: CallContext): Promise<Request> {
       return value;
     },
   };
+}
+
+/**
+ * The team's Phase 1 grant to a member: a lead starts, a member's starter (its member_started is in
+ * the caller's own log) cancels it, and members send, ask and monitor one another.
+ */
+function granted(
+  ctx: CallContext,
+  caller: Caller,
+  op: PolicyOp,
+  target: string,
+): boolean {
+  if (op === "start") return caller.row.role === "lead";
+  if (op !== "cancel") return true;
+  return ctx.chain.events.some(
+    (l) =>
+      l.kind === "event" &&
+      l.event.type === "member_started" &&
+      l.event.data.member.name === target,
+  );
 }
 
 /** A model's target: the member it names, at the generation its own log last recorded. */

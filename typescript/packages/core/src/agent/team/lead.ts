@@ -61,6 +61,7 @@ async function withTeam<Output>(
     ref: { tenant: log.tenant, id },
     principal: input.actor.principal,
     lead: entry,
+    store: result.thread.store,
   });
   return { ...result, team };
 }

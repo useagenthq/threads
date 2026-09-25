@@ -295,6 +295,12 @@ async def room_in(rt: Runtime, to: TeamRecipient) -> bool:
     return await _fits(rt.store.budgets, [*to.covering, *run], to.policy, to.model, to.params)
 
 
+async def ask_room(budgets: BudgetLedger, to: TeamRecipient) -> bool:
+    """An operator's ask's headroom: the recipient's own and ancestors' budgets have room for one
+    request of its model (a Phase 1 operator request has no run budget of its own)."""
+    return await _fits(budgets, to.covering, to.policy, to.model, to.params)
+
+
 async def _fits(
     budgets: BudgetLedger,
     covering: Sequence[Covering],

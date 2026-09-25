@@ -7,10 +7,14 @@ from typing import Literal
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.config import ConfigError
+from threads.agents.run import member_runner
 from threads.agents.store import Store, now_ms, open_store, scoped
+from threads.agents.team_check import agents_of
 from threads.agents.team_handle import HandleEnv, Team
 from threads.agents.team_handle_types import TeamRef
 from threads.agents.team_leads import AsRan, Lead, leads_named
+from threads.agents.team_worker import WorkerEnv
+from threads.agents.teams import member_pin
 from threads.log import BranchId, Principal, ThreadStartedEvent
 from threads.result import Err, Ok
 from threads.store import SqliteStore
@@ -31,14 +35,18 @@ async def open_team(
     if principal.tenant != ref.tenant:
         message = f"the principal is of tenant {principal.tenant}, not the team's"
         return Err(OpenTeamError("forbidden", message))
-    sq = await open_store(scoped(store, ref.tenant))
+    tenant = scoped(store, ref.tenant)
+    sq = await open_store(tenant)
     team = await sq.run(lambda c: team_row(c, ref.id))
     if team is None or team.tenant_id != ref.tenant:
         return Err(OpenTeamError("not_found", f"no team {ref.id} in {ref.tenant}"))
     lead = await _rebound(sq, ref)
     if isinstance(lead, Err):
         return lead
-    return Ok(Team(HandleEnv(sq, ref, principal, lead.value.pin, lead.value.limits)))
+    found = lead.value
+    agents = agents_of(found.team)
+    worker = WorkerEnv(tenant, sq, lambda: ref.id, agents, member_pin, member_runner(tenant))
+    return Ok(Team(HandleEnv(sq, ref, principal, found.pin, found.limits, worker)))
 
 
 async def _rebound(sq: SqliteStore, ref: TeamRef) -> Ok[Lead] | Err[OpenTeamError]:

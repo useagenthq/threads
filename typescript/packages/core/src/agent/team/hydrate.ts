@@ -37,7 +37,7 @@ export async function hydrated(
   }
 }
 
-async function readText(
+export async function readText(
   artifacts: ArtifactStore,
   ref: ArtifactRef,
 ): Promise<string> {

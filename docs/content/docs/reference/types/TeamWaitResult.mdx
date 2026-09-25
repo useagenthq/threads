@@ -1,0 +1,21 @@
+---
+title: "TeamWaitResult"
+description: "team.wait's result."
+icon: "Braces"
+---
+
+A union discriminated by `status`.
+
+### Waited
+
+Any [`Waited`](/docs/reference/types/Waited).
+
+### refused
+
+<Field name="status" type={"\"refused\""} required>
+  "refused": nothing was done; code says why.
+</Field>
+
+<Field name="code" type={"ObserveRefusal | OperatorRefusal | \"invalid_request\""} required>
+  Why it was refused. invalid_request (mode above the member count) is returned before any writer, so, like busy, it is never logged.
+</Field>

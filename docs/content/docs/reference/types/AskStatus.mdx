@@ -1,0 +1,35 @@
+---
+title: "AskStatus"
+description: "team.askStatus's answer."
+icon: "Braces"
+---
+
+A union discriminated by `status`.
+
+### open
+
+<Field name="status" type={"\"open\""} required>
+  "open": waiting for a reply.
+</Field>
+
+<Field name="askId / ask_id" type={"AskId"} required>
+  The ask.
+</Field>
+
+<Field name="deadline" type={"TimeMs"} required>
+  When it times out.
+</Field>
+
+### not_found
+
+<Field name="status" type={"\"not_found\""} required>
+  "not_found": no such ask in this team's log.
+</Field>
+
+<Field name="askId / ask_id" type={"AskId"} required>
+  The ask.
+</Field>
+
+### AskOutcome
+
+Any [`AskOutcome`](/docs/reference/types/AskOutcome).

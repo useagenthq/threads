@@ -286,9 +286,56 @@ const lead = agent({
 - `teamLimits.concurrent` caps how many members are starting or running at once (default 4). `teamLimits.mailbox` caps how many messages can wait for one member (default 100).
 - An agent in a team can't hand off, so a listed agent with `handoffs` is refused when the lead is set up (`handoff_in_team`). A lead or member can't have its own tool named `start`, `send`, `ask`, `reply`, `wait`, `monitor` or `cancel` (`duplicate_name`). No agent in a team may be named `operator`, which marks text your own code writes (`invalid_config`).
 
-<Callout>
-  Methods on the team handle for your own code (`team.start`, `team.send`, `team.ask`, `team.wait`, `team.members`) are on the way in this phase. Until they land, `r.team` names the team: `r.team.ref`.
-</Callout>
+## Working with the team from your code
+
+A lead's result carries its team: `r.team`. Your code can start members, message them, ask them questions, wait for them and cancel them, just as the lead's model can. Each call is recorded in the team's log under the principal of the run, so the audit trail shows who asked for what.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const r = await lead.run("Plan the launch.", { store });
+const team = r.team;
+
+const started = await team.start("researcher", "Find last quarter's churn numbers.");
+if (started.status === "started") {
+  const answer = await team.ask(started.member, "Which segment churned most?", {
+    timeoutMs: 60_000,
+  });
+  if (answer.status === "answered") console.log(answer.text);
+
+  const done = await team.wait([started.member]);
+  if (done.status === "waited") console.log(done.finished);
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+r = await lead.run("Plan the launch.", store=store)
+team = r.team
+
+started = await team.start("researcher", "Find last quarter's churn numbers.")
+if started.status == "started":
+    answer = await team.ask(started.member, "Which segment churned most?", timeout_ms=60_000)
+    if answer.status == "answered":
+        print(answer.text)
+
+    done = await team.wait([started.member])
+    if done.status == "waited":
+        print(done.finished)
+```
+
+</Tab>
+</Tabs>
+
+- **`team.ask` and `team.wait` return when the answer is in.** Until then your call runs the team for you: members start, work and reply in your process, as they do during the lead's run. An ask ends `answered`, `timed_out` (no reply by its deadline, 120 s at most), `member_ended` or `cancelled` (the team closed). A wait ends with what settled, what is parked and what is still running; `mode: "any"` returns once one member settles, and a number returns once that many have.
+- **`team.cancel` returns at once.** Its result `cancel_requested` means the cancel is recorded; the member applies it at its next step and ends `cancelled`.
+- **`team.askStatus(askId)` (`ask_status` in Python) reads an ask without waiting**: `open` with its deadline, its outcome, or `not_found`.
+- **Retries are safe with a key.** Pass `idempotencyKey` (`idempotency_key`): the same key, principal and arguments return the first call's outcome (an ask or a wait still open is joined, not asked again), and nothing new is recorded. The same key with other arguments is refused `idempotency_key_reused`.
+- **Another process, or another person.** `openTeam(store, r.team.ref, { principal })` (`open_team`) gives a handle on a team another process ran, acting for that principal. The process must define the same lead agent.
+- **Refusals are values.** A call that can't go ahead returns `{ status: "refused", code }`: the member is unknown, has ended or its mailbox is full, the team has closed, or `busy` if the team's log stayed locked by another writer for 5 s (nothing was recorded; retry with the same key).
 
 ## Specialists the lead defines
 

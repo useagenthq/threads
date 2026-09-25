@@ -1,16 +1,25 @@
+import type { MemberRef } from "../log";
 import {
   addressed,
   type CallContext,
   callerOf,
   callMailId,
+  callRequest,
   decide,
   isRefusal,
+  named,
   type Refused,
   recorded,
 } from "./call";
-import { finishWait, publicResult, type Waiting } from "./close";
+import {
+  type CloseContext,
+  finishWait,
+  publicResult,
+  type Waiting,
+} from "./close";
 import { TEAM_CONSTANTS } from "./constants";
 import { parkCall } from "./park";
+import type { Request, Target } from "./request";
 import type { MonitorResult, Waited, Wire } from "./results";
 import { type MemberRow, refOf, settledOf } from "./rows";
 
@@ -24,7 +33,7 @@ const SETTLED: ReadonlySet<MemberRow["state"]> = new Set(["idle", "ended"]);
 
 /** member_observed: the target's committed result, and where it is. */
 async function observe(
-  ctx: CallContext,
+  ctx: Pick<CloseContext, "tx" | "batch">,
   monitorId: string,
   row: MemberRow,
 ): Promise<void> {
@@ -43,10 +52,12 @@ async function observe(
   });
 }
 
+/** How many listed members must settle: all, any (one), or a count. */
+export type WaitMode = "all" | "any" | number;
+
 /**
- * wait (mode all, the default deadline): the listed members, a repeat dropped, each known at its
- * generation, then one monitor decision each; wait_started, an observation per settled member,
- * and the finish when that meets the mode, else a park. A re-dispatched wait only parks.
+ * The model's wait (mode all, the default deadline): the listed members, a repeat dropped, then
+ * the wait. A re-dispatched wait only parks, and so does one left waiting.
  */
 export async function wait(
   ctx: CallContext,
@@ -62,37 +73,72 @@ export async function wait(
       l.event.type === "wait_started" &&
       l.event.data.wait_id === waitId,
   );
-  if (again) {
-    await parkCall(ctx, caller);
-    return { status: "waiting", wait_id: waitId };
+  if (!again) {
+    const targets = [...new Set(args.members)].map((m) => named(ctx, m));
+    const got = await openWait(await callRequest(ctx), closing(ctx), targets, {
+      mode: "all",
+      timeoutMs,
+    });
+    if (got.status !== "waiting") return got;
   }
+  await parkCall(ctx, caller);
+  return { status: "waiting", wait_id: waitId };
+}
+
+/**
+ * An operator wait's members, a repeat dropped (they are frozen at the call); invalid_request
+ * when a numeric mode is above their count, which is refused before any writer is taken.
+ */
+export function waitMembers(
+  members: readonly MemberRef[],
+  mode: WaitMode | undefined,
+): readonly MemberRef[] | "invalid_request" {
+  const key = (m: MemberRef) =>
+    JSON.stringify([m.tenant, m.team, m.name, m.generation]);
+  const distinct = [...new Map(members.map((m) => [key(m), m])).values()];
+  return typeof mode === "number" && mode > distinct.length
+    ? "invalid_request"
+    : distinct;
+}
+
+/**
+ * A wait, for a model call or an operator request: each target known at its generation, then one
+ * monitor decision each; wait_started, an observation per settled member, and the finish when
+ * that meets the mode. Returns what it recorded, or waiting.
+ */
+export async function openWait(
+  req: Request,
+  close: CloseContext,
+  targets: readonly Target[],
+  how: { readonly mode: WaitMode; readonly timeoutMs: number },
+): Promise<Wire<Waited> | Waiting | Refused> {
   const rows: MemberRow[] = [];
-  for (const name of new Set(args.members)) {
-    const row = await addressed(ctx, caller, name);
-    if (isRefusal(row)) return recorded(ctx, row);
+  for (const target of targets) {
+    const row = await target.row();
+    if ("refused" in row) return req.refuse(row);
     rows.push(row);
   }
-  for (const row of rows) decide(ctx, "monitor", row.name, true);
+  for (const row of rows) {
+    const denied = req.decide("monitor", row.name);
+    if (denied !== undefined) return req.refuse(denied);
+  }
   const cap = TEAM_CONSTANTS.askWaitDefaultMs;
-  const started = ctx.batch.add({
+  const started = req.batch.add({
     type: "wait_started",
     type_version: 1,
     critical: true,
     actor: { kind: "host" },
     data: {
-      wait_id: waitId,
-      members: rows.map((r) => refOf(caller.team, r)),
-      mode: "all",
-      deadline: ctx.batch.now + Math.min(timeoutMs, cap),
+      wait_id: req.mailId,
+      members: rows.map((r) => refOf(req.team, r)),
+      mode: how.mode,
+      deadline: req.batch.now + Math.min(how.timeoutMs, cap),
     },
   });
-  const settled = rows.filter((r) => SETTLED.has(r.state));
-  for (const row of settled)
-    await observe(ctx, `${ctx.call.branch_id}:${started}:${row.name}`, row);
-  if (settled.length === rows.length)
-    return await finishWait(closing(ctx), waitId, { deadline: false });
-  await parkCall(ctx, caller);
-  return { status: "waiting", wait_id: waitId };
+  for (const row of rows)
+    if (SETTLED.has(row.state))
+      await observe(close, `${close.branchId}:${started}:${row.name}`, row);
+  return await finishWait(close, req.mailId, { deadline: false });
 }
 
 /** The call's append as a close: the caller's own thread and branch. */

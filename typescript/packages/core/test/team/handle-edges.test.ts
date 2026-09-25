@@ -110,6 +110,7 @@ async function world(writer: readonly string[], leadStarts = false) {
       ref: r.team.ref,
       principal: OPERATOR,
       lead: entry,
+      store,
     });
   const teamLog = async () => {
     const row = await reading(db, (tx) => teamRow(tx, r.team.ref.id));

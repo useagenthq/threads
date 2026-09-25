@@ -9683,6 +9683,82 @@
       }
     },
     {
+      "name": "ask-operator-key-reattaches",
+      "section": "4.4, 4.8",
+      "description": "A retry of team.ask under the key of an open ask re-attaches: the first request's ask id and deadline, and nothing is appended. team.ask then returns that ask's outcome from the team log, waiting for it while it is open.",
+      "given": {
+        "world": "ask-operator-key-reattaches"
+      },
+      "now": 1790000100000,
+      "op": "ask",
+      "by": "team",
+      "input": {
+        "request_id": "0192d000-0000-7000-8000-000000000102",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body": {
+          "to": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "question": "Any risks?"
+        },
+        "idempotency_key": "ask-1"
+      },
+      "expect": {
+        "outcome": {
+          "status": "open",
+          "ask_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101",
+          "deadline": 1790000220000
+        },
+        "appended": {},
+        "rows": {}
+      }
+    },
+    {
+      "name": "wait-operator-key-reattaches",
+      "section": "4.4, 4.12",
+      "description": "A retry of team.wait under the key of a wait still open re-attaches to it: its wait id, and nothing is appended.",
+      "given": {
+        "world": "wait-operator-key-reattaches"
+      },
+      "now": 1790000100000,
+      "op": "wait",
+      "by": "team",
+      "input": {
+        "request_id": "0192d000-0000-7000-8000-000000000102",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body": {
+          "members": [
+            {
+              "tenant": "acme",
+              "team": "0192c000-0000-7000-8000-000000000001",
+              "name": "researcher-1",
+              "generation": 1
+            }
+          ]
+        },
+        "idempotency_key": "wait-1"
+      },
+      "expect": {
+        "outcome": {
+          "status": "waiting",
+          "wait_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101"
+        },
+        "appended": {},
+        "rows": {}
+      }
+    },
+    {
       "name": "host-caller-ask-opens",
       "section": "29",
       "description": "support, a caller in no team, asks billing, a host member. The host rule {from: support, to: billing, allow: [ask]} decides it (source message_policy); the ask is from the caller address to billing's current generation, and support parks. The mail row is to_kind member in the host team; the asks row names support's branch as asker.",
@@ -16881,6 +16957,126 @@
         "pending_wakes": []
       }
     },
+    "ask-operator-key-reattaches": {
+      "logs": {
+        "lead": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+          "events": [
+            "f346836cf1927571",
+            "e3518c871880ffe0",
+            "9e120c269dc664f2",
+            "6f4d3ff5801c17e1",
+            "abc74c7e3567009a",
+            "7fbdae9c221f3bee",
+            "151a4f8f9c661b0d",
+            "56567842a679da60",
+            "4dfca82f329ea2dd",
+            "a65ae8dcfcb8d3d2"
+          ]
+        },
+        "researcher": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+          "events": [
+            "078150a0494371bf",
+            "3413706c8e1ed539"
+          ]
+        },
+        "team": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+          "events": [
+            "7b29896169d9dfe8",
+            "d0a66540301293d0",
+            "dbec0e532776a8b8",
+            "022369eed9156f4c"
+          ]
+        }
+      },
+      "rows": {
+        "teams": [
+          "e9a68a63d87561a2"
+        ],
+        "team_members": [
+          "7dafa2f438d8de25",
+          "380890775b159143"
+        ],
+        "mail": [
+          "8b4329ebe2ca0d72",
+          "ec5f0c0936578c29"
+        ],
+        "asks": [
+          "e8bf4eac92f0f37e"
+        ],
+        "monitors": [
+          "4fb5f5c494c1989d"
+        ],
+        "operator_receipts": [
+          "db9854c7d55a477b"
+        ],
+        "pending_wakes": []
+      }
+    },
+    "wait-operator-key-reattaches": {
+      "logs": {
+        "lead": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b1",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b1",
+          "events": [
+            "f346836cf1927571",
+            "e3518c871880ffe0",
+            "9e120c269dc664f2",
+            "6f4d3ff5801c17e1",
+            "abc74c7e3567009a",
+            "7fbdae9c221f3bee",
+            "151a4f8f9c661b0d",
+            "56567842a679da60",
+            "4dfca82f329ea2dd",
+            "a65ae8dcfcb8d3d2"
+          ]
+        },
+        "researcher": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b2",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b2",
+          "events": [
+            "078150a0494371bf",
+            "3413706c8e1ed539"
+          ]
+        },
+        "team": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+          "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+          "events": [
+            "7b29896169d9dfe8",
+            "1cbb4e9c3339f644",
+            "6e9055c73355984b",
+            "b8392812e16fc89f"
+          ]
+        }
+      },
+      "rows": {
+        "teams": [
+          "e9a68a63d87561a2"
+        ],
+        "team_members": [
+          "7dafa2f438d8de25",
+          "380890775b159143"
+        ],
+        "mail": [
+          "8b4329ebe2ca0d72"
+        ],
+        "asks": [],
+        "monitors": [
+          "4fb5f5c494c1989d",
+          "7575986aeff8a179"
+        ],
+        "operator_receipts": [
+          "86b1299e998c5a55"
+        ],
+        "pending_wakes": []
+      }
+    },
     "host-caller-ask-opens": {
       "logs": {
         "billing": {
@@ -17937,6 +18133,55 @@
           "output_tokens": 20
         },
         "completeness": "complete"
+      }
+    },
+    "022369eed9156f4c": {
+      "seq": 4,
+      "event_id": "0192e001-0000-7000-8000-000000000004",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "type": "message_sent",
+      "type_version": 1,
+      "time": 1790000004000,
+      "actor": {
+        "kind": "host"
+      },
+      "critical": true,
+      "data": {
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101",
+          "kind": "ask",
+          "team": "0192c000-0000-7000-8000-000000000001",
+          "from": {
+            "operator": "0192d000-0000-7000-8000-000000000101"
+          },
+          "to": {
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "ask_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101",
+          "deadline": 1790000220000,
+          "body": {
+            "text": "Any risks?"
+          }
+        }
       }
     },
     "026cc2428f045849": {
@@ -19484,6 +19729,48 @@
           "bytes": 492,
           "sha256": "72e4771dede1b032189cc42a4fd882e27c919278109b89ab9de716fc106ed4fd"
         }
+      }
+    },
+    "1cbb4e9c3339f644": {
+      "seq": 2,
+      "event_id": "0192e001-0000-7000-8000-000000000002",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "type": "operator_request",
+      "type_version": 1,
+      "time": 1790000002000,
+      "actor": {
+        "kind": "host",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        }
+      },
+      "critical": true,
+      "data": {
+        "request_id": "0192d000-0000-7000-8000-000000000101",
+        "op": "wait",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body_hash": "c9e9f22bf21872b1827a9773a1db2ead579cfaa3176fd432fc862494d022b02e",
+        "provenance": {
+          "principal": {
+            "issuer": "api",
+            "tenant": "acme",
+            "subject": "alice"
+          },
+          "root_request": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "via": []
+        },
+        "idempotency_key": "wait-1"
       }
     },
     "1cc2822227bb5e83": {
@@ -22573,6 +22860,27 @@
         "rule_id": "conformance_allow"
       }
     },
+    "6e9055c73355984b": {
+      "seq": 3,
+      "event_id": "0192e001-0000-7000-8000-000000000003",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "type": "message_policy_decided",
+      "type_version": 1,
+      "time": 1790000003000,
+      "actor": {
+        "kind": "host"
+      },
+      "critical": true,
+      "data": {
+        "op": "monitor",
+        "decision": "allow",
+        "source": "team",
+        "target": "researcher-1",
+        "request_id": "0192d000-0000-7000-8000-000000000101"
+      }
+    },
     "6f4d3ff5801c17e1": {
       "seq": 4,
       "event_id": "0192e001-0000-7000-8000-000000000004",
@@ -25570,6 +25878,33 @@
         "request_event_id": "0192e001-0000-7000-8000-000000000013"
       }
     },
+    "b8392812e16fc89f": {
+      "seq": 4,
+      "event_id": "0192e001-0000-7000-8000-000000000004",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "type": "wait_started",
+      "type_version": 1,
+      "time": 1790000004000,
+      "actor": {
+        "kind": "host"
+      },
+      "critical": true,
+      "data": {
+        "wait_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101",
+        "members": [
+          {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "researcher-1",
+            "generation": 1
+          }
+        ],
+        "mode": "all",
+        "deadline": 1790000220000
+      }
+    },
     "b8c68d4213828681": {
       "seq": 7,
       "event_id": "0192e001-0000-7000-8000-000000000007",
@@ -26523,6 +26858,48 @@
         }
       }
     },
+    "d0a66540301293d0": {
+      "seq": 2,
+      "event_id": "0192e001-0000-7000-8000-000000000002",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "type": "operator_request",
+      "type_version": 1,
+      "time": 1790000002000,
+      "actor": {
+        "kind": "host",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        }
+      },
+      "critical": true,
+      "data": {
+        "request_id": "0192d000-0000-7000-8000-000000000101",
+        "op": "ask",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body_hash": "45767601bde5f7f9e9245dd97884d1be96050e0d4dc46189b564832f96d7c7e6",
+        "provenance": {
+          "principal": {
+            "issuer": "api",
+            "tenant": "acme",
+            "subject": "alice"
+          },
+          "root_request": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "via": []
+        },
+        "idempotency_key": "ask-1"
+      }
+    },
     "d16f33792af259f0": {
       "seq": 13,
       "event_id": "0192e001-0000-7000-8000-00000000000d",
@@ -26851,6 +27228,27 @@
         "source": "team",
         "target": "researcher-1",
         "call_id": "c4"
+      }
+    },
+    "dbec0e532776a8b8": {
+      "seq": 3,
+      "event_id": "0192e001-0000-7000-8000-000000000003",
+      "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+      "branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "epoch": 1,
+      "type": "message_policy_decided",
+      "type_version": 1,
+      "time": 1790000003000,
+      "actor": {
+        "kind": "host"
+      },
+      "critical": true,
+      "data": {
+        "op": "ask",
+        "decision": "allow",
+        "source": "team",
+        "target": "researcher-1",
+        "request_id": "0192d000-0000-7000-8000-000000000101"
       }
     },
     "ddfca06f6bad193e": {
@@ -30602,6 +31000,15 @@
       "state": "pending",
       "consumed_seq": null
     },
+    "7575986aeff8a179": {
+      "monitor_id": "0192b000-0000-7000-8000-0000000000b3:0192e001-0000-7000-8000-000000000004:researcher-1",
+      "team_id": "0192c000-0000-7000-8000-000000000001",
+      "watcher_branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "target_name": "researcher-1",
+      "target_generation": 1,
+      "kind": "settle",
+      "wait_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101"
+    },
     "778519cf18d99a65": {
       "team_id": "0192c000-0000-7000-8000-000000000001",
       "name": "writer-1",
@@ -30943,6 +31350,15 @@
       "created_at": 1790000005000,
       "state": "pending",
       "consumed_seq": null
+    },
+    "86b1299e998c5a55": {
+      "tenant_id": "acme",
+      "team_id": "0192c000-0000-7000-8000-000000000001",
+      "op": "wait",
+      "idempotency_key": "wait-1",
+      "principal_key": "api/acme/alice",
+      "body_hash": "c9e9f22bf21872b1827a9773a1db2ead579cfaa3176fd432fc862494d022b02e",
+      "request_id": "0192d000-0000-7000-8000-000000000101"
     },
     "8973c97fb5f31588": {
       "team_id": "0192c000-0000-7000-8000-000000000001",
@@ -31995,6 +32411,15 @@
       "result": null,
       "updated_seq": 4
     },
+    "db9854c7d55a477b": {
+      "tenant_id": "acme",
+      "team_id": "0192c000-0000-7000-8000-000000000001",
+      "op": "ask",
+      "idempotency_key": "ask-1",
+      "principal_key": "api/acme/alice",
+      "body_hash": "45767601bde5f7f9e9245dd97884d1be96050e0d4dc46189b564832f96d7c7e6",
+      "request_id": "0192d000-0000-7000-8000-000000000101"
+    },
     "dc14f1f48b9279b1": {
       "team_id": "0192c000-0000-7000-8000-000000000001",
       "name": "lead",
@@ -32220,6 +32645,16 @@
       "state": "pending",
       "consumed_seq": null
     },
+    "e8bf4eac92f0f37e": {
+      "ask_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101",
+      "team_id": "0192c000-0000-7000-8000-000000000001",
+      "asker_branch_id": "0192b000-0000-7000-8000-0000000000b3",
+      "recipient_name": "researcher-1",
+      "recipient_generation": 1,
+      "deadline": 1790000220000,
+      "state": "open",
+      "closed_seq": null
+    },
     "e9a68a63d87561a2": {
       "team_id": "0192c000-0000-7000-8000-000000000001",
       "tenant_id": "acme",
@@ -32320,6 +32755,53 @@
       "state": "starting",
       "result": null,
       "updated_seq": 4
+    },
+    "ec5f0c0936578c29": {
+      "mail_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101",
+      "team_id": "0192c000-0000-7000-8000-000000000001",
+      "kind": "ask",
+      "to_kind": "member",
+      "to_name": "researcher-1",
+      "to_generation": 1,
+      "to_branch_id": null,
+      "principal_key": "api/acme/alice",
+      "root_request": "0192a000-0000-7000-8000-0000000000b3:0192e001-0000-7000-8000-000000000002",
+      "envelope": {
+        "mail_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101",
+        "kind": "ask",
+        "team": "0192c000-0000-7000-8000-000000000001",
+        "from": {
+          "operator": "0192d000-0000-7000-8000-000000000101"
+        },
+        "to": {
+          "name": "researcher-1",
+          "generation": 1
+        },
+        "provenance": {
+          "principal": {
+            "issuer": "api",
+            "tenant": "acme",
+            "subject": "alice"
+          },
+          "root_request": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+            "event_id": "0192e001-0000-7000-8000-000000000002"
+          },
+          "via": []
+        },
+        "causal": {
+          "thread_id": "0192a000-0000-7000-8000-0000000000b3",
+          "event_id": "0192e001-0000-7000-8000-000000000002"
+        },
+        "ask_id": "0192b000-0000-7000-8000-0000000000b3:0192d000-0000-7000-8000-000000000101",
+        "deadline": 1790000220000,
+        "body": {
+          "text": "Any risks?"
+        }
+      },
+      "created_at": 1790000004000,
+      "state": "pending",
+      "consumed_seq": null
     },
     "ee6818d1fb7a1b5e": {
       "tenant_id": "acme",

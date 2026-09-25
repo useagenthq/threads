@@ -33,9 +33,9 @@ from threads.result import Err, Ok
 
 
 class StoreCorruptError(Exception):
-    """Raised by the result reads (Team.members; lane 21E adds wait, ask and ask_status) when a
-    result the verified log names is missing or corrupt in the artifact store: a broken store
-    invariant, never an expected failure."""
+    """Raised by the result reads (Team.members, wait, ask and ask_status) when a result the
+    verified log names is missing or corrupt in the artifact store: a broken store invariant,
+    never an expected failure."""
 
     def __init__(
         self, code: Literal["artifact_missing", "artifact_corrupt"], ref: ArtifactRef, message: str
@@ -58,7 +58,7 @@ async def hydrated(stored: StoredMemberResult, read: ReadArtifact) -> MemberResu
             if text is None:
                 if body.ref is MISSING:
                     raise AssertionError("a text body is text or a ref")
-                text = await _read_text(read, body.ref)
+                text = await read_text(read, body.ref)
             return MemberCompleted(stored.member, text)
         case FailedResult():
             error = MemberError(stored.error.code, stored.error.message)
@@ -74,7 +74,7 @@ async def hydrated(stored: StoredMemberResult, read: ReadArtifact) -> MemberResu
             assert_never(stored)
 
 
-async def _read_text(read: ReadArtifact, ref: ArtifactRef) -> str:
+async def read_text(read: ReadArtifact, ref: ArtifactRef) -> str:
     got = await read(ref.sha256)
     if isinstance(got, Err):
         missing = got.error.code == "artifact_missing"

@@ -26,21 +26,29 @@ export type { Skill } from "./skills";
 export { type Store, sqlite } from "./sqlite";
 export { type DynamicAgentOptions, dynamicAgent } from "./team/dynamic";
 export type {
+  AskStatus,
   MemberState,
   OperatorRefusal,
   Team,
+  TeamAskOptions,
+  TeamAskResult,
+  TeamCancelResult,
   TeamCursor,
   TeamItem,
   TeamMember,
   TeamSendResult,
   TeamSource,
   TeamStartResult,
+  TeamWaitOptions,
+  TeamWaitResult,
 } from "./team/handle-types";
 export { openTeam } from "./team/open";
 export type {
   AskOutcome,
   AskRefusal,
   AskResult,
+  CancelRefusal,
+  CancelResult,
   DynamicAgent,
   InvalidDefinition,
   MemberRef,

@@ -29,6 +29,7 @@ from threads.team.constants import TEAM_CONSTANTS
 from threads.team.mail import body_of, sent
 from threads.team.ops import TeamLimits, deliverable
 from threads.team.park import park_call
+from threads.team.request import Request, Target
 from threads.team.rows import MemberRow, ask_row
 
 
@@ -67,28 +68,36 @@ def ask(ctx: CallContext, to: str, question: str, plan: AskPlan) -> JsonValue:
             raise AssertionError("an ask envelope always has a deadline")
         park_call(ctx, caller.provenance)
         return {"status": "open", "ask_id": ask_id, "deadline": opened.deadline}
-    row = deliverable(call_request(ctx), "ask", named(ctx, to), plan.limits)
+    got = open_ask(call_request(ctx), named(ctx, to), question, plan)
+    if got.get("status") == "open":
+        park_call(ctx, caller.provenance)
+    return got
+
+
+def open_ask(req: Request, to: Target, question: str, plan: AskPlan) -> dict[str, JsonValue]:
+    """The ask's mail, for a model call or an operator request: the checks send makes, headroom,
+    then message_sent{ask} with its deadline. Nothing records the open ask as a result."""
+    row = deliverable(req, "ask", to, plan.limits)
     if isinstance(row, Refusal):
-        return recorded(ctx, row)
+        return req.refuse(row)
     if not plan.headroom(row):
-        return recorded(ctx, Refusal("budget_exceeded"))
+        return req.refuse(Refusal("budget_exceeded"))
     cap = TEAM_CONSTANTS.ask_wait_default_ms
-    deadline = ctx.batch.now + min(plan.timeout_ms, cap)
+    deadline = req.batch.now + min(plan.timeout_ms, cap)
     env: dict[str, JsonValue] = {
-        "mail_id": ask_id,
+        "mail_id": req.mail_id,
         "kind": "ask",
-        "team": caller.team.team_id,
-        "from": caller.ref,
+        "team": req.team.team_id,
+        "from": req.sender,
         "to": {"name": row.name, "generation": row.generation},
-        "provenance": caller.provenance,
-        "causal": causal_of(ctx),
-        "ask_id": ask_id,
+        "provenance": req.provenance,
+        "causal": req.causal,
+        "ask_id": req.mail_id,
         "deadline": deadline,
-        "body": body_of(question, ctx.put),
+        "body": body_of(question, req.put),
     }
-    ctx.batch.add(sent(env))
-    park_call(ctx, caller.provenance)
-    return {"status": "open", "ask_id": ask_id, "deadline": deadline}
+    req.batch.add(sent(env))
+    return {"status": "open", "ask_id": req.mail_id, "deadline": deadline}
 
 
 def reply(ctx: CallContext, ask_id: str, text: str) -> JsonValue:

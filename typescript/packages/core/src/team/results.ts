@@ -123,6 +123,21 @@ export type WaitResult =
   | Waited
   | { readonly status: "refused"; readonly code: ObserveRefusal };
 
+/** Why a cancel was refused. */
+export type CancelRefusal =
+  | "forbidden"
+  | "unknown_member"
+  | "stale_member"
+  | "member_ended";
+
+/**
+ * The cancel tool's result; the model sees its Wire form. cancel_requested: accepted and durable,
+ * not yet applied; the member ends cancelled at its next step.
+ */
+export type CancelResult =
+  | { readonly status: "cancel_requested"; readonly member: MemberRef }
+  | { readonly status: "refused"; readonly code: CancelRefusal };
+
 /** The monitor tool's result; the model sees its Wire form (snake_case keys). */
 export type MonitorResult =
   | { readonly status: "monitoring"; readonly member: MemberRef }

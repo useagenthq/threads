@@ -120,6 +120,138 @@ async def send(
   Makes a retry safe: the same key, principal and body return (or re-attach to) the first request's outcome. Scoped to this team and operation. Omitted: every call is a new request.
 </Field>
 
+### ask
+
+Asks a member a question and waits for its reply, its end, or the deadline.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+ask(to: MemberRef, question: string, options?: {
+  timeoutMs?: PosInt;
+  idempotencyKey?: string;
+}): Promise<TeamAskResult>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def ask(
+    to: MemberRef,
+    question: str,
+    *,
+    timeout_ms: PosInt | None = None,
+    idempotency_key: str | None = None,
+) -> TeamAskResult
+```
+
+</Tab>
+</Tabs>
+
+<Field name="to" type={"MemberRef"} required>
+  The member to ask. See [MemberRef](/docs/reference/types/MemberRef).
+</Field>
+
+<Field name="question" type={"string"} required>
+  The question.
+</Field>
+
+<Field name="timeoutMs / timeout_ms" type={"PosInt"}>
+  How long to wait. Omitted: the host policy, initially 120 s, and never more than it.
+</Field>
+
+<Field name="idempotencyKey / idempotency_key" type={"string"}>
+  Makes a retry safe: the same key, principal and body return (or re-attach to) the first request's outcome. Scoped to this team and operation. Omitted: every call is a new request.
+</Field>
+
+**Throws** `StoreCorruptError` for a definition that can't run.
+
+### wait
+
+Waits until members settle (become idle or end), or the deadline. Settlement is durable evidence: a member that went idle and started again still counts.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+wait(members: readonly MemberRef[], options?: {
+  mode?: "all" | "any" | PosInt;
+  timeoutMs?: PosInt;
+  idempotencyKey?: string;
+}): Promise<TeamWaitResult>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def wait(
+    members: Sequence[MemberRef],
+    *,
+    mode: Literal["all", "any"] | PosInt = "all",
+    timeout_ms: PosInt | None = None,
+    idempotency_key: str | None = None,
+) -> TeamWaitResult
+```
+
+</Tab>
+</Tabs>
+
+<Field name="members" type={"readonly MemberRef[]"} required>
+  The members to wait for: non-empty, frozen at the call.
+</Field>
+
+<Field name="mode" type={"\"all\" | \"any\" | PosInt"} default={"all"}>
+  all, any, or how many must settle. any never cancels the others. A number above the count of distinct members is refused invalid_request before anything is recorded.
+</Field>
+
+<Field name="timeoutMs / timeout_ms" type={"PosInt"}>
+  How long to wait. Omitted: the host policy, initially 120 s, and never more than it.
+</Field>
+
+<Field name="idempotencyKey / idempotency_key" type={"string"}>
+  Makes a retry safe: the same key, principal and body return (or re-attach to) the first request's outcome. Scoped to this team and operation. Omitted: every call is a new request.
+</Field>
+
+**Throws** `StoreCorruptError` for a definition that can't run.
+
+### cancel
+
+Requests a member's cancel: durable at once, applied at the member's next step.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+cancel(member: MemberRef, options?: {
+  idempotencyKey?: string;
+}): Promise<TeamCancelResult>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def cancel(
+    member: MemberRef,
+    *,
+    idempotency_key: str | None = None,
+) -> TeamCancelResult
+```
+
+</Tab>
+</Tabs>
+
+<Field name="member" type={"MemberRef"} required>
+  The member to cancel. See [MemberRef](/docs/reference/types/MemberRef).
+</Field>
+
+<Field name="idempotencyKey / idempotency_key" type={"string"}>
+  Makes a retry safe: the same key, principal and body return (or re-attach to) the first request's outcome. Scoped to this team and operation. Omitted: every call is a new request.
+</Field>
+
 ### members
 
 Every member of the team, the lead included, with its state and, once idle or ended, its result. A pure read.
@@ -174,3 +306,32 @@ async def events(
 </Field>
 
 **Returns an error value** with one of these codes: `invalid_cursor`.
+
+### askStatus / ask_status
+
+An ask's state from the team log: open, not_found, or its outcome. A pure read; it never closes an ask.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+askStatus(askId: AskId): Promise<AskStatus>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def ask_status(
+    ask_id: AskId,
+) -> AskStatus
+```
+
+</Tab>
+</Tabs>
+
+<Field name="askId / ask_id" type={"AskId"} required>
+  The ask, as team.ask or its outcome names it.
+</Field>
+
+**Throws** `StoreCorruptError` for a definition that can't run.

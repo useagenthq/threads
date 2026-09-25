@@ -16,6 +16,7 @@ import { TEAM_CONSTANTS } from "./constants";
 import { bodyOf, sent } from "./mail";
 import { deliverable, type TeamLimits } from "./ops";
 import { parkCall } from "./park";
+import type { Request, Target } from "./request";
 import type { ReplyResult, Wire } from "./results";
 import { askRow, type MemberRow } from "./rows";
 
@@ -32,7 +33,8 @@ export type AskPlan = {
   readonly timeoutMs?: number;
 };
 
-type Opened = {
+/** An ask sent: its id and deadline. */
+export type AskOpened = {
   readonly status: "open";
   readonly ask_id: string;
   readonly deadline: number;
@@ -59,46 +61,59 @@ export async function ask(
   ctx: CallContext,
   args: { readonly to: string; readonly question: string },
   plan: AskPlan,
-): Promise<Opened | Refused> {
+): Promise<AskOpened | Refused> {
   const caller = await callerOf(ctx);
   if (caller === undefined) throw new Error("a team tool call outside a team");
-  const askId = callMailId(ctx);
-  const opened = sentAs(ctx, askId);
+  const opened = sentAs(ctx, callMailId(ctx));
   if (opened !== undefined) return reopened(ctx, caller, opened);
-  const row = await deliverable(
+  const got = await openAsk(
     await callRequest(ctx),
-    "ask",
     named(ctx, args.to),
-    plan.limits,
+    args.question,
+    plan,
   );
-  if ("refused" in row) return recorded(ctx, row);
+  if (got.status === "open") await parkCall(ctx, caller);
+  return got;
+}
+
+/**
+ * The ask's mail, for a model call or an operator request: the checks send makes, headroom, then
+ * message_sent{ask} with its deadline. Nothing records the open ask as a result.
+ */
+export async function openAsk(
+  req: Request,
+  to: Target,
+  question: string,
+  plan: AskPlan,
+): Promise<AskOpened | Refused> {
+  const row = await deliverable(req, "ask", to, plan.limits);
+  if ("refused" in row) return req.refuse(row);
   if (!(await plan.headroom(row)))
-    return recorded(ctx, refusal("budget_exceeded"));
+    return req.refuse(refusal("budget_exceeded"));
   const cap = TEAM_CONSTANTS.askWaitDefaultMs;
-  const deadline = ctx.batch.now + Math.min(plan.timeoutMs ?? cap, cap);
-  ctx.batch.add(
+  const deadline = req.batch.now + Math.min(plan.timeoutMs ?? cap, cap);
+  req.batch.add(
     sent({
-      mail_id: askId,
+      mail_id: req.mailId,
       kind: "ask",
-      team: caller.team.team_id,
-      from: caller.ref,
+      team: req.team.team_id,
+      from: req.from,
       to: { name: row.name, generation: row.generation },
-      provenance: caller.provenance,
-      causal: causalOf(ctx),
-      ask_id: askId,
+      provenance: req.provenance,
+      causal: req.causal,
+      ask_id: req.mailId,
       deadline,
-      body: await bodyOf(args.question, ctx.put),
+      body: await bodyOf(question, req.put),
     }),
   );
-  await parkCall(ctx, caller);
-  return { status: "open", ask_id: askId, deadline } satisfies Opened;
+  return { status: "open", ask_id: req.mailId, deadline };
 }
 
 async function reopened(
   ctx: CallContext,
   caller: Caller,
   opened: MailEnvelope,
-): Promise<Opened> {
+): Promise<AskOpened> {
   if (opened.deadline === undefined)
     throw new Error("an ask envelope always has a deadline");
   await parkCall(ctx, caller);

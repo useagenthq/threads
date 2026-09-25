@@ -19,6 +19,7 @@ from threads.log import (
     OperatorRequestEvent,
     OperatorSender,
     Principal,
+    WaitStartedEvent,
 )
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
@@ -195,13 +196,15 @@ def ref_target(conn: Conn, team: TeamRow, ref: MemberRef) -> Target:
 
 def _recorded(events: Sequence[Event], team: TeamRow, rid: str) -> dict[str, JsonValue]:
     """The outcome the team log recorded for request `rid`: its refusal, the member it started,
-    the mail it sent, or the cancel it requested. An ask or wait re-attaches instead (lanes 21E,
-    21F)."""
+    the mail it sent or the cancel it requested; an ask or a wait re-attaches, with its id."""
     request = next(
         (e for e in events if isinstance(e, OperatorRequestEvent) and e.data.request_id == rid),
         None,
     )
+    wait_id = f"{events[0].branch_id}:{rid}"
     for e in events:
+        if isinstance(e, WaitStartedEvent) and e.data.wait_id == wait_id:
+            return {"status": "waiting", "wait_id": wait_id}
         outcome = _outcome_of(e, team, rid, None if request is None else request.event_id)
         if outcome is not None:
             return outcome
@@ -231,9 +234,11 @@ def _started_by(e: MemberStartedEvent, request_event: str | None) -> bool:
 
 
 def _mail_outcome(env: MailEnvelope, team: TeamRow) -> dict[str, JsonValue] | None:
-    """An operator's own mail: its send's message, or its cancel's request."""
+    """An operator's own mail: its send's message, its ask, or its cancel's request."""
     if env.kind == "message":
         return {"id": env.mail_id, "status": "sent"}
+    if env.kind == "ask" and isinstance(env.ask_id, str) and isinstance(env.deadline, int):
+        return {"status": "open", "ask_id": env.ask_id, "deadline": env.deadline}
     if env.kind != "cancel" or env.to == "team_log":
         return None
     to = to_json(env.to)

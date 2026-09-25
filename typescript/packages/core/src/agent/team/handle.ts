@@ -1,61 +1,35 @@
-import type { EventOf } from "../../fold/state";
-import {
-  type Json,
-  MailId,
-  type MemberRef,
-  type Principal,
-  ThreadId,
-} from "../../log";
+import { MailId, type MemberRef, ThreadId } from "../../log";
 import { listedOf, startPin } from "../../loop/agents/start-pin";
 import { startRoom } from "../../loop/ledger";
-import { redactSecrets } from "../../redact/text";
-import { knownEvents } from "../../reduce";
-import type { LogStore } from "../../store";
-import type { ArtifactStore } from "../../store/artifacts";
-import { reading } from "../../store/driver";
 import { uuidv7 } from "../../store/encode";
-import type { DecideTx } from "../../store/writer";
-import type { Batch, Mint } from "../../team/batch";
-import {
-  type OperatorOp,
-  openOperator,
-  type Recorded,
-  refTarget,
-} from "../../team/operator";
+import { refTarget } from "../../team/operator";
 import { type StartPlan, send, start } from "../../team/ops";
-import type { Request } from "../../team/request";
-import { memberRows, type TeamRow, teamRow } from "../../team/rows";
-import type { DeferTools } from "../defer";
-import type { MemberEntry } from "../registry";
 import { ancestorsOf } from "./budgets";
 import { teamEvents } from "./feed";
 import type {
   Team,
-  TeamRef,
   TeamSendResult,
   TeamStartOptions,
   TeamStartResult,
 } from "./handle-types";
+import {
+  type HandleEnv,
+  isIn,
+  KEYED,
+  leadOf,
+  limitsOf,
+  operator,
+} from "./operator-request";
 import { roster } from "./roster";
 import { pins } from "./runtime";
-import { BUSY, onTeamLog } from "./team-log";
+import { BUSY } from "./team-log";
+import { askMember, cancelMember, statusOf, waitFor } from "./waits";
 
-// The operator's handle (spec/api.json Team): each of start and send is one operator request
-// decided in one team-log append (design §4.4), by the same ops as the model's tools; members and
-// events are pure reads. Lane 21E adds ask, wait, cancel and askStatus as further requests.
+// The operator's handle (spec/api.json Team): each of start, send, ask, wait and cancel is one
+// operator request decided in one team-log append (design §4.4), by the same ops as the model's
+// tools (waits.ts has ask, wait and cancel); members, events and askStatus are pure reads.
 
-export type HandleEnv = {
-  readonly log: LogStore;
-  readonly artifacts: ArtifactStore;
-  readonly ref: TeamRef;
-  readonly principal: Principal;
-  /** The lead that ran, as this process defines it: the agents start resolves. */
-  readonly lead: MemberEntry;
-  readonly busyBoundMs?: number;
-  readonly mint?: Mint;
-};
-
-const utf8 = new TextEncoder();
+export type { HandleEnv } from "./operator-request";
 
 export function teamHandle(env: HandleEnv): Team {
   return {
@@ -64,6 +38,11 @@ export function teamHandle(env: HandleEnv): Team {
       startMember(env, agent, task, options),
     send: (to, text, options = {}) =>
       sendTo(env, to, text, options.idempotencyKey),
+    ask: (to, question, options = {}) => askMember(env, to, question, options),
+    wait: (members, options = {}) => waitFor(env, members, options),
+    cancel: (member, options = {}) =>
+      cancelMember(env, member, options.idempotencyKey),
+    askStatus: (askId) => statusOf(env, askId),
     members: () => roster(env.log, env.artifacts, env.ref.id),
     events: (options = {}) => teamEvents(env.log, env.ref.id, options.after),
   };
@@ -131,110 +110,10 @@ async function sendTo(
   throw new Error(`a send recorded ${done.status}`);
 }
 
-/**
- * One operator request under the team-log writer: its key looked up, then `decide` with the
- * op. Returns what the op or the key's replay recorded, or busy.
- */
-async function operator(
-  env: HandleEnv,
-  op: OperatorOp,
-  body: Readonly<Record<string, Json | undefined>>,
-  idempotencyKey: string | undefined,
-  decide: (req: Request, team: TeamRow) => Promise<Recorded>,
-): Promise<Recorded | typeof BUSY> {
-  const team = await reading(env.log.driver, (tx) => teamRow(tx, env.ref.id));
-  if (team === undefined) throw new Error(`no team ${env.ref.id}`);
-  const requestId = uuidv7(env.log.now());
-  return await onTeamLog(
-    env.log,
-    team.team_log_branch_id,
-    async (tx: DecideTx, batch: Batch) => {
-      // Read in the append: the team may have closed since the handle looked.
-      const now = (await teamRow(tx.tx, env.ref.id)) ?? team;
-      const opened = await openOperator(
-        { tx: tx.tx, chain: tx.chain, batch, put: putText(env), team: now },
-        {
-          requestId,
-          op,
-          principal: env.principal,
-          body: present(body),
-          idempotencyKey,
-        },
-      );
-      return opened.kind === "recorded"
-        ? opened.outcome
-        : decide(opened.request, now);
-    },
-    {
-      ...(env.busyBoundMs === undefined
-        ? {}
-        : { busyBoundMs: env.busyBoundMs }),
-      ...(env.mint === undefined ? {} : { mint: env.mint }),
-    },
-  );
-}
-
-/** A body's parameters as api.json names them, an omitted option left out. */
-function present(
-  body: Readonly<Record<string, Json | undefined>>,
-): Readonly<Record<string, Json>> {
-  return Object.fromEntries(
-    Object.entries(body).flatMap(([k, v]) => (v === undefined ? [] : [[k, v]])),
-  );
-}
-
-/** A text above the inline cap, stored before the append that names it (redacted, C5). */
-function putText(env: HandleEnv): Request["put"] {
-  return async (text) => {
-    const bytes = utf8.encode(redactSecrets(text));
-    return {
-      sha256: await env.artifacts.put(bytes),
-      bytes: bytes.length,
-      media_type: "text/plain",
-    };
-  };
-}
-
-const limitsOf = (env: HandleEnv) => env.lead.teamLimits;
-
-/** The lead as a member's parent, and the defer_tools its members inherit. */
-async function leadOf(env: HandleEnv): Promise<{
-  readonly parent: NonNullable<EventOf<"thread_started">["data"]["parent"]>;
-  readonly deferTools: DeferTools | undefined;
-}> {
-  const row = (
-    await reading(env.log.driver, (tx) => memberRows(tx, env.ref.id))
-  ).find((r) => r.role === "lead");
-  const read =
-    row?.branch_id === undefined || row.branch_id === null
-      ? undefined
-      : await env.log.read(row.branch_id);
-  if (row === undefined || read === undefined || !read.ok)
-    throw new Error(`team ${env.ref.id} has no readable lead log`);
-  const started = knownEvents(read.value).find(
-    (e) => e.type === "thread_started",
-  );
-  if (started?.type !== "thread_started" || row.branch_id === null)
-    throw new Error("a lead log starts with thread_started");
-  return {
-    parent: {
-      thread_id: row.thread_id,
-      branch_id: row.branch_id,
-      event_id: started.event_id,
-      relation: "team_member",
-    },
-    deferTools: started.data.policy?.context?.defer_tools,
-  };
-}
-
 type StartCode = Extract<TeamStartResult, { status: "refused" }>["code"];
 type SendCode = Extract<TeamSendResult, { status: "refused" }>["code"];
 
 // The codes the team log can record for each op (its key refusals included).
-const KEYED = [
-  "idempotency_key_reused",
-  "idempotency_key_principal_mismatch",
-] as const;
 const START_CODES: readonly StartCode[] = [
   "forbidden",
   "unknown_agent",
@@ -254,6 +133,3 @@ const SEND_CODES: readonly SendCode[] = [
   "team_closed",
   ...KEYED,
 ];
-
-const isIn = <C extends string>(codes: readonly C[], code: string): code is C =>
-  codes.some((c) => c === code);

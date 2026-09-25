@@ -1,0 +1,27 @@
+---
+title: "TeamCancelResult"
+description: "team.cancel's result."
+icon: "Braces"
+---
+
+A union discriminated by `status`.
+
+### cancel_requested
+
+<Field name="status" type={"\"cancel_requested\""} required>
+  "cancel_requested": the cancel is accepted and durable, not yet applied; the member ends cancelled at its next step.
+</Field>
+
+<Field name="member" type={"MemberRef"} required>
+  The member being cancelled.
+</Field>
+
+### refused
+
+<Field name="status" type={"\"refused\""} required>
+  "refused": nothing was done; code says why.
+</Field>
+
+<Field name="code" type={"CancelRefusal | OperatorRefusal"} required>
+  Why it was refused.
+</Field>

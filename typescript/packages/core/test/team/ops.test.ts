@@ -23,11 +23,8 @@ import {
 // through this runtime's own store ops reaches the reference's outcome, appends the same event
 // types per log and makes the same row changes; the team then replays.
 
-/** The operator's ask, wait and cancel wait for their Team methods (lane 21F follow-up). */
-const OPERATOR_LATER: ReadonlySet<string> = new Set(["ask", "wait", "cancel"]);
-
-const runs = (v: Vector): boolean =>
-  v.lane === undefined && !(v.by === "team" && OPERATOR_LATER.has(v.op));
+/** A vector tagged for a later lane is not run by this build. */
+const runs = (v: Vector): boolean => v.lane === undefined;
 
 async function materializeOp(fx: Fixture, v: Vector): Promise<unknown> {
   const rebind = z
@@ -92,7 +89,7 @@ async function appended(
 describe("team op vectors, run by this runtime", () => {
   const mine = DOC.vectors.filter(runs);
 
-  test("cover every op, but the operator's ask, wait and cancel", () => {
+  test("cover every op, the operator's included", () => {
     expect(new Set(mine.map((v) => v.op))).toEqual(
       new Set([
         ...["start", "send", "ask", "reply", "wait", "monitor", "cancel"],
@@ -101,8 +98,8 @@ describe("team op vectors, run by this runtime", () => {
       ]),
     );
     // Pinned: a vector that drops out of the selection fails here, not silently.
-    expect(mine).toHaveLength(96);
-    expect(mine.filter((v) => v.by === "team")).toHaveLength(18);
+    expect(mine).toHaveLength(103);
+    expect(mine.filter((v) => v.by === "team")).toHaveLength(25);
   });
 
   for (const v of mine)

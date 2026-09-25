@@ -160,7 +160,8 @@ def keyed(w: World, label: str, op: str, inp: Obj) -> Obj | None:
 
 def recorded(w: World, label: str, rid: str) -> Obj:
     """The outcome the team log recorded for request `rid`: its refusal, the member it started,
-    the mail it sent, or the cancel it requested."""
+    the mail it sent or the cancel it requested; an ask or a wait re-attaches, returning its id as
+    the request first did (the method then returns its outcome from the team log)."""
     log = w.logs[label]
     request = next(
         e
@@ -184,7 +185,11 @@ def recorded(w: World, label: str, rid: str) -> Obj:
             to = obj(env["to"])
             member = {"tenant": w.team()["tenant_id"], "team": env["team"], **to}
             return {"member": member, "status": "cancel_requested"}
-    raise AssertionError(f"request {rid}'s outcome: ask and wait re-attach (lanes 21E and 21F)")
+        if env.get("from") == {"operator": rid} and env["kind"] == "ask":
+            return {"status": "open", "ask_id": env["ask_id"], "deadline": env["deadline"]}
+        if e["type"] == "wait_started" and d["wait_id"] == f"{log.branch}:{rid}":
+            return {"status": "waiting", "wait_id": d["wait_id"]}
+    raise AssertionError(f"request {rid} recorded no outcome")
 
 
 def _next_event_id(w: World, label: str) -> str:

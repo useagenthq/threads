@@ -11,7 +11,7 @@ import type { MemberRow, TeamRow } from "./rows";
 // named, how the outcome is recorded) is here. Reference: spec/tools/fixtures/ops_request.py.
 
 /** The ops the Phase 1 policy decides. */
-export type PolicyOp = "start" | "send" | "ask";
+export type PolicyOp = "start" | "send" | "ask" | "monitor" | "cancel";
 
 /** The member an op addresses: its name (the decision's target) and its row, read when due. */
 export type Target = {

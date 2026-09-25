@@ -1,4 +1,5 @@
 import type {
+  AskId,
   KnownEvent,
   MailId,
   MemberName,
@@ -8,11 +9,19 @@ import type {
   TeamId,
 } from "../../log";
 import type { InvalidDefinition } from "../../team/dynamic";
-import type { MemberResult, SendRefusal } from "../../team/results";
+import type {
+  AskOutcome,
+  AskRefusal,
+  CancelRefusal,
+  MemberResult,
+  ObserveRefusal,
+  SendRefusal,
+  Waited,
+} from "../../team/results";
 import type { StartRefusal } from "./types";
 
 // The operator's handle on a team (spec/api.json Team, Team* results, TeamMember, TeamItem): what
-// run().team and openTeam return. Lane 21E's ask, wait, cancel and askStatus join it.
+// run().team and openTeam return.
 
 /** Which team: team.ref, for openTeam in another process. */
 export type TeamRef = {
@@ -46,6 +55,43 @@ export type TeamSendResult =
       readonly status: "refused";
       readonly code: SendRefusal | OperatorRefusal;
     };
+
+/** team.ask's result: how the ask ended, or why it was refused. */
+export type TeamAskResult =
+  | AskOutcome
+  | {
+      readonly status: "refused";
+      readonly code: AskRefusal | OperatorRefusal;
+    };
+
+/**
+ * team.wait's result. invalid_request (a numeric mode above the member count) is returned before
+ * any writer, so, like busy, it is never logged.
+ */
+export type TeamWaitResult =
+  | Waited
+  | {
+      readonly status: "refused";
+      readonly code: ObserveRefusal | OperatorRefusal | "invalid_request";
+    };
+
+/** team.cancel's result: cancel_requested is durable; the member ends at its next step. */
+export type TeamCancelResult =
+  | { readonly status: "cancel_requested"; readonly member: MemberRef }
+  | {
+      readonly status: "refused";
+      readonly code: CancelRefusal | OperatorRefusal;
+    };
+
+/** team.askStatus's answer: open, not_found, or how the ask ended. */
+export type AskStatus =
+  | {
+      readonly status: "open";
+      readonly askId: AskId;
+      readonly deadline: number;
+    }
+  | { readonly status: "not_found"; readonly askId: AskId }
+  | AskOutcome;
 
 /** starting: its log not opened yet. idle: its latest task is done; mail wakes it. */
 export type MemberState = "starting" | "running" | "idle" | "parked" | "ended";
@@ -89,6 +135,18 @@ export type TeamItem =
 /** Every Team method's retry key: the same key, principal and body replay the first outcome. */
 type Keyed = { readonly idempotencyKey?: string };
 
+/** team.ask's options. timeoutMs: omitted, the default (120 s), and never more than it. */
+export type TeamAskOptions = Keyed & { readonly timeoutMs?: number };
+
+/**
+ * team.wait's options. mode: all (the default), any, or how many must settle; any never cancels
+ * the others. timeoutMs: omitted, the default (120 s), and never more than it.
+ */
+export type TeamWaitOptions = Keyed & {
+  readonly mode?: "all" | "any" | number;
+  readonly timeoutMs?: number;
+};
+
 /** team.start's options: a label on any start; the rest for a dynamic agent only. */
 export type TeamStartOptions = Keyed & {
   readonly label?: string;
@@ -116,6 +174,27 @@ export type Team = {
     text: string,
     options?: Keyed,
   ) => Promise<TeamSendResult>;
+  /** Asks a member a question and waits for its reply, its end, or the deadline. */
+  readonly ask: (
+    to: MemberRef,
+    question: string,
+    options?: TeamAskOptions,
+  ) => Promise<TeamAskResult>;
+  /**
+   * Waits until members settle (become idle or end), or the deadline. Settlement is durable
+   * evidence: a member that went idle and started again still counts.
+   */
+  readonly wait: (
+    members: readonly MemberRef[],
+    options?: TeamWaitOptions,
+  ) => Promise<TeamWaitResult>;
+  /** Requests a member's cancel: durable at once, applied at the member's next step. */
+  readonly cancel: (
+    member: MemberRef,
+    options?: Keyed,
+  ) => Promise<TeamCancelResult>;
+  /** An ask's state from the team log. A pure read; it never closes an ask. */
+  readonly askStatus: (askId: AskId) => Promise<AskStatus>;
   /** Every member, the lead included, with its state and, once settled, its result. */
   readonly members: () => Promise<readonly TeamMember[]>;
   /** The team's audit feed: every committed event of every team log, as stored. */

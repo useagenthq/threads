@@ -13,11 +13,15 @@ import {
 } from "../log";
 import type { Tx } from "../store/driver";
 import type { Chain } from "../verify";
+import type { AskOpened } from "./ask";
 import type { Batch } from "./batch";
 import { type Refusal, type Refused, refusal, refusedOf } from "./call";
+import type { CancelRequested } from "./cancel";
+import type { ReadText, Waiting } from "./close";
 import type { PutText } from "./mail";
 import type { Sent, Started } from "./ops";
 import type { Request, Target } from "./request";
+import type { Waited, Wire } from "./results";
 import { memberNamed, memberRows, type TeamRow } from "./rows";
 
 // An operator request in the team log (design §4.4; spec/schema/README.md, "Teams"): its key is
@@ -45,15 +49,22 @@ export type OperatorContext = {
   readonly chain: Chain;
   readonly batch: Batch;
   readonly put: PutText;
+  readonly read: ReadText;
   readonly team: TeamRow;
 };
 
-/** A request's recorded outcome, as the team log holds it. */
+/**
+ * A request's outcome, as the team log holds it: what its op returned. A replayed ask or wait
+ * re-attaches: its id, open or waiting, whatever the team log has recorded for it since.
+ */
 export type Recorded =
   | Started
   | Sent
   | Refused
-  | { readonly member: MemberRef; readonly status: "cancel_requested" };
+  | CancelRequested
+  | AskOpened
+  | Wire<Waited>
+  | Waiting;
 
 /** Open: decide it with the op. Recorded: its key replays an earlier request's outcome. */
 export type Opened =
@@ -233,7 +244,7 @@ export function refTarget(tx: Tx, team: TeamRow, ref: MemberRef): Target {
 
 /**
  * The outcome the team log recorded for request `rid`: its refusal, the member it started, the
- * mail it sent, or the cancel it requested. An ask or wait re-attaches instead (lanes 21E, 21F).
+ * mail it sent or the cancel it requested; an ask or a wait re-attaches, with its id.
  */
 function recorded(chain: Chain, team: TeamRow, rid: string): Recorded {
   const events = chain.events.flatMap((l) =>
@@ -242,8 +253,12 @@ function recorded(chain: Chain, team: TeamRow, rid: string): Recorded {
   const request = events.find(
     (e) => e.type === "operator_request" && e.data.request_id === rid,
   );
+  const branch = chain.segments[0]?.header.branch_id;
   for (const e of events) {
-    const outcome = outcomeOf(e, team, rid, request?.event_id);
+    const outcome =
+      e.type === "wait_started" && e.data.wait_id === `${branch}:${rid}`
+        ? { status: "waiting" as const, wait_id: e.data.wait_id }
+        : outcomeOf(e, team, rid, request?.event_id);
     if (outcome !== undefined) return outcome;
   }
   throw new Error(`request ${rid} recorded no outcome this build replays`);
@@ -278,9 +293,15 @@ function outcomeOf(
   }
 }
 
-/** An operator's own mail: its send's message, or its cancel's request. */
+/** An operator's own mail: its send's message, its ask, or its cancel's request. */
 function mailOutcome(env: MailEnvelope, team: TeamRow): Recorded | undefined {
   if (env.kind === "message") return { id: env.mail_id, status: "sent" };
+  if (
+    env.kind === "ask" &&
+    env.ask_id !== undefined &&
+    env.deadline !== undefined
+  )
+    return { status: "open", ask_id: env.ask_id, deadline: env.deadline };
   if (env.kind !== "cancel" || env.to === "team_log" || "caller" in env.to)
     return undefined;
   const member = { tenant: team.tenant_id, team: env.team, ...env.to };

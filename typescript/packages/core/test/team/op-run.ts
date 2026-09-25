@@ -4,19 +4,21 @@ import { EndedResult, MemberRef, Principal, ThreadId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { ok } from "../../src/result";
 import type { EventDraft, Writer } from "../../src/store";
-import { ask, reply } from "../../src/team/ask";
+import { ask, openAsk, reply } from "../../src/team/ask";
 import { Batch } from "../../src/team/batch";
 import { type CallContext, callRequest, named } from "../../src/team/call";
-import { cancel } from "../../src/team/cancel";
+import { cancel, requestCancel } from "../../src/team/cancel";
+import { TEAM_CONSTANTS } from "../../src/team/constants";
 import { type ConsumeContext, consume } from "../../src/team/consume";
 import { deadline } from "../../src/team/deadline";
 import { resolveDefinition } from "../../src/team/dynamic";
 import { openOperator, refTarget } from "../../src/team/operator";
 import { type StartPlan, send, start } from "../../src/team/ops";
 import { turnProvenance } from "../../src/team/provenance";
-import { teamOfLog } from "../../src/team/rows";
+import type { Request } from "../../src/team/request";
+import { type TeamRow, teamOfLog } from "../../src/team/rows";
 import { type Settlement, settle } from "../../src/team/settle";
-import { monitor, wait } from "../../src/team/watch";
+import { monitor, openWait, wait, waitMembers } from "../../src/team/watch";
 import { StartInput } from "../../src/tools/team-inputs";
 import { DOC, TEAM, type Vector, vectorMint } from "./vectors";
 
@@ -122,11 +124,30 @@ function startPlan(v: Op, args: z.infer<typeof StartInput>): StartPlan {
 
 const Body = {
   send: z.object({ to: MemberRef, text: z.string() }),
+  ask: z.object({
+    to: MemberRef,
+    question: z.string(),
+    timeout_ms: z.number().optional(),
+  }),
+  wait: z.object({
+    members: z.array(MemberRef),
+    mode: z.union([z.enum(["all", "any"]), z.number()]).optional(),
+    timeout_ms: z.number().optional(),
+  }),
+  cancel: z.object({ member: MemberRef }),
   any: z.record(z.string(), z.json()),
 };
 
-/** An operator request's outcome: what the op returns, or what its key replays. */
+/**
+ * An operator request's outcome: what the op returns, or what its key replays. A wait's mode
+ * above its member count is refused before the writer, as the handle does.
+ */
 async function operatorOp(w: Writer, v: Op): Promise<unknown> {
+  if (v.op === "wait") {
+    const body = Body.wait.parse(v.input["body"]);
+    if (waitMembers(body.members, body.mode) === "invalid_request")
+      return { code: "invalid_request", status: "refused" };
+  }
   let out: unknown;
   await decided(w, async (ctx) => {
     const team = await teamOfLog(ctx.tx, ctx.branchId);
@@ -135,7 +156,7 @@ async function operatorOp(w: Writer, v: Op): Promise<unknown> {
       { ...ctx, put, team },
       {
         requestId: z.string().parse(v.input["request_id"]),
-        op: z.enum(["start", "send"]).parse(v.op),
+        op: z.enum(["start", "send", "ask", "wait", "cancel"]).parse(v.op),
         principal: Principal.parse(v.input["principal"]),
         body: Body.any.parse(v.input["body"]),
         idempotencyKey: z.string().optional().parse(v.input["idempotency_key"]),
@@ -145,16 +166,51 @@ async function operatorOp(w: Writer, v: Op): Promise<unknown> {
       out = opened.outcome;
       return;
     }
-    if (v.op === "send") {
-      const body = Body.send.parse(v.input["body"]);
-      const to = refTarget(ctx.tx, team, body.to);
-      out = await send(opened.request, to, body.text, limits(v));
-    } else {
-      const body = StartInput.parse(v.input["body"]);
-      out = await start(opened.request, body, startPlan(v, body));
-    }
+    out = await operatorDecide(ctx, opened.request, team, v);
   });
   return out;
+}
+
+function operatorDecide(
+  ctx: ConsumeContext,
+  req: Request,
+  team: TeamRow,
+  v: Op,
+): Promise<unknown> {
+  const body = v.input["body"];
+  switch (v.op) {
+    case "send": {
+      const b = Body.send.parse(body);
+      return send(req, refTarget(ctx.tx, team, b.to), b.text, limits(v));
+    }
+    case "ask": {
+      const b = Body.ask.parse(body);
+      return openAsk(req, refTarget(ctx.tx, team, b.to), b.question, {
+        limits: limits(v),
+        headroom: async () => v.given.headroom ?? true,
+        ...(b.timeout_ms === undefined ? {} : { timeoutMs: b.timeout_ms }),
+      });
+    }
+    case "wait": {
+      const b = Body.wait.parse(body);
+      const members = waitMembers(b.members, b.mode);
+      if (members === "invalid_request") throw new Error("checked before");
+      const targets = members.map((m) => refTarget(ctx.tx, team, m));
+      return openWait(req, ctx, targets, {
+        mode: b.mode ?? "all",
+        timeoutMs: b.timeout_ms ?? TEAM_CONSTANTS.askWaitDefaultMs,
+      });
+    }
+    case "cancel":
+      return requestCancel(
+        req,
+        refTarget(ctx.tx, team, Body.cancel.parse(body).member),
+      );
+    default: {
+      const b = StartInput.parse(body);
+      return start(req, b, startPlan(v, b));
+    }
+  }
 }
 
 const limits = (v: Op) => ({
@@ -276,12 +332,12 @@ export function runOn(w: Writer, v: Op): Promise<unknown> {
   switch (v.op) {
     case "send":
     case "start":
-      return "request_id" in v.input ? operatorOp(w, v) : callOp(w, v);
     case "ask":
-    case "reply":
     case "wait":
-    case "monitor":
     case "cancel":
+      return "request_id" in v.input ? operatorOp(w, v) : callOp(w, v);
+    case "reply":
+    case "monitor":
       return callOp(w, v);
     case "consume":
       return consumeOp(w);

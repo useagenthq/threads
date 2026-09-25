@@ -16,10 +16,13 @@ from threads.agents.results import (
     Parked,
     RunResult,
 )
+from threads.agents.run import member_runner
 from threads.agents.store import now_ms, open_store
+from threads.agents.team_check import agents_of
 from threads.agents.team_handle import HandleEnv, Team
 from threads.agents.team_handle_types import TeamRef
-from threads.agents.teams import pins
+from threads.agents.team_worker import WorkerEnv
+from threads.agents.teams import member_pin, pins
 from threads.log import ThreadStartedEvent, UserInputEvent
 from threads.result import Err
 
@@ -72,7 +75,12 @@ async def with_team[D, O](lead: Definition[D], result: RunResult[O]) -> TeamRunR
     if started is None or started.data.team is MISSING or request is None:
         raise AssertionError(f"thread {thread.id} leads no team")
     ref = TeamRef(thread.store.tenant, started.data.team.id)
-    team = Team(HandleEnv(sq, ref, request.actor.principal, pins(lead), lead.team_limits))
+    team_id = ref.id
+    agents = agents_of(lead.team or ())
+    run = member_runner(thread.store)
+    worker = WorkerEnv(thread.store, sq, lambda: team_id, agents, member_pin, run)
+    env = HandleEnv(sq, ref, request.actor.principal, pins(lead), lead.team_limits, worker)
+    team = Team(env)
     match result:
         case Completed():
             return TeamCompleted(result.output, result.thread, team=team)

@@ -156,8 +156,7 @@ def call_request(ctx: CallContext) -> Request:
     caller = caller_of(ctx)
 
     def decide_(op: PolicyOp, target: str) -> Refusal | None:
-        # Phase 1: only a lead starts; members send to one another.
-        return decide(ctx, op, target, allow=op != "start" or caller.row.role == "lead")
+        return decide(ctx, op, target, allow=_granted(ctx, caller, op, target))
 
     def parent(started_id: str) -> JsonValue:
         return {
@@ -181,6 +180,18 @@ def call_request(ctx: CallContext) -> Request:
         parent,
         lambda refusal: _done(ctx, refused_of(refusal)),
         lambda value: _done(ctx, value),
+    )
+
+
+def _granted(ctx: CallContext, caller: Caller, op: PolicyOp, target: str) -> bool:
+    """The team's Phase 1 grant to a member: a lead starts, a member's starter (its member_started
+    is in the caller's own log) cancels it, and members send, ask and monitor one another."""
+    if op == "start":
+        return caller.row.role == "lead"
+    if op != "cancel":
+        return True
+    return any(
+        isinstance(e, MemberStartedEvent) and e.data.member.name == target for e in ctx.fold.events
     )
 
 

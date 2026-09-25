@@ -29,6 +29,8 @@ export type {
   AskOutcome,
   AskRefusal,
   AskResult,
+  CancelRefusal,
+  CancelResult,
   MemberResult,
   MonitorResult,
   ObserveRefusal,

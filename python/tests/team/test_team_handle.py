@@ -25,7 +25,9 @@ from threads import (
     sqlite,
 )
 from threads.agents.member_results import MemberCompleted
+from threads.agents.run import member_runner
 from threads.agents.store import now_ms
+from threads.agents.team_check import agents_of
 from threads.agents.team_handle import HandleEnv
 from threads.agents.team_handle_types import (
     EpochRestarted,
@@ -36,7 +38,8 @@ from threads.agents.team_handle_types import (
 )
 from threads.agents.team_log_mail import take_team_log_mail
 from threads.agents.team_tools import Sent, Started
-from threads.agents.teams import pins
+from threads.agents.team_worker import WorkerEnv
+from threads.agents.teams import member_pin, pins
 from threads.log import BranchId, Event, OperatorRequestEvent
 from threads.result import Err, Ok
 from threads.team.rebuild import rebuild_team_index
@@ -176,7 +179,10 @@ def test_a_held_team_log_lease_past_the_bound_is_busy_and_nothing_is_recorded() 
         assert row is not None
         held = await sq.acquire(BranchId(row.team_log_branch_id), "someone-else", now_ms)
         assert isinstance(held, Ok)
-        env = HandleEnv(sq, team.ref, OPERATOR, pins(lead.definition), lead.definition.team_limits)
+        definition = lead.definition
+        agents = agents_of(definition.team or ())
+        worker = WorkerEnv(store, sq, lambda: team.ref.id, agents, member_pin, member_runner(store))
+        env = HandleEnv(sq, team.ref, OPERATOR, pins(definition), definition.team_limits, worker)
         bounded = Team(replace(env, busy_bound_ms=30))
         before = len(await _team_log(store, team))
         assert await bounded.start("writer", "Go.") == TeamStartRefused("busy")

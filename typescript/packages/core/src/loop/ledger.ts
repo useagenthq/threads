@@ -142,8 +142,15 @@ export async function roomIn(
 ): Promise<boolean> {
   if (s.config.budgets === undefined) return true;
   const run = covers.filter((c) => c.scope === "run");
-  const all = [...to.covering, ...run];
-  return fits(all, boundsFor(to.policy, to.model, to.params), tx);
+  return askRoom({ ...to, covering: [...to.covering, ...run] }, tx);
+}
+
+/**
+ * An operator's ask's headroom, read in `tx`: the recipient's own and ancestors' budgets have room
+ * for one request of its model (a Phase 1 operator request has no run budget of its own).
+ */
+export function askRoom(to: TeamRecipient, tx: Tx): Promise<boolean> {
+  return fits(to.covering, boundsFor(to.policy, to.model, to.params), tx);
 }
 
 /**

@@ -388,6 +388,38 @@
       "tests/team/test_team_handle.py::test_team_start_is_one_operator_request_the_member_starts_with_its_label"
     ]
   },
+  "Team.ask": {
+    "ts": [
+      "packages/core/test/team/operator-waits.test.ts > team.ask > the member's reply is the ask's outcome; askStatus reads the same"
+    ],
+    "py": [
+      "tests/team/test_team_operator_waits.py::test_the_members_reply_is_the_asks_outcome_ask_status_reads_the_same"
+    ]
+  },
+  "Team.askStatus": {
+    "ts": [
+      "packages/core/test/team/operator-waits.test.ts > team.ask > the member's reply is the ask's outcome; askStatus reads the same"
+    ],
+    "py": [
+      "tests/team/test_team_operator_waits.py::test_the_members_reply_is_the_asks_outcome_ask_status_reads_the_same"
+    ]
+  },
+  "Team.cancel": {
+    "ts": [
+      "packages/core/test/team/operator-waits.test.ts > team.cancel > a starting member's cancel is durable at once; it ends cancelled without running"
+    ],
+    "py": [
+      "tests/team/test_team_operator_waits.py::test_a_starting_members_cancel_is_durable_at_once_it_ends_cancelled_without_running"
+    ]
+  },
+  "Team.wait": {
+    "ts": [
+      "packages/core/test/team/operator-waits.test.ts > team.wait > waits for a member to settle, with its result"
+    ],
+    "py": [
+      "tests/team/test_team_operator_waits.py::test_waits_for_a_member_to_settle_with_its_result"
+    ]
+  },
   "TeamAgent.check": {
     "ts": [
       "packages/core/test/team/agent.test.ts > agent({team}) > check(): a member that hands off is refused handoff_in_team"

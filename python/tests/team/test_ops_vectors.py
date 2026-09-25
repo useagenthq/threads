@@ -27,14 +27,8 @@ from threads.result import Err, Ok
 from threads.store import SqliteStore, Writer
 from threads.team.materialize import MaterializeOptions, Rebind, materialize
 
-OPERATOR_LATER = frozenset({"ask", "wait", "cancel"})
-"""The operator's ask, wait and cancel wait for their Team methods (lane 21F follow-up)."""
-MINE = [
-    v
-    for v in vectors()
-    if "lane" not in v  # a Teams Phase 2 vector waits for its sub-lane's build
-    and not (v["by"] == "team" and v["op"] in OPERATOR_LATER)
-]
+MINE = [v for v in vectors() if "lane" not in v]
+"""A vector tagged for a later lane waits for that sub-lane's build."""
 
 
 def _clock(v: Obj) -> Callable[[], int]:
@@ -100,8 +94,8 @@ def test_the_selection_covers_this_builds_ops() -> None:
         *("materialize", "idle", "end"),
     }
     # Pinned: a vector that drops out of the selection fails here, not silently.
-    assert len(MINE) == 96  # noqa: PLR2004 - the pinned selection size
-    assert sum(v["by"] == "team" for v in MINE) == 18  # noqa: PLR2004 - of them, the operator's
+    assert len(MINE) == 103  # noqa: PLR2004 - the pinned selection size
+    assert sum(v["by"] == "team" for v in MINE) == 25  # noqa: PLR2004 - of them, the operator's
 
 
 @pytest.mark.parametrize("v", MINE, ids=[str(v["name"]) for v in MINE])

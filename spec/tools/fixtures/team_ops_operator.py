@@ -11,10 +11,11 @@ from typing import TYPE_CHECKING
 from .common import arr, text
 from .dynamic import SPECIALIST
 from .ops_member import start
-from .ops_send import send
+from .ops_observe import wait
+from .ops_send import ask, send
 from .team_ops_dynamic import DYNAMIC_HASH, NEW_THREAD
 from .team_ops_worlds import BOB, REQUESTS, Vec, ended, operator, refused, running
-from .team_pieces import WRITER, ref
+from .team_pieces import RESEARCHER, WRITER, ref
 
 if TYPE_CHECKING:
     from .jcs import Obj
@@ -139,5 +140,45 @@ def _dynamic() -> list[Vec]:
     ]
 
 
+def _reattached() -> list[Vec]:
+    """A retry of an ask or a wait re-attaches: the first request's id, and nothing appended."""
+    question: Obj = {"to": RESEARCHER, "question": "Any risks?"}
+    w = running()
+    opened = ask(w, "team", operator(REQUESTS[0], question, "ask-1"))
+    out = [
+        Vec(
+            "ask-operator-key-reattaches",
+            "4.4, 4.8",
+            "A retry of team.ask under the key of an open ask re-attaches: the first request's "
+            "ask id and deadline, and nothing is appended. team.ask then returns that ask's "
+            "outcome from the team log, waiting for it while it is open.",
+            w,
+            "ask",
+            "team",
+            operator(REQUESTS[1], question, "ask-1"),
+            opened,
+            {},
+        )
+    ]
+    members: Obj = {"members": [RESEARCHER]}
+    w = running()
+    waiting = wait(w, "team", operator(REQUESTS[0], members, "wait-1"))
+    out.append(
+        Vec(
+            "wait-operator-key-reattaches",
+            "4.4, 4.12",
+            "A retry of team.wait under the key of a wait still open re-attaches to it: its wait "
+            "id, and nothing is appended.",
+            w,
+            "wait",
+            "team",
+            operator(REQUESTS[1], members, "wait-1"),
+            waiting,
+            {},
+        )
+    )
+    return out
+
+
 def operator_vectors() -> list[Vec]:
-    return [*_keyed(), *_dynamic()]
+    return [*_keyed(), *_dynamic(), *_reattached()]

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from threads.team.mail import PutText
     from threads.team.rows import MemberRow, TeamRow
 
-type PolicyOp = Literal["start", "send", "ask"]
+type PolicyOp = Literal["start", "send", "ask", "monitor", "cancel"]
 """The ops the Phase 1 policy decides."""
 
 

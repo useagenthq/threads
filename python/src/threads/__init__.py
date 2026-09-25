@@ -40,6 +40,8 @@ from threads.agents.team_answers import (  # noqa: E402
     AskOutcome,
     AskRefusal,
     AskResult,
+    CancelRefusal,
+    CancelResult,
     MemberResult,
     MonitorResult,
     ObserveRefusal,
@@ -50,8 +52,11 @@ from threads.agents.team_answers import (  # noqa: E402
 )
 from threads.agents.team_handle import Team  # noqa: E402
 from threads.agents.team_handle_types import (  # noqa: E402
+    AskStatus,
     MemberState,
     OperatorRefusal,
+    TeamAskResult,
+    TeamCancelResult,
     TeamCursor,
     TeamItem,
     TeamMember,
@@ -59,6 +64,7 @@ from threads.agents.team_handle_types import (  # noqa: E402
     TeamSendResult,
     TeamSource,
     TeamStartResult,
+    TeamWaitResult,
 )
 from threads.agents.team_results import TeamRunResult  # noqa: E402
 from threads.agents.team_tools import (  # noqa: E402
@@ -125,8 +131,11 @@ __all__ = [
     "AskOutcome",
     "AskRefusal",
     "AskResult",
+    "AskStatus",
     "Binding",
     "BudgetExhausted",
+    "CancelRefusal",
+    "CancelResult",
     "Cancelled",
     "CaseExpectation",
     "Completed",
@@ -207,6 +216,8 @@ __all__ = [
     "SyncReport",
     "Team",
     "TeamAgent",
+    "TeamAskResult",
+    "TeamCancelResult",
     "TeamCursor",
     "TeamItem",
     "TeamMember",
@@ -216,6 +227,7 @@ __all__ = [
     "TeamSendResult",
     "TeamSource",
     "TeamStartResult",
+    "TeamWaitResult",
     "Thread",
     "Tool",
     "Trees",

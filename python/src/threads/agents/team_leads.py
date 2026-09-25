@@ -2,7 +2,7 @@
 rebinds a team's lead by its name and config_hash among them, as materialize rebinds a member."""
 
 import weakref
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, replace
 from typing import Final
@@ -32,6 +32,8 @@ class Lead:
     name: str
     pin: Pin
     limits: TeamLimits
+    team: Sequence[Definition[None]]
+    """The agents its team lists: a handle's worker rebinds members among them."""
     config_hash: Callable[[AsRan], Awaitable[str]]
     """Its config_hash as a thread of its own, pinned as that thread was. Raises ConfigError."""
 
@@ -55,7 +57,8 @@ def register_lead[D](handle: object, definition: Definition[D]) -> None:
             _, config = pinned.pin()
         return sha256_hex(config)
 
-    lead = Lead(definition.name, pins(definition), definition.team_limits, config_hash)
+    team = definition.team or ()
+    lead = Lead(definition.name, pins(definition), definition.team_limits, team, config_hash)
     _LEADS[handle] = lead
 
 

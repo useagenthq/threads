@@ -201,6 +201,7 @@ describe("the busy bound", () => {
       ref: team.ref,
       principal: ALICE,
       lead: entry,
+      store,
       busyBoundMs: 30,
     });
     const before = (await teamLog(store, team)).length;

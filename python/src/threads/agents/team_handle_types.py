@@ -1,11 +1,18 @@
 """The results and reads of the operator's handle on a team (spec/api.json Team* results,
-TeamMember, TeamItem): what Team's methods return. Lane 21E's ask, wait, cancel and ask_status join
-them."""
+TeamMember, TeamItem, AskStatus): what Team's methods return."""
 
 from dataclasses import dataclass
 from typing import Literal
 
 from threads.agents.member_results import MemberResult
+from threads.agents.team_answers import (
+    AskOutcome,
+    AskRefusal,
+    CancelRefusal,
+    CancelRequested,
+    ObserveRefusal,
+    Waited,
+)
 from threads.agents.team_tools import SendRefusal, Sent, Started, StartRefusal
 from threads.log import Event, MemberRef, Principal
 from threads.team.dynamic import InvalidDefinition
@@ -44,6 +51,61 @@ type TeamStartResult = Started | TeamStartRefused
 """team.start's result."""
 type TeamSendResult = Sent | TeamSendRefused
 """team.send's result."""
+
+
+@dataclass(frozen=True, slots=True)
+class TeamAskRefused:
+    code: AskRefusal | OperatorRefusal
+    status: Literal["refused"] = "refused"
+
+
+type TeamAskResult = AskOutcome | TeamAskRefused
+"""team.ask's result: how the ask ended, or why it was refused."""
+
+
+@dataclass(frozen=True, slots=True)
+class TeamWaitRefused:
+    """invalid_request (a numeric mode above the member count) is returned before any writer, so,
+    like busy, it is never logged."""
+
+    code: ObserveRefusal | OperatorRefusal | Literal["invalid_request"]
+    status: Literal["refused"] = "refused"
+
+
+type TeamWaitResult = Waited | TeamWaitRefused
+"""team.wait's result."""
+
+
+@dataclass(frozen=True, slots=True)
+class TeamCancelRefused:
+    code: CancelRefusal | OperatorRefusal
+    status: Literal["refused"] = "refused"
+
+
+type TeamCancelResult = CancelRequested | TeamCancelRefused
+"""team.cancel's result: cancel_requested is durable; the member ends at its next step."""
+
+
+@dataclass(frozen=True, slots=True)
+class AskOpen:
+    """Waiting for a reply."""
+
+    ask_id: str
+    deadline: int
+    """When it times out."""
+    status: Literal["open"] = "open"
+
+
+@dataclass(frozen=True, slots=True)
+class AskNotFound:
+    """No such ask in this team's log."""
+
+    ask_id: str
+    status: Literal["not_found"] = "not_found"
+
+
+type AskStatus = AskOpen | AskNotFound | AskOutcome
+"""team.ask_status's answer: open, not_found, or how the ask ended."""
 
 type MemberState = Literal["starting", "running", "idle", "parked", "ended"]
 """starting: its log not opened yet. idle: its latest task is done; mail wakes it."""

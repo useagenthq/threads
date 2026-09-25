@@ -1,0 +1,21 @@
+---
+title: "TeamAskResult"
+description: "team.ask's result."
+icon: "Braces"
+---
+
+A union discriminated by `status`.
+
+### AskOutcome
+
+Any [`AskOutcome`](/docs/reference/types/AskOutcome).
+
+### refused
+
+<Field name="status" type={"\"refused\""} required>
+  "refused": nothing was done; code says why.
+</Field>
+
+<Field name="code" type={"AskRefusal | OperatorRefusal"} required>
+  Why it was refused.
+</Field>
