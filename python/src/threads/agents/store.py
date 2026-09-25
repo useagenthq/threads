@@ -1,33 +1,41 @@
-"""`sqlite()` (spec/api.json): the one log and artifact store, opened lazily on first use."""
+"""`sqlite()` (spec/api.json): the log and artifact store, opened lazily on first use.
+`threads.postgres.postgres()` makes the same opaque Store over Postgres."""
 
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 from weakref import WeakKeyDictionary
 
 from threads.agents.config import ConfigError
-from threads.log import BranchId
-from threads.result import Err
+from threads.log import BranchId, ParseError
+from threads.result import Err, Ok
 from threads.store import LOCAL_TENANT, SqliteStore, Writer
+
+type Opener = Callable[[str], Awaitable[Ok[SqliteStore] | Err[ParseError]]]
+"""Opens a store for a tenant: what `postgres()` passes instead of a SQLite path."""
 
 
 @dataclass(frozen=True, eq=False)
 class Store:
-    """The SQLite log and artifact store (spec/api.json `Store`). Sealed: no public methods."""
+    """The log and artifact store (spec/api.json `Store`): sqlite() or postgres(). Opaque: no
+    public methods."""
 
     path: str
     tenant: str = field(default=LOCAL_TENANT, kw_only=True)
     """Every read and write is scoped to this tenant; `scoped` makes one."""
     root: "Store | None" = field(default=None, kw_only=True, repr=False)
     """The store this one scopes: they share one database handle."""
+    opener: Opener | None = field(default=None, kw_only=True, repr=False)
+    """Opens a store that isn't a SQLite path (postgres()); `path` is then its description."""
 
 
 def scoped(store: Store, tenant: str) -> Store:
     """The same database, scoped to another tenant: what the host serves a principal with."""
     root = store.root or store
-    return Store(root.path, tenant=tenant, root=root)
+    return Store(root.path, tenant=tenant, root=root, opener=root.opener)
 
 
 LIVE: Final[dict[BranchId, Writer]] = {}
@@ -63,11 +71,14 @@ async def open_store(store: Store) -> SqliteStore:
         scoped_store = (await open_store(store.root)).scoped(store.tenant)
         _OPENED[store] = scoped_store
         return scoped_store
-    memory = store.path == ":memory:"
-    if not memory:
-        Path(store.path).mkdir(parents=True, exist_ok=True)
-    at = ":memory:" if memory else Path(store.path) / "threads.db"
-    result = await SqliteStore.open(at, tenant_id=store.tenant)
+    if store.opener is not None:
+        result = await store.opener(store.tenant)
+    else:
+        memory = store.path == ":memory:"
+        if not memory:
+            Path(store.path).mkdir(parents=True, exist_ok=True)
+        at = ":memory:" if memory else Path(store.path) / "threads.db"
+        result = await SqliteStore.open(at, tenant_id=store.tenant)
     if isinstance(result, Err):
         raise ConfigError("invalid_config", f"store {store.path}: {result.error.message}")
     _OPENED[store] = result.value

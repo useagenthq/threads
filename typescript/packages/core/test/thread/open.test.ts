@@ -21,15 +21,15 @@ const bytes = (s: string): Uint8Array => new TextEncoder().encode(s);
 
 /** A parent whose sandbox wrote a file, then snapshotted at a quiescent boundary. */
 async function setup() {
-  const f = fixture();
+  const f = await fixture();
   const sandbox = fakeSandbox();
   const box = unwrap(await sandbox.create("op-parent", CTX));
   unwrap(await box.upload("notes.txt", bytes("v1"), CTX));
   const data: SnapshotData = unwrap(await box.snapshot("op-snap", CTX));
-  unwrap(f.store.createBranch(THREAD, ROOT));
-  const writer = unwrap(f.store.acquire(ROOT, "holder-a"));
+  unwrap(await f.store.createBranch(THREAD, ROOT));
+  const writer = unwrap(await f.store.acquire(ROOT, "holder-a"));
   unwrap(
-    writer.append([
+    await writer.append([
       started,
       userInput("write notes"),
       turnCompleted,
@@ -55,7 +55,7 @@ async function eventAt(thread: Thread, index: number): Promise<EventId> {
 
 describe("openThread", () => {
   test("an unknown thread is not_found", async () => {
-    const f = fixture();
+    const f = await fixture();
     const store = storeOf({ log: f.store, artifacts: f.artifacts });
     const other = ThreadId.parse("0192a000-0000-7000-8000-0000000000ff");
     expect(code(await openThread(store, other))).toBe("not_found");
@@ -83,7 +83,7 @@ describe("fork", () => {
     const child: Thread = unwrap(await thread.fork(point));
     expect(child.branch).not.toBe(ROOT);
 
-    const log = unwrap(f.store.read(child.branch));
+    const log = unwrap(await f.store.read(child.branch));
     const fork = knownEvents(log).at(-1);
     if (fork?.type !== "fork") throw new Error("the child ends with its fork");
     expect(fork.data.knowledge_policy).toBe("pinned");
@@ -94,11 +94,13 @@ describe("fork", () => {
     expect(text(unwrap(await restored.download("notes.txt", CTX)))).toBe("v1");
     unwrap(await restored.upload("notes.txt", bytes("child"), CTX));
     expect(text(unwrap(await box.download("notes.txt", CTX)))).toBe("v1");
-    expect(unwrap(f.store.ledger.rows()).map((r) => r.state)).toEqual(["live"]);
+    expect(unwrap(await f.store.ledger.rows()).map((r) => r.state)).toEqual([
+      "live",
+    ]);
 
     // The child continues on its own, like any branch.
-    const writer = unwrap(f.store.acquire(child.branch, "holder-c"));
-    unwrap(writer.append([userInput("again")]));
+    const writer = unwrap(await f.store.acquire(child.branch, "holder-c"));
+    unwrap(await writer.append([userInput("again")]));
   });
 
   test("records the knowledge policy it was asked for", async () => {
@@ -106,7 +108,7 @@ describe("fork", () => {
     const child = unwrap(
       await thread.fork(await eventAt(thread, 3), { knowledge: "current" }),
     );
-    const fork = knownEvents(unwrap(f.store.read(child.branch))).at(-1);
+    const fork = knownEvents(unwrap(await f.store.read(child.branch))).at(-1);
     expect(fork?.type === "fork" ? fork.data.knowledge_policy : "").toBe(
       "current",
     );
@@ -119,7 +121,7 @@ describe("fork", () => {
       "no_snapshot_boundary",
       2,
     ]);
-    expect(unwrap(f.store.ledger.rows())).toEqual([]);
+    expect(unwrap(await f.store.ledger.rows())).toEqual([]);
   });
 
   test("without a sandbox it is sandbox_required and creates nothing", async () => {
@@ -129,6 +131,6 @@ describe("fork", () => {
     const [point] = await thread.forkPoints();
     if (point === undefined) throw new Error("one fork point");
     expect(code(await thread.fork(point))).toBe("sandbox_required");
-    expect(unwrap(f.store.ledger.rows())).toEqual([]);
+    expect(unwrap(await f.store.ledger.rows())).toEqual([]);
   });
 });

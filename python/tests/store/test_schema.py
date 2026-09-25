@@ -12,7 +12,9 @@ from threads._generated.store_sql import STORE_VERSION
 from threads.log import BranchId, ThreadId
 from threads.result import Err, Ok
 from threads.store import LOCAL_TENANT, SqliteStore
-from threads.store.sql import connect
+from threads.store.sqlite_driver import connect
+
+pytestmark = pytest.mark.sqlite_only
 
 STORE_SQL = Path(__file__).resolve().parents[3] / "spec" / "schema" / "store.sql"
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
@@ -121,3 +123,14 @@ def test_opening_a_fresh_store_waits_out_another_process_switching_it_to_wal(
         for opener in openers:
             opener.join()
     assert failed == []
+
+
+def test_a_sqlite_older_than_the_portable_subset_needs_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sqlite3, "sqlite_version_info", (3, 38, 5))
+    monkeypatch.setattr(sqlite3, "sqlite_version", "3.38.5")
+    refused = open_or_refuse(tmp_path / "threads.db")
+    assert refused == Err(
+        "unsupported_format: SQLite 3.38.5 is older than 3.39, which threads needs"
+    )

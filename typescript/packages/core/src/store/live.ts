@@ -25,15 +25,19 @@ export function liveWriter(branch: string): Writer | undefined {
  * so the next executor starts at once. A failed renewal poisons the writer, which fences every
  * later dispatch and append.
  */
-export function keepLease(writer: Writer): () => void {
+export function keepLease(writer: Writer): () => Promise<void> {
   const { ttlMs } = writer.lease;
-  const timer = setInterval(() => {
-    if (!writer.renew(ttlMs).ok) clearInterval(timer);
+  const timer = setInterval(async () => {
+    try {
+      if (!(await writer.renew(ttlMs)).ok) clearInterval(timer);
+    } catch {
+      // A store outage: the next renewal tries again; a lapsed lease fences the writer.
+    }
   }, ttlMs / 3);
   const done = running(writer);
-  return () => {
+  return async () => {
     clearInterval(timer);
     done();
-    writer.release();
+    await writer.release();
   };
 }

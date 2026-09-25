@@ -35,6 +35,7 @@ from threads.agents.store import open_store
 from threads.log import BranchId, MemberEndedEvent, MemberStartedEvent, ThreadId
 from threads.loop.scripted import ScriptedModel
 from threads.result import Ok
+from threads.store.sql import text_of
 from threads.team.rows import member_rows
 from threads.thread.handle import Thread
 
@@ -122,10 +123,11 @@ def test_a_crash_at_a_dynamic_members_materialize_then_a_template_without_its_to
         # The restart's template lists read_b; the lead chose read_a.
         store = sqlite(str(tmp_path))
         sq = await open_store(store)
-        teams: list[tuple[str, str]] = await sq.run(
+        teams = await sq.run(
             lambda c: c.execute("SELECT lead_thread_id, team_id FROM teams").fetchall()
         )
-        ((lead_thread, team),) = teams
+        ((lead_column, team_column),) = teams
+        lead_thread, team = text_of(lead_column), text_of(team_column)
         lead_branch = await sq.root(ThreadId(lead_thread))
         assert isinstance(lead_branch, Ok)
         thread = Thread(ThreadId(lead_thread), lead_branch.value, store)

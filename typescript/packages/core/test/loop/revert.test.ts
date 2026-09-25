@@ -73,21 +73,21 @@ async function killedAfterInput(
   readonly u: Input;
   readonly left: readonly KnownEvent[];
 }> {
-  const h = harness([], [], [], undefined, POLICY);
-  const first = unwrap(h.store.acquire(ROOT, "first"));
+  const h = await harness([], [], [], undefined, POLICY);
+  const first = unwrap(await h.store.acquire(ROOT, "first"));
   const primary = scriptedModel({ responses: [overloaded] });
   const small = scriptedSmall([say("from the fallback")]);
   const config = h.config({
     models: (ref) => (ref.name === "scripted-small" ? small : primary),
   });
   await resume(first, h.artifacts, config, { input: userInput("hi") });
-  first.release();
-  const killed = unwrap(h.store.acquire(ROOT, "killed", 1));
-  unwrap(killed.append([userInput("again")]));
+  await first.release();
+  const killed = unwrap(await h.store.acquire(ROOT, "killed", 1));
+  unwrap(await killed.append([userInput("again")]));
   const u = events(killed).findLast((e): e is Input => e.type === "user_input");
   if (u === undefined) throw new Error("the input was appended");
   const extra = more(u);
-  if (extra.length > 0) unwrap(killed.append(extra));
+  if (extra.length > 0) unwrap(await killed.append(extra));
   h.clock.now += 10;
   return { h, u, left: events(killed) };
 }
@@ -104,7 +104,7 @@ async function reopen(
   readonly log: readonly KnownEvent[];
   readonly requested: readonly number[];
 }> {
-  const writer = unwrap(h.store.acquire(ROOT, "reopened"));
+  const writer = unwrap(await h.store.acquire(ROOT, "reopened"));
   const primary = scriptedModel({ responses: [say(answer)] });
   const small = scriptedSmall([say(answer)]);
   const requested: number[] = [];

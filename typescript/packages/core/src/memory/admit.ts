@@ -51,7 +51,7 @@ export async function admitPaths(
       );
     // The provider key is the binding's record_id, per scope: another agent or tenant adding the
     // same file is another ingest (spec/schema/README.md, "Knowledge ingest key").
-    const binding = bindings.issue(
+    const binding = await bindings.issue(
       "knowledge",
       scope,
       `${path}@${sha256Hex(content)}`,

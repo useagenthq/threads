@@ -45,7 +45,7 @@ export function cancelAt(
     send: async function* (request, context, options) {
       sends += 1;
       if (sends === at) {
-        unwrap(writer().append([cancel]));
+        unwrap(await writer().append([cancel]));
         if (leak !== undefined)
           await context.put(
             encoder.encode(JSON.stringify({ encrypted: leak })),

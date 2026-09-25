@@ -40,7 +40,7 @@ class OwnerContext:
 
     async def fence(self) -> Ok[None] | Err[ParseError]:
         owner, now = self._owner, self._clock()
-        error = await self._worker.call(lambda c: lease.check(c, owner.branch_id, owner.lease, now))
+        error = await self._worker.read(lambda c: lease.check(c, owner.branch_id, owner.lease, now))
         return Ok(None) if error is None else Err(error)
 
 

@@ -14,10 +14,10 @@ import type { Halt } from "./types";
 
 const ASK_FOR_OUTPUT = `Return the final result by calling ${FINAL_OUTPUT}.`;
 
-export function validateCandidate(
+export async function validateCandidate(
   s: Session,
   call: EventOf<"tool_call">,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const output = s.fold.policy?.output;
   if (output === undefined)
     return s.append(
@@ -53,10 +53,10 @@ export function validateCandidate(
     const value = call.data.input;
     const shown = canonicalize(value);
     return (
-      s.append(
+      (await s.append(
         draft.outputValidated({ ...common, outcome: "accepted", value }),
-      ) ??
-      s.append(
+      )) ??
+      (await s.append(
         draft.toolResult(
           {
             call_id: call.data.call_id,
@@ -66,18 +66,18 @@ export function validateCandidate(
           },
           TOOL,
         ),
-      )
+      ))
     );
   }
   const stopped =
-    s.append(
+    (await s.append(
       draft.outputValidated({
         ...common,
         outcome: "rejected",
         errors: [{ path: "", message: errors }],
       }),
-    ) ??
-    s.append(
+    )) ??
+    (await s.append(
       draft.toolResult(
         {
           call_id: call.data.call_id,
@@ -87,12 +87,15 @@ export function validateCandidate(
         },
         TOOL,
       ),
-    );
-  return stopped ?? giveUp(s, output.max_retries);
+    ));
+  return stopped ?? (await giveUp(s, output.max_retries));
 }
 
 /** After max_retries failed candidates the turn ends output_invalid. */
-function giveUp(s: Session, maxRetries: number): Halt | undefined {
+async function giveUp(
+  s: Session,
+  maxRetries: number,
+): Promise<Halt | undefined> {
   const turn = turnEvents(s.events, s.fold);
   const failures =
     turn.filter(
@@ -101,17 +104,19 @@ function giveUp(s: Session, maxRetries: number): Halt | undefined {
     turn.filter(
       (e) => e.type === "injected" && e.data.origin.id === FINAL_OUTPUT,
     ).length;
-  return failures >= maxRetries ? endTurn(s, "output_invalid") : undefined;
+  return failures >= maxRetries
+    ? await endTurn(s, "output_invalid")
+    : undefined;
 }
 
 /**
  * A turn that ends in plain text while an output schema is pinned counts as a failed
  * candidate: the model is asked for final_output, or the turn ends output_invalid.
  */
-export function missingCandidate(s: Session): Halt | undefined {
+export async function missingCandidate(s: Session): Promise<Halt | undefined> {
   const output = s.fold.policy?.output;
   if (output === undefined) return endTurn(s, "end_turn");
-  const stopped = s.append(
+  const stopped = await s.append(
     draft.injected({
       source: "recovery",
       trust: "trusted_instruction",
@@ -119,5 +124,5 @@ export function missingCandidate(s: Session): Halt | undefined {
       text: ASK_FOR_OUTPUT,
     }),
   );
-  return stopped ?? giveUp(s, output.max_retries);
+  return stopped ?? (await giveUp(s, output.max_retries));
 }

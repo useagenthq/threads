@@ -11,7 +11,7 @@ import { type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import type { ArtifactStore } from "./artifacts";
 import { ObserverCursors } from "./cursors";
-import type { SqliteDriver } from "./driver";
+import { READ_ONLY, type StoreDriver } from "./driver";
 import { exportBytes } from "./lines";
 import {
   type LossRow,
@@ -53,14 +53,14 @@ const KEPT: ReadonlySet<string> = new Set([
 export type ChangedBranch = z.infer<typeof Changed>;
 
 export class Feed {
-  readonly #db: SqliteDriver;
+  readonly #db: StoreDriver;
   readonly #artifacts: ArtifactStore;
   readonly #cursors: ObserverCursors;
   readonly now: () => number;
   readonly observer: string;
 
   private constructor(
-    db: SqliteDriver,
+    db: StoreDriver,
     artifacts: ArtifactStore,
     now: () => number,
     observer: string,
@@ -83,18 +83,22 @@ export class Feed {
    * Every listed branch whose head is past the observer's cursor, in branch id order. A branch
    * without a cursor row starts at its fork point, or 0: a new fork never re-reads its parent.
    */
-  changed(): Result<readonly ChangedBranch[], LogError> {
+  async changed(): Promise<Result<readonly ChangedBranch[], LogError>> {
     return parseRows(
       Changed,
-      this.#db.all(
-        `SELECT b.branch_id, b.thread_id, b.tenant_id, b.head_seq,
+      await this.#db.transaction(
+        (tx) =>
+          tx.all(
+            `SELECT b.branch_id, b.thread_id, b.tenant_id, b.head_seq,
             coalesce(c.seq, b.fork_at_seq, 0) AS cursor
           FROM branches b
           LEFT JOIN observer_cursors c ON c.branch_id = b.branch_id AND c.observer = ?
           WHERE b.state NOT IN ('forking', 'fork_failed')
             AND b.head_seq > coalesce(c.seq, b.fork_at_seq, 0)
           ORDER BY b.branch_id`,
-        [this.observer],
+            [this.observer],
+          ),
+        READ_ONLY,
       ),
     );
   }
@@ -103,32 +107,32 @@ export class Feed {
    * A branch's verified resolved chain, whatever its tenant. A chain a newer writer made keeps
    * its code (unsupported_format, unsupported_critical_event); any other failure is log_corrupt.
    */
-  chain(branchId: string): Result<VerifiedLog, LogError> {
-    const bytes = exportBytes(this.#db, this.#artifacts, branchId);
+  async chain(branchId: string): Promise<Result<VerifiedLog, LogError>> {
+    const bytes = await this.#db.transaction(
+      (tx) => exportBytes(tx, this.#artifacts, branchId),
+      READ_ONLY,
+    );
     const log = bytes.ok ? verifyExport(bytes.value) : bytes;
     if (log.ok || KEPT.has(log.error.code)) return log;
     return err(logError("log_corrupt", log.error.message, log.error.seq));
   }
 
   /** Moves each cursor forward, never back, in one transaction. */
-  checkpoint(
+  async checkpoint(
     rows: readonly { readonly branch_id: BranchId; readonly seq: number }[],
-  ): void {
-    this.#db.transaction(() => {
-      for (const row of rows)
-        this.#cursors.advance(this.observer, row.branch_id, row.seq);
-    });
+  ): Promise<void> {
+    await this.#cursors.advanceAll(this.observer, rows);
   }
 
-  register(): void {
-    registerObserver(this.#db, this.observer, this.now());
+  register(): Promise<void> {
+    return registerObserver(this.#db, this.observer, this.now());
   }
 
-  unreportedLosses(): Result<readonly LossRow[], LogError> {
+  unreportedLosses(): Promise<Result<readonly LossRow[], LogError>> {
     return unreportedLosses(this.#db, this.observer);
   }
 
-  markReported(rows: readonly LossRow[]): void {
-    markReported(this.#db, this.observer, rows, this.now());
+  markReported(rows: readonly LossRow[]): Promise<void> {
+    return markReported(this.#db, this.observer, rows, this.now());
   }
 }

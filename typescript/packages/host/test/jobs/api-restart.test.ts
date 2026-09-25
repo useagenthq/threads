@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { LogStore, memoryArtifacts } from "@threads/core";
-import { openBunSqlite } from "@threads/core/bun-sqlite";
 import { BranchId, type KnownEvent, knownEvents } from "@threads/core/host";
 import { z } from "zod";
+import { sqlAll } from "../sql";
 import { TENANT } from "./api-worker";
 import {
   expireLeases,
@@ -17,6 +17,7 @@ import {
   spawn,
   waitAt,
 } from "./drill";
+import { drillDriver } from "./stores";
 import { rows } from "./worker";
 
 // Job api-run-kill-restart: a host running a run started through the run API is killed with
@@ -32,19 +33,19 @@ const api = (where: string, env: Record<string, string>) =>
   spawn("api", where, env, API_WORKER);
 
 /** The drill run's branch, read on a connection closed right after. */
-function events(where: string): readonly KnownEvent[] {
-  const db = openBunSqlite(join(where, "threads.db"));
+async function events(where: string): Promise<readonly KnownEvent[]> {
+  const db = (await drillDriver(where)).db;
   try {
-    const opened = LogStore.open(db, Date.now, memoryArtifacts(), TENANT);
+    const opened = await LogStore.open(db, Date.now, memoryArtifacts(), TENANT);
     if (!opened.ok) throw new Error(opened.error.message);
     const [row] = z
       .array(z.strictObject({ branch_id: BranchId }))
-      .parse(db.all("SELECT branch_id FROM run_receipts", []));
+      .parse(await sqlAll(db, "SELECT branch_id FROM run_receipts", []));
     const read =
-      row === undefined ? undefined : opened.value.read(row.branch_id);
+      row === undefined ? undefined : await opened.value.read(row.branch_id);
     return read?.ok === true ? knownEvents(read.value) : [];
   } finally {
-    db.close();
+    await db.close();
   }
 }
 
@@ -69,17 +70,17 @@ async function crashed(
   env: Record<string, string> = {},
 ): Promise<string> {
   const dir = await killed(point, env);
-  expireLeases(dir);
+  await expireLeases(dir);
   return dir;
 }
 
 describe("api-run-kill-restart", () => {
   test("killed at the model request: a host given no input completes the turn", async () => {
     const dir = await crashed("model_request");
-    const acked = events(dir).map((e) => e.event_id);
+    const acked = (await events(dir)).map((e) => e.event_id);
 
     expect(await finish(api(dir, {}))).toBe(0);
-    const after = events(dir);
+    const after = await events(dir);
     expect(after.map((e) => e.event_id).slice(0, acked.length)).toEqual(acked);
     expect(count(after, "user_input")).toBe(1);
     expect(count(after, "model_response")).toBe(1);
@@ -89,7 +90,7 @@ describe("api-run-kill-restart", () => {
     // A second restart finds nothing to do.
     const settled = after.map((e) => e.event_id);
     expect(await finish(api(dir, {}))).toBe(0);
-    expect(events(dir).map((e) => e.event_id)).toEqual(settled);
+    expect((await events(dir)).map((e) => e.event_id)).toEqual(settled);
     expect(logged(dir)).toBe("");
   }, 60_000);
 
@@ -98,10 +99,10 @@ describe("api-run-kill-restart", () => {
     const next = api(dir, {});
     // Its first passes find the branch leased by the dead host.
     await Bun.sleep(2_000);
-    expect(count(events(dir), "turn_completed")).toBe(0);
-    expireLeases(dir);
+    expect(count(await events(dir), "turn_completed")).toBe(0);
+    await expireLeases(dir);
     expect(await finish(next)).toBe(0);
-    const after = events(dir);
+    const after = await events(dir);
     expect(count(after, "model_response")).toBe(1);
     expect(after.at(-1)?.type).toBe("turn_completed");
     oneWriterAtATime(after);
@@ -113,7 +114,7 @@ describe("api-run-kill-restart", () => {
     expect(rows(dir, "charges.jsonl")).toHaveLength(1);
 
     expect(await finish(api(dir, { DRILL_CHARGE: "1" }))).toBe(0);
-    const after = events(dir);
+    const after = await events(dir);
     expect(rows(dir, "charges.jsonl")).toHaveLength(1);
     expect(count(after, "effect_begin")).toBe(1);
     expect(count(after, "parked")).toBe(1);
@@ -130,7 +131,7 @@ describe("api-run-kill-restart", () => {
     go(dir);
     expect(await finish(a)).toBe(0);
     expect(await finish(b)).toBe(0);
-    const after = events(dir);
+    const after = await events(dir);
     expect(rows(dir, "model.jsonl").length - before).toBe(1);
     expect(count(after, "model_response")).toBe(1);
     expect(count(after, "turn_completed")).toBe(1);

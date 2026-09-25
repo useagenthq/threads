@@ -23,9 +23,13 @@ import { type MemberRow, refOf, settledOf } from "./rows";
 const SETTLED: ReadonlySet<MemberRow["state"]> = new Set(["idle", "ended"]);
 
 /** member_observed: the target's committed result, and where it is. */
-function observe(ctx: CallContext, monitorId: string, row: MemberRow): void {
+async function observe(
+  ctx: CallContext,
+  monitorId: string,
+  row: MemberRow,
+): Promise<void> {
   if (row.branch_id === null) throw new Error("a settled member has a branch");
-  const { result, seq } = settledOf(ctx.db, row);
+  const { result, seq } = await settledOf(ctx.tx, row);
   ctx.batch.add({
     type: "member_observed",
     type_version: 1,
@@ -44,12 +48,12 @@ function observe(ctx: CallContext, monitorId: string, row: MemberRow): void {
  * generation, then one monitor decision each; wait_started, an observation per settled member,
  * and the finish when that meets the mode, else a park. A re-dispatched wait only parks.
  */
-export function wait(
+export async function wait(
   ctx: CallContext,
   args: { readonly members: readonly string[] },
   timeoutMs: number = TEAM_CONSTANTS.askWaitDefaultMs,
-): Wire<Waited> | Waiting | Refused {
-  const caller = callerOf(ctx);
+): Promise<Wire<Waited> | Waiting | Refused> {
+  const caller = await callerOf(ctx);
   if (caller === undefined) throw new Error("a team tool call outside a team");
   const waitId = callMailId(ctx);
   const again = ctx.chain.events.some(
@@ -59,12 +63,12 @@ export function wait(
       l.event.data.wait_id === waitId,
   );
   if (again) {
-    parkCall(ctx, caller);
+    await parkCall(ctx, caller);
     return { status: "waiting", wait_id: waitId };
   }
   const rows: MemberRow[] = [];
   for (const name of new Set(args.members)) {
-    const row = addressed(ctx, caller, name);
+    const row = await addressed(ctx, caller, name);
     if (isRefusal(row)) return recorded(ctx, row);
     rows.push(row);
   }
@@ -84,10 +88,10 @@ export function wait(
   });
   const settled = rows.filter((r) => SETTLED.has(r.state));
   for (const row of settled)
-    observe(ctx, `${ctx.call.branch_id}:${started}:${row.name}`, row);
+    await observe(ctx, `${ctx.call.branch_id}:${started}:${row.name}`, row);
   if (settled.length === rows.length)
-    return finishWait(closing(ctx), waitId, { deadline: false });
-  parkCall(ctx, caller);
+    return await finishWait(closing(ctx), waitId, { deadline: false });
+  await parkCall(ctx, caller);
   return { status: "waiting", wait_id: waitId };
 }
 
@@ -104,14 +108,14 @@ function closing(ctx: CallContext): Parameters<typeof finishWait>[0] {
  * monitor: its decision, then the member; monitor_set, and for an ended target its observation
  * and the ended result at once, else an end monitor row whose firing opens a turn when idle.
  */
-export function monitor(
+export async function monitor(
   ctx: CallContext,
   args: { readonly member: string },
-): Wire<MonitorResult> | Refused {
-  const caller = callerOf(ctx);
+): Promise<Wire<MonitorResult> | Refused> {
+  const caller = await callerOf(ctx);
   if (caller === undefined) throw new Error("a team tool call outside a team");
   decide(ctx, "monitor", args.member, true);
-  const row = addressed(ctx, caller, args.member);
+  const row = await addressed(ctx, caller, args.member);
   if (isRefusal(row)) return recorded(ctx, row);
   const member = refOf(caller.team, row);
   const set = ctx.batch.add({
@@ -126,10 +130,10 @@ export function monitor(
       member,
       status: "monitoring",
     } satisfies Wire<MonitorResult>);
-  observe(ctx, `${ctx.call.branch_id}:${set}:${row.name}`, row);
-  const { result } = settledOf(ctx.db, row);
+  await observe(ctx, `${ctx.call.branch_id}:${set}:${row.name}`, row);
+  const { result } = await settledOf(ctx.tx, row);
   return recorded(ctx, {
-    result: publicResult(result, ctx.read),
+    result: await publicResult(result, ctx.read),
     status: "ended",
   } satisfies Wire<MonitorResult>);
 }

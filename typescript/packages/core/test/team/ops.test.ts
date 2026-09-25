@@ -62,24 +62,26 @@ async function materializeOp(fx: Fixture, v: Vector): Promise<unknown> {
     : { status: got.status };
 }
 
-function writerOf(fx: Fixture, v: Vector): Writer {
+async function writerOf(fx: Fixture, v: Vector): Promise<Writer> {
   const log = worldLogs(v)[v.by];
   if (log === undefined) throw new Error(`no log ${v.by}`);
-  return unwrap(fx.store.acquire(BranchId.parse(log.branch_id), "vectors"));
+  return unwrap(
+    await fx.store.acquire(BranchId.parse(log.branch_id), "vectors"),
+  );
 }
 
 async function run(fx: Fixture, v: Vector): Promise<unknown> {
   return v.op === "materialize"
     ? materializeOp(fx, v)
-    : runOn(writerOf(fx, v), v);
+    : runOn(await writerOf(fx, v), v);
 }
 
 /** The event types appended per log label since `heads`. */
-function appended(
+async function appended(
   fx: Fixture,
   v: Vector,
   heads: ReadonlyMap<string, number>,
-): Readonly<Record<string, readonly string[]>> {
+): Promise<Readonly<Record<string, readonly string[]>>> {
   const out: Record<string, string[]> = {};
   const labels = {
     ...Object.fromEntries(
@@ -91,7 +93,7 @@ function appended(
       .string()
       .parse(v.input["branch_id"]);
   for (const [label, branch] of Object.entries(labels)) {
-    const read = fx.store.read(BranchId.parse(branch));
+    const read = await fx.store.read(BranchId.parse(branch));
     if (!read.ok) continue;
     const types = knownEvents(read.value)
       .filter((e) => e.seq > (heads.get(label) ?? 0))
@@ -119,17 +121,18 @@ describe("team op vectors, run by this runtime", () => {
 
   for (const v of mine)
     test(v.name, async () => {
-      const fx = seeded(v);
-      const before = rows(fx);
-      const heads = new Map(
-        Object.entries(worldLogs(v)).map(([label, log]) => [
+      const fx = await seeded(v);
+      const before = await rows(fx);
+      const heads = new Map<string, number>();
+      for (const [label, log] of Object.entries(worldLogs(v)))
+        heads.set(
           label,
-          unwrap(fx.store.read(BranchId.parse(log.branch_id))).events.length,
-        ]),
-      );
+          unwrap(await fx.store.read(BranchId.parse(log.branch_id))).events
+            .length,
+        );
       expect(await run(fx, v)).toEqual(v.expect.outcome);
-      expect(appended(fx, v, heads)).toEqual(v.expect.appended);
-      expect(changes(before, rows(fx))).toEqual(v.expect.rows);
-      assertTeamReplays(fx.store, TEAM);
+      expect(await appended(fx, v, heads)).toEqual(v.expect.appended);
+      expect(changes(before, await rows(fx))).toEqual(v.expect.rows);
+      await assertTeamReplays(fx.store, TEAM);
     });
 });

@@ -95,7 +95,7 @@ describe("a dynamic member's limits", () => {
     );
     expect(results.map((d) => d.is_error)).toEqual([true, true]);
     expect(types(log)).not.toContain("effect_begin");
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("a member reads its own spilled result through read_tool_result", async () => {

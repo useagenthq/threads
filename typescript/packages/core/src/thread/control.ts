@@ -1,14 +1,14 @@
 import type { z } from "zod";
 import type { ParkAddress } from "../fold/state";
-import type {
-  BranchId,
+import {
+  type BranchId,
   EventId,
-  JsonObject,
-  KnownEvent,
-  ModelRef,
-  Principal,
+  type JsonObject,
+  type KnownEvent,
+  type ModelRef,
+  type Principal,
+  principalKey,
 } from "../log";
-import { principalKey } from "../log";
 import { knownEvents } from "../reduce";
 import { err, ok, type Result } from "../result";
 import {
@@ -17,8 +17,10 @@ import {
   liveWriter,
   type Writer,
 } from "../store";
+import { uuidv7 } from "../store/encode";
+import { isRefusal } from "../store/writer";
 import { type Ask, invalidAnswer, matchAnswer } from "../tools/ask-user";
-import type { ChainEvent, LogError } from "../verify";
+import type { Chain, ChainEvent, LogError } from "../verify";
 import { askerOf } from "./questions";
 
 // The Thread control methods (spec/api.json Thread): each appends the actor's
@@ -101,7 +103,7 @@ export async function control(
   principal: Principal,
   plan: (
     events: readonly KnownEvent[],
-    writer: Writer,
+    chain: Chain,
   ) => Result<Plan, ControlError>,
   { alongside, idle = false }: ControlOptions = {},
 ): Promise<Controlled> {
@@ -110,14 +112,19 @@ export async function control(
   const live = liveWriter(branchId);
   if (live !== undefined)
     return idle ? fail("branch_busy", BUSY) : appendPlan(live, plan, alongside);
-  const writer = log.acquire(branchId, HOLDER);
-  if (!writer.ok)
+  const writer = await log.acquire(branchId, HOLDER);
+  if (!writer.ok) {
+    // A run of this process took the lease while this acquire waited: through its writer.
+    const started = liveWriter(branchId);
+    if (started !== undefined && !idle)
+      return appendPlan(started, plan, alongside);
     return fail(acquireCode(writer.error, idle), writer.error.message);
+  }
   const planned = idle ? between(plan) : plan;
   try {
-    return appendPlan(writer.value, planned, alongside);
+    return await appendPlan(writer.value, planned, alongside);
   } finally {
-    writer.value.release();
+    await writer.value.release();
   }
 }
 
@@ -133,36 +140,36 @@ function acquireCode(error: LogError, idle: boolean): ControlError["code"] {
 function between(
   plan: (
     events: readonly KnownEvent[],
-    writer: Writer,
+    chain: Chain,
   ) => Result<Plan, ControlError>,
-): (
-  events: readonly KnownEvent[],
-  writer: Writer,
-) => Result<Plan, ControlError> {
-  return (events, writer) =>
-    writer.chain.fold.turnOpen
+): (events: readonly KnownEvent[], chain: Chain) => Result<Plan, ControlError> {
+  return (events, chain) =>
+    chain.fold.turnOpen
       ? err({ code: "branch_busy", message: BUSY })
-      : plan(events, writer);
+      : plan(events, chain);
 }
 
-function appendPlan(
+/**
+ * The plan, decided under the writer's lock against the chain it extends (a control queued
+ * behind a live run's in-flight append plans against what that append left), then appended.
+ */
+async function appendPlan(
   writer: Writer,
   plan: (
     events: readonly KnownEvent[],
-    writer: Writer,
+    chain: Chain,
   ) => Result<Plan, ControlError>,
   alongside?: Alongside,
-): Controlled {
-  const planned = plan(knownEvents(writer.chain), writer);
-  if (!planned.ok) return planned;
-  const { record, after } = planned.value;
-  const done = writer.fenced(() => {
-    const first = writer.append([record], alongside);
-    if (!first.ok || after === undefined) return first;
-    const id = eventIdOf(first.value[0]);
-    const rest = writer.append(after(id));
-    return rest.ok ? first : rest;
-  });
+): Promise<Controlled> {
+  const done = await writer.appendDecided(async ({ chain, now }) => {
+    const planned = plan(knownEvents(chain), chain);
+    if (!planned.ok) return planned;
+    const { record, after } = planned.value;
+    // One append: the record names its own id, so what follows it can cite it.
+    const id = EventId.parse(uuidv7(now));
+    return ok([{ ...record, event_id: id }, ...(after?.(id) ?? [])]);
+  }, alongside);
+  if (isRefusal(done)) return err(done.refusal);
   if (!done.ok) return fail(codeOf(done.error), done.error.message);
   return ok({ event_id: eventIdOf(done.value[0]) });
 }
@@ -187,10 +194,10 @@ function codeOf(error: LogError): ControlError["code"] {
 
 /** A resumed for `address` when the branch is parked on it. */
 export function resumeIf(
-  writer: Writer,
+  chain: Chain,
   address: ParkAddress,
 ): ((id: EventId) => readonly EventDraft[]) | undefined {
-  const parked = writer.chain.fold.parked.some(
+  const parked = chain.fold.parked.some(
     (a) => a.kind === address.kind && a.id === address.id,
   );
   return parked ? (id) => [resumed(address, id)] : undefined;
@@ -215,13 +222,10 @@ export function answer(
   callId: string,
   text: string | readonly string[],
   principal: Principal,
-): (
-  events: readonly KnownEvent[],
-  writer: Writer,
-) => Result<Plan, ControlError> {
-  return (events, writer) => {
+): (events: readonly KnownEvent[], chain: Chain) => Result<Plan, ControlError> {
+  return (events, chain) => {
     const address: ParkAddress = { kind: "input", id: callId };
-    const after = resumeIf(writer, address);
+    const after = resumeIf(chain, address);
     if (after === undefined)
       return err({
         code: "no_open_question",
@@ -232,7 +236,7 @@ export function answer(
         code: "forbidden",
         message: "only the user whose input opened this turn may answer",
       });
-    const asked = writer.chain.fold.asks.get(callId);
+    const asked = chain.fold.asks.get(callId);
     // Rule 48 keeps an unreadable question from parking; one that did anyway takes free text.
     const ask = asked === undefined || asked === "invalid" ? FREE : asked;
     const recorded = matchAnswer(ask, text);
@@ -262,14 +266,11 @@ export function resolveParked(
   effectKey: string,
   resolution: "assume_done" | "assume_not_done",
   principal: Principal,
-): (
-  events: readonly KnownEvent[],
-  writer: Writer,
-) => Result<Plan, ControlError> {
-  return (_events, writer) => {
+): (events: readonly KnownEvent[], chain: Chain) => Result<Plan, ControlError> {
+  return (_events, chain) => {
     const address: ParkAddress = { kind: "effect", id: effectKey };
-    const after = resumeIf(writer, address);
-    const effect = writer.chain.fold.effects.get(effectKey);
+    const after = resumeIf(chain, address);
+    const effect = chain.fold.effects.get(effectKey);
     if (after === undefined || effect === undefined)
       return err({ code: "not_parked", message: `${effectKey} is not parked` });
     return ok({

@@ -9,8 +9,17 @@ import { ALREADY_OPEN } from "../../src/store/open";
 import { claimMail } from "../../src/team/claim";
 import { TEAM_CONSTANTS } from "../../src/team/constants";
 import { plain } from "../conformance/cases";
+import { ENGINE } from "../store/engine";
 import { type Fixture, fixture, unwrap } from "../store/helpers";
-import { assertTeamReplays, caseLog, TENANT, teamOf, verified } from "./kit";
+import {
+  assertTeamReplays,
+  caseLog,
+  exec,
+  query,
+  TENANT,
+  teamOf,
+  verified,
+} from "./kit";
 import { draftOf } from "./writes";
 
 // The index hooks on a live writer: a lead's first append opens its team whole, a failing hook
@@ -23,14 +32,14 @@ const LEAD_BRANCH = BranchId.parse("0192b000-0000-7000-8000-0000000000b1");
 const TEAM_LOG = BranchId.parse("0192b000-0000-7000-8000-0000000000b3");
 
 const Rows = z.array(z.record(z.string(), z.unknown()));
-const rows = (fx: Fixture, sql: string): unknown =>
-  Rows.parse(fx.db.all(sql, []));
+const rows = async (fx: Fixture, sql: string): Promise<unknown> =>
+  Rows.parse(await query(fx.db, sql, []));
 
 /** The lead's log opened with its first `n` recorded events. */
-function openLead(fx: Fixture, n: number): Writer {
+async function openLead(fx: Fixture, n: number): Promise<Writer> {
   const events: readonly KnownEvent[] = lead.slice(0, n);
   const writer = unwrap(
-    fx.store.openBranch({
+    await fx.store.openBranch({
       threadId: LEAD_THREAD,
       branchId: LEAD_BRANCH,
       lease: { holderId: "lead", ttlMs: 30_000 },
@@ -42,10 +51,10 @@ function openLead(fx: Fixture, n: number): Writer {
 }
 
 describe("a lead's first append", () => {
-  test("opens the team log, the teams row and the lead's row, and the feed starts with team_opened", () => {
-    const fx = fixture(TENANT);
-    openLead(fx, 2);
-    const log = unwrap(fx.store.read(TEAM_LOG));
+  test("opens the team log, the teams row and the lead's row, and the feed starts with team_opened", async () => {
+    const fx = await fixture(TENANT);
+    await openLead(fx, 2);
+    const log = unwrap(await fx.store.read(TEAM_LOG));
     // The thread the lead's thread_started.team names.
     expect(log.segments[0]?.header.thread_id).toBe(
       ThreadId.parse("0192a000-0000-7000-8000-0000000000b3"),
@@ -60,7 +69,12 @@ describe("a lead's first append", () => {
         },
       ],
     ]);
-    expect(rows(fx, "SELECT * FROM teams")).toEqual([
+    expect(
+      await rows(
+        fx,
+        "SELECT team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at FROM teams",
+      ),
+    ).toEqual([
       {
         team_id: TEAM,
         tenant_id: TENANT,
@@ -70,12 +84,12 @@ describe("a lead's first append", () => {
       },
     ]);
     expect(
-      rows(fx, "SELECT name, generation, role, state FROM team_members"),
+      await rows(fx, "SELECT name, generation, role, state FROM team_members"),
     ).toEqual([
       { name: "lead", generation: 1, role: "lead", state: "running" },
     ]);
     expect(
-      rows(
+      await rows(
         fx,
         "SELECT feed_offset, branch_id, seq FROM team_feed ORDER BY feed_offset",
       ),
@@ -85,19 +99,21 @@ describe("a lead's first append", () => {
       { feed_offset: 3, branch_id: LEAD_BRANCH, seq: 2 },
     ]);
     // The team log's lease is free: the next writer takes it at once, at epoch 2.
-    expect(unwrap(fx.store.acquire(TEAM_LOG, "operator")).lease.epoch).toBe(2);
-    assertTeamReplays(fx.store, TEAM);
+    expect(
+      unwrap(await fx.store.acquire(TEAM_LOG, "operator")).lease.epoch,
+    ).toBe(2);
+    await assertTeamReplays(fx.store, TEAM);
   });
 
-  test("a team log that already exists refuses the append, and none of it is written", () => {
-    const fx = fixture(TENANT);
+  test("a team log that already exists refuses the append, and none of it is written", async () => {
+    const fx = await fixture(TENANT);
     unwrap(
-      fx.store.createBranch(
+      await fx.store.createBranch(
         ThreadId.parse("0192a000-0000-7000-8000-0000000000b3"),
         TEAM_LOG,
       ),
     );
-    const refused = fx.store.openBranch({
+    const refused = await fx.store.openBranch({
       threadId: LEAD_THREAD,
       branchId: LEAD_BRANCH,
       lease: { holderId: "lead", ttlMs: 30_000 },
@@ -105,18 +121,20 @@ describe("a lead's first append", () => {
     });
     expect(refused.ok ? "ok" : refused.error.code).toBe("invalid_transition");
     for (const table of ["teams", "team_members", "team_feed"])
-      expect(rows(fx, `SELECT * FROM ${table}`)).toEqual([]);
-    expect(fx.store.branchState(LEAD_BRANCH).ok).toBe(false);
+      expect(await rows(fx, `SELECT * FROM ${table}`)).toEqual([]);
+    expect((await fx.store.branchState(LEAD_BRANCH)).ok).toBe(false);
   });
 });
 
 describe("the feed", () => {
-  test("gets one row per appended event, offsets in commit order", () => {
-    const fx = fixture(TENANT);
-    const writer = openLead(fx, 2);
-    for (const e of lead.slice(2, 10)) unwrap(writer.append([draftOf(e)]));
+  test("gets one row per appended event, offsets in commit order", async () => {
+    const fx = await fixture(TENANT);
+    const writer = await openLead(fx, 2);
+    for (const e of lead.slice(2, 10))
+      unwrap(await writer.append([draftOf(e)]));
     const feed = Rows.parse(
-      fx.db.all(
+      await query(
+        fx.db,
         "SELECT feed_offset, seq FROM team_feed WHERE branch_id = ? ORDER BY feed_offset",
         [LEAD_BRANCH],
       ),
@@ -125,49 +143,54 @@ describe("the feed", () => {
     expect(feed.map((r) => r["feed_offset"])).toEqual([
       2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
     ]);
-    assertTeamReplays(fx.store, TEAM);
+    await assertTeamReplays(fx.store, TEAM);
   });
 });
 
 describe("the lookup every append makes", () => {
-  test("which team a branch belongs to is found through indexes, never a scan", () => {
-    const fx = fixture(TENANT);
-    const plan = Rows.parse(
-      fx.db.all(
-        `EXPLAIN QUERY PLAN SELECT team_id FROM team_members WHERE thread_id = ? AND branch_id = ?
+  // EXPLAIN QUERY PLAN is SQLite's; the Postgres schema carries the same indexes.
+  test.skipIf(ENGINE !== "sqlite")(
+    "which team a branch belongs to is found through indexes, never a scan",
+    async () => {
+      const fx = await fixture(TENANT);
+      const plan = Rows.parse(
+        await query(
+          fx.db,
+          `EXPLAIN QUERY PLAN SELECT team_id FROM team_members WHERE thread_id = ? AND branch_id = ?
           UNION SELECT team_id FROM teams WHERE team_log_branch_id = ?`,
-        ["t", "b", "b"],
-      ),
-    ).map((r) => String(r["detail"]));
-    expect(plan.some((d) => d.includes("team_members_thread"))).toBe(true);
-    expect(plan.some((d) => d.includes("teams_log_branch"))).toBe(true);
-    expect(plan.some((d) => d.startsWith("SCAN"))).toBe(false);
-  });
+          ["t", "b", "b"],
+        ),
+      ).map((r) => String(r["detail"]));
+      expect(plan.some((d) => d.includes("team_members_thread"))).toBe(true);
+      expect(plan.some((d) => d.includes("teams_log_branch"))).toBe(true);
+      expect(plan.some((d) => d.startsWith("SCAN"))).toBe(false);
+    },
+  );
 });
 
 describe("mail.claim", () => {
   const TASK = "0192b000-0000-7000-8000-0000000000b1:c1";
 
-  test("one worker claims a pending row until its claim expires", () => {
-    const fx = fixture(TENANT);
-    openLead(fx, 9);
+  test("one worker claims a pending row until its claim expires", async () => {
+    const fx = await fixture(TENANT);
+    await openLead(fx, 9);
     const t = fx.clock.now;
-    expect(claimMail(fx.db, TASK, "a", t)).toBe("claimed");
-    expect(claimMail(fx.db, TASK, "b", t + 1)).toBe("taken");
+    expect(await claimMail(fx.db, TASK, "a", t)).toBe("claimed");
+    expect(await claimMail(fx.db, TASK, "b", t + 1)).toBe("taken");
     const expiry = t + TEAM_CONSTANTS.claimTtlMs;
-    expect(claimMail(fx.db, TASK, "b", expiry - 1)).toBe("taken");
-    expect(claimMail(fx.db, TASK, "b", expiry, 10)).toBe("claimed");
-    expect(rows(fx, "SELECT claim_token, claim_expires_at FROM mail")).toEqual([
-      { claim_token: "b", claim_expires_at: expiry + 10 },
-    ]);
+    expect(await claimMail(fx.db, TASK, "b", expiry - 1)).toBe("taken");
+    expect(await claimMail(fx.db, TASK, "b", expiry, 10)).toBe("claimed");
+    expect(
+      await rows(fx, "SELECT claim_token, claim_expires_at FROM mail"),
+    ).toEqual([{ claim_token: "b", claim_expires_at: expiry + 10 }]);
   });
 
-  test("a row that is not pending, or doesn't exist, is never claimed", () => {
-    const fx = fixture(TENANT);
-    openLead(fx, 9);
-    fx.db.run("UPDATE mail SET state = 'consumed'", []);
-    expect(claimMail(fx.db, TASK, "a", fx.clock.now)).toBe("not_pending");
-    expect(claimMail(fx.db, "no-such-mail", "a", fx.clock.now)).toBe(
+  test("a row that is not pending, or doesn't exist, is never claimed", async () => {
+    const fx = await fixture(TENANT);
+    await openLead(fx, 9);
+    await exec(fx.db, "UPDATE mail SET state = 'consumed'", []);
+    expect(await claimMail(fx.db, TASK, "a", fx.clock.now)).toBe("not_pending");
+    expect(await claimMail(fx.db, "no-such-mail", "a", fx.clock.now)).toBe(
       "not_found",
     );
   });

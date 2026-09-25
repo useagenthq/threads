@@ -18,6 +18,7 @@ import {
 } from "../../src/agent/sqlite";
 import { type KnownEvent, ThreadId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
+import { keepLease } from "../../src/store";
 import { unwrap } from "../store/helpers";
 
 // Thread control methods (spec/api.json Thread): each appends its actor's event under its own
@@ -85,8 +86,35 @@ async function events(
   thread: Thread,
 ): Promise<readonly KnownEvent[]> {
   const { log } = await openStore(store);
-  return knownEvents(unwrap(log.read(thread.branch)));
+  return knownEvents(unwrap(await log.read(thread.branch)));
 }
+
+describe("controls through a live run's writer", () => {
+  test("two controls at once each plan against the chain the other left: both mode changes land", async () => {
+    const { store, thread } = await parked([]);
+    const { log } = await openStore(store);
+    // This process runs the branch: controls go through its writer, queued on its lock.
+    const writer = unwrap(await log.acquire(thread.branch, "live-run"));
+    const stop = keepLease(writer);
+    try {
+      const [first, second] = await Promise.all([
+        thread.setMode("plan", alice),
+        thread.setMode("accept_edits", alice),
+      ]);
+      expect(first.ok).toBe(true);
+      expect(second.ok).toBe(true);
+    } finally {
+      await stop();
+    }
+    const changes = (await events(store, thread)).flatMap((e) =>
+      e.type === "mode_changed" ? [[e.data.from, e.data.to]] : [],
+    );
+    expect(changes).toEqual([
+      ["default", "plan"],
+      ["plan", "accept_edits"],
+    ]);
+  });
+});
 
 describe("approvals", () => {
   test("approve consumes the challenge once; the parked call then runs", async () => {
@@ -104,9 +132,11 @@ describe("approvals", () => {
     });
     expect(unwrap(await thread.pendingApprovals())).toEqual([]);
     const { db } = await storeConnection(store);
-    expect(db.all("SELECT state, decided_by FROM approvals", [])).toEqual([
-      { state: "granted", decided_by: "api/local/alice" },
-    ]);
+    expect(
+      await db.transaction((tx) =>
+        tx.all("SELECT state, decided_by FROM approvals", []),
+      ),
+    ).toEqual([{ state: "granted", decided_by: "api/local/alice" }]);
     const result = await resume();
     expect(result.status).toBe("completed");
     expect(sent).toEqual(["bob"]);
@@ -272,7 +302,7 @@ describe("cancel, mode, model, questions and parked effects", () => {
   test("a lease another holder has is branch_busy, typed, and appends nothing", async () => {
     const { store, thread } = await parked([]);
     const { log } = await openStore(store);
-    const other = unwrap(log.acquire(thread.branch, "another-process"));
+    const other = unwrap(await log.acquire(thread.branch, "another-process"));
     try {
       const before = (await events(store, thread)).length;
       const [pending] = unwrap(await thread.pendingApprovals());
@@ -289,7 +319,7 @@ describe("cancel, mode, model, questions and parked effects", () => {
         });
       expect((await events(store, thread)).length).toBe(before);
     } finally {
-      other.release();
+      await other.release();
     }
   });
 
@@ -318,7 +348,11 @@ describe("cancel, mode, model, questions and parked effects", () => {
       const { db } = await storeConnection(store);
       const [row] = z
         .array(z.object({ thread_id: ThreadId }))
-        .parse(db.all("SELECT thread_id FROM branches", []));
+        .parse(
+          await db.transaction((tx) =>
+            tx.all("SELECT thread_id FROM branches", []),
+          ),
+        );
       if (row !== undefined) {
         const opened = await openThread(store, row.thread_id);
         if (opened.ok) thread = opened.value;

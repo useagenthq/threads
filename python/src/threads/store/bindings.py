@@ -8,23 +8,23 @@ write under the same key carries the same binding.
 """
 
 import hashlib
-import sqlite3
 from typing import Final, Literal
 
+from threads.store.conn import Conn
 from threads.store.worker import Worker
 
 type Kind = Literal["memory", "knowledge"]
 
 _SQL: Final[dict[Kind, tuple[str, str]]] = {
     "memory": (
-        "INSERT OR IGNORE INTO memory_bindings"
-        " (namespace, record_id, tenant_id, agent, scope) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO memory_bindings (namespace, record_id, tenant_id, agent, scope)"
+        " VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
         "SELECT 1 FROM memory_bindings WHERE namespace = ? AND record_id = ?"
         " AND tenant_id = ? AND agent = ? AND scope = ?",
     ),
     "knowledge": (
-        "INSERT OR IGNORE INTO knowledge_bindings"
-        " (namespace, record_id, tenant_id, agent, scope) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO knowledge_bindings (namespace, record_id, tenant_id, agent, scope)"
+        " VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
         "SELECT 1 FROM knowledge_bindings WHERE namespace = ? AND record_id = ?"
         " AND tenant_id = ? AND agent = ? AND scope = ?",
     ),
@@ -54,7 +54,7 @@ class Bindings:
     ) -> frozenset[tuple[str, str]]:
         """Which of the (namespace, record_id) pairs belong to the calling scope."""
 
-        def read(conn: sqlite3.Connection) -> frozenset[tuple[str, str]]:
+        def read(conn: Conn) -> frozenset[tuple[str, str]]:
             return frozenset(
                 (namespace, record_id)
                 for namespace, record_id in items
@@ -63,7 +63,7 @@ class Bindings:
                 ).fetchone()
             )
 
-        return await self._worker.call(read)
+        return await self._worker.read(read)
 
     async def violation(self, tenant_id: str, namespace: str, record_id: str, at: int) -> None:
         """Records a dropped item in the host's audit table."""

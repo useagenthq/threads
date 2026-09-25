@@ -1,8 +1,7 @@
 import { ok, type Result } from "../result";
 import type { VerifiedLog } from "../verify";
 import type { LogError } from "../verify/error";
-import type { ArtifactStore } from "./artifacts";
-import type { SqliteDriver } from "./driver";
+import type { Tx } from "./driver";
 import type { BranchRow } from "./tables";
 import type { Writer } from "./writer";
 
@@ -20,25 +19,28 @@ export function isTorn(row: BranchRow): boolean {
 }
 
 /** The served prefix becomes the verified head; the torn bytes stay as evidence. */
-export function markRepaired(db: SqliteDriver, branchId: string): void {
-  db.run(
+export async function markRepaired(tx: Tx, branchId: string): Promise<void> {
+  await tx.run(
     "UPDATE branches SET state = 'ready', head_verified = 1 WHERE branch_id = ?",
     [branchId],
   );
 }
 
-/** Appends log_repaired{truncated_bytes, at_offset, dropped_ref} under the new lease. */
-export function recordRepair(
+/**
+ * Appends log_repaired{truncated_bytes, at_offset, dropped_ref} under the new lease, in the
+ * acquiring transaction. `dropped` is the torn bytes, read before the transaction began.
+ */
+export async function recordRepair(
+  tx: Tx,
   writer: Writer,
-  artifacts: ArtifactStore,
   row: BranchRow,
   log: VerifiedLog,
-): Result<Writer, LogError> {
+  dropped: Result<Uint8Array, LogError>,
+): Promise<Result<Writer, LogError>> {
   const sha256 = row.dropped_ref;
   if (sha256 === null) throw new Error("a torn branch keeps its dropped bytes");
-  const dropped = artifacts.get(sha256);
   if (!dropped.ok) return dropped;
-  const appended = writer.append([
+  const appended = await writer.appendIn(tx, [
     {
       type: "log_repaired",
       type_version: 1,

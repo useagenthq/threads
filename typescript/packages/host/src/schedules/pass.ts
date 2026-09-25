@@ -1,10 +1,10 @@
-import type { LogStore, NewThreadPin, SqliteDriver } from "@threads/core/host";
+import type { LogStore, NewThreadPin, StoreDriver } from "@threads/core/host";
 import type { HostContext, HostedAgent } from "../context";
 
 /** One scheduler pass over a tenant. */
 export type Pass = {
   readonly ctx: HostContext;
-  readonly db: SqliteDriver;
+  readonly db: StoreDriver;
   readonly log: LogStore;
   readonly tenant: string;
   /** The thread_started an agent pins, set up once per pass however many schedules use it. */
@@ -13,7 +13,7 @@ export type Pass = {
 
 export function newPass(
   ctx: HostContext,
-  db: SqliteDriver,
+  db: StoreDriver,
   log: LogStore,
   tenant: string,
 ): Pass {

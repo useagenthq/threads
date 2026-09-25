@@ -4,7 +4,6 @@ events and the call's one result, so a call re-dispatched after a crash either f
 or makes it now, never twice. An ask or a wait stays a pending call: its re-dispatch only parks,
 and the writer's close records its one result."""
 
-import sqlite3
 from collections.abc import Callable, Sequence
 
 from pydantic import JsonValue
@@ -28,6 +27,7 @@ from threads.loop.teams import put_text
 from threads.reduce.fold import loop_parked
 from threads.result import Err
 from threads.store import Draft
+from threads.store.conn import Conn
 from threads.store.lines import uuid7
 from threads.store.writer import DecideTx, Refusal
 from threads.team.ask import AskPlan, ask, reply
@@ -143,7 +143,7 @@ async def _room(rt: Runtime, team: TeamRuntime, name: str) -> bool:
     return to is None or await room_in(rt, to)
 
 
-def _named(conn: sqlite3.Connection, rt: Runtime, name: str) -> MemberRow | None:
+def _named(conn: Conn, rt: Runtime, name: str) -> MemberRow | None:
     """The named member of the team this thread acts in (a nested lead's own team first)."""
     thread = rt.fold.thread_id
     rows = [] if thread is None else own_rows(conn, thread)

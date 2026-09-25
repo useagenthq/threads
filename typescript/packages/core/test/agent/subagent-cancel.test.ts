@@ -14,6 +14,7 @@ import { openStore, storeConnection } from "../../src/agent/sqlite";
 import { type KnownEvent, ThreadId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { unwrap } from "../store/helpers";
+import { query } from "../team/kit";
 
 // Tree-wide cancellation and parked children (spec/schema/README.md, "Subagent cancellation and // parking"): a cancelled parent cancels its running descendants and records each
 // one's end before its own cancelled; a child that parks parks its parent, which resumes once
@@ -41,8 +42,10 @@ async function events(
 ): Promise<readonly KnownEvent[]> {
   const { log } = await openStore(store);
   const branch =
-    typeof thread === "string" ? unwrap(log.mainBranch(thread)) : thread.branch;
-  return knownEvents(unwrap(log.read(branch)));
+    typeof thread === "string"
+      ? unwrap(await log.mainBranch(thread))
+      : thread.branch;
+  return knownEvents(unwrap(await log.read(branch)));
 }
 
 function childOf(parent: readonly KnownEvent[]): ThreadId {
@@ -71,7 +74,7 @@ async function parentOnceChildRuns(store: Store): Promise<ThreadId> {
     const { db } = await storeConnection(store);
     const rows = z
       .array(z.object({ thread_id: ThreadId }))
-      .parse(db.all("SELECT DISTINCT thread_id FROM branches", []));
+      .parse(await query(db, "SELECT DISTINCT thread_id FROM branches", []));
     for (const { thread_id } of rows.length === 2 ? rows : []) {
       const log = await events(store, thread_id);
       if (log.some((e) => e.type === "agent_spawned")) return thread_id;

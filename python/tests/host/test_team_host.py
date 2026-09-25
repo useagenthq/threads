@@ -65,7 +65,7 @@ def test_two_schedules_of_one_lead_in_one_pass_each_new_thread_opens_a_team_of_i
             due = [Due(schedule, 60_000, "lead", "Go.", "UTC", missed=False)]
             assert await reserve_due(p, started, due, 60_000) is None
         sq = await open_store(store)
-        teams: list[tuple[str, str]] = await sq.run(
+        teams = await sq.run(
             lambda c: c.execute("SELECT team_id, lead_thread_id FROM teams").fetchall()
         )
         assert len(teams) == 2  # noqa: PLR2004 - one per schedule

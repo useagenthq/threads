@@ -269,10 +269,10 @@ export class HostContext {
     threadId: ThreadId,
   ): Promise<readonly KnownEvent[] | undefined> {
     const { log } = await this.open(tenant);
-    const main = log.mainBranch(threadId);
+    const main = await log.mainBranch(threadId);
     let branch = main.ok ? main.value : undefined;
     while (branch !== undefined) {
-      const read = log.read(branch);
+      const read = await log.read(branch);
       if (!read.ok) return undefined;
       const events = knownEvents(read.value);
       const started = events.find((e) => e.type === "thread_started");

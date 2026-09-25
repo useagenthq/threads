@@ -30,7 +30,7 @@ export async function startGate(
     }
     const out = await run(ext, "subagent_start", [call.data], key.call_id);
     const [decided, reason] = started(out);
-    const stopped = s.append(
+    const stopped = await s.append(
       decision(ext.name, "subagent_start", decided, key, reason),
     );
     if (stopped !== undefined) return stopped;
@@ -87,7 +87,7 @@ export async function stopGate(
       continue;
     const out = await run(ext, "subagent_stop", [finished], key.call_id);
     const [decided, reason] = stopped(out, count, limit);
-    const halted = s.append(
+    const halted = await s.append(
       decision(ext.name, "subagent_stop", decided, key, reason),
     );
     if (halted !== undefined) return halted;

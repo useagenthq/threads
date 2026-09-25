@@ -3,6 +3,8 @@ import { agent, extension, scriptedModel, sqlite } from "@threads/core";
 import {
   deleteThread,
   openStore,
+  READ_ONLY,
+  type StoreDriver,
   storeConnection,
   ThreadId,
   tenantStore,
@@ -16,6 +18,10 @@ import { reserveDue } from "../src/schedules/identity";
 import { newPass } from "../src/schedules/pass";
 import { pendingRows } from "../src/schedules/rows";
 import { eventsOf, mailer, say } from "./kit";
+import { sqlAll, sqlRun } from "./sql";
+
+const pending = (db: StoreDriver) =>
+  db.transaction((tx) => pendingRows(tx, "local"), READ_ONLY);
 
 // Cron parsing and DST rules, and the single winner of a pending occurrence. The schedule lifecycle
 // is replayed from the shared vector in schedule-threads.test.ts.
@@ -77,10 +83,10 @@ async function scheduleThread(store: ReturnType<typeof sqlite>) {
   const { db } = await storeConnection(store);
   const [row] = z
     .array(z.strictObject({ thread_id: ThreadId }))
-    .parse(db.all("SELECT thread_id FROM schedule_threads", []));
+    .parse(await sqlAll(db, "SELECT thread_id FROM schedule_threads", []));
   const { log } = await openStore(tenantStore(store, "local"));
   if (row === undefined) throw new Error("no schedule thread");
-  const main = log.mainBranch(row.thread_id);
+  const main = await log.mainBranch(row.thread_id);
   if (!main.ok) throw new Error(main.error.message);
   return { db, log, thread: row.thread_id, branch: main.value };
 }
@@ -106,21 +112,21 @@ describe("scheduler", () => {
     await a.ctx.idle();
     // An outbound delivery holds the writer when the next occurrence falls due: it stays pending.
     const { db, log, branch } = await scheduleThread(store);
-    const outbound = log.acquire(branch, "outbound");
+    const outbound = await log.acquire(branch, "outbound");
     if (!outbound.ok) throw new Error(outbound.error.message);
     await tick(a.ctx, a.bound, nine - 60_000, nine + DAY + 1_000);
-    outbound.value.release();
+    await outbound.value.release();
     // After a restart, two schedulers both select it; one decides it first.
-    const [stale] = pendingRows(db, "local");
+    const [stale] = await pending(db);
     if (stale === undefined) throw new Error("no pending row");
     const b = host(store);
     await tick(b.ctx, b.bound, nine + DAY + 60_000, nine + DAY + 60_000);
     await b.ctx.idle();
-    const writer = log.acquire(branch, "stale-scheduler");
+    const writer = await log.acquire(branch, "stale-scheduler");
     if (!writer.ok) throw new Error(writer.error.message);
     const pass = newPass(b.ctx, db, log, "local");
-    expect(logOccurrence(pass, writer.value, stale, null)).toBe(false);
-    writer.value.release();
+    expect(await logOccurrence(pass, writer.value, stale, null)).toBe(false);
+    await writer.value.release();
     const logged = (await eventsOf(store, "local", branch)).filter(
       (e) => e.type === "schedule_fired" || e.type === "schedule_skipped",
     );
@@ -129,7 +135,8 @@ describe("scheduler", () => {
       "schedule_fired",
     ]);
     expect(
-      db.all(
+      await sqlAll(
+        db,
         "SELECT state, logged_seq IS NOT NULL AS logged FROM schedule_occurrences ORDER BY occurrence_at",
         [],
       ),
@@ -148,7 +155,7 @@ describe("scheduler", () => {
     await a.ctx.idle();
     const { db, log, thread, branch } = await scheduleThread(store);
     // Another scheduler holds the writer: this one takes its pins (none pending), then waits.
-    const held = log.acquire(branch, "other-scheduler");
+    const held = await log.acquire(branch, "other-scheduler");
     if (!held.ok) throw new Error(held.error.message);
     const deciding = decideThread(newPass(a.ctx, db, log, "local"), thread);
     await Bun.sleep(1);
@@ -163,10 +170,10 @@ describe("scheduler", () => {
       timezone: "UTC",
       missed: false,
     };
-    reserveDue(db, log, started, [due]);
-    held.value.release();
+    await reserveDue(db, log, started, [due]);
+    await held.value.release();
     await deciding;
-    expect(pendingRows(db, "local")).toHaveLength(1);
+    expect(await pending(db)).toHaveLength(1);
     await tick(a.ctx, a.bound, nine - 60_000, nine + DAY + 1_000);
     await a.ctx.idle();
     const logged = (await eventsOf(store, "local", branch)).filter(
@@ -185,11 +192,11 @@ describe("scheduler", () => {
     await tick(a.ctx, a.bound, nine - 60_000, nine + 1_000);
     await a.ctx.idle();
     const { db, log, thread, branch } = await scheduleThread(store);
-    const outbound = log.acquire(branch, "outbound");
+    const outbound = await log.acquire(branch, "outbound");
     if (!outbound.ok) throw new Error(outbound.error.message);
     await tick(a.ctx, a.bound, nine - 60_000, nine + DAY + 1_000);
-    outbound.value.release();
-    const done = deleteThread(db, "local", thread, Date.now());
+    await outbound.value.release();
+    const done = await deleteThread(db, "local", thread, Date.now());
     if (!done.ok) throw new Error(done.error.message);
     const started = (await a.bound[0]?.hosted.runner.started())?.event;
     if (started === undefined) throw new Error("no schedule");
@@ -203,13 +210,14 @@ describe("scheduler", () => {
     });
     // The retired key and a new one, reserved after the deletion committed: the retired row
     // stays retired, and the new one lands on a new thread, never the deleted one.
-    reserveDue(db, log, started, [due(nine + DAY), due(nine + 2 * DAY)]);
+    await reserveDue(db, log, started, [due(nine + DAY), due(nine + 2 * DAY)]);
     const [identity] = z
       .array(z.strictObject({ thread_id: ThreadId }))
-      .parse(db.all("SELECT thread_id FROM schedule_threads", []));
+      .parse(await sqlAll(db, "SELECT thread_id FROM schedule_threads", []));
     expect(identity?.thread_id).not.toBe(thread);
     expect(
-      db.all(
+      await sqlAll(
+        db,
         "SELECT state, thread_id = ? AS on_new FROM schedule_occurrences ORDER BY occurrence_at",
         [identity?.thread_id ?? ""],
       ),
@@ -224,14 +232,15 @@ describe("scheduler", () => {
   test("a stored pending row whose frozen input is not an Input is reported as corrupt", async () => {
     const store = sqlite(":memory:");
     const { db } = await storeConnection(store);
-    db.run(
+    await sqlRun(
+      db,
       `INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state, thread_id,
         claimed_at, agent, input_json, timezone)
         VALUES ('local', 'daily', 1, 'pending', '0192a000-0000-7000-8000-000000000001', 1,
         'support', '{"not": "an input"}', 'UTC')`,
       [],
     );
-    expect(() => pendingRows(db, "local")).toThrow("schedule rows are corrupt");
+    await expect(pending(db)).rejects.toThrow("schedule rows are corrupt");
   });
 
   test("a schedule id that is not a Name is refused at ready", () => {
@@ -252,7 +261,9 @@ describe("scheduler", () => {
     await tick(a.ctx, a.bound, nine - 60_000, nine + 1_000);
     await a.ctx.idle();
     const { db, log, thread } = await scheduleThread(store);
-    db.run("UPDATE events SET line = ? WHERE seq = 1", [new Uint8Array([0])]);
+    await db.transaction((tx) =>
+      tx.run("UPDATE events SET line = ? WHERE seq = 1", [new Uint8Array([0])]),
+    );
     const started = (await a.bound[0]?.hosted.runner.started())?.event;
     if (started === undefined) throw new Error("no schedule");
     const due = {
@@ -263,11 +274,15 @@ describe("scheduler", () => {
       timezone: "UTC",
       missed: false,
     };
-    expect(() => reserveDue(db, log, started, [due])).toThrow("can't be read");
-    expect(db.all("SELECT thread_id FROM schedule_threads", [])).toEqual([
-      { thread_id: thread },
-    ]);
-    expect(db.all("SELECT 1 FROM schedule_occurrences", [])).toHaveLength(1);
+    await expect(reserveDue(db, log, started, [due])).rejects.toThrow(
+      "can't be read",
+    );
+    expect(
+      await sqlAll(db, "SELECT thread_id FROM schedule_threads", []),
+    ).toEqual([{ thread_id: thread }]);
+    expect(
+      await sqlAll(db, "SELECT 1 FROM schedule_occurrences", []),
+    ).toHaveLength(1);
     await a.ctx.stop();
   });
 
@@ -299,7 +314,8 @@ describe("scheduler", () => {
     await tick(ctx, bound, nine - 60_000, nine + 1_000);
     const { db } = await storeConnection(store);
     expect(
-      db.all(
+      await sqlAll(
+        db,
         `SELECT (SELECT count(*) FROM schedule_threads) AS identities,
           (SELECT count(*) FROM schedule_occurrences) AS occurrences,
           (SELECT count(*) FROM threads) AS threads`,

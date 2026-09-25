@@ -4,11 +4,11 @@ keeps every artifact any stored line or branch row names.
 
 import os
 import re
-import sqlite3
 import time
 from pathlib import Path
 from typing import Final
 
+from threads.store.conn import Conn
 from threads.store.sql import blob_of, text_of
 from threads.store.trash import SEAMS, link_back, seam, trash_name
 
@@ -19,13 +19,14 @@ _TRASH: Final = re.compile(r"\.([0-9a-f]{64})\.trash-")
 _PER_BRANCH: Final = ("events", "leases", "observer_cursors")
 
 
-def referenced(conn: sqlite3.Connection) -> frozenset[str]:
+def referenced(conn: Conn) -> frozenset[str]:
     """Every sha256 any stored line or branch row names: the mark of the sweep. A hash-shaped
     string that is not an artifact only keeps a file that doesn't exist."""
     found: set[str] = set()
-    for (line,) in conn.execute("SELECT line FROM events"):
+    for (line,) in conn.execute("SELECT line FROM events").fetchall():
         found.update(m.decode() for m in _SHA256.findall(blob_of(line)))
-    for header, dropped in conn.execute("SELECT header_line, dropped_ref FROM branches"):
+    rows = conn.execute("SELECT header_line, dropped_ref FROM branches").fetchall()
+    for header, dropped in rows:
         found.update(m.decode() for m in _SHA256.findall(blob_of(header)))
         if dropped is not None:
             found.add(text_of(dropped))

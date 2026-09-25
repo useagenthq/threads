@@ -2,7 +2,7 @@ import { z } from "zod";
 import { BranchId, TeamId, type ThreadId } from "../log";
 import { ok, type Result } from "../result";
 import type { LogError } from "../verify/error";
-import type { SqliteDriver } from "./driver";
+import type { Tx } from "./driver";
 import { recordLosses } from "./losses";
 import { parseRows } from "./tables";
 
@@ -22,13 +22,15 @@ export const TEAM_TABLES: readonly string[] = [
 
 const BranchRow = z.strictObject({ branch_id: BranchId });
 
-export function branchesOf(
-  db: SqliteDriver,
+export async function branchesOf(
+  tx: Tx,
   thread: string,
-): Result<readonly BranchId[], LogError> {
+): Promise<Result<readonly BranchId[], LogError>> {
   const rows = parseRows(
     BranchRow,
-    db.all("SELECT branch_id FROM branches WHERE thread_id = ?", [thread]),
+    await tx.all("SELECT branch_id FROM branches WHERE thread_id = ?", [
+      thread,
+    ]),
   );
   return rows.ok ? ok(rows.value.map((r) => r.branch_id)) : rows;
 }
@@ -40,16 +42,17 @@ const TeamRow = z.strictObject({ team_id: TeamId, lead_thread_id: z.string() });
  * in this tenant. A team id is never taken from a log: an imported team_opened could name
  * another tenant's team.
  */
-export function doomedTeams(
-  db: SqliteDriver,
+export async function doomedTeams(
+  tx: Tx,
   tenantId: string,
   doomed: ReadonlySet<string>,
-): Result<ReadonlySet<TeamId>, LogError> {
+): Promise<Result<ReadonlySet<TeamId>, LogError>> {
   const rows = parseRows(
     TeamRow,
-    db.all("SELECT team_id, lead_thread_id FROM teams WHERE tenant_id = ?", [
-      tenantId,
-    ]),
+    await tx.all(
+      "SELECT team_id, lead_thread_id FROM teams WHERE tenant_id = ?",
+      [tenantId],
+    ),
   );
   if (!rows.ok) return rows;
   return ok(
@@ -62,13 +65,13 @@ export function doomedTeams(
 }
 
 /** Every index row of `team`: its teams row only in this tenant. */
-export function deleteTeam(
-  db: SqliteDriver,
+export async function deleteTeam(
+  tx: Tx,
   tenantId: string,
   team: TeamId,
-): void {
+): Promise<void> {
   for (const table of TEAM_TABLES)
-    db.run(
+    await tx.run(
       table === "teams"
         ? "DELETE FROM teams WHERE team_id = ? AND tenant_id = ?"
         : `DELETE FROM ${table} WHERE team_id = ?`,
@@ -82,16 +85,16 @@ export function deleteTeam(
  * live resources move to releasing for gc; a tombstone and one loss row per telemetry observer
  * record it.
  */
-export function deleteOne(
-  db: SqliteDriver,
+export async function deleteOne(
+  tx: Tx,
   tenantId: string,
   threadId: ThreadId,
   now: number,
-): Result<void, LogError> {
-  const branches = branchesOf(db, threadId);
+): Promise<Result<void, LogError>> {
+  const branches = await branchesOf(tx, threadId);
   if (!branches.ok) return branches;
   // Before the events go: what each telemetry exporter may not have sent yet.
-  recordLosses(db, tenantId, threadId, now);
+  await recordLosses(tx, tenantId, threadId, now);
   for (const branch of branches.value) {
     for (const table of [
       "events",
@@ -100,13 +103,15 @@ export function deleteOne(
       "pending_wakes",
       "questions",
     ])
-      db.run(`DELETE FROM ${table} WHERE branch_id = ?`, [branch]);
-    db.run(
+      await tx.run(`DELETE FROM ${table} WHERE branch_id = ?`, [branch]);
+    await tx.run(
       "UPDATE resources SET state = 'releasing' WHERE owner_branch_id = ? AND state = 'live'",
       [branch],
     );
   }
-  db.run("DELETE FROM pending_wakes WHERE child_thread_id = ?", [threadId]);
+  await tx.run("DELETE FROM pending_wakes WHERE child_thread_id = ?", [
+    threadId,
+  ]);
   for (const table of [
     "approvals",
     "inbox",
@@ -114,23 +119,23 @@ export function deleteOne(
     "run_receipts",
     "schedule_threads",
   ])
-    db.run(`DELETE FROM ${table} WHERE thread_id = ? AND tenant_id = ?`, [
+    await tx.run(`DELETE FROM ${table} WHERE thread_id = ? AND tenant_id = ?`, [
       threadId,
       tenantId,
     ]);
   // Its undecided reservations are dropped, never logged; the rows only keep their keys taken.
-  db.run(
+  await tx.run(
     `UPDATE schedule_occurrences SET state = 'retired'
       WHERE thread_id = ? AND tenant_id = ? AND state = 'pending'`,
     [threadId, tenantId],
   );
-  db.run("DELETE FROM budget_ledger WHERE budget_id = ? OR budget_id LIKE ?", [
-    `thread:${threadId}`,
-    `run:${threadId}:%`,
-  ]);
-  db.run("DELETE FROM branches WHERE thread_id = ?", [threadId]);
-  db.run("DELETE FROM threads WHERE thread_id = ?", [threadId]);
-  db.run(
+  await tx.run(
+    "DELETE FROM budget_ledger WHERE budget_id = ? OR budget_id LIKE ?",
+    [`thread:${threadId}`, `run:${threadId}:%`],
+  );
+  await tx.run("DELETE FROM branches WHERE thread_id = ?", [threadId]);
+  await tx.run("DELETE FROM threads WHERE thread_id = ?", [threadId]);
+  await tx.run(
     "INSERT INTO tombstones (thread_id, tenant_id, deleted_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
     [threadId, tenantId, now],
   );

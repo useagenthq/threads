@@ -41,6 +41,12 @@ supermemory = [
 zep = [
     "zep-cloud>=3.28,<4",
 ]
+# threads.postgres (lane 27): Postgres has no official vendor SDK. psycopg 3 is the maintained
+# reference adapter, with binary wheels; its sync connection fits the store's worker thread, and
+# its errors carry typed SQLSTATEs (serialization failures, connection loss).
+postgres = [
+    "psycopg[binary]>=3.2,<3.3",
+]
 # threads.host over HTTP. Starlette: spec/api.json types host(authenticate)
 # with starlette.requests.Request and Host.asgi as starlette.types.ASGIApp, and it is the
 # smallest routing/SSE layer that runs on any ASGI server. Uvicorn: the minimal ASGI server
@@ -135,6 +141,7 @@ addopts = ["--strict-markers", "--strict-config", "-ra"]
 markers = [
     "live: the live gate; sends real provider requests, only with THREADS_LIVE=1",
     "jobs: crash drills; real child processes on one store, killed and restarted",
+    "sqlite_only: pins SQLite itself (its pragmas or file); the Postgres leg skips it",
 ]
 xfail_strict = true
 filterwarnings = ["error"]

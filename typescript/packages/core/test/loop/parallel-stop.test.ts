@@ -24,14 +24,14 @@ describe("cancel mid-group", () => {
     const gate = Promise.withResolvers<void>();
     const runs = new Map<string, number>();
     const all = names(10);
-    let cancel = (): void => {};
+    let cancel = async (): Promise<unknown> => undefined;
     const { log, end } = await run(
       all.map((n) =>
         impl(read(n), async () => {
           runs.set(n, (runs.get(n) ?? 0) + 1);
           // The 8th start fills the window: cancel while all 8 wait on the gate.
           if (runs.size === 8) {
-            cancel();
+            await cancel();
             gate.resolve();
           }
           await gate.promise;
@@ -40,9 +40,9 @@ describe("cancel mid-group", () => {
       ),
       [calls(...all), FINAL],
       (_h, writer) => {
-        cancel = () =>
+        cancel = async () =>
           unwrap(
-            writer.append([
+            await writer.append([
               {
                 type: "cancel_requested",
                 type_version: 1,
@@ -118,7 +118,9 @@ describe("a lost lease inside a group", () => {
     expect(results(first.log)).toEqual([]);
 
     // The new owner runs the unrecorded reads in call order, once each.
-    const usurper = unwrap(first.h.store.acquire(ROOT, "usurper", 30_000));
+    const usurper = unwrap(
+      await first.h.store.acquire(ROOT, "usurper", 30_000),
+    );
     runs.clear();
     const again = await resume(
       usurper,
@@ -143,14 +145,16 @@ describe("crash mid-drain", () => {
       }),
     );
     const first = await run(bodies, [calls(...names(3)), FINAL], (h) => ({
-      onEvent: (e) => {
+      onEvent: async (e) => {
         if (e.type === "tool_result" && e.data.call_id === "call_1")
-          takeOver(h);
+          await takeOver(h);
       },
     }));
     expect(first.end).toMatchObject({ kind: "halted" });
     expect(results(first.log)).toEqual(["call_1"]);
-    const usurper = unwrap(first.h.store.acquire(ROOT, "usurper", 30_000));
+    const usurper = unwrap(
+      await first.h.store.acquire(ROOT, "usurper", 30_000),
+    );
     const again = await resume(
       usurper,
       first.h.artifacts,

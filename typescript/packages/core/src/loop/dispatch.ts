@@ -66,7 +66,11 @@ async function runCall(
   return ask(s, call);
 }
 
-function denied(s: Session, callId: string, reason?: string): Halt | undefined {
+async function denied(
+  s: Session,
+  callId: string,
+  reason?: string,
+): Promise<Halt | undefined> {
   return s.append(
     draft.toolResult(
       {
@@ -81,7 +85,10 @@ function denied(s: Session, callId: string, reason?: string): Halt | undefined {
 }
 
 /** An ask opens an approval challenge and parks until an approver answers. */
-function ask(s: Session, call: EventOf<"tool_call">): Halt | undefined {
+async function ask(
+  s: Session,
+  call: EventOf<"tool_call">,
+): Promise<Halt | undefined> {
   const { call_id: callId, input } = call.data;
   // A granted challenge allowed the call, so an answered one here was denied: never ask again.
   if (
@@ -133,38 +140,38 @@ async function dispatch(
   if (framework !== undefined) return framework(s, call);
   const spec = callSpec(s.fold, call);
   if (spec?.effect_class === "read_only") {
-    const fenced = s.fence();
+    const fenced = await s.fence();
     if (fenced !== undefined) return fenced;
     return recordRead(s, callId, await body(s, call));
   }
   const attempts = s.events.filter(
     (e) => e.type === "effect_begin" && e.data.call_id === callId,
   ).length;
-  const begun = s.appendWork(
+  const begun = await s.appendWork(
     draft.effectBegin({ call_id: callId, attempt: attempts + 1 }),
   );
   // A cancel landed first: nothing is dispatched; the cancellation step closes the call.
   if (begun === BARRED) return undefined;
   if (begun !== undefined) return begun;
   // Fenced in the same synchronous section as the dispatch: a stale owner never runs it.
-  const fenced = s.fence();
+  const fenced = await s.fence();
   if (fenced !== undefined) return fenced;
   const run = await sent(s, call);
   return settle(s, callId, run);
 }
 
 /** A read_only call's result and its injections. */
-export function recordRead(
+export async function recordRead(
   s: Session,
   callId: string,
   run: ToolRun,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   // A read_only call changes nothing, so an uncertain run is just a failed one.
   const done: Extract<ToolRun, { kind: "done" }> =
     run.kind === "done"
       ? run
       : { kind: "done", output: `failed: ${run.kind}`, isError: true };
-  return s.append(result(s, callId, done), ...injections(done));
+  return s.append(await result(s, callId, done), ...injections(done));
 }
 
 /** The body of a mediated operation, or its stub in stub mode. */
@@ -206,7 +213,7 @@ export async function body(
       principal: s.config.principal,
       signal,
       fence: async () => {
-        const halted = s.fence();
+        const halted = await s.fence();
         return halted === undefined
           ? ok(undefined)
           : err({ code: "stale_epoch", message: halted.message });
@@ -218,13 +225,13 @@ export async function body(
   }
 }
 
-function settle(
+async function settle(
   s: Session,
   callId: string,
   run: ToolRun | "unmatched",
-): Promise<Halt | undefined> | Halt | undefined {
+): Promise<Halt | undefined> {
   if (run === "unmatched") {
-    const stopped = s.append(
+    const stopped = await s.append(
       draft.effectResolved(
         { call_id: callId, outcome: "not_sent", by: "adapter" },
         { kind: "host" },
@@ -239,8 +246,8 @@ function settle(
   }
   switch (run.kind) {
     case "done": {
-      const shown = recordOutput(s, callId, run.output);
-      const ref = shown.ref ?? s.store(shown.text, "text/plain");
+      const shown = await recordOutput(s, callId, run.output);
+      const ref = shown.ref ?? (await s.store(shown.text, "text/plain"));
       // The result artifact is durable first; the commit and its result land together.
       return s.append(
         draft.effectCommit({
@@ -256,19 +263,19 @@ function settle(
     }
     case "unknown":
       return (
-        s.append(
+        (await s.append(
           draft.effectUnknown({ call_id: callId, reason: run.reason }),
-        ) ?? settleUnknown(s, callId, { kind: "host" })
+        )) ?? (await settleUnknown(s, callId, { kind: "host" }))
       );
     case "not_sent":
       return (
-        s.append(
+        (await s.append(
           draft.effectResolved(
             { call_id: callId, outcome: "not_sent", by: "adapter" },
             { kind: "host" },
           ),
-        ) ??
-        s.append(
+        )) ??
+        (await s.append(
           draft.toolResult(
             {
               call_id: callId,
@@ -278,22 +285,22 @@ function settle(
             },
             { kind: "host" },
           ),
-        )
+        ))
       );
     default:
       return assertNever(run);
   }
 }
 
-function result(
+async function result(
   s: Session,
   callId: string,
   run: Extract<ToolRun, { kind: "done" }>,
-): EventDraft {
+): Promise<EventDraft> {
   return resultOf(
     callId,
     run.isError,
-    recordOutput(s, callId, run.output),
+    await recordOutput(s, callId, run.output),
     contentOf(run),
   );
 }

@@ -103,7 +103,7 @@ export function threadHandle(
   const { log, artifacts } = opened;
   const { id: threadId, branch: branchId } = ref;
   const points = async (): Promise<readonly ForkPoint[]> => {
-    const current = readLog(log, branchId);
+    const current = await readLog(log, branchId);
     return current.ok ? forkPoints(current.value, log.now()) : [];
   };
   return {
@@ -111,7 +111,7 @@ export function threadHandle(
     branch: branchId,
     store: ref.store,
     timeline: async () => {
-      const current = readLog(log, branchId);
+      const current = await readLog(log, branchId);
       if (!current.ok) return current;
       const marked = new Set(
         forkPoints(current.value, log.now()).map((p) => p.event_id),
@@ -154,11 +154,11 @@ export function threadHandle(
       return ok(threadHandle(opened, { ...ref, branch: child }, options));
     },
     todos: async () => {
-      const current = readLog(log, branchId);
+      const current = await readLog(log, branchId);
       return current.ok ? projections(current.value).todos : [];
     },
     children: async () => {
-      const current = readLog(log, branchId);
+      const current = await readLog(log, branchId);
       return current.ok ? projections(current.value).children : [];
     },
     replay: async () => replay(log, artifacts, branchId),

@@ -8,7 +8,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LogStore, memoryArtifacts } from "@threads/core";
-import { openBunSqlite } from "@threads/core/bun-sqlite";
 import {
   type KnownEvent,
   knownEvents,
@@ -16,6 +15,8 @@ import {
   type VerifiedLog,
 } from "@threads/core/host";
 import { z } from "zod";
+import { sqlAll, sqlRun } from "../sql";
+import { drillDriver } from "./stores";
 import { rows, TEAM } from "./worker";
 
 // The parent side of the crash drills: spawns worker.ts processes on one store, stops or kills
@@ -122,35 +123,35 @@ export function go(where: string): void {
 }
 
 /** A killed holder's lease runs out after its TTL (30 s); the drill moves its expiry to now. */
-export function expireLeases(where: string): void {
-  const db = openBunSqlite(join(where, "threads.db"));
+export async function expireLeases(where: string): Promise<void> {
+  const db = (await drillDriver(where)).db;
   try {
-    db.run("UPDATE leases SET expires_at = 0", []);
+    await sqlRun(db, "UPDATE leases SET expires_at = 0", []);
   } finally {
-    db.close();
+    await db.close();
   }
 }
 
 /** The drill conversation's main branch, read on a connection closed right after. */
-export function log(where: string): VerifiedLog | undefined {
-  const db = openBunSqlite(join(where, "threads.db"));
+export async function log(where: string): Promise<VerifiedLog | undefined> {
+  const db = (await drillDriver(where)).db;
   try {
-    const opened = LogStore.open(db, Date.now, memoryArtifacts(), TEAM);
+    const opened = await LogStore.open(db, Date.now, memoryArtifacts(), TEAM);
     if (!opened.ok) throw new Error(opened.error.message);
     const [first] = z
       .array(z.strictObject({ thread_id: ThreadId }))
-      .parse(db.all("SELECT thread_id FROM inbox LIMIT 1", []));
+      .parse(await sqlAll(db, "SELECT thread_id FROM inbox LIMIT 1", []));
     if (first === undefined) return undefined;
-    const main = opened.value.mainBranch(first.thread_id);
-    const read = main.ok ? opened.value.read(main.value) : undefined;
+    const main = await opened.value.mainBranch(first.thread_id);
+    const read = main.ok ? await opened.value.read(main.value) : undefined;
     return read?.ok === true ? read.value : undefined;
   } finally {
-    db.close();
+    await db.close();
   }
 }
 
-export function events(where: string): readonly KnownEvent[] {
-  const read = log(where);
+export async function events(where: string): Promise<readonly KnownEvent[]> {
+  const read = await log(where);
   return read === undefined ? [] : knownEvents(read);
 }
 

@@ -41,17 +41,24 @@ export type DeadlineOutcome =
   | Waiting
   | typeof NOT_DUE;
 
-export function deadline(ctx: CloseContext, id: string): DeadlineOutcome {
-  const ask = askRow(ctx.db, id);
+export async function deadline(
+  ctx: CloseContext,
+  id: string,
+): Promise<DeadlineOutcome> {
+  const ask = await askRow(ctx.tx, id);
   if (ask !== undefined) {
-    const open = askOpen(ctx.db, ctx.branchId, id, ctx.batch);
+    const open = await askOpen(ctx.tx, ctx.branchId, id, ctx.batch);
     if (!open) return NOT_DUE;
     // Team close is a trigger of its own: the team log's next step closes its open asks.
-    const closed = teamOfLog(ctx.db, ctx.branchId)?.closed_at ?? null;
+    const closed = (await teamOfLog(ctx.tx, ctx.branchId))?.closed_at ?? null;
     if (closed !== null)
-      return completeAsk(ctx, id, { cancelled: true, due: false }) ?? NOT_DUE;
+      return (
+        (await completeAsk(ctx, id, { cancelled: true, due: false })) ?? NOT_DUE
+      );
     if (ctx.batch.now < ask.deadline) return NOT_DUE;
-    return completeAsk(ctx, id, { cancelled: false, due: true }) ?? NOT_DUE;
+    return (
+      (await completeAsk(ctx, id, { cancelled: false, due: true })) ?? NOT_DUE
+    );
   }
   const started = startedOf(ctx.chain, id);
   const due =
@@ -59,29 +66,29 @@ export function deadline(ctx: CloseContext, id: string): DeadlineOutcome {
     ctx.batch.now >= started.data.deadline &&
     openWaits(ctx.chain, ctx.batch).has(id);
   if (!due) return NOT_DUE;
-  committedNotices(ctx, id);
-  return finishWait(ctx, id, { deadline: true });
+  await committedNotices(ctx, id);
+  return await finishWait(ctx, id, { deadline: true });
 }
 
 /** This writer's asks and waits whose deadline has passed by `now`. */
-export function dueIds(
-  ctx: Pick<CloseContext, "db" | "chain" | "branchId">,
+export async function dueIds(
+  ctx: Pick<CloseContext, "tx" | "chain" | "branchId">,
   now: number,
-): readonly string[] {
+): Promise<readonly string[]> {
   const waits = [...ctx.chain.fold.team.waits].filter((id) => {
     const started = startedOf(ctx.chain, id);
     return started !== undefined && now >= started.data.deadline;
   });
-  return [...dueAsks(ctx.db, ctx.branchId, now), ...waits];
+  return [...(await dueAsks(ctx.tx, ctx.branchId, now)), ...waits];
 }
 
 /** The earliest deadline among this writer's open asks and waits, if any. */
-export function nextDeadline(
-  ctx: Pick<CloseContext, "db" | "chain" | "branchId">,
-): number | undefined {
-  const asks = dueAsks(ctx.db, ctx.branchId, Number.MAX_SAFE_INTEGER).map(
-    (id) => askRow(ctx.db, id)?.deadline ?? Number.MAX_SAFE_INTEGER,
-  );
+export async function nextDeadline(
+  ctx: Pick<CloseContext, "tx" | "chain" | "branchId">,
+): Promise<number | undefined> {
+  const asks: number[] = [];
+  for (const id of await dueAsks(ctx.tx, ctx.branchId, Number.MAX_SAFE_INTEGER))
+    asks.push((await askRow(ctx.tx, id))?.deadline ?? Number.MAX_SAFE_INTEGER);
   const waits = [...ctx.chain.fold.team.waits].map((id) => {
     const started = startedOf(ctx.chain, id);
     return started !== undefined

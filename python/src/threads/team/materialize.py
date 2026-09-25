@@ -6,7 +6,6 @@ complete end-of-member append instead, and no model request is ever made for it.
 spec/tools/fixtures/ops_start.py."""
 
 import json
-import sqlite3
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import Final, Literal
@@ -25,6 +24,7 @@ from threads.log import (
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import SqliteStore, Writer
+from threads.store.conn import Conn
 from threads.store.lease import Lease
 from threads.store.lines import Draft, uuid7
 from threads.store.opening import BranchOpening
@@ -103,7 +103,7 @@ async def materialize(
     pinned = {k: raw[k] for k in _LINE_ZERO if k in raw}
     branch = o.branch_id or BranchId(uuid7(o.clock()))
 
-    def decide(conn: sqlite3.Connection, now: int) -> BranchOpening | None:
+    def decide(conn: Conn, now: int) -> BranchOpening | None:
         row = member_named(conn, team, name)
         if row is None or row.state != "starting" or row.generation != s.row.generation:
             return None
@@ -126,7 +126,7 @@ async def materialize(
 
 
 def _first_events(  # noqa: PLR0913, PLR0917 - one opening: where, of whom, with what
-    conn: sqlite3.Connection,
+    conn: Conn,
     batch: Batch,
     s: _Starting,
     pinned: Mapping[str, JsonValue],

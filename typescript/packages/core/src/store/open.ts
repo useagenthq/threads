@@ -4,7 +4,7 @@ import { addLine, type Chain, emptyChain } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import { admitDrafts, type EventDraft } from "./admit";
 import { newBranch } from "./branch";
-import type { SqliteDriver } from "./driver";
+import type { Sql, Tx } from "./driver";
 import { indexAppend, knownOf } from "./indexing";
 import {
   atomically,
@@ -25,11 +25,11 @@ export type BranchOpening = {
 };
 
 /** A new branch opens a new thread: never a second root of one already stored. */
-function newThread(
-  db: SqliteDriver,
+async function newThread(
+  tx: Tx,
   threadId: ThreadId,
-): Result<void, LogError> {
-  const owner = threadOwner(db, threadId);
+): Promise<Result<void, LogError>> {
+  const owner = await threadOwner(tx, threadId);
   if (!owner.ok) return owner;
   return owner.value === undefined
     ? ok(undefined)
@@ -45,19 +45,19 @@ export const ALREADY_OPEN = "already_open";
  * epoch 1 and runs the index hooks. A new branch is one nobody can hold yet, so this never
  * appends to a live branch. Returns the new chain, or `already_open`.
  */
-export function openBranch(
-  db: SqliteDriver,
+export async function openBranch(
+  sql: Sql,
   now: number,
   opening: BranchOpening,
-): Result<Chain | typeof ALREADY_OPEN, LogError> {
+): Promise<Result<Chain | typeof ALREADY_OPEN, LogError>> {
   const { tenantId, threadId, branchId, lease, drafts } = opening;
-  return atomically<Chain | typeof ALREADY_OPEN>(db, () => {
-    const existing = getBranch(db, branchId);
+  return await atomically<Chain | typeof ALREADY_OPEN>(sql, async (tx) => {
+    const existing = await getBranch(tx, branchId);
     if (!existing.ok) return existing;
     if (existing.value !== undefined) return ok(ALREADY_OPEN);
-    const fresh = newThread(db, threadId);
+    const fresh = await newThread(tx, threadId);
     if (!fresh.ok) return fresh;
-    const made = newBranch(db, {
+    const made = await newBranch(tx, {
       tenantId,
       threadId,
       branchId,
@@ -72,14 +72,14 @@ export function openBranch(
     const admitted = admitDrafts(chain, drafts, now, 1);
     if (!admitted.ok) return admitted;
     const { events, opened } = admitted.value;
-    insertEvents(db, branchId, events);
-    putLease(db, branchId, {
+    await insertEvents(tx, branchId, events);
+    await putLease(tx, branchId, {
       holder_id: lease.holderId,
       epoch: 1,
       expires_at: now + lease.ttlMs,
     });
-    const indexed = indexAppend({
-      db,
+    const indexed = await indexAppend({
+      tx,
       tenant: tenantId,
       threadId,
       branchId,

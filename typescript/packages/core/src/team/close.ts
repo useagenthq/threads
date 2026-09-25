@@ -30,15 +30,15 @@ import {
 // Reference: spec/tools/fixtures/ops_consume.py (complete) and ops_observe.py (finish).
 
 /** Reads a {ref} body's text from the content-addressed store (sha256 and length verified). */
-export type ReadText = (ref: ArtifactRef) => string;
+export type ReadText = (ref: ArtifactRef) => Promise<string>;
 
 /**
  * Text read from an artifact store. A ref the verified log names is always present, so a missing
  * or corrupt artifact is a broken store invariant: it throws.
  */
 export function readerOf(artifacts: ArtifactStore): ReadText {
-  return (ref) => {
-    const got = artifacts.get(ref.sha256);
+  return async (ref) => {
+    const got = await artifacts.get(ref.sha256);
     if (!got.ok) throw new Error(got.error.message);
     return new TextDecoder().decode(got.value);
   };
@@ -66,25 +66,30 @@ const NOTICES: ReadonlySet<string> = new Set([
 /** The call an ask or wait belongs to: its id after the sender branch. */
 export const callOf = (key: string): string => key.slice(key.indexOf(":") + 1);
 
-function textOf(body: Body | undefined, read: ReadText): string {
+async function textOf(body: Body | undefined, read: ReadText): Promise<string> {
   if (body?.text !== undefined) return body.text;
   if (body?.ref === undefined) throw new Error("a text body is text or a ref");
   return read(body.ref);
 }
 
 /** A stored result as the public one: a completed output is its text. */
-export function publicResult(
+export async function publicResult(
   result: StoredMemberResult,
   read: ReadText,
-): Wire<MemberResult> {
+): Promise<Wire<MemberResult>> {
   return result.status === "completed"
-    ? { ...result, output: textOf(result.output, read) }
+    ? { ...result, output: await textOf(result.output, read) }
     : result;
 }
 
 /** This writer's pending mail the batch hasn't taken. */
-export function mine(ctx: CloseContext): readonly MailEnvelope[] {
-  return untaken(pendingHere(ctx.db, ctx.threadId, ctx.branchId), ctx.batch);
+export async function mine(
+  ctx: CloseContext,
+): Promise<readonly MailEnvelope[]> {
+  return untaken(
+    await pendingHere(ctx.tx, ctx.threadId, ctx.branchId),
+    ctx.batch,
+  );
 }
 
 const HOST = {
@@ -104,42 +109,42 @@ function resume(ctx: CloseContext, address: ParkAddress, cause: string): void {
 }
 
 /** ask_closed, and for a member asker its resumed and the ask call's one result. */
-export function closeAsk(
+export async function closeAsk(
   ctx: CloseContext,
   askId: string,
   outcome: Outcome,
   cause?: string,
-): Wire<AskOutcome> {
+): Promise<Wire<AskOutcome>> {
   const closed = ctx.batch.add({
     ...HOST,
     type: "ask_closed",
     data: { ask_id: askId, outcome },
   });
-  const value = askValue(ctx, askId, outcome);
+  const value = await askValue(ctx, askId, outcome);
   if (ctx.chain.fold.team.teamLog) return value;
   resume(ctx, { kind: "ask", id: askId }, cause ?? closed);
   ctx.batch.add(toolResult(callOf(askId), value));
   return value;
 }
 
-function askValue(
+async function askValue(
   ctx: CloseContext,
   askId: string,
   outcome: Outcome,
-): Wire<AskOutcome> {
+): Promise<Wire<AskOutcome>> {
   switch (outcome.status) {
     case "answered": {
-      const reply = mailEnvelope(ctx.db, outcome.reply);
+      const reply = await mailEnvelope(ctx.tx, outcome.reply);
       if (reply === undefined || "operator" in reply.from)
         throw new Error(`no member's reply ${outcome.reply}`);
-      const text = textOf(reply.body, ctx.read);
+      const text = await textOf(reply.body, ctx.read);
       return { ask_id: askId, status: "answered", member: reply.from, text };
     }
     case "member_ended":
       return {
         ask_id: askId,
         status: outcome.status,
-        result: publicResult(outcome.result, ctx.read),
+        result: await publicResult(outcome.result, ctx.read),
       };
     case "timed_out":
     case "cancelled":
@@ -152,17 +157,19 @@ function askValue(
  * the ask, then a cancel (a member asker) or a closed team (the team log), then the deadline.
  * Undefined: nothing decides it yet.
  */
-export function completeAsk(
+export async function completeAsk(
   ctx: CloseContext,
   askId: string,
   how: { readonly cancelled: boolean; readonly due: boolean },
-): Wire<AskOutcome> | undefined {
+): Promise<Wire<AskOutcome> | undefined> {
   for (const kind of ["reply", "bounce"] as const) {
-    const env = mine(ctx).find((m) => m.kind === kind && m.ask_id === askId);
+    const env = (await mine(ctx)).find(
+      (m) => m.kind === kind && m.ask_id === askId,
+    );
     if (env === undefined) continue;
     const got = ctx.batch.add(received(env));
     if (kind === "reply")
-      return closeAsk(
+      return await closeAsk(
         ctx,
         askId,
         { status: "answered", reply: env.mail_id },
@@ -171,24 +178,32 @@ export function completeAsk(
     const result = env.result;
     if (result === undefined || result.status === "completed")
       throw new Error("an ask's bounce carries the ended member's result");
-    return closeAsk(ctx, askId, { status: "member_ended", result }, got);
+    return await closeAsk(ctx, askId, { status: "member_ended", result }, got);
   }
-  if (how.cancelled) return closeAsk(ctx, askId, { status: "cancelled" });
-  return how.due ? closeAsk(ctx, askId, { status: "timed_out" }) : undefined;
+  if (how.cancelled) return await closeAsk(ctx, askId, { status: "cancelled" });
+  return how.due
+    ? await closeAsk(ctx, askId, { status: "timed_out" })
+    : undefined;
 }
 
 /** A reply or an ask's bounce: completes its ask while open, else is recorded only. */
-export function takeAnswer(ctx: CloseContext, env: MailEnvelope): void {
+export async function takeAnswer(
+  ctx: CloseContext,
+  env: MailEnvelope,
+): Promise<void> {
   const askId = env.ask_id ?? "";
-  if (askOpen(ctx.db, ctx.branchId, askId, ctx.batch))
-    completeAsk(ctx, askId, { cancelled: false, due: false });
+  if (await askOpen(ctx.tx, ctx.branchId, askId, ctx.batch))
+    await completeAsk(ctx, askId, { cancelled: false, due: false });
   else ctx.batch.add(received(env));
 }
 
 /** Every settle or end notice of the wait already committed counts: consume it first. */
-export function committedNotices(ctx: CloseContext, waitId: string): void {
+export async function committedNotices(
+  ctx: CloseContext,
+  waitId: string,
+): Promise<void> {
   const settles = settleMonitors(ctx.chain, ctx.batch, ctx.branchId);
-  for (const env of mine(ctx))
+  for (const env of await mine(ctx))
     if (
       NOTICES.has(env.kind) &&
       env.monitor_id !== undefined &&
@@ -201,14 +216,17 @@ export function committedNotices(ctx: CloseContext, waitId: string): void {
  * A settle or end notice that is a wait's: the receipt, and the wait finishes if that meets its
  * mode (a notice of a wait that already finished is recorded only). False: not a wait's.
  */
-export function takeWaitNotice(ctx: CloseContext, env: MailEnvelope): boolean {
+export async function takeWaitNotice(
+  ctx: CloseContext,
+  env: MailEnvelope,
+): Promise<boolean> {
   const waitId = settleMonitors(ctx.chain, ctx.batch, ctx.branchId).get(
     env.monitor_id ?? "",
   );
   if (waitId === undefined) return false;
   const got = ctx.batch.add(received(env));
   if (openWaits(ctx.chain, ctx.batch).has(waitId))
-    finishWait(ctx, waitId, { cause: got, deadline: false });
+    await finishWait(ctx, waitId, { cause: got, deadline: false });
   return true;
 }
 
@@ -242,18 +260,21 @@ type Tally = {
 };
 
 /** Each member of the wait, in its order: settled, parked now, or still pending. */
-function tally(
+async function tally(
   ctx: CloseContext,
   started: Extract<Item, { type: "wait_started" }>,
-): Tally {
+): Promise<Tally> {
   const evidence = evidenceOf(itemsOf(ctx.chain, ctx.batch));
   const out: Tally = { finished: [], parked: [], pending: [] };
   for (const m of started.data.members) {
     const got = evidence.get(`${ctx.branchId}:${started.event_id}:${m.name}`);
-    const row = memberNamed(ctx.db, m.team, m.name);
+    const row = await memberNamed(ctx.tx, m.team, m.name);
     if (got !== undefined) out.finished.push(got);
     else if (row?.state === "parked" && row.branch_id !== null)
-      out.parked.push({ member: m, reason: parkReason(ctx, row.branch_id) });
+      out.parked.push({
+        member: m,
+        reason: await parkReason(ctx, row.branch_id),
+      });
     else out.pending.push(m);
   }
   return out;
@@ -264,17 +285,17 @@ function tally(
  * member order, once the mode is met or at the deadline; a member waiter also resumes and records
  * the call's one result. Returns the waiter's view: waiting, or waited.
  */
-export function finishWait(
+export async function finishWait(
   ctx: CloseContext,
   waitId: string,
   how: { readonly cause?: string; readonly deadline: boolean },
-): Wire<Waited> | Waiting {
+): Promise<Wire<Waited> | Waiting> {
   const started = itemsOf(ctx.chain, ctx.batch).find(
     (e) => e.type === "wait_started" && e.data.wait_id === waitId,
   );
   if (started?.type !== "wait_started")
     throw new Error(`no wait_started ${waitId}`);
-  const { finished, parked, pending } = tally(ctx, started);
+  const { finished, parked, pending } = await tally(ctx, started);
   const { mode, members } = started.data;
   const met = satisfied(mode, finished.length, members.length);
   if (!met && !how.deadline) return { status: "waiting", wait_id: waitId };
@@ -287,7 +308,7 @@ export function finishWait(
   const waited: Wire<Waited> = {
     status: "waited",
     ...done,
-    finished: finished.map((r) => publicResult(r, ctx.read)),
+    finished: await Promise.all(finished.map((r) => publicResult(r, ctx.read))),
   };
   if (ctx.chain.fold.team.teamLog) return waited;
   resume(ctx, { kind: "wait", id: waitId }, how.cause ?? finishedId);
@@ -298,11 +319,11 @@ export function finishWait(
 const ParkedLine = z.object({ data: z.object({ reason: ParkReason }) });
 
 /** Why a parked member is parked: its log's last park. */
-function parkReason(ctx: CloseContext, branch: string): Reason {
+async function parkReason(ctx: CloseContext, branch: string): Promise<Reason> {
   const [row] = z
     .array(z.object({ line: z.instanceof(Uint8Array) }))
     .parse(
-      ctx.db.all(
+      await ctx.tx.all(
         "SELECT line FROM events WHERE branch_id = ? AND type = 'parked' ORDER BY seq DESC LIMIT 1",
         [branch],
       ),

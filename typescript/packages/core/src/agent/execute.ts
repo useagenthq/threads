@@ -56,10 +56,10 @@ export async function execute<Deps, Output>(
   const set: SetUp<Deps, Output> = { ...def, context, mcp: mcp.tools };
   const created = pin(set, link, undefined, plan.answerer === true);
   // Durable before any event names them (a thread_started of this pin).
-  storeSpecs(artifacts, created.artifacts);
+  await storeSpecs(artifacts, created.artifacts);
   // Each run is its own executor: a second run on a busy branch is branch_busy.
   const holder = plan.holder ?? `run-${crypto.randomUUID()}`;
-  const began = open(
+  const began = await open(
     log,
     child?.threadId ?? target?.threadId ?? plan.thread,
     [leadStarted(def, created.started, log.now()), ...(target?.prefix ?? [])],
@@ -154,7 +154,7 @@ export async function execute<Deps, Output>(
     );
   } finally {
     await team?.stop();
-    stop();
+    await stop();
   }
 }
 

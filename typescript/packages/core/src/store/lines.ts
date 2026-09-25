@@ -2,7 +2,7 @@ import { err, ok, type Result } from "../result";
 import type { LogError } from "../verify/error";
 import { logError } from "../verify/error";
 import type { ArtifactStore } from "./artifacts";
-import type { SqliteDriver } from "./driver";
+import type { Tx } from "./driver";
 import { canonicalLine } from "./encode";
 import { type BranchRow, eventLines, getBranch } from "./tables";
 
@@ -16,23 +16,23 @@ export type BranchLines = {
  * Each ancestor segment through its fork point (header and lines, byte-identical), then the
  * branch's own header and lines (wire rule 12). No head line.
  */
-export function branchLines(
-  db: SqliteDriver,
+export async function branchLines(
+  tx: Tx,
   branchId: string,
-): Result<BranchLines, LogError> {
+): Promise<Result<BranchLines, LogError>> {
   const segments: Uint8Array[][] = [];
   let leaf: BranchRow | undefined;
   let id: string | null = branchId;
   let through = Number.MAX_SAFE_INTEGER;
   while (id !== null) {
-    const row = getBranch(db, id);
+    const row = await getBranch(tx, id);
     if (!row.ok) return row;
     if (row.value === undefined)
       return err(logError("branch_not_found", `no branch ${id}`));
     leaf ??= row.value;
     // Only through the head read with the row: a line appended since (another process's) is
     // not in this read, so the head checkpoint stays the last line.
-    const own = eventLines(db, id, Math.min(through, row.value.head_seq));
+    const own = await eventLines(tx, id, Math.min(through, row.value.head_seq));
     if (!own.ok) return own;
     segments.unshift([row.value.header_line, ...own.value]);
     through = Math.min(through, row.value.fork_at_seq ?? 0);
@@ -57,14 +57,14 @@ export function headLine(row: BranchRow): Result<Uint8Array, LogError> {
  * The branch's export: its lines, one per line with "\n", then its head line. A branch imported
  * without a verified head ends as it was imported: with its torn bytes, or with nothing.
  */
-export function exportBytes(
-  db: SqliteDriver,
+export async function exportBytes(
+  tx: Tx,
   artifacts: ArtifactStore,
   branchId: string,
-): Result<Uint8Array, LogError> {
-  const branch = branchLines(db, branchId);
+): Promise<Result<Uint8Array, LogError>> {
+  const branch = await branchLines(tx, branchId);
   if (!branch.ok) return branch;
-  const tail = endLine(artifacts, branch.value.row);
+  const tail = await endLine(artifacts, branch.value.row);
   if (!tail.ok) return tail;
   const parts = [...branch.value.lines, tail.value];
   const size = parts.reduce((n, part) => n + part.length + 1, 0);
@@ -78,10 +78,11 @@ export function exportBytes(
   return ok(out);
 }
 
-function endLine(
+// Only a torn import reads an artifact here, inside the reading transaction.
+async function endLine(
   artifacts: ArtifactStore,
   row: BranchRow,
-): Result<Uint8Array, LogError> {
+): Promise<Result<Uint8Array, LogError>> {
   if (row.head_verified) return headLine(row);
   if (row.dropped_ref === null) return ok(new Uint8Array());
   return artifacts.get(row.dropped_ref);

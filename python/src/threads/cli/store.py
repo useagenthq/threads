@@ -15,11 +15,22 @@ from threads.result import Err, Ok
 from threads.sandbox.ledger import gc as release
 from threads.store import deletion, retention, verify_export
 from threads.store.lines import uuid7
+from threads.store.sql import text_of
 from threads.thread.handle import open_thread
 
 
+def store_at(path: str) -> Store:
+    """The store `--store` names: a directory (SQLite), or a postgres:// URL."""
+    if path.startswith(("postgres://", "postgresql://")):
+        # Loaded only for a Postgres store: a SQLite user never imports psycopg.
+        from threads.postgres import postgres  # noqa: PLC0415
+
+        return postgres(path)
+    return sqlite(path)
+
+
 def _store(path: str, tenant: str) -> Store:
-    return scoped(sqlite(path), tenant)
+    return scoped(store_at(path), tenant)
 
 
 def _fail(message: str) -> int:
@@ -97,19 +108,23 @@ async def delete(path: str, tenant: str, thread: str | None) -> int:
 async def gc(path: str, module: str | None, grace_days: float) -> int:
     """Releases what the ledger says to release through each agent's sandbox adapter (the
     host module's), then sweeps unreferenced artifacts older than the grace period."""
-    root = sqlite(path)
+    root = store_at(path)
     sq = await open_store(root)
     if module is not None:
         served = load(module)
         tenants = await sq.run(
-            lambda c: [str(t) for (t,) in c.execute("SELECT DISTINCT tenant_id FROM resources")]
+            lambda c: [
+                text_of(t)
+                for (t,) in c.execute("SELECT DISTINCT tenant_id FROM resources").fetchall()
+            ],
+            read_only=True,
         )
         # Holds the adapters' connections for the sweep; they are closed when it ends.
         async with holding():
             for sandbox in served.sandboxes():
                 for tenant in tenants:
                     await release(await open_store(scoped(root, tenant)), sandbox, now_ms)
-    keep = await sq.run(retention.referenced)
-    removed = retention.sweep(Path(path) / "artifacts", keep, grace_days * 86_400)
+    keep = await sq.run(retention.referenced, read_only=True)
+    removed = await sq.sweep_artifacts(keep, now_ms() - int(grace_days * 86_400_000))
     print(f"removed {len(removed)} unreferenced artifacts")
     return 0

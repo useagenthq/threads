@@ -10,7 +10,7 @@ import { forkBranch, recoverForks } from "../../src/thread/fork";
 import { verifyExport } from "../../src/verify";
 import { CTX } from "../sandbox/context";
 import { fakeHarness, type SandboxHarness } from "../sandbox/harness";
-import { count, fixture, unwrap } from "../store/helpers";
+import { count, type Fixture, fixture, unwrap } from "../store/helpers";
 import { CASE_NAMES, type Case, caseStore, loadCase } from "./cases";
 import { expectAppended } from "./recover";
 
@@ -43,13 +43,13 @@ export async function runFork(
   harness: SandboxHarness = fakeHarness,
 ): Promise<void> {
   const input = Input.parse(c.input);
-  const f = caseStore(c);
+  const f = await caseStore(c);
   f.clock.now = c.now;
-  const imported = unwrap(f.store.importLog(bytes));
+  const imported = unwrap(await f.store.importLog(bytes));
   const leaf = imported.segments.at(-1)?.header;
   if (leaf === undefined) throw new Error("a verified log has a header");
   const parent = leaf.branch_id;
-  const before = unwrap(f.store.exportBranch(parent));
+  const before = unwrap(await f.store.exportBranch(parent));
   const script = SandboxScript.parse(c.scripts.sandbox ?? {});
   const { sandbox, creates } = harness.make(script);
   const crash = Object.values(script.snapshots ?? {}).some(
@@ -58,11 +58,11 @@ export async function runFork(
 
   await operate(c, f, crash ? dies(sandbox) : sandbox, sandbox, parent, input);
   if (c.fork?.child_state !== undefined)
-    expect<unknown>(unwrap(f.store.branchState(input.new_branch_id))).toBe(
-      c.fork.child_state,
-    );
+    expect<unknown>(
+      unwrap(await f.store.branchState(input.new_branch_id)),
+    ).toBe(c.fork.child_state);
   if (c.fork?.parent_unchanged === true)
-    expect(unwrap(f.store.exportBranch(parent))).toEqual(before);
+    expect(unwrap(await f.store.exportBranch(parent))).toEqual(before);
 
   const handle = await openThread(
     storeOf({ log: f.store, artifacts: f.artifacts }),
@@ -70,29 +70,29 @@ export async function runFork(
     { branchId: input.new_branch_id },
   );
   expect(handle.ok).toBe(c.fork?.child_created ?? false);
-  if (handle.ok) checkChild(c, f, input.new_branch_id);
+  if (handle.ok) await checkChild(c, f, input.new_branch_id);
   else await checkNothingLeft(c, f, sandbox, script);
   if (c.resources !== undefined) {
     expect(creates()).toBe(c.resources.creates);
     expect<unknown>(
-      unwrap(f.store.ledger.rows()).map((r) => ({
+      unwrap(await f.store.ledger.rows()).map((r) => ({
         kind: r.kind,
         state: r.state,
       })),
     ).toEqual(c.resources.rows);
   }
-  f.db.close();
+  await f.db.close();
 }
 
 /** A failed fork appends nothing and leaves no sandbox, except a create it can't establish. */
 async function checkNothingLeft(
   c: Case,
-  f: ReturnType<typeof caseStore>,
+  f: Fixture,
   sandbox: Sandbox,
   script: SandboxScript,
 ): Promise<void> {
   expect(c.appended ?? []).toEqual([]);
-  const rows = unwrap(f.store.ledger.rows());
+  const rows = unwrap(await f.store.ledger.rows());
   for (const row of rows) expect(["released", "unknown"]).toContain(row.state);
   if (rows.some((r) => r.state === "unknown")) return;
   for (const snap of Object.values(script.snapshots ?? {})) {
@@ -104,7 +104,7 @@ async function checkNothingLeft(
 /** The fork, or for restore_response crash: the fork dies, the host restarts, recovery runs. */
 async function operate(
   c: Case,
-  f: ReturnType<typeof caseStore>,
+  f: Fixture,
   used: Sandbox,
   sandbox: Sandbox,
   parent: BranchId,
@@ -135,17 +135,13 @@ async function operate(
   );
 }
 
-function checkChild(
-  c: Case,
-  f: ReturnType<typeof caseStore>,
-  child: BranchId,
-): void {
-  const log = unwrap(f.store.read(child));
+async function checkChild(c: Case, f: Fixture, child: BranchId): Promise<void> {
+  const log = unwrap(await f.store.read(child));
   const own = log.segments.at(-1);
   expect(own?.header.branch_id).toBe(child);
   const appended = knownEvents(log).filter((e) => e.branch_id === child);
   expectAppended(appended, c.appended ?? []);
-  expect(count(f.db, child)).toEqual({ n: appended.length }); // no parent row copied
+  expect(await count(f.db, child)).toEqual({ n: appended.length }); // no parent row copied
   const fork = appended[0];
   if (fork?.type !== "fork")
     throw new Error("the child's first event is its fork");
@@ -161,12 +157,12 @@ function checkChild(
     );
   }
   // The child's export imports cleanly on its own.
-  const exported = unwrap(f.store.exportBranch(child));
+  const exported = unwrap(await f.store.exportBranch(child));
   expect(verifyExport(exported).ok).toBe(true);
-  const other = fixture();
-  for (const a of c.artifacts) other.artifacts.put(a);
-  expect(unwrap(other.store.importLog(exported)).segments.length).toBe(2);
-  other.db.close();
+  const other = await fixture();
+  for (const a of c.artifacts) await other.artifacts.put(a);
+  expect(unwrap(await other.store.importLog(exported)).segments.length).toBe(2);
+  await other.db.close();
 }
 
 /** Every fork case of the corpus against one adapter. */

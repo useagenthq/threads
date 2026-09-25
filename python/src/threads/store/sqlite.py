@@ -9,21 +9,21 @@ from collections.abc import Callable, Sequence
 from dataclasses import replace
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
-from threads import VERSION
 from threads.log import BranchId, Event, EventId, ParseError, ThreadId
 from threads.log.digest import sha256_hex
 from threads.redaction import SecretInStoredBytesError, published
 from threads.render import ReadArtifact, Rendered, render
 from threads.render.verify import verify_requests
 from threads.result import Err, Ok
-from threads.store import lease, sql
+from threads.store import lease, sql, sqlite_driver
 from threads.store._feed import Feed
 from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
 from threads.store.bindings import Bindings, Kind
 from threads.store.branches import BranchStore, corrupt
 from threads.store.budgets import BudgetLedger
+from threads.store.conn import Conn, Dialect, SqliteConn
 from threads.store.context import CleanupContext, OwnerContext
 from threads.store.cursors import ObserverCursors
 from threads.store.lines import Draft, head_line, header_line, imported_bytes
@@ -31,13 +31,11 @@ from threads.store.opening import ALREADY_OPEN, BranchOpening, open_alone, open_
 from threads.store.resources import Ledger, Resource
 from threads.store.spill import Spill
 from threads.store.tables import Tables
+from threads.store.taking import repair_draft, take
 from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
 from threads.store.writer import Writer
 from threads.team.imported import import_indexed
-
-if TYPE_CHECKING:
-    from pydantic import JsonValue
 
 
 class SqliteStore(BranchStore):
@@ -55,7 +53,7 @@ class SqliteStore(BranchStore):
         branch_not_found. A database a newer schema wrote is unsupported_format. Artifacts
         default to `artifacts/` beside the database file (in memory for ":memory:")."""
         worker = await Worker.open(str(path))
-        error = await worker.call(sql.install)
+        error = await worker.free(sqlite_driver.install)
         if error is not None:
             await worker.close()
             return Err(error)
@@ -80,26 +78,43 @@ class SqliteStore(BranchStore):
         """Host-issued memory or knowledge bindings."""
         return Bindings(self._worker, kind)
 
+    @property
+    def dialect(self) -> Dialect:
+        """The engine under this store: "sqlite" or "postgres"."""
+        return self._worker.dialect
+
     async def run[T](
-        self, statement: Callable[[sqlite3.Connection], T], *, publishing: bytes | None = None
+        self,
+        statement: Callable[[Conn], T],
+        *,
+        read_only: bool = False,
+        publishing: bytes | None = None,
     ) -> T:
-        """A built-in provider's statement on the store's own thread (local_memory,
-        local_knowledge keep their tables in the run's store). With `publishing`, those bytes
-        are stored as an artifact first, in the same step with registration paused: a
-        registered value in them writes nothing (SecretInStoredBytesError, C5)."""
-        if publishing is None:
-            return await self._worker.call(statement)
-        data = publishing
-
-        def both(conn: sqlite3.Connection) -> T:
-            self._artifacts.put(data)
-            return statement(conn)
-
-        return await self._worker.call(lambda c: published(data, lambda: both(c)))
+        """A statement on the store's own thread, in one transaction (read-only when asked).
+        With `publishing`, those bytes are stored as an artifact first, in the same step with
+        registration paused: a registered value in them writes nothing (SecretInStoredBytesError,
+        C5)."""
+        if read_only:
+            return await self._worker.read(statement)
+        return await self._worker.call(_stored_first(self._artifacts, publishing, statement))
 
     def feed(self, observer: str, now: Clock) -> Feed:
         """What a telemetry exporter reads every tenant's branches through (never appends)."""
         return Feed(self._worker, self._artifacts, now, observer)
+
+    async def run_sqlite[T](
+        self, statement: Callable[[sqlite3.Connection], T], *, publishing: bytes | None = None
+    ) -> T:
+        """A statement on the SQLite connection itself, for the built-in providers whose FTS5
+        tables live in the run's store (local_memory, local_knowledge): they issue their own
+        transactions. They refuse a Postgres store at setup, so this never runs on one."""
+
+        def raw(conn: Conn) -> T:
+            if not isinstance(conn, SqliteConn):
+                raise TypeError("a SQLite-only provider ran on a Postgres store")
+            return statement(conn.raw)
+
+        return await self._worker.free(_stored_first(self._artifacts, publishing, raw))
 
     @property
     def cursors(self) -> ObserverCursors:
@@ -172,14 +187,14 @@ class SqliteStore(BranchStore):
 
     async def open_checked(
         self,
-        decide: Callable[[sqlite3.Connection, int], BranchOpening | None],
+        decide: Callable[[Conn, int], BranchOpening | None],
         clock: Clock,
     ) -> Ok[Writer | Literal["already_open"] | None] | Err[ParseError]:
         """`branch.open` after a check in the same transaction: `decide` reads the store and
         returns the opening (its tenant is this store's), or None to commit nothing."""
         now = clock()
 
-        def scoped(conn: sqlite3.Connection, at: int) -> BranchOpening | None:
+        def scoped(conn: Conn, at: int) -> BranchOpening | None:
             o = decide(conn, at)
             return None if o is None else replace(o, tenant_id=self._tenant)
 
@@ -210,7 +225,7 @@ class SqliteStore(BranchStore):
         the log holds (wake rows, its teams) are folded again in the same transaction."""
         tenant, artifacts = self._tenant, self._artifacts
 
-        def store(conn: sqlite3.Connection) -> ParseError | None:
+        def store(conn: Conn) -> ParseError | None:
             replayed = verify_requests(log.fold.events, artifacts.get)
             if isinstance(replayed, Err):
                 return replayed.error
@@ -228,15 +243,19 @@ class SqliteStore(BranchStore):
 
     async def put_artifact(self, data: bytes) -> str:
         """Stores bytes content-addressed and returns their sha256 once they are durable."""
-        return await self._worker.call(lambda _: published(data, lambda: self._artifacts.put(data)))
+        return await self._worker.free(lambda _: published(data, lambda: self._artifacts.put(data)))
 
     async def spill(self) -> Spill:
         """A new artifact written a chunk at a time, never held whole in memory."""
-        return Spill(self._worker, await self._worker.call(lambda _: self._artifacts.sink()))
+        return Spill(self._worker, await self._worker.free(lambda _: self._artifacts.sink()))
+
+    async def sweep_artifacts(self, keep: frozenset[str], older_than: int) -> tuple[str, ...]:
+        """gc's sweep: the artifacts not in `keep` stored before `older_than` (epoch ms)."""
+        return await self._worker.free(lambda _: self._artifacts.sweep(keep, older_than))
 
     async def get_artifact(self, sha256: str) -> Ok[bytes] | Err[ParseError]:
         """An artifact's bytes, verified against its hash."""
-        return await self._worker.call(lambda _: self._artifacts.get(sha256))
+        return await self._worker.free(lambda _: self._artifacts.get(sha256))
 
     async def render(
         self, events: Sequence[Event], *, compaction: bool = False, cause: EventId | None = None
@@ -246,18 +265,18 @@ class SqliteStore(BranchStore):
         return await self.reading(partial(render, events, compaction=compaction, cause=cause))
 
     async def reading[T](self, job: Callable[[ReadArtifact], T]) -> T:
-        return await self._worker.call(lambda _: job(self._artifacts.get))
+        return await self._worker.free(lambda _: job(self._artifacts.get))
 
     async def export(self, branch_id: BranchId) -> Ok[bytes] | Err[ParseError]:
         """The JSONL export of a branch, ending with its committed head checkpoint."""
         found = await self._owned(branch_id)
         if isinstance(found, Err):
             return found
-        lines = await self._worker.call(lambda c: sql.export(c, branch_id))
+        lines = await self._worker.read(lambda c: sql.export(c, branch_id))
         dropped = found.value.dropped_ref
         if dropped is None:
             return Ok(lines)
-        tail = await self._worker.call(lambda _: self._artifacts.get(dropped))
+        tail = await self._worker.free(lambda _: self._artifacts.get(dropped))
         return tail if isinstance(tail, Err) else Ok(lines + tail.value)
 
     async def export_through(self, branch_id: BranchId, seq: int) -> Ok[bytes] | Err[ParseError]:
@@ -268,13 +287,13 @@ class SqliteStore(BranchStore):
             return found
         if not (found.value.fork_at_seq or 0) < seq <= found.value.head_seq:
             return Err(ParseError("seq_mismatch", f"branch {branch_id} has no own line {seq}"))
-        lines = await self._worker.call(lambda c: sql.prefix(c, branch_id, seq))
+        lines = await self._worker.read(lambda c: sql.prefix(c, branch_id, seq))
         last = lines.removesuffix(b"\n").rsplit(b"\n", 1)[-1]
         return Ok(lines + head_line(branch_id, seq, sha256_hex(last)) + b"\n")
 
     async def root(self, thread_id: ThreadId) -> Ok[BranchId] | Err[ParseError]:
         """The thread's main branch: its root."""
-        found = await self._worker.call(lambda c: sql.root(c, thread_id, self._tenant))
+        found = await self._worker.read(lambda c: sql.root(c, thread_id, self._tenant))
         if found is None:
             return Err(ParseError("not_found", f"no thread {thread_id}"))
         return Ok(found)
@@ -301,7 +320,7 @@ class SqliteStore(BranchStore):
         read = await self.read(branch_id, clock())
         if isinstance(read, Err):
             return Err(corrupt(read.error))
-        return await self._take(read.value, holder_id, clock)
+        return await take(self._worker, self._artifacts, read.value, holder_id, clock)
 
     async def repair_torn(
         self, branch_id: BranchId, holder_id: str, clock: Clock
@@ -319,56 +338,29 @@ class SqliteStore(BranchStore):
         if dropped is None or isinstance(read, Err):
             message = f"branch {branch_id} is {owned.value.state}"
             return Err(ParseError("branch_not_runnable", message, owned.value.head_seq))
-        taken = await self._take(read.value, holder_id, clock)
+        taken = await take(self._worker, self._artifacts, read.value, holder_id, clock)
         if isinstance(taken, Err):
             return taken
-        repaired = await taken.value.append([_repaired(read.value, dropped)])
+        repaired = await taken.value.append([repair_draft(read.value, dropped)])
         if isinstance(repaired, Err):
             return repaired
         await self._worker.call(lambda c: sql.mark_repaired(c, branch_id))
         return taken
 
-    async def _take(
-        self, log: VerifiedLog, holder_id: str, clock: Clock
-    ) -> Ok[Writer] | Err[ParseError]:
-        branch_id = log.segments[-1].header.branch_id
-        writer = log.segments[-1].header.writer
-        if (writer.impl, _major(writer.version)) != ("threads-py", _major(VERSION)):
-            message = "another implementation or major version writes this branch; fork it"
-            return Err(ParseError("writer_mismatch", message, 0))
-        chain_epoch = log.fold.epoch
-        taken = await self._worker.call(
-            lambda c: lease.take(c, branch_id, holder_id, chain_epoch, clock())
-        )
-        if isinstance(taken, ParseError):
-            return Err(taken)
-        return Ok(
-            Writer(
-                self._worker,
-                taken,
-                log.fold,
-                log.segments[-1].last_line,
-                clock,
-                self._artifacts.get,
-            )
-        )
 
+def _stored_first[T](
+    artifacts: ArtifactStore, data: bytes | None, job: Callable[[Conn], T]
+) -> Callable[[Conn], T]:
+    """`job`, after `data` (if any) is stored as an artifact with registration paused."""
+    if data is None:
+        return job
+    stored = data
 
-def _repaired(log: VerifiedLog, dropped_sha256: str) -> Draft:
-    data: dict[str, JsonValue] = {
-        "truncated_bytes": len(log.dropped),
-        "at_offset": log.committed_bytes,
-        "dropped_ref": {
-            "sha256": dropped_sha256,
-            "bytes": len(log.dropped),
-            "media_type": "application/octet-stream",
-        },
-    }
-    return Draft("log_repaired", data, {"kind": "recovery"}, critical=False)
+    def both(conn: Conn) -> T:
+        artifacts.put(stored)
+        return job(conn)
 
-
-def _major(version: str) -> str:
-    return version.split(".", 1)[0]
+    return lambda c: published(stored, lambda: both(c))
 
 
 def _result(error: ParseError | None) -> Ok[None] | Err[ParseError]:

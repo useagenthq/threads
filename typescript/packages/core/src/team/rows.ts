@@ -10,7 +10,7 @@ import {
   ThreadId,
 } from "../log";
 import type { EnumOf, Strict } from "../log/zod-types";
-import type { SqliteDriver } from "../store/driver";
+import type { Tx } from "../store/driver";
 
 // Typed reads of the team index inside a decided append's transaction (store.sql, Teams). The
 // rows are a projection of the logs the store already verified, so a row that fails its schema is
@@ -82,33 +82,44 @@ export type MonitorRow = z.infer<typeof MonitorRow>;
 const MEMBER_COLUMNS =
   "team_id, name, generation, role, agent, config_hash, thread_id, branch_id, state";
 
-export function teamRow(db: SqliteDriver, team: string): TeamRow | undefined {
-  return z
-    .array(TeamRow)
-    .parse(db.all("SELECT * FROM teams WHERE team_id = ?", [team]))[0];
-}
-
-/** The team whose log is `branch`, if it is a team log. */
-export function teamOfLog(
-  db: SqliteDriver,
-  branch: string,
-): TeamRow | undefined {
+export async function teamRow(
+  tx: Tx,
+  team: string,
+): Promise<TeamRow | undefined> {
   return z
     .array(TeamRow)
     .parse(
-      db.all("SELECT * FROM teams WHERE team_log_branch_id = ?", [branch]),
+      await tx.all(
+        "SELECT team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at FROM teams WHERE team_id = ?",
+        [team],
+      ),
+    )[0];
+}
+
+/** The team whose log is `branch`, if it is a team log. */
+export async function teamOfLog(
+  tx: Tx,
+  branch: string,
+): Promise<TeamRow | undefined> {
+  return z
+    .array(TeamRow)
+    .parse(
+      await tx.all(
+        "SELECT team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at FROM teams WHERE team_log_branch_id = ?",
+        [branch],
+      ),
     )[0];
 }
 
 /** Every member row of the team, the lead's included, in (name, generation) order. */
-export function memberRows(
-  db: SqliteDriver,
+export async function memberRows(
+  tx: Tx,
   team: string,
-): readonly MemberRow[] {
+): Promise<readonly MemberRow[]> {
   return z
     .array(MemberRow)
     .parse(
-      db.all(
+      await tx.all(
         `SELECT ${MEMBER_COLUMNS} FROM team_members WHERE team_id = ? ORDER BY name, generation`,
         [team],
       ),
@@ -116,23 +127,23 @@ export function memberRows(
 }
 
 /** The member's current row: its highest generation. */
-export function memberNamed(
-  db: SqliteDriver,
+export async function memberNamed(
+  tx: Tx,
   team: string,
   name: string,
-): MemberRow | undefined {
-  return memberRows(db, team).findLast((r) => r.name === name);
+): Promise<MemberRow | undefined> {
+  return (await memberRows(tx, team)).findLast((r) => r.name === name);
 }
 
 /** The rows a thread's own events write: a member's, a lead's, both for a nested lead. */
-export function ownRows(
-  db: SqliteDriver,
+export async function ownRows(
+  tx: Tx,
   thread: ThreadId,
-): readonly MemberRow[] {
+): Promise<readonly MemberRow[]> {
   return z
     .array(MemberRow)
     .parse(
-      db.all(
+      await tx.all(
         `SELECT ${MEMBER_COLUMNS} FROM team_members WHERE thread_id = ? ORDER BY role, team_id`,
         [thread],
       ),
@@ -150,14 +161,14 @@ export function refOf(team: TeamRow, row: MemberRow): MemberRef {
 }
 
 /** Pending mail to a member's name (or to the team log), in (created_at, mail_id) order. */
-export function pendingTo(
-  db: SqliteDriver,
+export async function pendingTo(
+  tx: Tx,
   team: string,
   name: string | null,
-): readonly MailEnvelope[] {
+): Promise<readonly MailEnvelope[]> {
   return z.array(MailRow).parse(
-    db.all(
-      `SELECT envelope FROM mail WHERE team_id = ? AND to_name IS ? AND state = 'pending'
+    await tx.all(
+      `SELECT envelope FROM mail WHERE team_id = ? AND to_name IS NOT DISTINCT FROM ? AND state = 'pending'
           ORDER BY created_at, mail_id`,
       [team, name],
     ),
@@ -165,26 +176,26 @@ export function pendingTo(
 }
 
 /** Pending mail to a writer: its thread's own rows, or the team log when it is one. */
-export function pendingHere(
-  db: SqliteDriver,
+export async function pendingHere(
+  tx: Tx,
   thread: ThreadId,
   branch: string,
-): readonly MailEnvelope[] {
-  const rows = ownRows(db, thread);
-  if (rows.length > 0) return pendingFor(db, rows);
-  const team = teamOfLog(db, branch);
-  return team === undefined ? [] : pendingTo(db, team.team_id, null);
+): Promise<readonly MailEnvelope[]> {
+  const rows = await ownRows(tx, thread);
+  if (rows.length > 0) return await pendingFor(tx, rows);
+  const team = await teamOfLog(tx, branch);
+  return team === undefined ? [] : await pendingTo(tx, team.team_id, null);
 }
 
 /** Pending mail to any of a thread's own rows (a nested lead has two), in one order. */
-export function pendingFor(
-  db: SqliteDriver,
+export async function pendingFor(
+  tx: Tx,
   rows: readonly MemberRow[],
-): readonly MailEnvelope[] {
+): Promise<readonly MailEnvelope[]> {
   if (rows.length === 0) return [];
   const pairs = rows.map(() => "(?, ?)").join(", ");
   return z.array(MailRow).parse(
-    db.all(
+    await tx.all(
       `SELECT envelope FROM mail WHERE state = 'pending' AND (team_id, to_name) IN (VALUES ${pairs})
         ORDER BY created_at, mail_id`,
       rows.flatMap((r) => [r.team_id, r.name]),
@@ -193,13 +204,15 @@ export function pendingFor(
 }
 
 /** A mail row's envelope, whatever its state. */
-export function mailEnvelope(
-  db: SqliteDriver,
+export async function mailEnvelope(
+  tx: Tx,
   mailId: string,
-): MailEnvelope | undefined {
+): Promise<MailEnvelope | undefined> {
   return z
     .array(MailRow)
-    .parse(db.all("SELECT envelope FROM mail WHERE mail_id = ?", [mailId]))[0];
+    .parse(
+      await tx.all("SELECT envelope FROM mail WHERE mail_id = ?", [mailId]),
+    )[0];
 }
 
 const SettledRow = z
@@ -213,14 +226,14 @@ const SettledRow = z
  * An idle or ended member's committed result and the seq of the member_idle or member_ended
  * that wrote it (nothing else changes the row until its next turn opens).
  */
-export function settledOf(
-  db: SqliteDriver,
+export async function settledOf(
+  tx: Tx,
   row: MemberRow,
-): { readonly result: StoredMemberResult; readonly seq: number } {
+): Promise<{ readonly result: StoredMemberResult; readonly seq: number }> {
   const [got] = z
     .array(SettledRow)
     .parse(
-      db.all(
+      await tx.all(
         "SELECT result, updated_seq FROM team_members WHERE team_id = ? AND name = ? AND generation = ?",
         [row.team_id, row.name, row.generation],
       ),
@@ -241,11 +254,14 @@ const AskRow: Strict<{
 export type AskRow = z.infer<typeof AskRow>;
 
 /** An ask's row, whatever its state. */
-export function askRow(db: SqliteDriver, askId: string): AskRow | undefined {
+export async function askRow(
+  tx: Tx,
+  askId: string,
+): Promise<AskRow | undefined> {
   return z
     .array(AskRow)
     .parse(
-      db.all(
+      await tx.all(
         "SELECT asker_branch_id, deadline, state FROM asks WHERE ask_id = ?",
         [askId],
       ),
@@ -254,11 +270,14 @@ export function askRow(db: SqliteDriver, askId: string): AskRow | undefined {
 
 /** This branch's open asks whose deadline is at or before `now`, oldest first. */
 /** This branch's open asks, in ask_id order. */
-export function openAsks(db: SqliteDriver, branch: string): readonly string[] {
+export async function openAsks(
+  tx: Tx,
+  branch: string,
+): Promise<readonly string[]> {
   return z
     .array(z.strictObject({ ask_id: z.string() }))
     .parse(
-      db.all(
+      await tx.all(
         "SELECT ask_id FROM asks WHERE asker_branch_id = ? AND state = 'open' ORDER BY ask_id",
         [branch],
       ),
@@ -266,15 +285,15 @@ export function openAsks(db: SqliteDriver, branch: string): readonly string[] {
     .map((r) => r.ask_id);
 }
 
-export function dueAsks(
-  db: SqliteDriver,
+export async function dueAsks(
+  tx: Tx,
   branch: string,
   now: number,
-): readonly string[] {
+): Promise<readonly string[]> {
   return z
     .array(z.strictObject({ ask_id: z.string() }))
     .parse(
-      db.all(
+      await tx.all(
         `SELECT ask_id FROM asks WHERE asker_branch_id = ? AND state = 'open' AND deadline <= ?
           ORDER BY deadline, ask_id`,
         [branch, now],
@@ -284,13 +303,13 @@ export function dueAsks(
 }
 
 /** The live monitors on one member generation, in monitor_id order. */
-export function monitorsOn(
-  db: SqliteDriver,
+export async function monitorsOn(
+  tx: Tx,
   team: string,
   row: MemberRow,
-): readonly MonitorRow[] {
+): Promise<readonly MonitorRow[]> {
   return z.array(MonitorRow).parse(
-    db.all(
+    await tx.all(
       `SELECT monitor_id, watcher_branch_id, kind FROM monitors
           WHERE team_id = ? AND target_name = ? AND target_generation = ? ORDER BY monitor_id`,
       [team, row.name, row.generation],

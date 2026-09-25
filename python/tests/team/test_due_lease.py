@@ -17,6 +17,7 @@ from threads.agents.store import now_ms
 from threads.agents.team_worker import TeamWorker
 from threads.log import BranchId
 from threads.result import Ok
+from threads.store.sql import text_of
 from threads.team.constants import TEAM_CONSTANTS
 
 if TYPE_CHECKING:
@@ -61,14 +62,14 @@ def test_a_due_ask_under_another_holders_lease_the_worker_yields_then_closes_it(
             return await count(store, _PARKS) > 0
 
         await until(parked)
-        rows: list[tuple[str]] = await sq.run(lambda c: c.execute(_PARKED).fetchall())
+        rows = await sq.run(lambda c: c.execute(_PARKED).fetchall())
         # The parked writer's run releases its lease as it ends; then another process takes it.
-        other = await sq.acquire(BranchId(rows[0][0]), "another-process", now_ms)
+        other = await sq.acquire(BranchId(text_of(rows[0][0])), "another-process", now_ms)
         for _ in range(500):
             if isinstance(other, Ok):
                 break
             await asyncio.sleep(0.01)
-            other = await sq.acquire(BranchId(rows[0][0]), "another-process", now_ms)
+            other = await sq.acquire(BranchId(text_of(rows[0][0])), "another-process", now_ms)
         assert isinstance(other, Ok), other
         await elapse(store, TEAM_CONSTANTS.ask_wait_default_ms)
 

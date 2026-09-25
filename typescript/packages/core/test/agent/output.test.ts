@@ -149,9 +149,9 @@ describe("a structured subagent", () => {
     const ref = only(events, "agent_finished")[0]?.data.output_ref;
     if (ref === undefined) throw new Error("no output_ref");
     const { artifacts } = await openStore(store);
-    expect(new TextDecoder().decode(unwrap(artifacts.get(ref.sha256)))).toBe(
-      shown,
-    );
+    expect(
+      new TextDecoder().decode(unwrap(await artifacts.get(ref.sha256))),
+    ).toBe(shown);
   });
 });
 

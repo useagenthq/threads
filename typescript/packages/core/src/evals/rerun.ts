@@ -3,7 +3,7 @@ import { memoryStore } from "../agent/sqlite";
 import type { KnownEvent, Policy, ToolSpec } from "../log";
 import { type LoopConfig, type LoopEnd, recordedStubs, resume } from "../loop";
 import { knownEvents } from "../reduce";
-import { refReader } from "../render";
+import { prefetch } from "../render";
 import { readSpec } from "../render/tool-specs";
 import type { SandboxScript } from "../sandbox/script";
 import type { ArtifactStore, EventDraft, Writer } from "../store";
@@ -75,6 +75,7 @@ function config(
   input: RerunInput,
   writer: Writer,
   artifacts: ArtifactStore,
+  specs: ToolSpec[],
   clock: { now: number },
 ) {
   const events = () => knownEvents(writer.chain);
@@ -84,7 +85,7 @@ function config(
     input.recorded !== undefined,
   );
   const tools = answers({
-    specs: pinnedSpecs(writer, artifacts),
+    specs,
     sandbox: input.sandbox,
     recall: input.extensions?.recall ?? [],
     artifacts,
@@ -127,9 +128,17 @@ function config(
  * Every tool the thread pinned or later added, as the host binds them whatever the latest set
  * holds; a deferred tool by the full spec its spec_ref artifact holds.
  */
-function pinnedSpecs(writer: Writer, artifacts: ArtifactStore): ToolSpec[] {
-  const read = refReader(artifacts);
-  return [...writer.chain.fold.knownTools.values()].map((spec) => {
+async function pinnedSpecs(
+  writer: Writer,
+  artifacts: ArtifactStore,
+): Promise<ToolSpec[]> {
+  const known = [...writer.chain.fold.knownTools.values()];
+  const read = await prefetch(artifacts, (r) =>
+    known.map((spec) =>
+      spec.spec_ref === undefined ? undefined : readSpec(r, spec.spec_ref, 0),
+    ),
+  );
+  return known.map((spec) => {
     if (spec.spec_ref === undefined) return spec;
     const full = readSpec(read, spec.spec_ref, 0);
     if (!full.ok)
@@ -154,21 +163,22 @@ export async function rerun(input: RerunInput): Promise<Rerun> {
   const clock = { now: input.now };
   const store = await memoryStore(() => clock.now);
   try {
-    for (const artifact of input.artifacts) store.artifacts.put(artifact);
-    const imported = store.log.importLog(input.log);
+    for (const artifact of input.artifacts) await store.artifacts.put(artifact);
+    const imported = await store.log.importLog(input.log);
     if (!imported.ok) return refused(imported.error);
     const leaf = imported.value.segments.at(-1)?.header;
     if (leaf === undefined) throw new Error("a verified log has a header");
-    const acquired = store.log.acquire(leaf.branch_id, HOLDER);
+    const acquired = await store.log.acquire(leaf.branch_id, HOLDER);
     if (!acquired.ok) return refused(acquired.error);
     const writer = acquired.value;
     const before = imported.value.fold.seq;
-    const run = config(input, writer, store.artifacts, clock);
+    const specs = await pinnedSpecs(writer, store.artifacts);
+    const run = config(input, writer, store.artifacts, specs, clock);
     const end = await resume(writer, store.artifacts, run.loop, {
       loop: input.model !== undefined,
       ...(input.input === undefined ? {} : { input: input.input }),
     });
-    const exported = store.log.exportBranch(leaf.branch_id);
+    const exported = await store.log.exportBranch(leaf.branch_id);
     if (!exported.ok || !verifyExport(exported.value).ok)
       throw new Error("a rerun's branch exports and verifies");
     return {
@@ -191,7 +201,7 @@ export async function rerun(input: RerunInput): Promise<Rerun> {
       exported: exported.value,
     };
   } finally {
-    store.close();
+    await store.close();
   }
 }
 

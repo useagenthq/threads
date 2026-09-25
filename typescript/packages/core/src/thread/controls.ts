@@ -86,15 +86,15 @@ export function controls(
 ): ThreadControl {
   return {
     branches: async () => {
-      const rows = log.branches(threadId);
+      const rows = await log.branches(threadId);
       return rows.ok ? rows.value.map(branchInfo) : [];
     },
     pendingApprovals: async () => {
-      const current = readLog(log, branchId);
+      const current = await readLog(log, branchId);
       if (!current.ok) return current;
       const events = knownEvents(current.value);
-      const read = (branch: BranchId) => {
-        const other = log.read(branch);
+      const read = async (branch: BranchId) => {
+        const other = await log.read(branch);
         return other.ok ? knownEvents(other.value) : undefined;
       };
       return ok(
@@ -102,7 +102,7 @@ export function controls(
           events,
           current.value.fold,
           log.now(),
-          memberView(events, read),
+          await memberView(events, read),
         ),
       );
     },

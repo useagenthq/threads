@@ -18,7 +18,7 @@ import { openStore } from "../../src/agent/sqlite";
 import { sha256Hex } from "../../src/hash";
 import { bindLocalKnowledge } from "../../src/memory/local-knowledge";
 import { ok } from "../../src/result";
-import { unwrap } from "../store/helpers";
+import { rows as query, unwrap } from "../store/helpers";
 import {
   ALICE,
   driverOf,
@@ -194,9 +194,9 @@ describe("ingest, search and cite (F14.1, F14.6)", () => {
       principal: MALLORY,
     });
     expect(injectedOf(await eventsOf(other))).toEqual([]);
-    const rows = (await driverOf(store)).driver.all(
+    const rows = await query(
+      (await driverOf(store)).driver,
       "SELECT code FROM provider_audit",
-      [],
     );
     expect(rows).toEqual([{ code: "scope_violation" }]);
     rmSync(dir, { recursive: true });
@@ -206,7 +206,7 @@ describe("ingest, search and cite (F14.1, F14.6)", () => {
 /** The host's remove on the built-in corpus (only the host ingests or removes). */
 async function removeFromCorpus(store: Store, docId: string): Promise<void> {
   const { log, artifacts } = await openStore(store);
-  const found = bindLocalKnowledge(
+  const found = await bindLocalKnowledge(
     localKnowledge({ paths: [] }),
     log.driver,
     artifacts,

@@ -29,7 +29,6 @@ import {
   type Model,
   type Store,
   scriptedModel,
-  sqlite,
 } from "@threads/core";
 import { sandboxFetch } from "@threads/core/adapter";
 import {
@@ -44,6 +43,8 @@ import { z } from "zod";
 import { host } from "../../src";
 import { HostContext } from "../../src/context";
 import { bindSchedules, tick } from "../../src/schedules";
+import { sqlAll } from "../sql";
+import { drillStore } from "./stores";
 
 export const TEAM = "T1";
 const USER = { issuer: "fake:T1", tenant: TEAM, subject: "U1" };
@@ -173,11 +174,11 @@ export async function conversation(
   const { db } = await storeConnection(store);
   const [first] = z
     .array(z.strictObject({ thread_id: ThreadId }))
-    .parse(db.all("SELECT thread_id FROM inbox LIMIT 1", []));
+    .parse(await sqlAll(db, "SELECT thread_id FROM inbox LIMIT 1", []));
   if (first === undefined) return undefined;
   const { log } = await openStore(tenantStore(store, TEAM));
-  const main = log.mainBranch(first.thread_id);
-  const read = main.ok ? log.read(main.value) : undefined;
+  const main = await log.mainBranch(first.thread_id);
+  const read = main.ok ? await log.read(main.value) : undefined;
   return read?.ok === true ? read.value : undefined;
 }
 
@@ -215,7 +216,7 @@ export async function until(probe: () => Promise<boolean>): Promise<void> {
 }
 
 async function serve(where: string): Promise<void> {
-  const store = sqlite(where);
+  const store = await drillStore(where);
   const before = await conversation(store);
   // A restart answers only what the log has not: the script is the model's, not the process's.
   const answered =
@@ -272,7 +273,7 @@ async function schedule(where: string): Promise<void> {
   const at = z
     .array(z.int())
     .parse(JSON.parse(process.env["DRILL_OCCURRENCES"] ?? "[]"));
-  const store = sqlite(where);
+  const store = await drillStore(where);
   const model = scripted(where, at.length);
   const ctx = new HostContext(
     store,
@@ -306,9 +307,12 @@ async function schedule(where: string): Promise<void> {
 
 async function claimed(store: Store): Promise<number> {
   const { db } = await storeConnection(store);
-  return db.all(
-    "SELECT 1 FROM schedule_occurrences WHERE state <> 'pending'",
-    [],
+  return (
+    await sqlAll(
+      db,
+      "SELECT 1 FROM schedule_occurrences WHERE state <> 'pending'",
+      [],
+    )
   ).length;
 }
 
@@ -316,11 +320,13 @@ async function turnOpen(store: Store): Promise<boolean> {
   const { db } = await storeConnection(store);
   const [row] = z
     .array(z.strictObject({ thread_id: ThreadId }))
-    .parse(db.all("SELECT thread_id FROM schedule_threads LIMIT 1", []));
+    .parse(
+      await sqlAll(db, "SELECT thread_id FROM schedule_threads LIMIT 1", []),
+    );
   if (row === undefined) return false;
   const { log } = await openStore(tenantStore(store, "local"));
-  const main = log.mainBranch(row.thread_id);
-  const read = main.ok ? log.read(main.value) : undefined;
+  const main = await log.mainBranch(row.thread_id);
+  const read = main.ok ? await log.read(main.value) : undefined;
   return read?.ok === true && read.value.fold.turnOpen;
 }
 

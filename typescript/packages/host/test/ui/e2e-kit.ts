@@ -173,9 +173,9 @@ export async function inputs(
   thread: ThreadId,
 ): Promise<readonly EventOf<"user_input">[]> {
   const { log } = await openStore(tenantStore(store, tenant));
-  const main = log.mainBranch(thread);
+  const main = await log.mainBranch(thread);
   if (!main.ok) return [];
-  const read = log.read(main.value);
+  const read = await log.read(main.value);
   if (!read.ok) throw new Error(read.error.message);
   return knownEvents(read.value).filter(
     (e): e is EventOf<"user_input"> => e.type === "user_input",

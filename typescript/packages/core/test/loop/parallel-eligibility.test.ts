@@ -91,12 +91,14 @@ describe("eligibility on the bound tools", () => {
     );
     expect(first.end.kind).toBe("parked");
     first.h.clock.now += 60_000; // the parked run's lease has lapsed
-    const writer = unwrap(first.h.store.acquire(ROOT, "approver", 30_000));
+    const writer = unwrap(
+      await first.h.store.acquire(ROOT, "approver", 30_000),
+    );
     const asked = events(writer).find((e) => e.type === "approval_requested");
     if (asked?.type !== "approval_requested") throw new Error("one challenge");
     const { challenge_id, call_id, args_hash } = asked.data;
     unwrap(
-      writer.append([
+      await writer.append([
         {
           type: "approval_granted",
           type_version: 1,
@@ -109,7 +111,7 @@ describe("eligibility on the bound tools", () => {
     const granted = events(writer).at(-1);
     if (granted === undefined) throw new Error("just appended");
     unwrap(
-      writer.append([
+      await writer.append([
         resumed({ kind: "approval", id: challenge_id }, granted.event_id),
       ]),
     );

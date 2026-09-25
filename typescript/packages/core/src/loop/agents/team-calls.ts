@@ -17,7 +17,7 @@ import {
   StartInput,
   WaitInput,
 } from "../../tools/team-inputs";
-import { roomFor, roomIn } from "../ledger";
+import { covering, roomFor, roomIn } from "../ledger";
 import type { Session } from "../session";
 import { BARRED, type Halt, type TeamRuntime } from "../types";
 import { listedOf, startPin } from "./start-pin";
@@ -35,16 +35,16 @@ export function teamOf(s: Session): TeamRuntime {
 }
 
 /** One team op decided under the caller's writer. */
-function decided(
+async function decided(
   s: Session,
   call: EventOf<"tool_call">,
-  op: (ctx: CallContext) => void,
-): Halt | undefined {
+  op: (ctx: CallContext) => Promise<unknown>,
+): Promise<Halt | undefined> {
   const team = teamOf(s);
-  const appended = s.appendDecided((tx) => {
+  const appended = await s.appendDecided(async (tx) => {
     const batch = new Batch(tx.chain.fold.seq, tx.now, team.mint);
-    op({
-      db: tx.db,
+    await op({
+      tx: tx.tx,
       chain: tx.chain,
       batch,
       call,
@@ -75,12 +75,15 @@ export async function startTool(
     args,
     starterOf(s),
   );
-  return decided(s, call, (ctx) =>
-    start(callRequest(ctx), args, {
+  // Read before the append: the run budget's lookup reads the store outside its transaction.
+  const covers = await covering(s);
+  return decided(s, call, async (ctx) =>
+    start(await callRequest(ctx), args, {
       agents: listedOf(args.agent, pinned),
       resolved,
       limits: team.limits,
-      headroom: () => pinned !== undefined && roomFor(s, pinned),
+      headroom: async (_agent, tx) =>
+        pinned !== undefined && (await roomFor(s, pinned, covers, tx)),
       threadId: ThreadId.parse(uuidv7(s.now())),
     }),
   );
@@ -99,58 +102,54 @@ function starterOf(s: Session): string {
 export function sendTool(
   s: Session,
   call: EventOf<"tool_call">,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const team = teamOf(s);
   const args = SendInput.parse(call.data.input);
-  return decided(s, call, (ctx) =>
-    send(callRequest(ctx), named(ctx, args.to), args.text, team.limits),
+  return decided(s, call, async (ctx) =>
+    send(await callRequest(ctx), named(ctx, args.to), args.text, team.limits),
   );
 }
 
 /** ask.open; headroom is on the recipient's budgets, read from its log. */
-export function askTool(
+export async function askTool(
   s: Session,
   call: EventOf<"tool_call">,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const team = teamOf(s);
   const args = AskInput.parse(call.data.input);
-  return decided(s, call, (ctx) => {
+  // Read before the append: the run budget's lookup reads the store outside its transaction.
+  const covers = await covering(s);
+  return decided(s, call, (ctx) =>
     ask(ctx, args, {
       limits: team.limits,
-      headroom: (row) => {
-        const to = team.recipient(row);
-        return to === undefined || roomIn(s, to);
+      headroom: async (row) => {
+        const to = await team.recipient(ctx.tx, row);
+        return to === undefined || roomIn(s, to, covers, ctx.tx);
       },
-    });
-  });
+    }),
+  );
 }
 
 export function replyTool(
   s: Session,
   call: EventOf<"tool_call">,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const args = ReplyInput.parse(call.data.input);
-  return decided(s, call, (ctx) => {
-    reply(ctx, args);
-  });
+  return decided(s, call, (ctx) => reply(ctx, args));
 }
 
 export function waitTool(
   s: Session,
   call: EventOf<"tool_call">,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const args = WaitInput.parse(call.data.input);
-  return decided(s, call, (ctx) => {
-    wait(ctx, args);
-  });
+  return decided(s, call, (ctx) => wait(ctx, args));
 }
 
 export function monitorTool(
   s: Session,
   call: EventOf<"tool_call">,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const args = MonitorInput.parse(call.data.input);
-  return decided(s, call, (ctx) => {
-    monitor(ctx, args);
-  });
+  return decided(s, call, (ctx) => monitor(ctx, args));
 }

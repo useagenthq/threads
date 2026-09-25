@@ -150,17 +150,17 @@ function leaky(key: string, before: number = 0): Model {
 describe("a provider-secret attempt ends in one batch (#328 HIGH 4)", () => {
   test("a takeover right after the abandonment still finds the turn ended", async () => {
     const key = credential("fake", "apiKey", "sk-l9-atomic-1a2b", "U")();
-    const h = harness([], [], []);
-    const writer = unwrap(h.store.acquire(ROOT, "owner", 30_000));
+    const h = await harness([], [], []);
+    const writer = unwrap(await h.store.acquire(ROOT, "owner", 30_000));
     await resume(
       writer,
       h.artifacts,
       h.config({
         models: () => leaky(key),
-        onEvent: (e: KnownEvent) => {
+        onEvent: async (e: KnownEvent) => {
           if (e.type !== "model_attempt_abandoned") return;
           h.clock.now += 60_000;
-          unwrap(h.store.acquire(ROOT, "usurper"));
+          unwrap(await h.store.acquire(ROOT, "usurper"));
         },
       }),
       { input: userInput("go") },
@@ -173,7 +173,7 @@ describe("a provider-secret attempt ends in one batch (#328 HIGH 4)", () => {
 
   test("a compaction request ends its turn the same way", async () => {
     const key = credential("fake", "apiKey", "sk-l9-compact-3c4d", "U")();
-    const h = harness([], [], [], undefined, {
+    const h = await harness([], [], [], undefined, {
       context: {
         ...CONTEXT_DEFAULTS,
         compact: { ...CONTEXT_DEFAULTS.compact, keep_tail: { tokens: 1 } },
@@ -181,13 +181,13 @@ describe("a provider-secret attempt ends in one batch (#328 HIGH 4)", () => {
     });
     const model = leaky(key, 1);
     for (const text of ["first", "second"]) {
-      const writer = unwrap(h.store.acquire(ROOT, `owner-${text}`));
+      const writer = unwrap(await h.store.acquire(ROOT, `owner-${text}`));
       await resume(writer, h.artifacts, h.config({ models: () => model }), {
         input: userInput(text),
       });
-      writer.release();
+      await writer.release();
     }
-    const log = events(unwrap(h.store.acquire(ROOT, "reader")));
+    const log = events(unwrap(await h.store.acquire(ROOT, "reader")));
     const last = log.findLast((e) => e.type === "turn_completed");
     expect(last?.data).toEqual({
       reason: "error",
@@ -256,15 +256,17 @@ describe("byte-exact writes fail closed", () => {
       expect(readFileSync(path).includes(key)).toBe(false);
   });
 
-  test("an import holding a value is refused (the torn tail included)", () => {
+  test("an import holding a value is refused (the torn tail included)", async () => {
     const later = "sk-l9-import-1e2f";
-    const f = fixture();
-    unwrap(f.store.createBranch(THREAD, ROOT));
-    const writer = unwrap(f.store.acquire(ROOT, "holder"));
-    unwrap(writer.append([started, input(`note ${later}`), turnCompleted]));
-    const bytes = unwrap(f.store.exportBranch(ROOT));
+    const f = await fixture();
+    unwrap(await f.store.createBranch(THREAD, ROOT));
+    const writer = unwrap(await f.store.acquire(ROOT, "holder"));
+    unwrap(
+      await writer.append([started, input(`note ${later}`), turnCompleted]),
+    );
+    const bytes = unwrap(await f.store.exportBranch(ROOT));
     credential("fake", "apiKey", later, "U")();
-    const imported = fixture().store.importLog(bytes);
+    const imported = await (await fixture()).store.importLog(bytes);
     expect(imported.ok ? "ok" : imported.error.code).toBe(
       "secret_in_stored_bytes",
     );

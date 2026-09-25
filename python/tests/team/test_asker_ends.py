@@ -67,7 +67,7 @@ def test_an_asker_whose_rebind_fails_closes_its_open_ask_cancelled_before_its_en
         assert reached(), "the drill reached its commit point"
 
         again = await restart(tmp_path / "t.db", _lead("Write differently.", restarted=True))
-        opened: list[tuple[int]] = await again.sq.run(lambda c: c.execute(_OPEN).fetchall())
+        opened = await again.sq.run(lambda c: c.execute(_OPEN).fetchall())
         assert opened == [(0,)]
         rows = await again.sq.run(lambda c: member_rows(c, again.team))
         row = next(r for r in rows if r.name == "writer-1")

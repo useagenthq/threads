@@ -3,8 +3,7 @@ canonical, re-chained, the head moved, and thread_started's config_hash recomput
 changed. The result verifies, so a test gets a real log with the shape it needs."""
 
 import copy
-import sqlite3
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 
 from pydantic import JsonValue, TypeAdapter
 
@@ -14,6 +13,8 @@ from threads.log import ThreadId
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.result import Ok
+from threads.store.conn import Conn, one
+from threads.store.sql import blob_of, int_of
 
 type Line = dict[str, JsonValue]
 _LINE: TypeAdapter[Line] = TypeAdapter(Line)
@@ -56,13 +57,17 @@ async def rewrite_log(
     assert isinstance(root, Ok)
     branch = root.value
 
-    def rewrite(c: sqlite3.Connection) -> None:
-        rows: Sequence[tuple[int, bytes]] = c.execute(
-            "SELECT seq, line FROM events WHERE branch_id = ? ORDER BY seq", (branch,)
-        ).fetchall()
-        (header,) = c.execute(
-            "SELECT header_line FROM branches WHERE branch_id = ?", (branch,)
-        ).fetchone()
+    def rewrite(c: Conn) -> None:
+        rows = [
+            (int_of(seq), blob_of(line))
+            for seq, line in c.execute(
+                "SELECT seq, line FROM events WHERE branch_id = ? ORDER BY seq", (branch,)
+            ).fetchall()
+        ]
+        (column,) = one(
+            c.execute("SELECT header_line FROM branches WHERE branch_id = ?", (branch,)).fetchone()
+        )
+        header = blob_of(column)
         before = [_LINE.validate_json(line) for _, line in rows]
         after = edit(copy.deepcopy(before))
         if after and _config(after[0]) != _config(before[0]):

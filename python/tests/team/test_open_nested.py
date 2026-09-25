@@ -11,6 +11,7 @@ from threads import Completed, Principal, TeamRef, agent, open_team, scripted_mo
 from threads.agents.team_tools import Started
 from threads.loop.defaults import CONTEXT
 from threads.result import Ok
+from threads.store.sql import text_of
 from threads.team.rows import member_rows
 
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")
@@ -38,12 +39,13 @@ def test_open_team_rebinds_a_nested_lead_that_inherited_defer_tools() -> None:
         sq = await sq_of(store)
         rows = await sq.run(lambda c: member_rows(c, r.team.ref.id))
         nested = next(m for m in rows if m.name == "researcher-1")
-        found: list[tuple[str]] = await sq.run(
+        found = await sq.run(
             lambda c: c.execute(
                 "SELECT team_id FROM teams WHERE lead_thread_id = ?", (nested.thread_id,)
             ).fetchall()
         )
-        ((inner,),) = found
+        ((inner_column,),) = found
+        inner = text_of(inner_column)
         opened = await open_team(store, TeamRef(r.team.ref.tenant, inner), principal=OPERATOR)
         assert isinstance(opened, Ok), opened
         assert isinstance(await opened.value.start("scanner", "Scan."), Started)

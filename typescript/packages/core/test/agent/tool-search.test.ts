@@ -273,7 +273,7 @@ describe("the pin", () => {
     const { artifacts } = await openStore(store);
     const ref = create?.spec_ref;
     if (ref === undefined) throw new Error("reference form");
-    const bytes = unwrap(artifacts.get(ref.sha256));
+    const bytes = unwrap(await artifacts.get(ref.sha256));
     expect(JSON.parse(new TextDecoder().decode(bytes))).toEqual(
       createIssue.spec(),
     );

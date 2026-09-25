@@ -45,14 +45,18 @@ export async function rewriteLog(
   edit: (lines: readonly Line[]) => readonly Line[],
 ): Promise<void> {
   const { db } = await storeConnection(store);
-  const branch = unwrap((await openStore(store)).log.mainBranch(thread));
+  const branch = unwrap(await (await openStore(store)).log.mainBranch(thread));
   const rows = Rows.parse(
-    db.all("SELECT seq, line FROM events WHERE branch_id = ? ORDER BY seq", [
-      branch,
-    ]),
+    await db.transaction((tx) =>
+      tx.all("SELECT seq, line FROM events WHERE branch_id = ? ORDER BY seq", [
+        branch,
+      ]),
+    ),
   );
   const [header] = Header.parse(
-    db.all("SELECT header_line FROM branches WHERE branch_id = ?", [branch]),
+    await db.transaction((tx) =>
+      tx.all("SELECT header_line FROM branches WHERE branch_id = ?", [branch]),
+    ),
   );
   const text = new TextDecoder();
   const before = rows.map((r) => Line.parse(JSON.parse(text.decode(r.line))));
@@ -72,23 +76,29 @@ export async function rewriteLog(
     };
   }
   let prev = sha256Hex(header?.header_line ?? new Uint8Array());
-  after.forEach((line, i) => {
+  for (const [i, line] of after.entries()) {
     const bytes = new TextEncoder().encode(
       unwrap(canonicalize({ ...line, prev_hash: prev })),
     );
-    db.run("UPDATE events SET line = ? WHERE branch_id = ? AND seq = ?", [
-      bytes,
-      branch,
-      rows[i]?.seq ?? 0,
-    ]);
+    await db.transaction((tx) =>
+      tx.run("UPDATE events SET line = ? WHERE branch_id = ? AND seq = ?", [
+        bytes,
+        branch,
+        rows[i]?.seq ?? 0,
+      ]),
+    );
     prev = sha256Hex(bytes);
-  });
-  db.run("DELETE FROM events WHERE branch_id = ? AND seq > ?", [
-    branch,
-    after.length,
-  ]);
-  db.run(
-    "UPDATE branches SET head_seq = ?, head_hash = ? WHERE branch_id = ?",
-    [after.length, prev, branch],
+  }
+  await db.transaction((tx) =>
+    tx.run("DELETE FROM events WHERE branch_id = ? AND seq > ?", [
+      branch,
+      after.length,
+    ]),
+  );
+  await db.transaction((tx) =>
+    tx.run(
+      "UPDATE branches SET head_seq = ?, head_hash = ? WHERE branch_id = ?",
+      [after.length, prev, branch],
+    ),
   );
 }

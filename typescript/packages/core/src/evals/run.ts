@@ -154,7 +154,7 @@ async function offline(plan: Plan, name: string): Promise<Offline | Evaluated> {
   if (!read.ok)
     return { result: result(name, "error", {}, `unreadable: ${read.error}`) };
   const c = read.value;
-  const replayed = replayCheck(c);
+  const replayed = await replayCheck(c);
   const checks = { replay: replayed.check };
   if (replayed.log === undefined || !replayed.check.ok) {
     const code = replayed.check.ok ? "log_corrupt" : replayed.check.code;

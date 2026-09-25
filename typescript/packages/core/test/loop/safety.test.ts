@@ -29,20 +29,20 @@ const SEND = {
 
 /** Another owner takes the expired lease right after `type` commits. */
 function takeoverAfter(
-  h: ReturnType<typeof harness>,
+  h: Awaited<ReturnType<typeof harness>>,
   type: KnownEvent["type"],
 ) {
-  return (e: KnownEvent): void => {
+  return async (e: KnownEvent): Promise<void> => {
     if (e.type !== type) return;
     h.clock.now += 60_000;
-    unwrap(h.store.acquire(ROOT, "usurper"));
+    unwrap(await h.store.acquire(ROOT, "usurper"));
   };
 }
 
 describe("a stale owner never dispatches (invariant 2)", () => {
   test("model.send is not called after a takeover following model_request", async () => {
-    const h = harness([], [], [FINAL]);
-    const writer = unwrap(h.store.acquire(ROOT, "owner", 30_000));
+    const h = await harness([], [], [FINAL]);
+    const writer = unwrap(await h.store.acquire(ROOT, "owner", 30_000));
     const end = await resume(
       writer,
       h.artifacts,
@@ -59,8 +59,8 @@ describe("a stale owner never dispatches (invariant 2)", () => {
   });
 
   test("tool.run is not called after a takeover following effect_begin", async () => {
-    const h = harness([EMAIL], [], [SEND, FINAL]);
-    const writer = unwrap(h.store.acquire(ROOT, "owner", 30_000));
+    const h = await harness([EMAIL], [], [SEND, FINAL]);
+    const writer = unwrap(await h.store.acquire(ROOT, "owner", 30_000));
     const end = await resume(
       writer,
       h.artifacts,
@@ -77,10 +77,10 @@ describe("a stale owner never dispatches (invariant 2)", () => {
     expect(events(writer).at(-1)?.type).toBe("effect_begin");
   });
 
-  test("a second owner's appends are refused while the first holds the lease", () => {
-    const h = harness([], [userInput("hi")], []);
-    unwrap(h.store.acquire(ROOT, "owner", 30_000));
-    expect(h.store.acquire(ROOT, "other").ok).toBe(false);
+  test("a second owner's appends are refused while the first holds the lease", async () => {
+    const h = await harness([], [userInput("hi")], []);
+    unwrap(await h.store.acquire(ROOT, "owner", 30_000));
+    expect((await h.store.acquire(ROOT, "other")).ok).toBe(false);
   });
 });
 
@@ -88,13 +88,13 @@ const host = { kind: "host" } as const;
 const recovery = { kind: "recovery" } as const;
 
 /** A crashed call: model_request, the tool_use response, the call, then `effects`. */
-function crashedCall(
-  h: ReturnType<typeof harness>,
+async function crashedCall(
+  h: Awaited<ReturnType<typeof harness>>,
   effects: readonly EventDraft[],
-): void {
-  const writer = unwrap(h.store.acquire(ROOT, "crashed", 1));
+): Promise<void> {
+  const writer = unwrap(await h.store.acquire(ROOT, "crashed", 1));
   const [request] = unwrap(
-    writer.append([
+    await writer.append([
       {
         type: "model_request",
         type_version: 1,
@@ -115,7 +115,7 @@ function crashedCall(
   const request_event_id = request?.event.event_id ?? "";
   const call = { call_id: "call_1", name: "send_email", input: { to: "bob" } };
   unwrap(
-    writer.append([
+    await writer.append([
       {
         type: "model_response",
         type_version: 1,
@@ -165,10 +165,10 @@ function crashedCall(
 
 describe("a settled effect is never dispatched again (invariant 3)", () => {
   test("confirmed_success without its tool_result is materialized, not re-run", async () => {
-    const h = harness([EMAIL], [userInput("mail bob")], [FINAL]);
+    const h = await harness([EMAIL], [userInput("mail bob")], [FINAL]);
     const out = new TextEncoder().encode("sent m-1");
-    const sha256 = h.artifacts.put(out);
-    crashedCall(h, [
+    const sha256 = await h.artifacts.put(out);
+    await crashedCall(h, [
       {
         type: "effect_resolved",
         type_version: 1,
@@ -182,7 +182,7 @@ describe("a settled effect is never dispatched again (invariant 3)", () => {
         },
       },
     ]);
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     const end = await resume(writer, h.artifacts, h.config());
     expect(end.kind).toBe("idle");
     expect(h.runs.get("send_email") ?? 0).toBe(0);
@@ -197,8 +197,8 @@ describe("a settled effect is never dispatched again (invariant 3)", () => {
   });
 
   test("interrupted without its tool_result closes the call, not re-run", async () => {
-    const h = harness([EMAIL], [userInput("mail bob")], [FINAL]);
-    crashedCall(h, [
+    const h = await harness([EMAIL], [userInput("mail bob")], [FINAL]);
+    await crashedCall(h, [
       {
         type: "effect_resolved",
         type_version: 1,
@@ -211,7 +211,7 @@ describe("a settled effect is never dispatched again (invariant 3)", () => {
         },
       },
     ]);
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     expect((await resume(writer, h.artifacts, h.config())).kind).toBe("idle");
     expect(h.runs.get("send_email") ?? 0).toBe(0);
     expect(
@@ -220,8 +220,8 @@ describe("a settled effect is never dispatched again (invariant 3)", () => {
   });
 
   test("not_sent re-dispatches under the same key with the next attempt", async () => {
-    const h = harness([EMAIL], [userInput("mail bob")], [FINAL]);
-    crashedCall(h, [
+    const h = await harness([EMAIL], [userInput("mail bob")], [FINAL]);
+    await crashedCall(h, [
       {
         type: "effect_resolved",
         type_version: 1,
@@ -230,7 +230,7 @@ describe("a settled effect is never dispatched again (invariant 3)", () => {
         data: { call_id: "call_1", outcome: "not_sent", by: "adapter" },
       },
     ]);
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     expect((await resume(writer, h.artifacts, h.config())).kind).toBe("idle");
     expect(h.runs.get("send_email")).toBe(1);
     const begins = events(writer).filter((e) => e.type === "effect_begin");
@@ -248,9 +248,9 @@ describe("a settled effect is never dispatched again (invariant 3)", () => {
       effect_class: "idempotent",
       dedup_window_ms: 10_000,
     } as const;
-    const h = harness([charge], [userInput("charge")], []);
+    const h = await harness([charge], [userInput("charge")], []);
     const t0 = h.clock.now;
-    crashedCall(h, [
+    await crashedCall(h, [
       {
         type: "effect_resolved",
         type_version: 1,
@@ -264,9 +264,9 @@ describe("a settled effect is never dispatched again (invariant 3)", () => {
       },
     ]);
     h.clock.now = t0 + 8000;
-    const resend = unwrap(h.store.acquire(ROOT, "resender", 1));
+    const resend = unwrap(await h.store.acquire(ROOT, "resender", 1));
     unwrap(
-      resend.append([
+      await resend.append([
         {
           type: "effect_begin",
           type_version: 1,
@@ -277,7 +277,7 @@ describe("a settled effect is never dispatched again (invariant 3)", () => {
       ]),
     );
     h.clock.now = t0 + 16_000;
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     expect((await resume(writer, h.artifacts, h.config())).kind).toBe("parked");
     expect(h.runs.get("send_email") ?? 0).toBe(0);
     expect(events(writer).at(-1)).toMatchObject({
@@ -291,9 +291,9 @@ describe("a reconciled result is recorded redacted (C5)", () => {
   test("a found lookup value never reaches the log or an artifact raw", async () => {
     const key = credential("fake", "apiKey", "sk-l9-reconcile-9c0d", "U")();
     const reconcilable = { ...EMAIL, effect_class: "reconcilable" } as const;
-    const h = harness([reconcilable], [userInput("mail bob")], [FINAL]);
-    crashedCall(h, []);
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const h = await harness([reconcilable], [userInput("mail bob")], [FINAL]);
+    await crashedCall(h, []);
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     const base = h.config();
     const impl = base.tools.get("send_email");
     if (impl === undefined) throw new Error("the harness binds send_email");
@@ -324,7 +324,7 @@ describe("a reconciled result is recorded redacted (C5)", () => {
         : undefined;
     if (ref === undefined)
       throw new Error("a reconciled effect records its result");
-    const stored = h.artifacts.get(ref.sha256);
+    const stored = await h.artifacts.get(ref.sha256);
     if (!stored.ok) throw new Error(stored.error.message);
     expect(new TextDecoder().decode(stored.value)).toBe(
       "sent with [secret fake.apiKey]",

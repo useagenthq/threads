@@ -9,7 +9,7 @@ import {
 import { openBunSqlite } from "@threads/core/bun-sqlite";
 import {
   openStore,
-  type SqliteDriver,
+  type StoreDriver,
   sha256Hex,
   storeOf,
 } from "@threads/core/host";
@@ -21,16 +21,16 @@ import type { Golden } from "./goldens";
 
 export type Harness = {
   readonly store: Store;
-  readonly db: SqliteDriver;
+  readonly db: StoreDriver;
   readonly clock: { now: number };
 };
 
-export function harness(): Harness {
+export async function harness(): Promise<Harness> {
   const clock = { now: 1_790_000_100_000 };
   const now = (): number => clock.now;
   const db = openBunSqlite(":memory:");
   const artifacts = memoryArtifacts();
-  const log = LogStore.open(db, now, artifacts);
+  const log = await LogStore.open(db, now, artifacts);
   if (!log.ok) throw new Error(log.error.message);
   return {
     store: storeOf({ log: log.value, artifacts }, { db, now }),
@@ -44,9 +44,11 @@ export async function importGolden(h: Harness, g: Golden): Promise<void> {
   const { artifacts, log } = await openedOf(h);
   const dir = join(g.dir, "artifacts");
   for (const name of safeList(dir))
-    artifacts.put(readFileSync(join(dir, name)));
+    await artifacts.put(readFileSync(join(dir, name)));
   for (const b of g.branches) {
-    const imported = log.importLog(readFileSync(join(g.dir, `${b}.jsonl`)));
+    const imported = await log.importLog(
+      readFileSync(join(g.dir, `${b}.jsonl`)),
+    );
     if (!imported.ok)
       throw new Error(`${g.name}/${b}: ${imported.error.message}`);
   }
@@ -88,48 +90,63 @@ const Row: z.ZodType<Row> = z.object({
 });
 
 /** Cuts the branch's own rows back to seq `k`; returns them, to grow back in order. */
-export function cut(h: Harness, branchId: string, k: number): readonly Row[] {
-  const rows = z
-    .array(Row)
-    .parse(
-      h.db.all(
-        "SELECT seq, event_id, type, type_version, critical, epoch, line FROM events WHERE branch_id = ? AND seq > ? ORDER BY seq",
-        [branchId, k],
-      ),
+export function cut(
+  h: Harness,
+  branchId: string,
+  k: number,
+): Promise<readonly Row[]> {
+  return h.db.transaction(async (tx) => {
+    const rows = z
+      .array(Row)
+      .parse(
+        await tx.all(
+          "SELECT seq, event_id, type, type_version, critical, epoch, line FROM events WHERE branch_id = ? AND seq > ? ORDER BY seq",
+          [branchId, k],
+        ),
+      );
+    await tx.run("DELETE FROM events WHERE branch_id = ? AND seq > ?", [
+      branchId,
+      k,
+    ]);
+    const last = z
+      .array(z.object({ line: z.instanceof(Uint8Array) }))
+      .parse(
+        await tx.all(
+          "SELECT line FROM events WHERE branch_id = ? AND seq = ? UNION ALL SELECT header_line FROM branches WHERE branch_id = ?",
+          [branchId, k, branchId],
+        ),
+      )[0];
+    await tx.run(
+      "UPDATE branches SET head_seq = ?, head_hash = ? WHERE branch_id = ?",
+      [k, sha256Hex(last?.line ?? new Uint8Array()), branchId],
     );
-  h.db.run("DELETE FROM events WHERE branch_id = ? AND seq > ?", [branchId, k]);
-  const last = z
-    .array(z.object({ line: z.instanceof(Uint8Array) }))
-    .parse(
-      h.db.all(
-        "SELECT line FROM events WHERE branch_id = ? AND seq = ? UNION ALL SELECT header_line FROM branches WHERE branch_id = ?",
-        [branchId, k, branchId],
-      ),
-    )[0];
-  h.db.run(
-    "UPDATE branches SET head_seq = ?, head_hash = ? WHERE branch_id = ?",
-    [k, sha256Hex(last?.line ?? new Uint8Array()), branchId],
-  );
-  return rows;
+    return rows;
+  });
 }
 
 /** Appends one cut row back, moving the head as an append's transaction does. */
-export function grow(h: Harness, branchId: string, row: Row): void {
-  h.db.run(
-    "INSERT INTO events (branch_id, seq, event_id, type, type_version, critical, epoch, line) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    [
-      branchId,
-      row.seq,
-      row.event_id,
-      row.type,
-      row.type_version,
-      row.critical,
-      row.epoch,
-      row.line,
-    ],
-  );
-  h.db.run(
-    "UPDATE branches SET head_seq = ?, head_hash = ? WHERE branch_id = ?",
-    [row.seq, sha256Hex(row.line), branchId],
-  );
+export async function grow(
+  h: Harness,
+  branchId: string,
+  row: Row,
+): Promise<void> {
+  await h.db.transaction(async (tx) => {
+    await tx.run(
+      "INSERT INTO events (branch_id, seq, event_id, type, type_version, critical, epoch, line) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        branchId,
+        row.seq,
+        row.event_id,
+        row.type,
+        row.type_version,
+        row.critical,
+        row.epoch,
+        row.line,
+      ],
+    );
+    await tx.run(
+      "UPDATE branches SET head_seq = ?, head_hash = ? WHERE branch_id = ?",
+      [row.seq, sha256Hex(row.line), branchId],
+    );
+  });
 }

@@ -2,7 +2,6 @@
 child branch, the thread_started that opens a root branch its creator writes itself (a
 schedule's thread), and `branch.open` (a team log, a team member)."""
 
-import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Final, Literal
@@ -16,6 +15,7 @@ from threads.result import Err, Ok
 from threads.store import indexing, lease
 from threads.store.admit import admit
 from threads.store.appended import Appended
+from threads.store.conn import Conn
 from threads.store.lines import Draft, Position, event_line, header_line
 from threads.store.sql import Branch, branch, insert_branch, insert_events, transaction
 from threads.store.verify import StoredEvent
@@ -64,11 +64,12 @@ def new_root(
     return Ok(NewRoot(row, (event, line), admitted.value.content, admitted.value.opened))
 
 
-def insert_root(conn: sqlite3.Connection, root: NewRoot, holder: str) -> ParseError | None:
+def insert_root(conn: Conn, root: NewRoot, holder: str) -> ParseError | None:
     """Inserts the branch and its first event, and runs the index hooks, in the caller's
     transaction (which rolls back on an error). `holder` is the opener's: a team log the hooks
     open is opened under it."""
-    insert_branch(conn, root.row)
+    if not insert_branch(conn, root.row):
+        return ParseError("invalid_transition", f"thread {root.row.thread_id} already exists")
     insert_events(conn, (root.first,), root.row.head_hash)
     event, row = root.first[0], root.row
     # No lease holds a new root: its first writer takes epoch 2.
@@ -109,7 +110,7 @@ class OpenedBranch:
 
 
 def open_branch(
-    conn: sqlite3.Connection, o: BranchOpening, now: int
+    conn: Conn, o: BranchOpening, now: int
 ) -> OpenedBranch | Literal["already_open"] | ParseError:
     """`branch.open` in the caller's transaction, which rolls back on an error: inserts the
     thread and branch rows (a thread already stored is refused), admits the drafts as a writer
@@ -130,7 +131,9 @@ def open_branch(
     row = Branch(
         o.branch_id, o.thread_id, o.tenant_id, None, None, header, "ready", 0, sha256_hex(header)
     )
-    lease.insert_new(conn, row, o.lease)
+    refused = lease.insert_new(conn, row, o.lease)
+    if refused is not None:
+        return refused
     last = rows[-1][1] if rows else header
     insert_events(conn, rows, sha256_hex(last))
     events = indexing.known([event for event, _ in rows])
@@ -148,7 +151,7 @@ class _UndoError(Exception):
 
 
 def open_alone(
-    conn: sqlite3.Connection, o: BranchOpening, now: int
+    conn: Conn, o: BranchOpening, now: int
 ) -> OpenedBranch | Literal["already_open"] | ParseError:
     """`open_branch` in a transaction of its own."""
     try:
@@ -162,8 +165,8 @@ def open_alone(
 
 
 def open_checked(
-    conn: sqlite3.Connection,
-    decide: Callable[[sqlite3.Connection, int], BranchOpening | None],
+    conn: Conn,
+    decide: Callable[[Conn, int], BranchOpening | None],
     now: int,
 ) -> OpenedBranch | Literal["already_open"] | ParseError | None:
     """`branch.open` after a check in the same transaction: `decide` reads the store and returns

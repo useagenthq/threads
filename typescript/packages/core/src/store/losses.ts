@@ -3,7 +3,7 @@ import { Int, ThreadId } from "../log";
 import type { Strict } from "../log/zod-types";
 import type { Result } from "../result";
 import type { LogError } from "../verify/error";
-import type { SqliteDriver } from "./driver";
+import { reading, type Sql, type Tx, writing } from "./driver";
 import { parseRows } from "./tables";
 
 // Loss accounting for telemetry exporters (store.sql observers and observer_losses): what a
@@ -14,13 +14,13 @@ import { parseRows } from "./tables";
  * counting the thread's events past that observer's cursor on each branch. Never waits on a
  * collector; with no observer registered it inserts nothing.
  */
-export function recordLosses(
-  db: SqliteDriver,
+export async function recordLosses(
+  tx: Tx,
   tenantId: string,
   threadId: string,
   now: number,
-): void {
-  db.run(
+): Promise<void> {
+  await tx.run(
     `INSERT INTO observer_losses
        (observer, tenant_id, thread_id, unchecked_events, deleted_at, reported_at)
      SELECT o.name, ?, ?, (
@@ -36,14 +36,16 @@ export function recordLosses(
 }
 
 /** Registers `observer` once, so deletions from now on record what it may not have sent. */
-export function registerObserver(
-  db: SqliteDriver,
+export async function registerObserver(
+  sql: Sql,
   observer: string,
   now: number,
-): void {
-  db.run(
-    "INSERT INTO observers (name, registered_at) VALUES (?, ?) ON CONFLICT DO NOTHING",
-    [observer, now],
+): Promise<void> {
+  await writing(sql, (tx) =>
+    tx.run(
+      "INSERT INTO observers (name, registered_at) VALUES (?, ?) ON CONFLICT DO NOTHING",
+      [observer, now],
+    ),
   );
 }
 
@@ -61,30 +63,32 @@ export const LossRow: Strict<{
 export type LossRow = z.infer<typeof LossRow>;
 
 /** The observer's loss rows not yet exported, oldest first. */
-export function unreportedLosses(
-  db: SqliteDriver,
+export async function unreportedLosses(
+  sql: Sql,
   observer: string,
-): Result<readonly LossRow[], LogError> {
+): Promise<Result<readonly LossRow[], LogError>> {
   return parseRows(
     LossRow,
-    db.all(
-      `SELECT tenant_id, thread_id, unchecked_events, deleted_at FROM observer_losses
-        WHERE observer = ? AND reported_at IS NULL ORDER BY deleted_at, thread_id`,
-      [observer],
+    await reading(sql, (tx) =>
+      tx.all(
+        `SELECT tenant_id, thread_id, unchecked_events, deleted_at FROM observer_losses
+          WHERE observer = ? AND reported_at IS NULL ORDER BY deleted_at, thread_id`,
+        [observer],
+      ),
     ),
   );
 }
 
 /** After the collector accepted their spans. */
-export function markReported(
-  db: SqliteDriver,
+export async function markReported(
+  sql: Sql,
   observer: string,
   rows: readonly LossRow[],
   now: number,
-): void {
-  db.transaction(() => {
+): Promise<void> {
+  await writing(sql, async (tx) => {
     for (const row of rows)
-      db.run(
+      await tx.run(
         `UPDATE observer_losses SET reported_at = ?
           WHERE observer = ? AND thread_id = ? AND deleted_at = ? AND reported_at IS NULL`,
         [now, observer, row.thread_id, row.deleted_at],

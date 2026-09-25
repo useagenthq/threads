@@ -40,12 +40,12 @@ function costResult(
     : ok(total);
 }
 
-export function treeCost(
+export async function treeCost(
   log: LogStore,
   root: ThreadId,
   chain: VerifiedLog,
-): Result<Cost | undefined, CostError> {
-  const parts = treeParts(log, root, chain);
+): Promise<Result<Cost | undefined, CostError>> {
+  const parts = await treeParts(log, root, chain);
   return parts.ok ? costResult(mergeTree(parts.value)) : parts;
 }
 
@@ -69,7 +69,7 @@ type Child = VerifiedLog | "unpriced" | "pending";
 type Pending = {
   readonly child: ThreadId;
   readonly path: string;
-  readonly open: () => Result<Child, ReadError>;
+  readonly open: () => Promise<Result<Child, ReadError>>;
 };
 
 /**
@@ -83,11 +83,11 @@ type Pending = {
  * never falsely complete. A member in the starting window has made no model request: it counts
  * zero and leaves the total complete.
  */
-function treeParts(
+async function treeParts(
   log: LogStore,
   root: ThreadId,
   chain: VerifiedLog,
-): Result<readonly TreePart[], CostError> {
+): Promise<Result<readonly TreePart[], CostError>> {
   const parts: TreePart[] = [];
   const seen = new Set<ThreadId>([root]);
   const stack: Pending[] = [];
@@ -104,7 +104,7 @@ function treeParts(
       cost: own.value,
       ran: events.some((e) => e.type === "model_request"),
     });
-    const members = teamMembers(log, at);
+    const members = await teamMembers(log, at);
     if (!members.ok) return err(within(path, members.error));
     const kids: Pending[] = [
       ...spawned(log, events, path),
@@ -115,7 +115,7 @@ function treeParts(
       })),
     ];
     stack.push(...kids.toReversed());
-    const read = nextChild(stack, seen, parts);
+    const read = await nextChild(stack, seen, parts);
     if (!read.ok) return read;
     next = read.value;
   }
@@ -134,8 +134,8 @@ function spawned(
   return events.flatMap((e) => {
     if (e.type !== "agent_spawned") return [];
     const child = e.data.child_thread_id;
-    const open = (): Result<Child, ReadError> => {
-      const read = childLog(log, e, finishes.get(child));
+    const open = async (): Promise<Result<Child, ReadError>> => {
+      const read = await childLog(log, e, finishes.get(child));
       return read.ok ? ok(read.value ?? "unpriced") : read;
     };
     return [{ child, path: `${path}child ${child}: `, open }];
@@ -146,11 +146,11 @@ function spawned(
  * Pops pending children until one has a log to walk; each unpriced one adds its part instead,
  * and a pending member adds nothing. Undefined when the stack is empty.
  */
-function nextChild(
+async function nextChild(
   stack: Pending[],
   seen: Set<ThreadId>,
   parts: TreePart[],
-): Result<{ at: VerifiedLog; path: string } | undefined, CostError> {
+): Promise<Result<{ at: VerifiedLog; path: string } | undefined, CostError>> {
   for (let top = stack.pop(); top !== undefined; top = stack.pop()) {
     if (seen.has(top.child))
       return err(
@@ -160,7 +160,7 @@ function nextChild(
         ),
       );
     seen.add(top.child);
-    const read = top.open();
+    const read = await top.open();
     if (!read.ok) return err(within(top.path, read.error));
     if (read.value === "unpriced") parts.push({ cost: undefined, ran: true });
     else if (read.value !== "pending")
@@ -174,12 +174,12 @@ function nextChild(
  * no agent_finished, or the one a cancelled parent writes for a child it never created. Any
  * other finished child's missing log is log_corrupt.
  */
-function childLog(
+async function childLog(
   log: LogStore,
   spawn: Spawned,
   finish: Finished | undefined,
-): Result<VerifiedLog | undefined, ReadError> {
-  const branch = log.mainBranch(spawn.data.child_thread_id);
+): Promise<Result<VerifiedLog | undefined, ReadError>> {
+  const branch = await log.mainBranch(spawn.data.child_thread_id);
   const unstarted = finish === undefined || neverCreated(finish);
   if (!branch.ok && branch.error.code === "branch_not_found" && unstarted)
     return ok(undefined);
@@ -192,7 +192,7 @@ function childLog(
           : `its log is missing, though its parent recorded it ${finish.data.status}`,
       ),
     );
-  const read = readLog(log, branch.value);
+  const read = await readLog(log, branch.value);
   if (!read.ok) return read;
   const started = knownEvents(read.value).find(
     (e) => e.type === "thread_started",

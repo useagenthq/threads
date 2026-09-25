@@ -7,7 +7,6 @@ import contextlib
 import os
 import select
 import signal
-import sqlite3
 import subprocess
 import sys
 import time
@@ -15,15 +14,16 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
+from jobs.stores import drill_open, query
 from jobs.worker import TEAM, read, rows
 
 from threads.log import EventId
 from threads.reduce import Fold
 from threads.result import Ok
-from threads.store import SqliteStore
 
 WORKER: Final = Path(__file__).with_name("worker.py")
 WAIT_S: Final = 20.0
+TESTS: Final = str(Path(__file__).parent.parent)
 _SPAWNED: list[subprocess.Popen[str]] = []
 
 
@@ -33,7 +33,7 @@ def spawn(role: str, where: Path, script: Path = WORKER, **env: str) -> subproce
     with (where / f"worker-{len(_SPAWNED)}.log").open("w") as errors:
         worker = subprocess.Popen(  # noqa: S603
             [sys.executable, str(script), role, str(where)],
-            env={**os.environ, **env},
+            env={**os.environ, "PYTHONPATH": TESTS, **env},
             stdout=subprocess.PIPE,
             stderr=errors,
             text=True,
@@ -88,8 +88,7 @@ def kill(worker: subprocess.Popen[str]) -> None:
 def expire_leases(where: Path) -> None:
     """A killed holder's lease runs out after its TTL (30 s); the drill moves its expiry to now
     instead of waiting, which is all the wait would change."""
-    with contextlib.closing(sqlite3.connect(where / "threads.db")) as db, db:
-        db.execute("UPDATE leases SET expires_at = 0")
+    query(where, "UPDATE leases SET expires_at = 0")
 
 
 def finish(worker: subprocess.Popen[str]) -> None:
@@ -115,7 +114,7 @@ def acked(where: Path) -> list[EventId]:
 
 async def _read(where: Path) -> Fold | None:
     # Closed after each read: the drill's processes own the store.
-    opened = await SqliteStore.open(where / "threads.db", tenant_id=TEAM)
+    opened = await drill_open(where, TEAM)
     assert isinstance(opened, Ok)
     try:
         return await read(opened.value)

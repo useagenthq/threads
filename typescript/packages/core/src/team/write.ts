@@ -16,18 +16,18 @@ import { changeRows, insertRows } from "./index";
  * a team log. A fork of a lead or member shares its thread but writes no team rows, so the index
  * stays the fold of the team's own logs (team fork is deferred).
  */
-export function teamRows(a: Appended): Result<void, LogError> {
+export async function teamRows(a: Appended): Promise<Result<void, LogError>> {
   const opens = a.events.some(
     (e) => e.type === "thread_started" || e.type === "team_opened",
   );
   if (!opens) {
-    const teams = teamsOf(a);
+    const teams = await teamsOf(a);
     if (!teams.ok) return teams;
     if (teams.value.length === 0) return ok(undefined);
   }
   const log = { threadId: a.threadId, branchId: a.branchId };
-  insertRows(a.db, log, a.events);
-  changeRows(a.db, log, a.events, a.opened);
+  await insertRows(a.tx, log, a.events);
+  await changeRows(a.tx, log, a.events, a.opened);
   return ok(undefined);
 }
 
@@ -36,11 +36,13 @@ export function teamRows(a: Appended): Result<void, LogError> {
  * in the same transaction: the teams row comes from it, the lead's row from the thread_started.
  * Nothing but this append opens that branch, so finding it open is refused.
  */
-export function openTeamLog(a: Appended): Result<void, LogError> {
+export async function openTeamLog(
+  a: Appended,
+): Promise<Result<void, LogError>> {
   for (const e of a.events) {
     const team = e.type === "thread_started" ? e.data.team : undefined;
     if (e.type !== "thread_started" || team === undefined) continue;
-    const opened = openBranch(a.db, a.now, {
+    const opened = await openBranch(a.tx, a.now, {
       tenantId: a.tenant,
       threadId: team.log_thread_id,
       branchId: team.log_branch_id,
@@ -80,12 +82,12 @@ export function openTeamLog(a: Appended): Result<void, LogError> {
 const TeamRow = z.strictObject({ team_id: z.string() });
 
 /** The teams whose own branch this is: a member's or lead's, or the team log. */
-function teamsOf(
+async function teamsOf(
   a: Appended,
-): Result<readonly { team_id: string }[], LogError> {
+): Promise<Result<readonly { team_id: string }[], LogError>> {
   return parseRows(
     TeamRow,
-    a.db.all(
+    await a.tx.all(
       `SELECT team_id FROM team_members WHERE thread_id = ? AND branch_id = ?
         UNION SELECT team_id FROM teams WHERE team_log_branch_id = ?`,
       [a.threadId, a.branchId, a.branchId],
@@ -98,16 +100,17 @@ function teamsOf(
  * lead's (a nested lead has two), or the team whose log it is. Offsets continue the team's
  * current epoch.
  */
-export function feedRows(a: Appended): Result<void, LogError> {
-  const teams = teamsOf(a);
+export async function feedRows(a: Appended): Promise<Result<void, LogError>> {
+  const teams = await teamsOf(a);
   if (!teams.ok) return teams;
   for (const { team_id } of teams.value)
     for (const e of a.events)
-      a.db.run(
+      await a.tx.run(
         `INSERT INTO team_feed (team_id, epoch, feed_offset, branch_id, seq)
-          SELECT ?, e, 1 + COALESCE(
-            (SELECT MAX(feed_offset) FROM team_feed WHERE team_id = ? AND epoch = e), 0), ?, ?
-          FROM (SELECT COALESCE(MAX(epoch), 1) AS e FROM team_feed WHERE team_id = ?)`,
+          SELECT CAST(? AS TEXT), e, 1 + COALESCE(
+            (SELECT MAX(feed_offset) FROM team_feed WHERE team_id = ? AND epoch = e), 0),
+            CAST(? AS TEXT), CAST(? AS BIGINT)
+          FROM (SELECT COALESCE(MAX(epoch), 1) AS e FROM team_feed WHERE team_id = ?) AS current_epoch`,
         [team_id, team_id, a.branchId, e.seq, team_id],
       );
   return ok(undefined);

@@ -3,12 +3,11 @@ nothing of it (all-or-nothing), two processes racing branch.open on one branch l
 the other told already_open, and no orphan, and a lead killed inside its member's settlement is
 finished once by the restart."""
 
-import contextlib
-import sqlite3
 from pathlib import Path
 
 import pytest
 from jobs.drill import WAIT_S, expire_leases, kill, spawn, wait_at
+from jobs.stores import query
 from jobs.team_worker import RACED, RACER_THREAD, TEAM, TEAM_LOG
 
 pytestmark = pytest.mark.jobs
@@ -19,8 +18,7 @@ TESTS = str(WORKER.parent.parent)
 
 
 def _query(where: Path, sql: str, *params: str) -> list[tuple[object, ...]]:
-    with contextlib.closing(sqlite3.connect(where / "threads.db")) as db:
-        return db.execute(sql, params).fetchall()
+    return query(where, sql, *params)
 
 
 def _said(where: Path, role: str) -> str:

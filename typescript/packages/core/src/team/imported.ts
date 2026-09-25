@@ -1,6 +1,7 @@
 import type { TeamId } from "../log";
 import { ok, type Result } from "../result";
 import type { LogStore } from "../store";
+import type { Tx } from "../store/driver";
 import { knownOf } from "../store/indexing";
 import { openedThreads } from "../store/started";
 import { uiReceiptRows } from "../store/ui-receipts";
@@ -16,17 +17,18 @@ import { rebuildTeamIndex } from "./rebuild";
 // imported (that import rebuilds it). A log that breaks rule 43 with the stored team is refused.
 
 /** Folds the index rows an imported `log` changes; runs inside the import's transaction. */
-export function indexImported(
+export async function indexImported(
+  tx: Tx,
   store: LogStore,
   log: VerifiedLog,
-): Result<void, LogError> {
+): Promise<Result<void, LogError>> {
   for (const s of log.segments)
-    refoldWakes(store.driver, s.header.branch_id, knownOf(s.events));
-  uiReceiptRows(store.driver, store.tenant, knownOf(log.events));
-  const teams = teamsOf(store, log);
+    await refoldWakes(tx, s.header.branch_id, knownOf(s.events));
+  await uiReceiptRows(tx, store.tenant, knownOf(log.events));
+  const teams = await teamsOf(tx, store, log);
   if (!teams.ok) return teams;
   for (const team of teams.value) {
-    const rebuilt = rebuildTeamIndex(store, team);
+    const rebuilt = await rebuildTeamIndex(store, team, tx);
     if (!rebuilt.ok && rebuilt.error.code !== "not_found") return rebuilt;
   }
   return ok(undefined);
@@ -36,10 +38,11 @@ export function indexImported(
  * The teams the log's thread belongs to, from its opening event: the team it leads, the team
  * whose log it is, and, for a member, its lead's team.
  */
-function teamsOf(
+async function teamsOf(
+  tx: Tx,
   store: LogStore,
   log: VerifiedLog,
-): Result<readonly TeamId[], LogError> {
+): Promise<Result<readonly TeamId[], LogError>> {
   const first = log.segments[0]?.events[0];
   const e = first?.kind === "event" ? first.event : undefined;
   if (e?.type === "team_opened") return ok([e.data.team]);
@@ -47,7 +50,7 @@ function teamsOf(
   const own = e.data.team === undefined ? [] : [e.data.team.id];
   const parent = e.data.parent;
   if (parent?.relation !== "team_member") return ok(own);
-  const opened = openedThreads(store.driver, store.tenant);
+  const opened = await openedThreads(tx, store.tenant);
   if (!opened.ok) return opened;
   const lead = opened.value.find((o) => o.threadId === parent.thread_id);
   const team =

@@ -4,7 +4,6 @@ both equal the reference fold pinned in every team case's `index`."""
 
 import asyncio
 import json
-import sqlite3
 
 import pytest
 from pydantic import JsonValue, TypeAdapter
@@ -27,6 +26,7 @@ from threads.log import (
 )
 from threads.result import Err, Ok
 from threads.store import sql
+from threads.store.conn import Conn
 from threads.team import rebuild
 from threads.team.index import TeamLog, change_rows, insert_rows, turn_openers
 from threads.team.rebuild import rebuild_team_index
@@ -80,9 +80,7 @@ def test_append_time_writes_equal_the_rebuild(case: str) -> None:
     assert written == rebuilt
 
 
-def _append_all(
-    conn: sqlite3.Connection, queues: list[tuple[TeamLog, list[Event], frozenset[str]]]
-) -> None:
+def _append_all(conn: Conn, queues: list[tuple[TeamLog, list[Event], frozenset[str]]]) -> None:
     """Appends every event, each as its own append (insert, then change), always taking the
     first log whose next event finds the row it changes; a receipt whose sender is not among the
     logs goes last."""
@@ -168,8 +166,8 @@ def test_a_rebuild_reads_the_logs_inside_its_own_transaction(
     lands between the read and the wipe."""
     seen: list[bool] = []
 
-    def export(conn: sqlite3.Connection, branch: BranchId) -> bytes:
-        seen.append(conn.in_transaction)
+    def export(conn: Conn, branch: BranchId) -> bytes:
+        seen.append(conn.depth > 0)
         return sql.export(conn, branch)
 
     monkeypatch.setattr(rebuild, "export", export)

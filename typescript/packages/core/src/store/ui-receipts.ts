@@ -1,6 +1,6 @@
 import { sha256Hex } from "../hash";
 import { canonicalize, type KnownEvent, principalKey } from "../log";
-import type { SqliteDriver } from "./driver";
+import type { Tx } from "./driver";
 
 // The `ui` run receipts an import rebuilds (spec/schema/ui/README.md, "Bodies"): a web UI's
 // retry finds its run by `<thread_id>:<client message id>`, so every user_input that carries
@@ -29,11 +29,11 @@ export function inputText(
 }
 
 /** Writes the receipt of each UI-started run among `events`; an existing receipt stays. */
-export function uiReceiptRows(
-  db: SqliteDriver,
+export async function uiReceiptRows(
+  tx: Tx,
   tenant: string,
   events: readonly KnownEvent[],
-): void {
+): Promise<void> {
   const started = events.find((e) => e.type === "thread_started");
   if (started?.type !== "thread_started") return;
   for (const e of events) {
@@ -41,7 +41,7 @@ export function uiReceiptRows(
       continue;
     const hash = uiBodyHash(started.data.agent_name, inputText(e));
     if (hash === undefined) continue;
-    db.run(
+    await tx.run(
       `INSERT INTO run_receipts (tenant_id, operation, idempotency_key, principal_key, body_hash,
         thread_id, branch_id, run_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT DO NOTHING`,

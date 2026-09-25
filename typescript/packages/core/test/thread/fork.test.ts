@@ -38,11 +38,11 @@ const LOST = {
   },
 } as const;
 
-function parent(snap: EventDraft = snapshot(null)) {
-  const f = fixture();
-  unwrap(f.store.createBranch(THREAD, ROOT));
-  const writer = unwrap(f.store.acquire(ROOT, "holder-a"));
-  unwrap(writer.append([started, userInput("hi"), turnCompleted, snap]));
+async function parent(snap: EventDraft = snapshot(null)) {
+  const f = await fixture();
+  unwrap(await f.store.createBranch(THREAD, ROOT));
+  const writer = unwrap(await f.store.acquire(ROOT, "holder-a"));
+  unwrap(await writer.append([started, userInput("hi"), turnCompleted, snap]));
   return f;
 }
 
@@ -52,9 +52,9 @@ const EMPTY = manifestHash([]);
 
 /** A fork that crashed after its ledger row, optionally after the provider call too. */
 async function crashed(sandbox: FakeSandbox, called: boolean) {
-  const f = parent();
-  const writer = unwrap(f.store.beginFork(request));
-  const row = unwrap(f.store.ledger.begin(writer, "sandbox", "fake"));
+  const f = await parent();
+  const writer = unwrap(await f.store.beginFork(request));
+  const row = unwrap(await f.store.ledger.begin(writer, "sandbox", "fake"));
   if (called) await sandbox.restore("snap_01", EMPTY, row.operation_key, CTX);
   f.clock.now += LEASE + 1;
   return f;
@@ -89,10 +89,10 @@ describe("a crash between the pending row and the create resolves by lookup", ()
       await recoverFork(f.store, sandbox, CHILD, "creator"),
     );
     expect(states).toEqual(["released"]);
-    expect(unwrap(f.store.ledger.rows())[0]?.release_outcome).toBe(
+    expect(unwrap(await f.store.ledger.rows())[0]?.release_outcome).toBe(
       "not_created",
     );
-    expect(unwrap(f.store.branchState(CHILD))).toBe("fork_failed");
+    expect(unwrap(await f.store.branchState(CHILD))).toBe("fork_failed");
     expect(sandbox.creates()).toBe(0);
   });
 
@@ -141,13 +141,13 @@ describe("a crash between the pending row and the create resolves by lookup", ()
       await recoverFork(f.store, nonfinal, CHILD, "creator"),
     );
     expect(states).toEqual(["unknown"]);
-    expect(unwrap(f.store.branchState(CHILD))).toBe("fork_failed");
+    expect(unwrap(await f.store.branchState(CHILD))).toBe("fork_failed");
   });
 
   test("nobody else reclaims a fork while its creator's lease is live", async () => {
     const sandbox = fakeSandbox(LOST);
-    const f = parent();
-    unwrap(f.store.beginFork(request));
+    const f = await parent();
+    unwrap(await f.store.beginFork(request));
     const busy = await recoverFork(f.store, sandbox, CHILD, "someone-else");
     expect(code(busy)).toBe("branch_busy");
   });
@@ -155,19 +155,19 @@ describe("a crash between the pending row and the create resolves by lookup", ()
 
 describe("a stale fork owner", () => {
   test("can't record a create, and its child never becomes visible", async () => {
-    const f = parent();
-    const stale = unwrap(f.store.beginFork(request));
+    const f = await parent();
+    const stale = unwrap(await f.store.beginFork(request));
     f.clock.now += LEASE + 1;
-    unwrap(f.store.reclaimFork(CHILD, "next-owner"));
-    expect(code(f.store.ledger.begin(stale, "sandbox", "fake"))).toBe(
+    unwrap(await f.store.reclaimFork(CHILD, "next-owner"));
+    expect(code(await f.store.ledger.begin(stale, "sandbox", "fake"))).toBe(
       "stale_epoch",
     );
     const finished = f.store.finishFork(stale, {
       sandboxId: SandboxId.parse("sbx_child_01"),
       knowledgePolicy: "pinned",
     });
-    expect(code(finished)).toBe("writer_poisoned");
-    expect(unwrap(f.store.branchState(CHILD))).toBe("forking");
+    expect(code(await finished)).toBe("writer_poisoned");
+    expect(unwrap(await f.store.branchState(CHILD))).toBe("forking");
   });
 });
 
@@ -179,20 +179,20 @@ describe("a failed release is retried, never dropped", () => {
       },
     });
     const sandbox = flakyClose(base);
-    const f = parent();
-    const writer = unwrap(f.store.beginFork(request));
-    const row = unwrap(f.store.ledger.begin(writer, "sandbox", "fake"));
+    const f = await parent();
+    const writer = unwrap(await f.store.beginFork(request));
+    const row = unwrap(await f.store.ledger.begin(writer, "sandbox", "fake"));
     const made = unwrap(
       await sandbox.restore("snap_01", EMPTY, row.operation_key, CTX),
     );
-    unwrap(f.store.ledger.live(writer, row.resource_id, made.id, null));
+    unwrap(await f.store.ledger.live(writer, row.resource_id, made.id, null));
     f.clock.now += LEASE + 1; // crash before the fork event
 
     const states = unwrap(
       await recoverFork(f.store, sandbox, CHILD, "creator"),
     );
     expect(states).toEqual(["release_failed"]);
-    expect(unwrap(f.store.ledger.rows())[0]?.release_outcome).toBe(
+    expect(unwrap(await f.store.ledger.rows())[0]?.release_outcome).toBe(
       "provider 500",
     );
     expect(unwrap(await collect(f.store.ledger, sandbox))).toEqual([]); // creator still holds

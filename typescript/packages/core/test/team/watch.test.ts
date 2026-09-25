@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { agent, scriptedModel, sqlite } from "../../src";
 import { TEAM_CONSTANTS } from "../../src/team/constants";
+import { rows as sqlAll } from "../store/helpers";
 import { clocked, held, until } from "./clock-kit";
 import { assertTeamReplays } from "./kit";
 import {
@@ -59,11 +60,11 @@ describe("wait", () => {
       status: "waited",
       timed_out: false,
     });
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("at the deadline a wait returns what settled so far, timed out; the member reports later", async () => {
-    const { store, elapse } = clocked();
+    const { store, elapse } = await clocked();
     const release = Promise.withResolvers<void>();
     const lead = agent({
       name: "lead",
@@ -86,12 +87,16 @@ describe("wait", () => {
     const parkedOnWait = async (): Promise<boolean> => {
       const log = await logOf(store);
       return (
-        log.driver.all("SELECT 1 FROM monitors WHERE kind = 'settle'", [])
-          .length > 0
+        (
+          await sqlAll(
+            log.driver,
+            "SELECT 1 FROM monitors WHERE kind = 'settle'",
+          )
+        ).length > 0
       );
     };
     await until(parkedOnWait);
-    elapse(TEAM_CONSTANTS.askWaitDefaultMs);
+    await elapse(TEAM_CONSTANTS.askWaitDefaultMs);
     const log = await logOf(store);
     await until(async () => (await parkedOnWait()) === false);
     release.resolve();
@@ -111,13 +116,13 @@ describe("wait", () => {
         e.type === "message_sent" && e.data.envelope.kind === "member_settled",
     );
     expect(sent).toHaveLength(1);
-    assertTeamReplays(log, r.team.ref.id);
+    await assertTeamReplays(log, r.team.ref.id);
   });
 });
 
 describe("ask deadline", () => {
   test("an ask no one answers closes timed out at its deadline, and the turn goes on", async () => {
-    const { store, elapse } = clocked();
+    const { store, elapse } = await clocked();
     const release = Promise.withResolvers<void>();
     const lead = agent({
       name: "lead",
@@ -144,18 +149,19 @@ describe("ask deadline", () => {
     const open = async (): Promise<boolean> => {
       const log = await logOf(store);
       return (
-        log.driver.all("SELECT 1 FROM asks WHERE state = 'open'", []).length > 0
+        (await sqlAll(log.driver, "SELECT 1 FROM asks WHERE state = 'open'"))
+          .length > 0
       );
     };
     await until(open);
-    elapse(TEAM_CONSTANTS.askWaitDefaultMs);
+    await elapse(TEAM_CONSTANTS.askWaitDefaultMs);
     await until(async () => (await open()) === false);
     release.resolve();
     const r = await run;
     expect(r.status === "completed" && r.output).toBe("Final.");
     const log = await events(store, r.thread);
     expect(resultOf(log, "c2")).toMatchObject({ status: "timed_out" });
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 });
 
@@ -194,7 +200,7 @@ describe("monitor", () => {
         .toSorted(),
     ).toEqual(["researcher-1", "task"]);
     expect(types(log)).toContain("monitor_set");
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("monitoring a member that already ended returns its result at once", async () => {
@@ -221,6 +227,6 @@ describe("monitor", () => {
       result: { status: "failed" },
     });
     expect(types(log)).toContain("member_observed");
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 });

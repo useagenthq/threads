@@ -13,6 +13,8 @@ from threads.store import StoreError
 from threads.store.artifacts import FileArtifacts
 from threads.store.worker import Worker
 
+pytestmark = pytest.mark.sqlite_only
+
 
 def test_an_outage_is_a_store_error_and_a_sql_bug_is_not(tmp_path: Path) -> None:
     async def main() -> None:

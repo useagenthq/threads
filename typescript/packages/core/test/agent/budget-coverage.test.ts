@@ -10,6 +10,7 @@ import { openStore, storeConnection } from "../../src/agent/sqlite";
 import type { BranchId, KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { unwrap } from "../store/helpers";
+import { exec } from "../team/kit";
 
 // spec/schema/README.md, Budget enforcement and Handoff scope: a limit is never skipped for want
 // of a per-attempt bound, the ledger is rebuilt from the log, and a handoff target is covered by
@@ -36,7 +37,7 @@ async function events(
   branch: BranchId,
 ): Promise<readonly KnownEvent[]> {
   const { log } = await openStore(store);
-  return knownEvents(unwrap(log.read(branch)));
+  return knownEvents(unwrap(await log.read(branch)));
 }
 
 const requests = (log: readonly KnownEvent[]) =>
@@ -210,7 +211,7 @@ describe("budget coverage", () => {
     const { log } = await openStore(store);
     const child = await events(
       store,
-      unwrap(log.mainBranch(spawned.data.child_thread_id)),
+      unwrap(await log.mainBranch(spawned.data.child_thread_id)),
     );
     expect(requests(child)).toBe(0);
     expect(
@@ -236,7 +237,7 @@ describe("budget coverage", () => {
     const r1 = await a.run("one", { store });
     await a.run("two", { store, thread: r1.thread.id });
     const { db } = await storeConnection(store);
-    db.run("DELETE FROM budget_ledger", []);
+    await exec(db, "DELETE FROM budget_ledger", []);
     const r3 = await a.run("three", { store, thread: r1.thread.id });
     expect(r3).toMatchObject({
       status: "budget_exhausted",

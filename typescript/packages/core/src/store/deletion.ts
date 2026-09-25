@@ -4,7 +4,7 @@ import { err, ok, type Result } from "../result";
 import { verifyLines } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import { branchesOf, deleteOne, deleteTeam, doomedTeams } from "./delete-rows";
-import type { SqliteDriver } from "./driver";
+import type { Sql, Tx } from "./driver";
 import { branchLines } from "./lines";
 import { type Opened, openedThreads } from "./started";
 import { atomically, parseRows } from "./tables";
@@ -23,65 +23,69 @@ export { TEAM_TABLES } from "./delete-rows";
  * not_found for another tenant's thread; thread_in_team for a member or team log whose lead
  * isn't deleted with it; busy while any of them could still run. A refusal writes nothing.
  */
-export function deleteThread(
-  db: SqliteDriver,
+export async function deleteThread(
+  sql: Sql,
   tenantId: string,
   threadId: ThreadId,
   now: number,
-): Result<number, LogError> {
-  return atomically(db, () => {
-    const all = threadsOf(db, tenantId);
+): Promise<Result<number, LogError>> {
+  return await atomically(sql, async (tx) => {
+    const all = await threadsOf(tx, tenantId);
     if (!all.ok) return all;
     if (!all.value.includes(threadId))
       return err(logError("not_found", `no thread ${threadId}`));
-    return deleteSet(db, tenantId, all.value, [threadId], now);
+    return await deleteSet(tx, tenantId, all.value, [threadId], now);
   });
 }
 
 /** Every thread of `tenantId`, as one deletion set in one transaction. */
-export function deleteTenant(
-  db: SqliteDriver,
+export async function deleteTenant(
+  sql: Sql,
   tenantId: string,
   now: number,
-): Result<number, LogError> {
-  return atomically(db, () => {
-    const all = threadsOf(db, tenantId);
-    return all.ok ? deleteSet(db, tenantId, all.value, all.value, now) : all;
+): Promise<Result<number, LogError>> {
+  return await atomically(sql, async (tx) => {
+    const all = await threadsOf(tx, tenantId);
+    return all.ok
+      ? await deleteSet(tx, tenantId, all.value, all.value, now)
+      : all;
   });
 }
 
 const ThreadRow = z.strictObject({ thread_id: ThreadId });
 
-function threadsOf(
-  db: SqliteDriver,
+async function threadsOf(
+  tx: Tx,
   tenantId: string,
-): Result<readonly ThreadId[], LogError> {
+): Promise<Result<readonly ThreadId[], LogError>> {
   const rows = parseRows(
     ThreadRow,
-    db.all("SELECT thread_id FROM threads WHERE tenant_id = ?", [tenantId]),
+    await tx.all("SELECT thread_id FROM threads WHERE tenant_id = ?", [
+      tenantId,
+    ]),
   );
   return rows.ok ? ok(rows.value.map((r) => r.thread_id)) : rows;
 }
 
-function deleteSet(
-  db: SqliteDriver,
+async function deleteSet(
+  tx: Tx,
   tenantId: string,
   all: readonly ThreadId[],
   start: readonly ThreadId[],
   now: number,
-): Result<number, LogError> {
-  const opened = openedThreads(db, tenantId);
+): Promise<Result<number, LogError>> {
+  const opened = await openedThreads(tx, tenantId);
   if (!opened.ok) return opened;
   const doomed = deletionSet(opened.value, start);
   const inTeam = outsideItsTeam(opened.value, doomed, new Set(all));
   if (inTeam !== undefined) return err(inTeam);
-  const quiet = running(db, doomed, now);
+  const quiet = await running(tx, doomed, now);
   if (!quiet.ok) return quiet;
-  const teams = doomedTeams(db, tenantId, doomed);
+  const teams = await doomedTeams(tx, tenantId, doomed);
   if (!teams.ok) return teams;
-  for (const team of teams.value) deleteTeam(db, tenantId, team);
+  for (const team of teams.value) await deleteTeam(tx, tenantId, team);
   for (const thread of all.filter((t) => doomed.has(t))) {
-    const gone = deleteOne(db, tenantId, thread, now);
+    const gone = await deleteOne(tx, tenantId, thread, now);
     if (!gone.ok) return gone;
   }
   return ok(doomed.size);
@@ -157,15 +161,15 @@ const LeaseRow = z.strictObject({ branch_id: BranchId });
  * (begun or unknown), or a log that doesn't verify, which can't be proved free of one: deleting
  * it would erase the only record recovery settles an effect from.
  */
-function running(
-  db: SqliteDriver,
+async function running(
+  tx: Tx,
   doomed: ReadonlySet<string>,
   now: number,
-): Result<void, LogError> {
+): Promise<Result<void, LogError>> {
   for (const thread of doomed) {
     const leased = parseRows(
       LeaseRow,
-      db.all(
+      await tx.all(
         `SELECT l.branch_id FROM leases l JOIN branches b ON b.branch_id = l.branch_id
           WHERE b.thread_id = ? AND l.expires_at > ?`,
         [thread, now],
@@ -175,10 +179,10 @@ function running(
     const live = leased.value[0];
     if (live !== undefined)
       return err(busy(thread, `branch ${live.branch_id} holds a live lease`));
-    const branches = branchesOf(db, thread);
+    const branches = await branchesOf(tx, thread);
     if (!branches.ok) return branches;
     for (const branch of branches.value) {
-      const why = unsettled(db, branch);
+      const why = await unsettled(tx, branch);
       if (why !== undefined) return err(busy(thread, why));
     }
   }
@@ -186,8 +190,11 @@ function running(
 }
 
 /** Why `branch` may still hold an effect only its log can settle, if it may. */
-function unsettled(db: SqliteDriver, branch: BranchId): string | undefined {
-  const lines = branchLines(db, branch);
+async function unsettled(
+  tx: Tx,
+  branch: BranchId,
+): Promise<string | undefined> {
+  const lines = await branchLines(tx, branch);
   const log = lines.ok ? verifyLines(lines.value.lines) : lines;
   if (!log.ok)
     return `branch ${branch} doesn't verify (${log.error.code}): run \`threads repair ${branch}\` if its tail is torn, or delete it with the version that wrote it`;

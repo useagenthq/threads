@@ -32,7 +32,7 @@ function answered(log: readonly KnownEvent[], data: Record<string, unknown>) {
 
 describe("requested compaction outcomes", () => {
   test("a summary: compacted{manual} naming the request, then the turn answers", async () => {
-    const h = asked([reply(SUMMARY_TEXT), reply("Answer.")]);
+    const h = await asked([reply(SUMMARY_TEXT), reply("Answer.")]);
     const log = await resumeOnce(h);
     const [request] = sides(log);
     if (request?.type !== "model_request") throw new Error("a side request");
@@ -43,7 +43,7 @@ describe("requested compaction outcomes", () => {
   });
 
   test("an empty summary is empty_summary", async () => {
-    const h = asked([reply(""), reply("Answer.")]);
+    const h = await asked([reply(""), reply("Answer.")]);
     answered(await resumeOnce(h), {
       stage: "summary",
       reason: "empty_summary",
@@ -51,7 +51,7 @@ describe("requested compaction outcomes", () => {
   });
 
   test("prompt_too_long twice: one fallback attempt, then prompt_too_long", async () => {
-    const h = asked([
+    const h = await asked([
       fail("prompt_too_long", 400),
       fail("prompt_too_long", 400),
       reply("A."),
@@ -62,14 +62,14 @@ describe("requested compaction outcomes", () => {
   });
 
   test("a provider error is model_error, with no second side request", async () => {
-    const h = asked([fail("server_error", 500), reply("A.")]);
+    const h = await asked([fail("server_error", 500), reply("A.")]);
     const log = await resumeOnce(h);
     expect(sides(log)).toHaveLength(1);
     answered(log, { reason: "model_error" });
   });
 
   test("no adapter for the epoch's model is model_error", async () => {
-    const h = asked([]);
+    const h = await asked([]);
     const log = await resumeOnce(h, { models: () => undefined });
     expect(sides(log)).toHaveLength(0);
     answered(log, { reason: "model_error" });
@@ -88,13 +88,13 @@ describe("requested compaction outcomes", () => {
         ref: { sha256: "f".repeat(64), bytes: 3, media_type: "text/plain" },
       },
     } as const;
-    const h = asked([], undefined, [missing]);
+    const h = await asked([], undefined, [missing]);
     const log = await resumeOnce(h);
     answered(log, { reason: "artifact_error" });
   });
 
   test("a before_compact deny is hook_denied, with no side request", async () => {
-    const h = asked([reply("Answer.")]);
+    const h = await asked([reply("Answer.")]);
     const deny = {
       name: "guard",
       timeoutMs: 1000,
@@ -117,7 +117,7 @@ describe("requested compaction outcomes", () => {
       data: { stage: "summary", reason: "still_over_threshold" },
     } as const;
     const policy = { context: CONTEXT_DEFAULTS };
-    const h = asked([reply(SUMMARY_TEXT), reply("A.")], policy, [
+    const h = await asked([reply(SUMMARY_TEXT), reply("A.")], policy, [
       failed,
       failed,
       failed,
@@ -127,7 +127,10 @@ describe("requested compaction outcomes", () => {
 });
 
 /** The harness model with no declared window, running `before` inside each send. */
-function around(h: ReturnType<typeof asked>, before: () => void): Model {
+function around(
+  h: Awaited<ReturnType<typeof asked>>,
+  before: () => Promise<unknown>,
+): Model {
   const inner = h.model;
   const model: Model = {
     ...inner,
@@ -135,9 +138,9 @@ function around(h: ReturnType<typeof asked>, before: () => void): Model {
       ...inner.info,
       limits: { ...inner.info.limits, context_window: 0 },
     },
-    send: (request, ctx, options) => {
-      before();
-      return inner.send(request, ctx, options);
+    send: async function* (request, ctx, options) {
+      await before();
+      yield* inner.send(request, ctx, options);
     },
   };
   markTestKit(model);
@@ -148,9 +151,9 @@ const operator = { issuer: "api", tenant: "acme", subject: "operator" };
 
 describe("requested compaction around the side attempt", () => {
   test("a cancel during the attempt: its outcome is recorded, then the turn is cancelled", async () => {
-    const h = asked([reply(SUMMARY_TEXT)]);
+    const h = await asked([reply(SUMMARY_TEXT)]);
     h.clock.now += 60_000;
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     const cancel: EventDraft = {
       type: "cancel_requested",
       type_version: 1,
@@ -159,7 +162,7 @@ describe("requested compaction around the side attempt", () => {
       data: { scope: "thread" },
     };
     // The model declares no window: a request is carried out all the same.
-    const model = around(h, () => unwrap(writer.append([cancel])));
+    const model = around(h, async () => unwrap(await writer.append([cancel])));
     await resume(writer, h.artifacts, h.config({ models: () => model }));
     const log = events(writer);
     const types = log.map((e) => e.type);
@@ -174,12 +177,16 @@ describe("requested compaction around the side attempt", () => {
   });
 
   test("a lease lost during the attempt: no outcome; the new owner finishes it", async () => {
-    const h = asked([reply(SUMMARY_TEXT), reply(SUMMARY_TEXT), reply("A.")]);
+    const h = await asked([
+      reply(SUMMARY_TEXT),
+      reply(SUMMARY_TEXT),
+      reply("A."),
+    ]);
     h.clock.now += 60_000;
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
-    const steal = around(h, () => {
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
+    const steal = around(h, async () => {
       h.clock.now += writer.lease.ttlMs + 1;
-      unwrap(h.store.acquire(ROOT, "thief")).release();
+      await unwrap(await h.store.acquire(ROOT, "thief")).release();
     });
     const end = await resume(
       writer,
@@ -216,7 +223,7 @@ describe("a requested summary refused as leaked", () => {
       },
     };
     markTestKit(leaky);
-    const h = asked([]);
+    const h = await asked([]);
     const log = await resumeOnce(h, { models: () => leaky });
     expect(sides(log)).toHaveLength(1);
     const failed = log.filter((e) => e.type === "compaction_failed");

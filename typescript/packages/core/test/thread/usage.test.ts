@@ -23,7 +23,10 @@ describe("Thread.usage", () => {
     const store = sqlite(":memory:");
     const thread = await run(store, priced([say("Hi.")]));
     const { log } = await openStore(store);
-    const direct = reduce(unwrap(log.read(thread.branch)), log.now()).usage;
+    const direct = reduce(
+      unwrap(await log.read(thread.branch)),
+      log.now(),
+    ).usage;
     expect(unwrap(await thread.usage())).toEqual(direct);
     expect(direct).toEqual({
       input_tokens: 10,
@@ -80,7 +83,7 @@ describe("Thread.cost", () => {
     const store = sqlite(":memory:");
     const thread = await run(store, priced([say("Hi.")]));
     const { log } = await openStore(store);
-    const chain = unwrap(log.read(thread.branch));
+    const chain = unwrap(await log.read(thread.branch));
     expect(chain.fold.policy?.currency).toBe("USD");
     const own = unwrap(await thread.cost());
     expect<unknown>(own).toEqual(cost(knownEvents(chain), chain.fold.policy));
@@ -104,7 +107,7 @@ describe("Thread.cost", () => {
     // What an older agent() stored: this pin without policy.currency, hashed the same way.
     const fresh = await run(sqlite(":memory:"), priced([say("Hi.")]));
     const { log: freshLog } = await openStore(fresh.store);
-    const [first] = knownEvents(unwrap(freshLog.read(fresh.branch)));
+    const [first] = knownEvents(unwrap(await freshLog.read(fresh.branch)));
     if (first?.type !== "thread_started") throw new Error("no thread_started");
     const { config_hash, ...config } = first.data;
     // Recomputing the stored hash from the pin proves the formula the legacy hash uses.
@@ -115,10 +118,10 @@ describe("Thread.cost", () => {
     const { log } = await openStore(store);
     const id = ThreadId.parse("0192a000-0000-7000-8000-0000000000bb");
     const branch = BranchId.parse("0192b000-0000-7000-8000-0000000000bb");
-    unwrap(log.createBranch(id, branch));
-    const writer = unwrap(log.acquire(branch, "older"));
+    unwrap(await log.createBranch(id, branch));
+    const writer = unwrap(await log.acquire(branch, "older"));
     unwrap(
-      writer.append([
+      await writer.append([
         {
           type: "thread_started",
           type_version: 1,
@@ -128,7 +131,7 @@ describe("Thread.cost", () => {
         },
       ]),
     );
-    writer.release();
+    await writer.release();
     const old = unwrap(await openThread(store, id));
     expect(unwrap(await old.cost())).toBeNull();
     const again = agent({ name: "lead", model: priced([say("More.")]) });
@@ -166,9 +169,11 @@ describe("usage, cost and cacheBreaks on edge logs", () => {
     const store = sqlite(":memory:");
     const thread = await run(store, priced([say("Hi.")]));
     const { db } = await storeConnection(store);
-    db.run(
-      'UPDATE events SET line = CAST(replace(CAST(line AS TEXT), \'"type":"turn_completed"\', \'"type":"approval_quorum"\') AS BLOB) WHERE branch_id = ?',
-      [thread.branch],
+    await db.transaction((tx) =>
+      tx.run(
+        'UPDATE events SET line = CAST(replace(CAST(line AS TEXT), \'"type":"turn_completed"\', \'"type":"approval_quorum"\') AS BLOB) WHERE branch_id = ?',
+        [thread.branch],
+      ),
     );
     expect([
       code(await thread.usage()),
@@ -183,10 +188,19 @@ describe("usage, cost and cacheBreaks on edge logs", () => {
     const thread = await run(store, priced([say("Hi.")]));
     const { db } = await storeConnection(store);
     // Another tenant's now: to this store the branch no longer exists.
-    db.run("PRAGMA foreign_keys = OFF", []);
-    db.run("UPDATE branches SET tenant_id = 'elsewhere' WHERE branch_id = ?", [
-      thread.branch,
-    ]);
+    // PRAGMA foreign_keys is a no-op inside a transaction: the thread row moves with the branch,
+    // checked at commit.
+    await db.transaction(async (tx) => {
+      await tx.run("PRAGMA defer_foreign_keys = ON", []);
+      await tx.run(
+        "UPDATE branches SET tenant_id = 'elsewhere' WHERE branch_id = ?",
+        [thread.branch],
+      );
+      await tx.run(
+        "UPDATE threads SET tenant_id = 'elsewhere' WHERE thread_id = ?",
+        [thread.id],
+      );
+    });
     expect([
       code(await thread.usage()),
       code(await thread.cost()),

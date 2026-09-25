@@ -11,7 +11,7 @@ import {
 } from "../../src/memory/local-knowledge";
 import { bindMemory, localMemory } from "../../src/memory/local-memory";
 import type { Scope } from "../../src/memory/protocol";
-import { memoryArtifacts, type SqliteDriver } from "../../src/store";
+import { memoryArtifacts, type StoreDriver } from "../../src/store";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
 import { unwrap } from "../store/helpers";
 
@@ -21,8 +21,8 @@ import { unwrap } from "../store/helpers";
 const S: Scope = { tenant_id: "t", agent: "a", scope: "u" };
 const encoder = new TextEncoder();
 
-function knowledge() {
-  const found = bindLocalKnowledge(
+async function knowledge() {
+  const found = await bindLocalKnowledge(
     localKnowledge({ paths: [] }),
     openBunSqlite(":memory:"),
     memoryArtifacts(),
@@ -49,18 +49,27 @@ describe("localMemory", () => {
     expect(got.ok ? "ok" : got.error.code).toBe("unavailable");
   });
 
-  test("a SQLite without FTS5 is a setup error that names FTS5", () => {
+  test("a SQLite without FTS5 is a setup error that names FTS5", async () => {
     const db = openBunSqlite(":memory:");
-    const noFts: SqliteDriver = {
+    const noFts: StoreDriver = {
       ...db,
-      exec: (sql) => {
-        if (sql.includes("fts5")) throw new Error("no such module: fts5");
-        db.exec(sql);
-      },
+      transaction: (fn, options) =>
+        db.transaction(
+          (tx) =>
+            fn({
+              ...tx,
+              run: async (sql, params) => {
+                if (sql.includes("fts5"))
+                  throw new Error("no such module: fts5");
+                return tx.run(sql, params);
+              },
+            }),
+          options,
+        ),
     };
     let thrown: unknown;
     try {
-      bindMemory(localMemory(), noFts);
+      await bindMemory(localMemory(), noFts);
     } catch (error) {
       thrown = error;
     }
@@ -72,7 +81,7 @@ describe("localMemory", () => {
   });
 
   test("query text can't form FTS5 syntax", async () => {
-    const p = bindMemory(localMemory(), openBunSqlite(":memory:"));
+    const p = await bindMemory(localMemory(), openBunSqlite(":memory:"));
     const hits = unwrap(await p.recall(S, 'text: OR "x" NEAR(*) -'));
     expect(hits).toEqual([]);
   });
@@ -93,7 +102,7 @@ describe("localKnowledge", () => {
   };
 
   test("the index rebuilds from admitted versions with the same results (F14.3)", async () => {
-    const p = knowledge();
+    const p = await knowledge();
     for (const [i, t] of [
       "alpha beta\n\ngamma",
       "beta delta",
@@ -103,13 +112,13 @@ describe("localKnowledge", () => {
       unwrap(await p.ingest(S, s.source, s.key));
     }
     const before = unwrap(await p.search(S, "beta"));
-    unwrap(p.rebuild());
+    unwrap(await p.rebuild());
     expect(unwrap(await p.search(S, "beta"))).toEqual(before);
     expect(before.length).toBe(2);
   });
 
   test("bytes that aren't UTF-8 text are an explicit parse error (F14.7)", async () => {
-    const p = knowledge();
+    const p = await knowledge();
     const got = await p.ingest(
       S,
       {
@@ -125,7 +134,7 @@ describe("localKnowledge", () => {
   });
 
   test("the same key with other content is invalid; with the same content a no-op", async () => {
-    const p = knowledge();
+    const p = await knowledge();
     const s = src("one");
     const v = unwrap(await p.ingest(S, s.source, s.key));
     expect(unwrap(await p.ingest(S, s.source, s.key))).toEqual(v);
@@ -135,7 +144,7 @@ describe("localKnowledge", () => {
   });
 
   test("sources narrows the search; passages tile a long document with exact spans", async () => {
-    const p = knowledge();
+    const p = await knowledge();
     const long = Array.from(
       { length: 40 },
       (_, i) => `Paragraph ${i} about refunds é.\n\n`,

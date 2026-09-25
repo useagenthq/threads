@@ -94,7 +94,7 @@ async function failedRebind(
   const after = await memberEvents(store, r.team.ref.id, "researcher-1");
   expect(after).toHaveLength(member.length);
   expect(model.remaining()).toBe(1);
-  assertTeamReplays(await logOf(store), r.team.ref.id);
+  await assertTeamReplays(await logOf(store), r.team.ref.id);
 }
 
 describe("a failed rebind", () => {

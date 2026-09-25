@@ -4,7 +4,7 @@ import { containsSecret } from "../redact";
 import { err, ok, type Result } from "../result";
 import type { Failure } from "../sandbox/protocol";
 import type { ArtifactStore } from "../store/artifacts";
-import type { SqliteDriver } from "../store/driver";
+import { READ_ONLY, type StoreDriver, type Tx } from "../store/driver";
 import { installFts, matchQuery } from "./fts";
 import { decodeText, passages } from "./passages";
 import type {
@@ -83,12 +83,12 @@ const DocRow = z.object({
 
 type Local = KnowledgeProvider & {
   /** Drops the index and refills it from the admitted artifacts (`rebuildIndex`). */
-  readonly rebuild: () => Result<void, ProviderError>;
+  readonly rebuild: () => Promise<Result<void, ProviderError>>;
 };
 
 export type LocalKnowledgeOptions = { readonly paths: readonly string[] };
 
-type Binder = (db: SqliteDriver, artifacts: ArtifactStore) => Local;
+type Binder = (db: StoreDriver, artifacts: ArtifactStore) => Promise<Local>;
 const locals = new WeakMap<
   KnowledgeProvider,
   { readonly paths: readonly string[]; readonly bind: Binder }
@@ -118,22 +118,24 @@ export function localKnowledge(
 }
 
 /** The built-in bound to a run's store with its configured paths, or undefined. */
-export function bindLocalKnowledge(
+export async function bindLocalKnowledge(
   provider: KnowledgeProvider,
-  db: SqliteDriver,
+  db: StoreDriver,
   artifacts: ArtifactStore,
-): { readonly local: Local; readonly paths: readonly string[] } | undefined {
+): Promise<
+  { readonly local: Local; readonly paths: readonly string[] } | undefined
+> {
   const found = locals.get(provider);
   return found === undefined
     ? undefined
-    : { local: found.bind(db, artifacts), paths: found.paths };
+    : { local: await found.bind(db, artifacts), paths: found.paths };
 }
 
-function guard<T, E>(
-  fn: () => Result<T, E | Failure<"unavailable">>,
-): Result<T, E | Failure<"unavailable">> {
+async function guard<T, E>(
+  fn: () => Promise<Result<T, E | Failure<"unavailable">>>,
+): Promise<Result<T, E | Failure<"unavailable">>> {
   try {
-    return fn();
+    return await fn();
   } catch (error) {
     return err({ code: "unavailable", message: String(error) });
   }
@@ -154,110 +156,126 @@ function parsed(source: KnowledgeSource): Result<string, ProviderError> {
 
 const where = (s: Scope): readonly string[] => [s.tenant_id, s.agent, s.scope];
 
-function bound(db: SqliteDriver, artifacts: ArtifactStore): Local {
-  installFts(db, DDL, "localKnowledge()");
-  const revision = (): number =>
-    Revision.array().parse(
-      db.all("SELECT revision FROM local_knowledge_revision WHERE one = 1", []),
-    )[0]?.revision ?? 0;
-  const bump = (): number => {
-    const next = revision() + 1;
-    db.run(
-      `INSERT INTO local_knowledge_revision (one, revision) VALUES (1, ?)
-       ON CONFLICT (one) DO UPDATE SET revision = excluded.revision`,
-      [next],
-    );
-    return next;
-  };
-  const index = (rowid: number, text: string): void => {
-    for (const p of passages(text))
-      db.run(
-        `INSERT INTO local_knowledge_fts (text, doc_rowid, span_start, span_end)
-         VALUES (?, ?, ?, ?)`,
-        [p.text, rowid, p.start, p.end],
-      );
-  };
-  const admit = (
-    scope: Scope,
-    source: KnowledgeSource,
-    key: string,
-    text: string,
-  ): Result<DocVersion, ProviderError> => {
-    const digest = sha256Hex(source.content);
-    const version = digest.slice(0, 16);
-    const [done] = KeyRow.array().parse(
-      db.all(
-        "SELECT digest, doc_id, version, revision FROM local_knowledge_keys WHERE key = ?",
-        [key],
-      ),
-    );
-    if (done !== undefined)
-      return done.digest === digest && done.doc_id === source.source_id
-        ? ok({
-            doc_id: done.doc_id,
-            version: done.version,
-            content_sha256: digest,
-            revision: done.revision,
-          })
-        : err({
-            code: "invalid",
-            message: `key ${key} reused with other content`,
-          });
-    const at = bump();
-    const [found] = RowId.array().parse(
-      db.all(
-        `SELECT rowid FROM local_knowledge_docs AS d WHERE doc_id = ? AND version = ? AND ${SCOPE}`,
-        [source.source_id, version, ...where(scope)],
-      ),
-    );
-    if (found !== undefined)
-      // ponytail: re-admitting removed bytes moves the row's revision, as in Python.
-      db.run(
-        `UPDATE local_knowledge_docs SET revision = ?, removed_revision = NULL
-         WHERE rowid = ? AND removed_revision IS NOT NULL`,
-        [at, found.rowid],
-      );
-    else {
-      db.run(
-        `INSERT INTO local_knowledge_docs (doc_id, version, revision, content_sha256, bytes,
-         media_type, location, namespace, record_id, tenant_id, agent, scope)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          source.source_id,
-          version,
-          at,
-          digest,
-          source.content.length,
-          source.media_type,
-          source.location ?? null,
-          source.binding.namespace,
-          source.binding.record_id,
-          ...where(scope),
-        ],
-      );
-      const [row] = RowId.array().parse(
-        db.all("SELECT last_insert_rowid() AS rowid", []),
-      );
-      index(row?.rowid ?? 0, text);
-    }
-    db.run("INSERT INTO local_knowledge_keys VALUES (?, ?, ?, ?, ?)", [
-      key,
-      digest,
-      source.source_id,
-      version,
-      at,
-    ]);
-    return ok({
-      doc_id: source.source_id,
-      version,
-      content_sha256: digest,
-      revision: at,
-    });
-  };
+async function revisionOf(tx: Tx): Promise<number> {
+  const rows = Revision.array().parse(
+    await tx.all("SELECT revision FROM local_knowledge_revision WHERE one = 1"),
+  );
+  return rows[0]?.revision ?? 0;
+}
 
+async function bump(tx: Tx): Promise<number> {
+  const next = (await revisionOf(tx)) + 1;
+  await tx.run(
+    `INSERT INTO local_knowledge_revision (one, revision) VALUES (1, ?)
+     ON CONFLICT (one) DO UPDATE SET revision = excluded.revision`,
+    [next],
+  );
+  return next;
+}
+
+async function index(tx: Tx, rowid: number, text: string): Promise<void> {
+  for (const p of passages(text))
+    await tx.run(
+      `INSERT INTO local_knowledge_fts (text, doc_rowid, span_start, span_end)
+       VALUES (?, ?, ?, ?)`,
+      [p.text, rowid, p.start, p.end],
+    );
+}
+
+async function admit(
+  tx: Tx,
+  scope: Scope,
+  source: KnowledgeSource,
+  key: string,
+  text: string,
+): Promise<Result<DocVersion, ProviderError>> {
+  const digest = sha256Hex(source.content);
+  const version = digest.slice(0, 16);
+  const [done] = KeyRow.array().parse(
+    await tx.all(
+      "SELECT digest, doc_id, version, revision FROM local_knowledge_keys WHERE key = ?",
+      [key],
+    ),
+  );
+  if (done !== undefined)
+    return done.digest === digest && done.doc_id === source.source_id
+      ? ok({
+          doc_id: done.doc_id,
+          version: done.version,
+          content_sha256: digest,
+          revision: done.revision,
+        })
+      : err({
+          code: "invalid",
+          message: `key ${key} reused with other content`,
+        });
+  const at = await bump(tx);
+  const [found] = RowId.array().parse(
+    await tx.all(
+      `SELECT rowid FROM local_knowledge_docs AS d WHERE doc_id = ? AND version = ? AND ${SCOPE}`,
+      [source.source_id, version, ...where(scope)],
+    ),
+  );
+  if (found !== undefined)
+    // ponytail: re-admitting removed bytes moves the row's revision, as in Python.
+    await tx.run(
+      `UPDATE local_knowledge_docs SET revision = ?, removed_revision = NULL
+       WHERE rowid = ? AND removed_revision IS NOT NULL`,
+      [at, found.rowid],
+    );
+  else await insertDoc(tx, scope, source, version, at, digest, text);
+  await tx.run(
+    `INSERT INTO local_knowledge_keys (key, digest, doc_id, version, revision)
+     VALUES (?, ?, ?, ?, ?)`,
+    [key, digest, source.source_id, version, at],
+  );
+  return ok({
+    doc_id: source.source_id,
+    version,
+    content_sha256: digest,
+    revision: at,
+  });
+}
+
+async function insertDoc(
+  tx: Tx,
+  scope: Scope,
+  source: KnowledgeSource,
+  version: string,
+  at: number,
+  digest: string,
+  text: string,
+): Promise<void> {
+  const [row] = RowId.array().parse(
+    await tx.all(
+      `INSERT INTO local_knowledge_docs (doc_id, version, revision, content_sha256, bytes,
+       media_type, location, namespace, record_id, tenant_id, agent, scope)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING rowid`,
+      [
+        source.source_id,
+        version,
+        at,
+        digest,
+        source.content.length,
+        source.media_type,
+        source.location ?? null,
+        source.binding.namespace,
+        source.binding.record_id,
+        ...where(scope),
+      ],
+    ),
+  );
+  await index(tx, row?.rowid ?? 0, text);
+}
+
+async function bound(
+  db: StoreDriver,
+  artifacts: ArtifactStore,
+): Promise<Local> {
+  await installFts(db, DDL, "localKnowledge()", "run this agent on sqlite()");
   return {
     ingest: async (scope, source, key) =>
-      guard(() => {
+      guard(async () => {
         const text = parsed(source);
         if (!text.ok) return text;
         // Byte-exact (its digest is its version): a source holding a registered value is refused.
@@ -267,68 +285,66 @@ function bound(db: SqliteDriver, artifacts: ArtifactStore): Local {
             message: `${source.source_id}: holds a registered secret; not ingested`,
           });
         // The admitted bytes are durable before the row that references them.
-        artifacts.put(source.content);
-        return db.transaction(() => admit(scope, source, key, text.value));
+        await artifacts.put(source.content);
+        return db.transaction((tx) =>
+          admit(tx, scope, source, key, text.value),
+        );
       }),
     remove: async (scope, docId, key) =>
       guard(() =>
-        db.transaction(() => {
-          const seen = db.all(
+        db.transaction(async (tx) => {
+          const seen = await tx.all(
             "SELECT 1 AS one FROM local_knowledge_keys WHERE key = ?",
             [key],
           );
           if (seen.length > 0) return ok(undefined);
-          const at = bump();
-          db.run(
+          const at = await bump(tx);
+          await tx.run(
             `UPDATE local_knowledge_docs AS d SET removed_revision = ?
              WHERE d.doc_id = ? AND d.removed_revision IS NULL AND ${SCOPE}`,
             [at, docId, ...where(scope)],
           );
-          db.run(
-            "INSERT INTO local_knowledge_keys VALUES (?, 'remove', ?, '', ?)",
+          await tx.run(
+            `INSERT INTO local_knowledge_keys (key, digest, doc_id, version, revision)
+             VALUES (?, 'remove', ?, '', ?)`,
             [key, docId, at],
           );
           return ok(undefined);
         }),
       ),
     search: async (scope, query, options = {}) =>
-      guard(() => {
-        const match = matchQuery(query);
-        if (match === undefined) return ok([]);
-        const only = options.sources ?? [];
-        const sql = `${SEARCH}${only.length === 0 ? "" : ` AND d.doc_id IN (${only.map(() => "?").join(", ")})`} ORDER BY bm25(local_knowledge_fts) LIMIT ?`;
-        const at = options.asOf ?? revision();
-        const rows = HitRow.array().parse(
-          db.all(sql, [
-            match,
-            at,
-            at,
-            at,
-            ...where(scope),
-            ...only,
-            options.k ?? 5,
-          ]),
-        );
-        return ok(
-          rows.map(
-            (r): KnowledgeHit => ({
-              doc_id: r.doc_id,
-              version: r.version,
-              span: { start: r.span_start, end: r.span_end },
-              text: r.text,
-              score: -r.rank,
-              binding: { namespace: r.namespace, record_id: r.record_id },
-            }),
-          ),
-        );
-      }),
+      guard(() =>
+        db.transaction(async (tx) => {
+          const match = matchQuery(query);
+          if (match === undefined) return ok([]);
+          const only = options.sources ?? [];
+          const sql = `${SEARCH}${only.length === 0 ? "" : ` AND d.doc_id IN (${only.map(() => "?").join(", ")})`} ORDER BY bm25(local_knowledge_fts) LIMIT ?`;
+          const at = options.asOf ?? (await revisionOf(tx));
+          const rows = HitRow.array().parse(
+            await tx.all(sql, [
+              match,
+              at,
+              at,
+              at,
+              ...where(scope),
+              ...only,
+              options.k ?? 5,
+            ]),
+          );
+          return ok(rows.map(hitOf));
+        }, READ_ONLY),
+      ),
     get: async (scope, docId, version) =>
-      guard(() => {
+      guard(async () => {
         const [row] = DocRow.array().parse(
-          db.all(
-            `SELECT content_sha256, bytes, media_type, namespace, record_id
-             FROM local_knowledge_docs AS d WHERE doc_id = ? AND version = ? AND ${SCOPE}`,
-            [docId, version, ...where(scope)],
+          await db.transaction(
+            (tx) =>
+              tx.all(
+                `SELECT content_sha256, bytes, media_type, namespace, record_id
+                 FROM local_knowledge_docs AS d WHERE doc_id = ? AND version = ? AND ${SCOPE}`,
+                [docId, version, ...where(scope)],
+              ),
+            READ_ONLY,
           ),
         );
         if (row === undefined)
@@ -348,7 +364,19 @@ function bound(db: SqliteDriver, artifacts: ArtifactStore): Local {
           binding: { namespace: row.namespace, record_id: row.record_id },
         });
       }),
-    revision: async () => guard(() => ok(revision())),
+    revision: async () =>
+      guard(async () => ok(await db.transaction(revisionOf, READ_ONLY))),
     rebuild: () => rebuildIndex(db, artifacts, index),
+  };
+}
+
+function hitOf(r: z.infer<typeof HitRow>): KnowledgeHit {
+  return {
+    doc_id: r.doc_id,
+    version: r.version,
+    span: { start: r.span_start, end: r.span_end },
+    text: r.text,
+    score: -r.rank,
+    binding: { namespace: r.namespace, record_id: r.record_id },
   };
 }

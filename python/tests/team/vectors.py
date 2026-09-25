@@ -3,7 +3,6 @@ seeded under this implementation's own headers and chained, its index rebuilt, e
 config the vectors pin stored under its config_hash, and the rows as the vectors list them."""
 
 import json
-import sqlite3
 from pathlib import Path
 from typing import Final
 
@@ -14,6 +13,7 @@ from threads.log import BranchId, ThreadId
 from threads.log.digest import sha256_hex
 from threads.result import Ok
 from threads.store import SqliteStore
+from threads.store.conn import Conn
 from threads.store.lines import header_line
 from threads.team.rebuild import rebuild_team_index
 
@@ -104,7 +104,7 @@ def agents() -> dict[str, str]:
     return out
 
 
-def rows(conn: sqlite3.Connection) -> Obj:
+def rows(conn: Conn) -> Obj:
     found = index_rows(conn)
     return {t: found[t] for t in KEYS}
 

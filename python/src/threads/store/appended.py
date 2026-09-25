@@ -1,10 +1,10 @@
 """One append as the index hooks see it (`threads.store.indexing`)."""
 
-import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from threads.log import BranchId, Event, ParseError, ThreadId
+from threads.store.conn import Conn
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +23,6 @@ class Appended:
     now: int
 
 
-type IndexHook = Callable[[sqlite3.Connection, Appended], ParseError | None]
+type IndexHook = Callable[[Conn, Appended], ParseError | None]
 """Writes index rows from an append's events (the replay rule). An error rolls the whole append
 back, as a companion's refusal does."""

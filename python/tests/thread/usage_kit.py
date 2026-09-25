@@ -1,7 +1,6 @@
 """Shared by the Thread usage and cost tests: priced scripted runs and ways to break their logs."""
 
 import asyncio
-import sqlite3
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import replace
 
@@ -14,6 +13,7 @@ from threads.log import Model as ModelLimits
 from threads.loop.model import Model, ModelInfo, ModelResponse
 from threads.loop.scripted import ScriptedModel
 from threads.result import Ok
+from threads.store.conn import Conn
 from threads.thread.handle import Thread
 
 PRICE: JsonValue = {"input": 3000, "output": 15_000}
@@ -85,7 +85,7 @@ async def corrupt(store: Store, thread: ThreadId, prompt: str) -> None:
         " WHERE branch_id = ? AND seq = 2"
     )
 
-    def edit(c: sqlite3.Connection) -> None:
+    def edit(c: Conn) -> None:
         c.execute(sql, (prompt, root.value))
 
     await sq.run(edit)

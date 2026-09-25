@@ -12,6 +12,7 @@ import {
   started,
 } from "./api-kit";
 import { alice, eve, say, until } from "./kit";
+import { sqlRun } from "./sql";
 
 // The edges of API run recovery: a corrupt receipt row is skipped and the valid ones still
 // recover; a run that fails for a reason other than a held lease or a store error is not
@@ -30,7 +31,8 @@ describe("API run recovery edges", () => {
     );
     await until(() => has(store, eve.tenant, bad.branch_id, "model_request"));
     const { db } = await storeConnection(store);
-    db.run(
+    await sqlRun(
+      db,
       "UPDATE run_receipts SET thread_id = 'not-a-uuid' WHERE branch_id = ?",
       [bad.branch_id],
     );

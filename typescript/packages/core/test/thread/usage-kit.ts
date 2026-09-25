@@ -77,10 +77,12 @@ export async function corrupt(
 ): Promise<void> {
   const { db } = await storeConnection(store);
   const { log } = await openStore(store);
-  const branch = unwrap(log.mainBranch(thread));
-  db.run(
-    "UPDATE events SET line = CAST(replace(CAST(line AS TEXT), ?, 'Edited.') AS BLOB) WHERE branch_id = ? AND seq = 2",
-    [prompt, branch],
+  const branch = unwrap(await log.mainBranch(thread));
+  await db.transaction((tx) =>
+    tx.run(
+      "UPDATE events SET line = CAST(replace(CAST(line AS TEXT), ?, 'Edited.') AS BLOB) WHERE branch_id = ? AND seq = 2",
+      [prompt, branch],
+    ),
   );
 }
 

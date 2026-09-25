@@ -57,7 +57,7 @@ function recorded(
   artifacts: Pick<ArtifactStore, "get">,
 ) {
   const seen = new Map<string, number>();
-  return (tool: string, input: Input): ToolRun | undefined => {
+  return async (tool: string, input: Input): Promise<ToolRun | undefined> => {
     const hash = argsHash(input);
     const key = `${tool}\n${hash}`;
     const occurrence = (seen.get(key) ?? 0) + 1;
@@ -68,7 +68,8 @@ function recorded(
     );
     if (r === undefined) return undefined;
     used.add(r);
-    const full = r.ref === undefined ? undefined : artifacts.get(r.ref.sha256);
+    const full =
+      r.ref === undefined ? undefined : await artifacts.get(r.ref.sha256);
     return {
       kind: "done",
       output:
@@ -159,7 +160,7 @@ export function answers(source: AnswerSource): Answers {
     impls.set(spec.name, {
       ...base,
       run: async (input) => {
-        const run = lookup(spec.name, input);
+        const run = await lookup(spec.name, input);
         if (run === undefined) {
           unrecorded += 1;
           return {

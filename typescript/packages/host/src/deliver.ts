@@ -69,7 +69,7 @@ export async function sendOp(
     return;
   }
   if (known === undefined) {
-    const opened = writer.append([
+    const opened = await writer.append([
       {
         ...base,
         type: "tool_call",
@@ -119,7 +119,7 @@ function attempts(s: Send): number {
 async function attempt(s: Send, n: number): Promise<void> {
   // Not begun: a stopping host leaves it for the next one to issue.
   if (s.stopping.aborted) return;
-  const begun = s.writer.append([
+  const begun = await s.writer.append([
     {
       ...base,
       type: "effect_begin",
@@ -132,7 +132,7 @@ async function attempt(s: Send, n: number): Promise<void> {
   if (sent === "stale" || sent === "stopped") return;
   if (sent.status === "sent") return commit(s, sent.platform_ref, "adapter");
   if (sent.sent === "outcome_unknown") {
-    const unknown = append(s, {
+    const unknown = await append(s, {
       ...base,
       type: "effect_unknown",
       actor: HOST,
@@ -140,7 +140,7 @@ async function attempt(s: Send, n: number): Promise<void> {
     });
     return unknown ? reconcile(s, n) : undefined;
   }
-  const settled = append(s, {
+  const settled = await append(s, {
     ...base,
     type: "effect_resolved",
     actor: HOST,
@@ -152,7 +152,10 @@ async function attempt(s: Send, n: number): Promise<void> {
     await untilStopped(s.stopping, backoff(n));
     return attempt(s, n + 1);
   }
-  append(s, result(s.callId, true, "not_executed", `not sent: ${sent.kind}`));
+  await append(
+    s,
+    result(s.callId, true, "not_executed", `not sent: ${sent.kind}`),
+  );
 }
 
 /** "stale": the lease is lost; "stopped": the host stopped waiting. Either way, nothing more. */
@@ -196,7 +199,7 @@ async function perform(s: Send): Promise<Performed> {
 async function reconcile(s: Send, n: number): Promise<void> {
   const { capabilities } = s.adapter;
   if (withinDedup(s, capabilities.dedup_window_ms)) {
-    const retry = append(
+    const retry = await append(
       s,
       resolved(s.callId, "safe_to_retry", "provider_dedup"),
     );
@@ -216,10 +219,13 @@ async function reconcile(s: Send, n: number): Promise<void> {
   const answer = looked?.ok === true ? looked.value : undefined;
   if (answer?.status === "found") return commit(s, answer.value, "reconcile");
   if (answer?.status === "not_found" && capabilities.lookup === "final") {
-    const retry = append(s, resolved(s.callId, "safe_to_retry", "reconcile"));
+    const retry = await append(
+      s,
+      resolved(s.callId, "safe_to_retry", "reconcile"),
+    );
     return retry ? attempt(s, n + 1) : undefined;
   }
-  append(s, {
+  await append(s, {
     ...base,
     type: "parked",
     actor: HOST,
@@ -227,15 +233,15 @@ async function reconcile(s: Send, n: number): Promise<void> {
   });
 }
 
-function commit(
+async function commit(
   s: Send,
   platformRef: string,
   by: "adapter" | "reconcile",
-): void {
+): Promise<void> {
   // Stored text, so redacted like any result (C5); the event's copy is redacted by the writer.
   const bytes = new TextEncoder().encode(redactSecrets(platformRef));
   const ref = {
-    sha256: s.artifacts.put(bytes),
+    sha256: await s.artifacts.put(bytes),
     bytes: bytes.length,
     media_type: "text/plain",
   };
@@ -262,7 +268,7 @@ function commit(
             result_ref: ref,
           },
         };
-  s.writer.append([
+  await s.writer.append([
     settled,
     result(s.callId, false, "executed", `sent ${platformRef}`),
   ]);
@@ -313,14 +319,14 @@ function withinDedup(s: Send, windowMs: number | undefined): boolean {
   return first?.kind === "event" && Date.now() - first.event.time < windowMs;
 }
 
-function append(s: Send, draft: EventDraft): boolean {
-  return s.writer.append([draft]).ok;
+async function append(s: Send, draft: EventDraft): Promise<boolean> {
+  return (await s.writer.append([draft])).ok;
 }
 
 function fenceOf(writer: Writer): Fence {
   return {
     fence: async () => {
-      const live = writer.fence();
+      const live = await writer.fence();
       return live.ok
         ? { ok: true, value: undefined }
         : {

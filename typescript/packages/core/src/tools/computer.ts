@@ -147,7 +147,7 @@ async function capture(
     cursor === null ? "" : `; cursor at (${cursor[1]}, ${cursor[2]})`
   }.`;
   const ref = {
-    sha256: env.artifacts.put(got.value),
+    sha256: await env.artifacts.put(got.value),
     bytes: got.value.length,
     media_type: "image/png",
   };

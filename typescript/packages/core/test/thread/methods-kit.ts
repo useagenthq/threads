@@ -13,7 +13,7 @@ import { openStore } from "../../src/agent/sqlite";
 import { sha256Hex } from "../../src/hash";
 import type { EventId, KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
-import { compactionSide, refReader, render } from "../../src/render";
+import { compactionSide, renderFrom } from "../../src/render";
 import type { EventDraft } from "../../src/store";
 import { unwrap } from "../store/helpers";
 
@@ -68,7 +68,7 @@ export async function events(
   ref: Pick<ThreadRef, "store" | "branch">,
 ): Promise<readonly KnownEvent[]> {
   const { log } = await openStore(ref.store);
-  return knownEvents(unwrap(log.read(ref.branch)));
+  return knownEvents(unwrap(await log.read(ref.branch)));
 }
 
 /** The text of a recorded request's bytes. */
@@ -78,7 +78,7 @@ export async function requestText(
 ): Promise<string> {
   if (request.type !== "model_request") throw new Error("not a request");
   const { artifacts } = await openStore(store);
-  const bytes = unwrap(artifacts.get(request.data.request_ref.sha256));
+  const bytes = unwrap(await artifacts.get(request.data.request_ref.sha256));
   return new TextDecoder().decode(bytes);
 }
 
@@ -88,11 +88,11 @@ export async function append(
   ...drafts: readonly EventDraft[]
 ): Promise<void> {
   const { log } = await openStore(ref.store);
-  const writer = unwrap(log.acquire(ref.branch, "crashed"));
+  const writer = unwrap(await log.acquire(ref.branch, "crashed"));
   try {
-    unwrap(writer.append(drafts));
+    unwrap(await writer.append(drafts));
   } finally {
-    writer.release();
+    await writer.release();
   }
 }
 
@@ -105,7 +105,7 @@ export async function sideRequest(
   const { artifacts } = await openStore(ref.store);
   const before = await events(ref);
   const side = compactionSide(before, cause);
-  const { bytes, prefix } = unwrap(render(before, refReader(artifacts), side));
+  const { bytes, prefix } = unwrap(await renderFrom(before, artifacts, side));
   return {
     type: "model_request",
     type_version: 1,
@@ -116,7 +116,7 @@ export async function sideRequest(
       purpose: "compaction",
       cause_event_id: cause,
       request_ref: {
-        sha256: artifacts.put(bytes),
+        sha256: await artifacts.put(bytes),
         bytes: bytes.length,
         media_type: "application/x-ndjson",
       },

@@ -16,7 +16,7 @@ import { BranchId, type TeamId } from "../../src/log";
 import { markTestKit } from "../../src/model/guard";
 import { memberRows } from "../../src/team/rows";
 import { unwrap } from "../store/helpers";
-import { assertTeamReplays } from "./kit";
+import { assertTeamReplays, query, reading } from "./kit";
 
 type Store = ReturnType<typeof sqlite>;
 
@@ -159,13 +159,14 @@ describe("lane 21D review regressions", () => {
     const charged = z
       .array(z.object({ n: z.int() }))
       .parse(
-        log.driver.all(
+        await query(
+          log.driver,
           "SELECT COUNT(*) AS n FROM budget_ledger WHERE budget_id = ? AND limit_name = 'max_model_requests'",
           [`run:${r.thread.id}:${input?.event_id ?? ""}`],
         ),
       )[0]?.n;
     expect(charged).toBe(5);
-    assertTeamReplays(log, r.team.ref.id);
+    await assertTeamReplays(log, r.team.ref.id);
   });
 
   test("H3: a member's turn opened by Bob's message acts as Bob, not as Alice who started it", async () => {
@@ -227,7 +228,7 @@ describe("lane 21D review regressions", () => {
       principal: bob,
     });
     expect(seen).toEqual(["alice", "bob"]);
-    assertTeamReplays(await logOf(store), first.team.ref.id);
+    await assertTeamReplays(await logOf(store), first.team.ref.id);
   });
 
   test("H4: a parked member whose definition changed ends failed pin_mismatch, as a value", async () => {
@@ -258,7 +259,7 @@ describe("lane 21D review regressions", () => {
     expect(
       receipts(await events(store, r.thread), "member_ended"),
     ).toHaveLength(1);
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("N5: a member whose definition changed with an effect in doubt parks on it, and ends once it is settled", async () => {
@@ -269,9 +270,9 @@ describe("lane 21D review regressions", () => {
       say("Started."),
     ]).run("Go.", { store });
     const log = await logOf(store);
-    const row = memberRows(log.driver, r.team.ref.id).find(
-      (m) => m.name === "researcher-1",
-    );
+    const row = (
+      await reading(log.driver, (tx) => memberRows(tx, r.team.ref.id))
+    ).find((m) => m.name === "researcher-1");
     if (row?.branch_id == null) throw new Error("the member has a branch");
     const member = unwrap(await openThread(store, row.thread_id));
     const [pending] = unwrap(await member.pendingApprovals());
@@ -279,10 +280,10 @@ describe("lane 21D review regressions", () => {
     unwrap(await member.approve(pending.challenge_id, operator));
     // A process crashed right after the email's effect_begin was durable.
     const crashed = unwrap(
-      log.acquire(BranchId.parse(row.branch_id), "crashed"),
+      await log.acquire(BranchId.parse(row.branch_id), "crashed"),
     );
     unwrap(
-      crashed.append([
+      await crashed.append([
         {
           type: "effect_begin",
           type_version: 1,
@@ -292,7 +293,7 @@ describe("lane 21D review regressions", () => {
         },
       ]),
     );
-    crashed.release();
+    await crashed.release();
     // A deploy changed the researcher while the email may have been sent.
     const again = await mailer("v2", [say("Unused.")]).run("Again.", {
       store,
@@ -328,7 +329,7 @@ describe("lane 21D review regressions", () => {
       status: "failed",
       error: { code: "pin_mismatch" },
     });
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("M1: a lead whose run fails returns without waiting on its members' turns", async () => {
@@ -372,12 +373,12 @@ describe("lane 21D review regressions", () => {
       team: r.team.ref.id,
       agents: new Map(),
     });
-    worker.start();
+    await worker.start();
     await worker.stop();
     expect(await endedWith(store, r.team.ref.id)).toMatchObject({
       status: "failed",
       error: { code: "pin_unavailable" },
     });
-    assertTeamReplays(opened.log, r.team.ref.id);
+    await assertTeamReplays(opened.log, r.team.ref.id);
   });
 });

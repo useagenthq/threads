@@ -12,12 +12,17 @@ import { hostRunner } from "../../src/agent/registry";
 import { storeOf } from "../../src/agent/sqlite";
 import { BranchId, TeamId, ThreadId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
-import { LogStore, memoryArtifacts, type SqliteDriver } from "../../src/store";
+import {
+  LogStore,
+  memoryArtifacts,
+  type StoreDriver,
+  type Tx,
+} from "../../src/store";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
 import { memberRows } from "../../src/team/rows";
 import { unwrap } from "../store/helpers";
 import { startSpecialist } from "./dynamic-kit";
-import { assertTeamReplays } from "./kit";
+import { assertTeamReplays, query, reading } from "./kit";
 import { say } from "./run-kit";
 
 // A crash drill for a dynamic member (spec/schema/README.md, Teams, "Dynamic members"): the
@@ -32,14 +37,20 @@ class Crash extends Error {}
  * The same database, through a driver that dies at every materialize of the member: the process
  * never gets past it, whatever it retries.
  */
-function crashing(base: SqliteDriver): SqliteDriver {
-  return {
-    ...base,
-    run: (sql, params) => {
+function crashing(base: StoreDriver): StoreDriver {
+  const wrap = (tx: Tx): Tx => ({
+    ...tx,
+    run: (sql, params = []) => {
       if (sql.includes("UPDATE team_members SET branch_id"))
         throw new Crash("killed at the member's materialize");
-      base.run(sql, params);
+      return tx.run(sql, params);
     },
+    transaction: (fn) => tx.transaction((inner) => fn(wrap(inner))),
+  });
+  return {
+    ...base,
+    transaction: (fn, options) =>
+      base.transaction((tx) => fn(wrap(tx)), options),
   };
 }
 
@@ -98,30 +109,34 @@ test("a crash at a dynamic member's materialize, then a template without its too
   const db = openBunSqlite(":memory:");
   const artifacts = memoryArtifacts();
   const now = Date.now;
-  const open = (driver: SqliteDriver) =>
+  const open = async (driver: StoreDriver) =>
     storeOf({
-      log: unwrap(LogStore.open(driver, now, artifacts)),
+      log: unwrap(await LogStore.open(driver, now, artifacts)),
       artifacts,
     });
   await expect(
     lead(template("read_a"), true).run("Is INV-1002 paid?", {
-      store: open(crashing(db)),
+      store: await open(crashing(db)),
     }),
   ).rejects.toThrow(Crash);
 
   // The restart's template lists read_b; the lead chose read_a.
   const member = scriptedModel({ responses: [say("never")] });
   const restarted = lead(template("read_b", member), false);
-  const store = open(db);
-  const log = unwrap(LogStore.open(db, now, artifacts));
+  const store = await open(db);
+  const log = unwrap(await LogStore.open(db, now, artifacts));
   const [row] = z
     .array(Row)
     .parse(
-      db.all("SELECT lead_thread_id AS thread_id, team_id FROM teams", []),
+      await query(
+        db,
+        "SELECT lead_thread_id AS thread_id, team_id FROM teams",
+        [],
+      ),
     );
   if (row === undefined)
     throw new Error("the lead's first append opened its team");
-  const leadBranch = unwrap(log.mainBranch(row.thread_id));
+  const leadBranch = unwrap(await log.mainBranch(row.thread_id));
   const runner = hostRunner(restarted);
   if (runner === undefined) throw new Error("agent() registers a host runner");
   const result = await runner.execute(
@@ -137,13 +152,17 @@ test("a crash at a dynamic member's materialize, then a template without its too
     output: "The specialist could not run.",
   });
 
-  const leadLog = knownEvents(unwrap(log.read(leadBranch)));
+  const leadLog = knownEvents(unwrap(await log.read(leadBranch)));
   const started = leadLog.filter((e) => e.type === "member_started");
   expect(started).toHaveLength(1);
-  const [only] = memberRows(db, row.team_id).filter((r) => r.role === "member");
+  const [only] = (
+    await reading(db, (tx) => memberRows(tx, row.team_id))
+  ).filter((r) => r.role === "member");
   if (only?.branch_id === null || only?.branch_id === undefined)
     throw new Error("the member's branch was opened by its failed rebind");
-  const events = knownEvents(unwrap(log.read(BranchId.parse(only.branch_id))));
+  const events = knownEvents(
+    unwrap(await log.read(BranchId.parse(only.branch_id))),
+  );
   expect(events.map((e) => e.type)).toEqual([
     "thread_started",
     "user_input",
@@ -157,5 +176,5 @@ test("a crash at a dynamic member's materialize, then a template without its too
     error: { code: "pin_unavailable" },
   });
   expect(member.remaining()).toBe(1);
-  assertTeamReplays(log, row.team_id);
+  await assertTeamReplays(log, row.team_id);
 });

@@ -51,7 +51,7 @@ async def team_members(store: Store, lead: VerifiedLog) -> tuple[Member, ...]:
     if started is None or started.data.team is MISSING:
         return ()
     team = started.data.team.id
-    rows: list[tuple[object, object, object, object]] = await (await open_store(store)).run(
+    rows = await (await open_store(store)).run(
         lambda c: c.execute(
             "SELECT m.name, m.generation, m.thread_id, m.branch_id FROM team_members m"
             " JOIN teams t ON t.team_id = m.team_id"

@@ -21,6 +21,7 @@ import {
   loadCase,
 } from "../../core/test/conformance/cases";
 import { host } from "../src";
+import { sqlAll } from "./sql";
 
 // The host's conformance runner: every `intake` and `host` case of spec/conformance/cases, run
 // as the README's "What a runner does per kind" says, with no per-case code.
@@ -176,7 +177,8 @@ async function runIntake(name: string, input: unknown): Promise<void> {
       }),
     )
     .parse(
-      db.all(
+      await sqlAll(
+        db,
         "SELECT channel, item_key, thread_id FROM inbox ORDER BY inbox_id",
         [],
       ),
@@ -260,7 +262,7 @@ async function inputsOf(
       .parse(Receipt.parse(JSON.parse(receipt)).branch_id);
     for (const tenant of tenants) {
       const { log } = await openStore(tenantStore(store, tenant));
-      const read = log.read(branch);
+      const read = await log.read(branch);
       if (read.ok)
         inputs += knownEvents(read.value).filter(
           (e) => e.type === "user_input",

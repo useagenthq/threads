@@ -2,7 +2,6 @@
 point, deleted in one transaction, only when nothing in it is still running. The resource ledger
 is never deleted with log rows: it owns cleanup."""
 
-import sqlite3
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from typing import Final, Literal
@@ -11,6 +10,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import BranchId, ThreadId, ThreadStartedEvent
 from threads.result import Err, Ok
+from threads.store.conn import Conn
 from threads.store.losses import record_losses
 from threads.store.sql import export, text_of, transaction
 from threads.store.started import Opened, opened_threads, owner_of
@@ -40,7 +40,7 @@ class DeleteError:
 
 
 def delete_thread(
-    conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId, now: int
+    conn: Conn, tenant_id: str, thread_id: ThreadId, now: int
 ) -> Ok[int] | Err[DeleteError]:
     """Deletes a thread of the tenant with everything that can't outlive it: its subagent and
     team member threads, recursively, and the team log and index rows of every team a deleted
@@ -54,21 +54,21 @@ def delete_thread(
         return _delete_set(conn, tenant_id, (thread_id,), now)
 
 
-def delete_tenant(conn: sqlite3.Connection, tenant_id: str, now: int) -> Ok[int] | Err[DeleteError]:
+def delete_tenant(conn: Conn, tenant_id: str, now: int) -> Ok[int] | Err[DeleteError]:
     """Every thread of the tenant, as one deletion set in one transaction."""
     with transaction(conn):
-        rows: list[tuple[object]] = conn.execute(
+        rows = conn.execute(
             "SELECT thread_id FROM threads WHERE tenant_id = ?", (tenant_id,)
         ).fetchall()
         return _delete_set(conn, tenant_id, tuple(ThreadId(text_of(t)) for (t,) in rows), now)
 
 
 def _delete_set(
-    conn: sqlite3.Connection, tenant_id: str, start: Sequence[ThreadId], now: int
+    conn: Conn, tenant_id: str, start: Sequence[ThreadId], now: int
 ) -> Ok[int] | Err[DeleteError]:
     opened = opened_threads(conn, tenant_id)
     doomed = _fixed_point(opened, start)
-    existing: list[tuple[object]] = conn.execute(
+    existing = conn.execute(
         "SELECT thread_id FROM threads WHERE tenant_id = ?", (tenant_id,)
     ).fetchall()
     alive = {text_of(t) for (t,) in existing}
@@ -81,20 +81,18 @@ def _delete_set(
     return Ok(len(doomed))
 
 
-def _doomed_teams(
-    conn: sqlite3.Connection, tenant_id: str, doomed: Collection[ThreadId]
-) -> list[str]:
+def _doomed_teams(conn: Conn, tenant_id: str, doomed: Collection[ThreadId]) -> list[str]:
     """The teams a doomed lead leads, by `teams.lead_thread_id` in this tenant (Gate 1 §4.15
     rule 2). A team id is never taken from a log: an imported team_opened could name another
     tenant's team. Filtered here, not in SQL, so a large tenant never passes SQLite's variable
     limit."""
-    rows: list[tuple[object, object]] = conn.execute(
+    rows = conn.execute(
         "SELECT team_id, lead_thread_id FROM teams WHERE tenant_id = ?", (tenant_id,)
     ).fetchall()
     return [text_of(team) for team, lead in rows if text_of(lead) in doomed]
 
 
-def _delete_teams(conn: sqlite3.Connection, tenant_id: str, teams: Collection[str]) -> None:
+def _delete_teams(conn: Conn, tenant_id: str, teams: Collection[str]) -> None:
     for team in teams:
         for table in TEAM_TABLES:
             scope = " AND tenant_id = ?" if table == "teams" else ""
@@ -141,9 +139,7 @@ def _outside_its_team(
     return None
 
 
-def _running(
-    conn: sqlite3.Connection, doomed: Collection[ThreadId], now: int
-) -> DeleteError | None:
+def _running(conn: Conn, doomed: Collection[ThreadId], now: int) -> DeleteError | None:
     """busy when a branch of the set has an unexpired lease (a live executor), an effect in
     doubt (begun or unknown), or a log that doesn't verify, which can't be proved free of one:
     deleting it would erase the only record recovery settles an effect from."""
@@ -169,14 +165,12 @@ def _busy(thread: ThreadId, why: str) -> DeleteError:
     )
 
 
-def _branches(conn: sqlite3.Connection, thread: ThreadId) -> list[BranchId]:
-    rows: list[tuple[object]] = conn.execute(
-        "SELECT branch_id FROM branches WHERE thread_id = ?", (thread,)
-    ).fetchall()
+def _branches(conn: Conn, thread: ThreadId) -> list[BranchId]:
+    rows = conn.execute("SELECT branch_id FROM branches WHERE thread_id = ?", (thread,)).fetchall()
     return [BranchId(text_of(b)) for (b,) in rows]
 
 
-def _unsettled(conn: sqlite3.Connection, branch: BranchId, now: int) -> str | None:
+def _unsettled(conn: Conn, branch: BranchId, now: int) -> str | None:
     """Why `branch` may still hold an effect only its log can settle, if it may."""
     log = verify_export(export(conn, branch), now)
     if isinstance(log, Err):
@@ -188,7 +182,7 @@ def _unsettled(conn: sqlite3.Connection, branch: BranchId, now: int) -> str | No
     return f"branch {branch} has an effect in doubt" if doubt else None
 
 
-def _delete_one(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId, now: int) -> None:
+def _delete_one(conn: Conn, tenant_id: str, thread_id: ThreadId, now: int) -> None:
     """One thread's rows: its branches' log, lease, cursor and wake rows, approvals, inbox and
     channel rows, receipts and budget rows go; its live resources move to releasing for gc; a
     tombstone and one loss row per telemetry observer record it."""
@@ -197,7 +191,10 @@ def _delete_one(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId, n
     for branch in _branches(conn, thread_id):
         for table in _PER_BRANCH:
             conn.execute(f"DELETE FROM {table} WHERE branch_id = ?", (branch,))  # noqa: S608
-        conn.execute("DELETE FROM budget_ledger WHERE attempt_key LIKE ?", (f"{branch}:%",))
+        conn.execute(
+            "DELETE FROM budget_ledger WHERE substr(attempt_key, 1, length(CAST(? AS TEXT))) = ?",
+            (f"{branch}:", f"{branch}:"),
+        )
         conn.execute(
             "UPDATE resources SET state = 'releasing' WHERE owner_branch_id = ? AND state = 'live'",
             (branch,),

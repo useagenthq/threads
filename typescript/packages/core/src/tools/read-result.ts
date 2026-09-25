@@ -21,7 +21,7 @@ export const readToolResult: Builtin = builtin({
     const { ref, preview } = recorded.data;
     let bytes: Uint8Array = utf8.encode(preview);
     if (ref !== undefined) {
-      const got = env.artifacts.get(ref.sha256);
+      const got = await env.artifacts.get(ref.sha256);
       if (!got.ok) return done(`${got.error.code}: ${got.error.message}`, true);
       if (got.value.length !== ref.bytes)
         return done(`artifact_corrupt: ${ref.sha256} length`, true);

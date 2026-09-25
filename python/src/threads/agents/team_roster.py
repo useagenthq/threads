@@ -2,8 +2,6 @@
 included, in (name, generation) order. A settled member's result is hydrated; a label is read from
 the member_started that started it (the lead's log, or the team log's for an operator's)."""
 
-import sqlite3
-
 from pydantic import TypeAdapter
 
 from threads.agents.member_results import hydrated
@@ -12,6 +10,7 @@ from threads.agents.team_handle_types import MemberState, TeamMember
 from threads.log import BranchId, MemberRef, MemberStartedEvent, StoredMemberResult
 from threads.result import Err
 from threads.store import SqliteStore
+from threads.store.conn import Conn
 from threads.store.sql import int_of, text_of
 from threads.team.rows import bytes_of, team_row
 
@@ -27,8 +26,8 @@ _STATES: dict[str, MemberState] = {
 type _Row = tuple[str, int, str, MemberState, str, str | None, bytes | None]
 
 
-def _rows(conn: sqlite3.Connection, team: str) -> list[_Row]:
-    found: list[tuple[object, ...]] = conn.execute(
+def _rows(conn: Conn, team: str) -> list[_Row]:
+    found = conn.execute(
         "SELECT name, generation, agent, state, role, branch_id, result FROM team_members"
         " WHERE team_id = ? ORDER BY name, generation",
         (team,),

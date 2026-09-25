@@ -2,6 +2,7 @@ import { BranchId, type Principal } from "../../log";
 import { knownEvents } from "../../reduce";
 import { err, ok, type Result } from "../../result";
 import type { LogStore } from "../../store";
+import { reading } from "../../store/driver";
 import { memberRows, teamRow } from "../../team/rows";
 import { ConfigError } from "../errors";
 import { leadsNamed, type MemberEntry, memberEntry } from "../registry";
@@ -30,7 +31,7 @@ export async function openTeam(
       message: `the principal is of tenant ${principal.tenant}, not the team's`,
     });
   const { log, artifacts } = await openStore(tenantStore(store, ref.tenant));
-  const team = teamRow(log.driver, ref.id);
+  const team = await reading(log.driver, (tx) => teamRow(tx, ref.id));
   if (team === undefined || team.tenant_id !== ref.tenant)
     return err({
       code: "not_found",
@@ -38,7 +39,9 @@ export async function openTeam(
     });
   const lead = await rebound(log, ref);
   if (!lead.ok) return lead;
-  return ok(teamHandle({ log, artifacts, ref, principal, lead: lead.value }));
+  return ok(
+    await teamHandle({ log, artifacts, ref, principal, lead: lead.value }),
+  );
 }
 
 /**
@@ -50,11 +53,13 @@ async function rebound(
   log: LogStore,
   ref: TeamRef,
 ): Promise<Result<MemberEntry, OpenTeamError>> {
-  const row = memberRows(log.driver, ref.id).find((r) => r.role === "lead");
+  const row = (await reading(log.driver, (tx) => memberRows(tx, ref.id))).find(
+    (r) => r.role === "lead",
+  );
   const read =
     row?.branch_id === undefined || row.branch_id === null
       ? undefined
-      : log.read(BranchId.parse(row.branch_id));
+      : await log.read(BranchId.parse(row.branch_id));
   if (row === undefined || read === undefined || !read.ok)
     throw new Error(`team ${ref.id} has no readable lead log`);
   const events = knownEvents(read.value);

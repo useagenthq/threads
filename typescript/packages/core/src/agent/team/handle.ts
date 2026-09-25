@@ -12,6 +12,7 @@ import { redactSecrets } from "../../redact/text";
 import { knownEvents } from "../../reduce";
 import type { LogStore } from "../../store";
 import type { ArtifactStore } from "../../store/artifacts";
+import { reading } from "../../store/driver";
 import { uuidv7 } from "../../store/encode";
 import type { DecideTx } from "../../store/writer";
 import type { Batch, Mint } from "../../team/batch";
@@ -63,7 +64,7 @@ export function teamHandle(env: HandleEnv): Team {
       startMember(env, agent, task, options),
     send: (to, text, options = {}) =>
       sendTo(env, to, text, options.idempotencyKey),
-    members: async () => roster(env.log, env.artifacts, env.ref.id),
+    members: () => roster(env.log, env.artifacts, env.ref.id),
     events: (options = {}) => teamEvents(env.log, env.ref.id, options.after),
   };
 }
@@ -76,7 +77,9 @@ async function startMember(
 ): Promise<TeamStartResult> {
   const { idempotencyKey, ...chosen } = options;
   const args = { agent, task, ...chosen };
-  const lead = leadOf(env);
+  const lead = await leadOf(env);
+  // Read before the append: the lead's and its ancestors' budgets cover the new member.
+  const starter = await ancestorsOf(env.log, lead.parent);
   const pin = pins(env.lead.team ?? [], lead.deferTools);
   const { pinned, resolved } = await startPin(
     pin,
@@ -89,9 +92,8 @@ async function startMember(
     resolved,
     limits: limitsOf(env),
     // The lead is the new member's parent: its budgets and its ancestors' cover the member.
-    headroom: () =>
-      pinned !== undefined &&
-      startRoom(env.log.budgets, ancestorsOf(env.log, lead.parent), pinned),
+    headroom: async (_agent, tx) =>
+      pinned !== undefined && (await startRoom(starter, pinned, tx)),
     threadId: ThreadId.parse(uuidv7(env.log.now())),
   };
   const done = await operator(env, "start", args, idempotencyKey, (req) =>
@@ -119,7 +121,7 @@ async function sendTo(
     "send",
     { to, text },
     idempotencyKey,
-    (req, team) => send(req, refTarget(req.db, team, to), text, limitsOf(env)),
+    (req, team) => send(req, refTarget(req.tx, team, to), text, limitsOf(env)),
   );
   if (done === BUSY) return { status: "refused", code: BUSY };
   if (done.status === "sent")
@@ -138,19 +140,19 @@ async function operator(
   op: OperatorOp,
   body: Readonly<Record<string, Json | undefined>>,
   idempotencyKey: string | undefined,
-  decide: (req: Request, team: TeamRow) => Recorded,
+  decide: (req: Request, team: TeamRow) => Promise<Recorded>,
 ): Promise<Recorded | typeof BUSY> {
-  const team = teamRow(env.log.driver, env.ref.id);
+  const team = await reading(env.log.driver, (tx) => teamRow(tx, env.ref.id));
   if (team === undefined) throw new Error(`no team ${env.ref.id}`);
   const requestId = uuidv7(env.log.now());
-  return onTeamLog(
+  return await onTeamLog(
     env.log,
     team.team_log_branch_id,
-    (tx: DecideTx, batch: Batch) => {
+    async (tx: DecideTx, batch: Batch) => {
       // Read in the append: the team may have closed since the handle looked.
-      const now = teamRow(tx.db, env.ref.id) ?? team;
-      const opened = openOperator(
-        { db: tx.db, chain: tx.chain, batch, put: putText(env), team: now },
+      const now = (await teamRow(tx.tx, env.ref.id)) ?? team;
+      const opened = await openOperator(
+        { tx: tx.tx, chain: tx.chain, batch, put: putText(env), team: now },
         {
           requestId,
           op,
@@ -183,10 +185,10 @@ function present(
 
 /** A text above the inline cap, stored before the append that names it (redacted, C5). */
 function putText(env: HandleEnv): Request["put"] {
-  return (text) => {
+  return async (text) => {
     const bytes = utf8.encode(redactSecrets(text));
     return {
-      sha256: env.artifacts.put(bytes),
+      sha256: await env.artifacts.put(bytes),
       bytes: bytes.length,
       media_type: "text/plain",
     };
@@ -196,17 +198,17 @@ function putText(env: HandleEnv): Request["put"] {
 const limitsOf = (env: HandleEnv) => env.lead.teamLimits;
 
 /** The lead as a member's parent, and the defer_tools its members inherit. */
-function leadOf(env: HandleEnv): {
+async function leadOf(env: HandleEnv): Promise<{
   readonly parent: NonNullable<EventOf<"thread_started">["data"]["parent"]>;
   readonly deferTools: DeferTools | undefined;
-} {
-  const row = memberRows(env.log.driver, env.ref.id).find(
-    (r) => r.role === "lead",
-  );
+}> {
+  const row = (
+    await reading(env.log.driver, (tx) => memberRows(tx, env.ref.id))
+  ).find((r) => r.role === "lead");
   const read =
     row?.branch_id === undefined || row.branch_id === null
       ? undefined
-      : env.log.read(row.branch_id);
+      : await env.log.read(row.branch_id);
   if (row === undefined || read === undefined || !read.ok)
     throw new Error(`team ${env.ref.id} has no readable lead log`);
   const started = knownEvents(read.value).find(

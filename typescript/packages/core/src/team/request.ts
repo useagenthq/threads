@@ -1,5 +1,5 @@
 import type { Provenance } from "../log";
-import type { SqliteDriver } from "../store/driver";
+import type { Tx } from "../store/driver";
 import type { Batch } from "./batch";
 import type { Refusal, Refused } from "./call";
 import type { Envelope, PutText } from "./mail";
@@ -16,7 +16,7 @@ export type PolicyOp = "start" | "send" | "ask";
 /** The member an op addresses: its name (the decision's target) and its row, read when due. */
 export type Target = {
   readonly name: string;
-  readonly row: () => MemberRow | Refusal;
+  readonly row: () => Promise<MemberRow | Refusal>;
 };
 
 /** thread_started.parent of a member this request starts. */
@@ -28,7 +28,8 @@ export type Parent = {
 };
 
 export type Request = {
-  readonly db: SqliteDriver;
+  /** The request's append transaction: every read and write goes through it. */
+  readonly tx: Tx;
   readonly batch: Batch;
   readonly put: PutText;
   readonly team: TeamRow;
@@ -44,7 +45,7 @@ export type Request = {
   /** Records the Phase 1 decision on `target`: the team's grant, else default deny (forbidden). */
   readonly decide: (op: PolicyOp, target: string) => Refusal | undefined;
   /** member_started.parent, given member_started's own event id. */
-  readonly parent: (startedId: string) => Parent;
+  readonly parent: (startedId: string) => Promise<Parent>;
   /** Records a refusal (the call's tool_result, or operator_refused) and returns it. */
   readonly refuse: (refusal: Refusal) => Refused;
   /** Records a success (the call's tool_result; an operator's needs nothing) and returns it. */

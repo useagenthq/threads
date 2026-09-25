@@ -7,7 +7,7 @@ import {
   type TeamRefusal,
 } from "../log";
 import type { EventDraft } from "../store/admit";
-import type { SqliteDriver } from "../store/driver";
+import type { Tx } from "../store/driver";
 import type { Chain } from "../verify";
 import type { Batch } from "./batch";
 import type { ReadText } from "./close";
@@ -31,7 +31,7 @@ import {
 
 /** What an op's decision reads, inside the caller's append transaction. */
 export type CallContext = {
-  readonly db: SqliteDriver;
+  readonly tx: Tx;
   /** The caller's committed chain: its turn, the call and what its log recorded. */
   readonly chain: Chain;
   readonly batch: Batch;
@@ -82,11 +82,12 @@ export function isRefusal(value: unknown): value is Refusal {
  * The team the caller acts in: the one it leads (a nested lead starts its own members), else
  * the one it is a member of. Undefined for a thread in no team.
  */
-export function callerOf(ctx: CallContext): Caller | undefined {
-  const rows = ownRows(ctx.db, ctx.call.thread_id);
+export async function callerOf(ctx: CallContext): Promise<Caller | undefined> {
+  const rows = await ownRows(ctx.tx, ctx.call.thread_id);
   const row = rows.find((r) => r.role === "lead") ?? rows[0];
-  const team = row === undefined ? undefined : teamRow(ctx.db, row.team_id);
-  const provenance = turnProvenance(ctx.db, ctx.chain);
+  const team =
+    row === undefined ? undefined : await teamRow(ctx.tx, row.team_id);
+  const provenance = await turnProvenance(ctx.tx, ctx.chain);
   if (row === undefined || team === undefined || provenance === undefined)
     return undefined;
   return { team, row, ref: refOf(team, row), provenance };
@@ -180,11 +181,11 @@ export function refusedOf(value: Refusal): Refused {
 }
 
 /** The call as a team request: its caller sends, and its tool_result records the outcome. */
-export function callRequest(ctx: CallContext): Request {
-  const caller = callerOf(ctx);
+export async function callRequest(ctx: CallContext): Promise<Request> {
+  const caller = await callerOf(ctx);
   if (caller === undefined) throw new Error("a team tool call outside a team");
   return {
-    db: ctx.db,
+    tx: ctx.tx,
     batch: ctx.batch,
     put: ctx.put,
     team: caller.team,
@@ -196,7 +197,7 @@ export function callRequest(ctx: CallContext): Request {
     // Phase 1: only a lead starts; members send to one another.
     decide: (op, target) =>
       decide(ctx, op, target, op !== "start" || caller.row.role === "lead"),
-    parent: (startedId) => ({
+    parent: async (startedId) => ({
       thread_id: ctx.call.thread_id,
       branch_id: ctx.call.branch_id,
       event_id: startedId,
@@ -214,8 +215,8 @@ export function callRequest(ctx: CallContext): Request {
 export function named(ctx: CallContext, name: string): Target {
   return {
     name,
-    row: () => {
-      const caller = callerOf(ctx);
+    row: async () => {
+      const caller = await callerOf(ctx);
       if (caller === undefined)
         throw new Error("a team tool call outside a team");
       return addressed(ctx, caller, name);
@@ -227,12 +228,12 @@ export function named(ctx: CallContext, name: string): Target {
  * The member a model addresses by name, at the generation the caller's own log last recorded for
  * it (its member_started, or a receipt's sender), else the current row's.
  */
-export function addressed(
+export async function addressed(
   ctx: CallContext,
   caller: Caller,
   name: string,
-): MemberRow | Refusal {
-  const row = memberNamed(ctx.db, caller.team.team_id, name);
+): Promise<MemberRow | Refusal> {
+  const row = await memberNamed(ctx.tx, caller.team.team_id, name);
   const generation = bound(ctx.chain, name) ?? row?.generation ?? 0;
   if (row === undefined || generation > row.generation)
     return refusal("unknown_member");

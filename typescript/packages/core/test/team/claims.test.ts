@@ -9,7 +9,7 @@ import { openBunSqlite } from "../../src/store/bun-sqlite";
 import { TEAM_CONSTANTS } from "../../src/team/constants";
 import { memberRows } from "../../src/team/rows";
 import { unwrap } from "../store/helpers";
-import { assertTeamReplays } from "./kit";
+import { assertTeamReplays, query, reading } from "./kit";
 import { call, memberEvents, receipts, say, start } from "./run-kit";
 
 // mail.claim and its expiry (design §4.6): a worker that claimed a member's pending mail and died
@@ -45,7 +45,7 @@ describe("mail claims", () => {
     const clock = { now: Date.now() };
     const now = (): number => clock.now;
     const store = storeOf(
-      { log: unwrap(LogStore.open(db, now, artifacts)), artifacts },
+      { log: unwrap(await LogStore.open(db, now, artifacts)), artifacts },
       { db, now },
     );
     const researcher = () =>
@@ -69,19 +69,23 @@ describe("mail claims", () => {
     // Run 2: another executor holds the researcher's lease, so this run's worker claims the
     // message it sends, can't run the member, and stops with the claim still live, as a worker
     // that dies holding it would.
-    const log = unwrap(LogStore.open(db, now, artifacts));
-    const row = memberRows(db, first.team.ref.id).find(
-      (m) => m.role === "member",
-    );
+    const log = unwrap(await LogStore.open(db, now, artifacts));
+    const row = (
+      await reading(db, (tx) => memberRows(tx, first.team.ref.id))
+    ).find((m) => m.role === "member");
     if (row?.branch_id === null || row === undefined)
       throw new Error("materialized");
     const holder = unwrap(
-      log.acquire(BranchId.parse(row.branch_id), "elsewhere"),
+      await log.acquire(BranchId.parse(row.branch_id), "elsewhere"),
     );
     const claimed = Promise.withResolvers<void>();
-    const watch = setInterval(() => {
+    const watch = setInterval(async () => {
       const rows = Claim.parse(
-        db.all("SELECT claim_token FROM mail WHERE kind = 'message'", []),
+        await query(
+          db,
+          "SELECT claim_token FROM mail WHERE kind = 'message'",
+          [],
+        ),
       );
       if (rows[0]?.claim_token !== null && rows[0] !== undefined)
         claimed.resolve();
@@ -99,7 +103,7 @@ describe("mail claims", () => {
       team: [researcher()],
     }).run("One more thing.", { store, thread });
     clearInterval(watch);
-    holder.release();
+    await holder.release();
     const lead = (responses: readonly unknown[]) =>
       agent({
         name: "lead",
@@ -119,6 +123,9 @@ describe("mail claims", () => {
     expect(
       receipts(await memberEvents(store, team, "researcher-1"), "message"),
     ).toHaveLength(1);
-    assertTeamReplays(unwrap(LogStore.open(db, now, artifacts)), team);
+    await assertTeamReplays(
+      unwrap(await LogStore.open(db, now, artifacts)),
+      team,
+    );
   });
 });

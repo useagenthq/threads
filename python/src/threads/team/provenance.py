@@ -2,7 +2,6 @@
 the (principal, root_request) of that turn, read from its opener. One turn has one authority and
 one budget root."""
 
-import sqlite3
 from collections.abc import Sequence
 
 from pydantic import JsonValue
@@ -18,16 +17,17 @@ from threads.log import (
 )
 from threads.reduce.handlers import to_json
 from threads.reduce.openers import turn_start
+from threads.store.conn import Conn
 from threads.team.rows import mail_envelope
 
 
-def turn_provenance(conn: sqlite3.Connection, events: Sequence[Event]) -> JsonValue:
+def turn_provenance(conn: Conn, events: Sequence[Event]) -> JsonValue:
     """The provenance of the open turn, or of the last one; None before any turn."""
     start = turn_start(events)
     return None if start is None else _of(conn, events, events[start])
 
 
-def _of(conn: sqlite3.Connection, events: Sequence[Event], e: Event) -> JsonValue:
+def _of(conn: Conn, events: Sequence[Event], e: Event) -> JsonValue:
     if isinstance(e, MessageReceivedEvent):
         return to_json(e.data.envelope.provenance)
     if isinstance(e, UserInputEvent):
@@ -42,7 +42,7 @@ def _of(conn: sqlite3.Connection, events: Sequence[Event], e: Event) -> JsonValu
     return None
 
 
-def _woken(conn: sqlite3.Connection, events: Sequence[Event], e: WokenEvent) -> JsonValue:
+def _woken(conn: Conn, events: Sequence[Event], e: WokenEvent) -> JsonValue:
     """A woken turn belongs to the run that spawned its first cause's child."""
     late = next(
         (

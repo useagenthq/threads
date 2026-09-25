@@ -40,7 +40,9 @@ from threads.agents.store import Store, open_store
 from threads.cli import main
 from threads.log import ThreadId
 from threads.result import Err, Ok
+from threads.store.conn import one
 from threads.store.deletion import DeleteError, delete_tenant, delete_thread
+from threads.store.sql import text_of
 from threads.team.rebuild import rebuild_team_index
 
 if TYPE_CHECKING:
@@ -68,7 +70,7 @@ def test_a_starting_member_has_no_thread_to_tombstone() -> None:
         assert await delete(store, LEAD) == Ok(PENDING)
         assert await team_rows(store) == 0
         tombs = await (await open_store(store)).run(
-            lambda c: {t for (t,) in c.execute("SELECT thread_id FROM tombstones")}
+            lambda c: {t for (t,) in c.execute("SELECT thread_id FROM tombstones").fetchall()}
         )
         assert tombs == {LEAD, TEAM_LOG}
 
@@ -117,11 +119,13 @@ def test_an_effect_in_doubt_is_busy() -> None:
 
     async def main_() -> None:
         store = await holding({"log": (case / "log.threads-py.jsonl").read_bytes()}, "local")
-        (thread,) = await (await open_store(store)).run(
-            lambda c: c.execute("SELECT thread_id FROM threads").fetchone()
+        (thread,) = one(
+            await (await open_store(store)).run(
+                lambda c: c.execute("SELECT thread_id FROM threads").fetchone()
+            )
         )
         sq = await open_store(store)
-        found = await sq.run(lambda c: delete_thread(c, "local", ThreadId(thread), NOW))
+        found = await sq.run(lambda c: delete_thread(c, "local", ThreadId(text_of(thread)), NOW))
         assert isinstance(found, Err)
         assert found.error.code == "busy"
         assert "effect in doubt" in found.error.message

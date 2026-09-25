@@ -164,7 +164,7 @@ describe("computer_screenshot", () => {
       ref: { media_type: "image/png", bytes: 33 },
     });
     if (image?.type !== "image_ref") throw new Error("no image");
-    expect(tool.artifacts.get(image.ref.sha256).ok).toBe(true);
+    expect((await tool.artifacts.get(image.ref.sha256)).ok).toBe(true);
   });
 
   test("a capture holding a registered value is refused, never stored (#328 HIGH 8)", async () => {
@@ -177,7 +177,7 @@ describe("computer_screenshot", () => {
     const run = await tool.run({});
     expect(run).toMatchObject({ kind: "done", isError: true });
     expect(run.kind === "done" && run.output).toContain("registered secret");
-    expect(tool.artifacts.get(sha256Hex(shot)).ok).toBe(false);
+    expect((await tool.artifacts.get(sha256Hex(shot))).ok).toBe(false);
   });
 
   test("no desktop answering is unavailable, never an empty success", async () => {
@@ -251,7 +251,7 @@ async function eventsOf(lost: boolean): Promise<readonly KnownEvent[]> {
     permissions: { mode: "bypass", allow_bypass: true },
   }).run("click it", { store: sqlite(":memory:") });
   const { log } = await openStore(result.thread.store);
-  return knownEvents(unwrap(log.read(result.thread.branch)));
+  return knownEvents(unwrap(await log.read(result.thread.branch)));
 }
 
 describe("computer in a run", () => {

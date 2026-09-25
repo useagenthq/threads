@@ -58,7 +58,7 @@ describe("one member per agent name", () => {
     open();
     const first = await running;
     const { log } = await openStore(store);
-    const events = knownEvents(unwrap(log.read(first.thread.branch)));
+    const events = knownEvents(unwrap(await log.read(first.thread.branch)));
     expect(
       events.filter((e) => e.type === "agent_spawned").map((e) => e.data),
     ).toMatchObject([{ call_id: "s1" }]);
@@ -77,7 +77,7 @@ describe("one member per agent name", () => {
       subagents: [worker],
     }).run("again", { store, thread: first.thread });
     expect(again.status).toBe("completed");
-    const after = knownEvents(unwrap(log.read(first.thread.branch)));
+    const after = knownEvents(unwrap(await log.read(first.thread.branch)));
     expect(
       after.filter((e) => e.type === "agent_spawned").map((e) => e.data),
     ).toMatchObject([{ call_id: "s1" }, { call_id: "s3" }]);

@@ -1,7 +1,6 @@
 """The single writer of one branch: `validate_next`, then the fenced conditional append."""
 
 import asyncio
-import sqlite3
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass
 
@@ -16,6 +15,7 @@ from threads.store import lease, sql
 from threads.store.admit import Admitted, admit, trial
 from threads.store.appended import Appended
 from threads.store.companion import Companion
+from threads.store.conn import CommitUnknownError, Conn
 from threads.store.indexing import index_append, known
 from threads.store.lines import Draft, Position, stored_secret
 from threads.store.verify import StoredEvent
@@ -33,7 +33,7 @@ class Refusal[E]:
 class DecideTx:
     """What a decided append's decision reads, inside the append's transaction."""
 
-    conn: sqlite3.Connection
+    conn: Conn
     fold: Fold
     """The committed fold the drafts extend: the stored head is its head."""
     now: int
@@ -54,11 +54,11 @@ type _Outcome = lease.Batch | ParseError | lease.Refused
 
 @dataclass(frozen=True, slots=True)
 class _Commit:
-    """One append's commit: where it goes, the trial fold its batch is admitted into, its clock
-    and companion."""
+    """One append's commit: where it goes, the trial fold its committed attempt admitted into,
+    its clock and companion."""
 
     head: lease.Head
-    fold: Fold
+    fold: Callable[[], Fold]
     now: int
     companion: Companion | None
 
@@ -168,21 +168,29 @@ class Writer:
         store's thread, into a trial copy of the fold that replaces it once committed."""
         now = self._clock()
         head = lease.Head(self._branch, self._lease, self._fold.seq)
-        committed, fold = self._fold, trial(self._fold)
-        refusals: list[Refusal[E]] = []
+        committed = self._fold
+        # One entry per attempt that reached the decision: the store may re-run the whole
+        # transaction, so each attempt admits into its own trial of the committed fold, and
+        # only the last attempt (the one that committed) counts.
+        tries: list[tuple[Fold, Refusal[E] | None]] = []
 
-        def build(conn: sqlite3.Connection) -> lease.Batch | lease.Refused:
+        def build(conn: Conn) -> lease.Batch | lease.Refused:
+            fold = trial(committed)
             decided = decide(DecideTx(conn, committed, now, self._read))
+            tries.append((fold, decided if isinstance(decided, Refusal) else None))
             if isinstance(decided, Refusal):
-                refusals.append(decided)
                 return lease.Refused(_REFUSED)
             built = self._admit(fold, decided, now)
             if isinstance(built, Err):
                 return lease.Refused(built.error)
             return self._batch(head, built.value)
 
-        outcome = await self._commit(_Commit(head, fold, now, companion), build)
-        return outcome, refusals[0] if refusals else None
+        def last() -> Fold:
+            return tries[-1][0] if tries else committed
+
+        outcome = await self._commit(_Commit(head, last, now, companion), build)
+        refused = isinstance(outcome, lease.Refused) and len(tries) > 0
+        return outcome, tries[-1][1] if refused else None
 
     def _admit(
         self, fold: Fold, drafts: Sequence[Draft], now: int
@@ -212,9 +220,9 @@ class Writer:
         try:
             outcome = await asyncio.shield(op)
         except asyncio.CancelledError:
-            self._settle(await op, commit.fold)
+            self._settle(await op, commit.fold())
             raise
-        self._settle(outcome, commit.fold)
+        self._settle(outcome, commit.fold())
         return outcome
 
     def _settle(self, outcome: _Outcome, fold: Fold) -> None:
@@ -233,9 +241,7 @@ class Writer:
         """The index hooks over the append's events, then its companion."""
         holder, companion = self._lease.holder_id, commit.companion
 
-        def after(
-            conn: sqlite3.Connection, stored: sql.Branch, batch: lease.Batch
-        ) -> ParseError | None:
+        def after(conn: Conn, stored: sql.Branch, batch: lease.Batch) -> ParseError | None:
             events = [event for event, _ in batch.rows]
             appended = Appended(
                 stored.tenant_id,
@@ -263,7 +269,7 @@ class Writer:
         lookup, a termination): a writer whose lease moved on must not reach the adapter, even
         though its intent is already durable. A lost lease poisons the writer."""
         now = self._clock()
-        error = await self._worker.call(lambda c: lease.check(c, self._branch, self._lease, now))
+        error = await self._worker.read(lambda c: lease.check(c, self._branch, self._lease, now))
         if error is not None:
             self._poisoned = True
             return Err(error)
@@ -273,13 +279,20 @@ class Writer:
         """Hands the lease back so the next executor can take the branch at once, only while
         this holder and epoch still hold it. The writer is done afterwards."""
         now = self._clock()
-        await self._worker.call(lambda c: lease.release(c, self._branch, self._lease, now))
         self._poisoned = True
+        await self._worker.call(lambda c: lease.release(c, self._branch, self._lease, now))
 
     async def renew(self) -> Ok[None] | Err[ParseError]:
         """Extends the lease. Once lost it stays lost: the writer is poisoned."""
         now = self._clock()
-        renewed = await self._worker.call(lambda c: lease.renew(c, self._branch, self._lease, now))
+        try:
+            renewed = await self._worker.call(
+                lambda c: lease.renew(c, self._branch, self._lease, now)
+            )
+        except CommitUnknownError:
+            # The renewal may or may not have landed: the owner reloads from the log.
+            self._poisoned = True
+            raise
         if isinstance(renewed, ParseError):
             self._poisoned = True
             return Err(renewed)

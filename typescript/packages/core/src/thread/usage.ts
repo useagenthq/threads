@@ -38,20 +38,19 @@ export function usageMethods(
 ): ThreadUsage {
   return {
     usage: async () => {
-      const read = readLog(log, branchId);
+      const read = await readLog(log, branchId);
       return read.ok ? ok(reduce(read.value, log.now()).usage) : read;
     },
     cost: async (options = {}) => {
-      const read = readLog(log, branchId);
+      const read = await readLog(log, branchId);
       if (!read.ok) return read;
-      const total =
-        options.tree === true
-          ? treeCost(log, threadId, read.value)
-          : ownCost(read.value);
+      const total = await (options.tree === true
+        ? treeCost(log, threadId, read.value)
+        : ownCost(read.value));
       return total.ok ? ok(total.value ?? null) : total;
     },
     cacheBreaks: async () => {
-      const read = readLog(log, branchId);
+      const read = await readLog(log, branchId);
       if (!read.ok) return read;
       // The effective ttl, so an agent that pinned no context still gets a list.
       const { cache_ttl_ms } = contextPolicy(read.value.fold.policy);

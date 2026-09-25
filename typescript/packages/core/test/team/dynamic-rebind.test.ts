@@ -103,7 +103,7 @@ async function failedRebind(
     log.length,
   );
   expect(member.remaining()).toBe(1);
-  assertTeamReplays(await logOf(store), r.team.ref.id);
+  await assertTeamReplays(await logOf(store), r.team.ref.id);
 }
 
 describe("rebinding a dynamic member", () => {

@@ -33,8 +33,8 @@ export type ForkInput = {
 };
 
 /** The snapshot event `point` names on the parent's chain, or no_snapshot_boundary. */
-function snapshotAt(log: LogStore, input: ForkInput) {
-  const parent = log.read(input.parent);
+async function snapshotAt(log: LogStore, input: ForkInput) {
+  const parent = await log.read(input.parent);
   if (!parent.ok) return parent;
   const event = knownEvents(parent.value).find(
     (e) => e.event_id === input.point,
@@ -58,9 +58,9 @@ export async function forkBranch(
   sandbox: Sandbox | undefined,
   input: ForkInput,
 ): Promise<Result<void, LogError>> {
-  const at = snapshotAt(log, input);
+  const at = await snapshotAt(log, input);
   if (!at.ok) return at;
-  const writer = log.beginFork({
+  const writer = await log.beginFork({
     parent: input.parent,
     atSeq: at.value.seq,
     branch: input.child,
@@ -70,8 +70,8 @@ export async function forkBranch(
   const snapshot = at.value.snapshot;
   if (snapshot === undefined)
     throw new Error("an eligible point is a snapshot");
-  const fail = (code: LogError["code"], message: string) => {
-    const failed = log.failFork(writer.value);
+  const fail = async (code: LogError["code"], message: string) => {
+    const failed = await log.failFork(writer.value);
     return failed.ok ? err(logError(code, message, at.value.seq)) : failed;
   };
   if (sandbox?.info.provider !== snapshot.provider)
@@ -105,7 +105,7 @@ async function restore(
   snapshot: SnapshotData,
 ): Promise<Result<SandboxSession, LogError>> {
   const ledger = log.ledger;
-  const row = ledger.begin(writer, "sandbox", sandbox.info.provider);
+  const row = await ledger.begin(writer, "sandbox", sandbox.info.provider);
   if (!row.ok) return row;
   // The adapter fences this context at its real dispatch point, after any queueing: a
   // creator that lost the lease meanwhile creates nothing.
@@ -116,7 +116,7 @@ async function restore(
     ownerContext(writer),
   );
   if (made.ok) {
-    const live = ledger.live(
+    const live = await ledger.live(
       writer,
       row.value.resource_id,
       made.value.id,
@@ -143,7 +143,7 @@ async function recover(
     ownerContext(writer),
   );
   if (!answer.ok) return answer;
-  const settled = settle(
+  const settled = await settle(
     ledger,
     writer,
     row,
@@ -188,14 +188,14 @@ export async function recoverFork(
   branch: BranchId,
   holderId: string,
 ): Promise<Result<readonly ResourceState[], LogError>> {
-  const rows = log.ledger.rows(branch);
+  const rows = await log.ledger.rows(branch);
   if (!rows.ok) return rows;
   // Only the rows' own provider can prove anything about them; refuse before touching them.
   for (const row of rows.value) {
     const same = sameProvider(sandbox, row);
     if (!same.ok) return same;
   }
-  const writer = log.reclaimFork(branch, holderId);
+  const writer = await log.reclaimFork(branch, holderId);
   if (!writer.ok) return writer;
   const states: ResourceState[] = [];
   for (const row of rows.value) {
@@ -208,7 +208,7 @@ export async function recoverFork(
     if (!settled.ok) return settled;
     states.push(settled.value);
   }
-  const failed = log.failFork(writer.value);
+  const failed = await log.failFork(writer.value);
   return failed.ok ? ok(states) : failed;
 }
 
@@ -221,7 +221,7 @@ export async function recoverForks(
   sandbox: Sandbox,
   holderId: string,
 ): Promise<Result<readonly BranchId[], LogError>> {
-  const forking = log.forkingBranches();
+  const forking = await log.forkingBranches();
   if (!forking.ok) return forking;
   const failed: BranchId[] = [];
   for (const branch of forking.value) {

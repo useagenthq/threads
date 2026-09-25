@@ -11,15 +11,15 @@ import { StoreCorruptError } from "../errors";
 const utf8 = new TextDecoder("utf-8", { fatal: true });
 
 /** The public result of a stored one. Throws StoreCorruptError. */
-export function hydrated(
+export async function hydrated(
   result: StoredMemberResult,
   artifacts: ArtifactStore,
-): MemberResult {
+): Promise<MemberResult> {
   switch (result.status) {
     case "completed": {
       const { output } = result;
       const text =
-        "text" in output ? output.text : readText(artifacts, output.ref);
+        "text" in output ? output.text : await readText(artifacts, output.ref);
       return { member: result.member, status: "completed", output: text };
     }
     case "handed_off":
@@ -37,8 +37,11 @@ export function hydrated(
   }
 }
 
-function readText(artifacts: ArtifactStore, ref: ArtifactRef): string {
-  const got = artifacts.get(ref.sha256);
+async function readText(
+  artifacts: ArtifactStore,
+  ref: ArtifactRef,
+): Promise<string> {
+  const got = await artifacts.get(ref.sha256);
   if (!got.ok) {
     const code =
       got.error.code === "artifact_missing"

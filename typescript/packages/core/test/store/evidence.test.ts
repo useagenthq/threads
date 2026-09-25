@@ -6,6 +6,7 @@ import {
   code,
   fixture,
   ROOT,
+  rows,
   started,
   THREAD,
   unwrap,
@@ -25,12 +26,12 @@ function join2(...parts: readonly Uint8Array[]): Uint8Array {
 }
 
 /** A clean export's lines without its head line (every line still ends in "\n"). */
-function withoutHead(): Uint8Array {
-  const f = fixture();
-  unwrap(f.store.createBranch(THREAD, ROOT));
-  const writer = unwrap(f.store.acquire(ROOT, "holder-a"));
-  unwrap(writer.append([started, userInput("hi")]));
-  const bytes = unwrap(f.store.exportBranch(ROOT));
+async function withoutHead(): Promise<Uint8Array> {
+  const f = await fixture();
+  unwrap(await f.store.createBranch(THREAD, ROOT));
+  const writer = unwrap(await f.store.acquire(ROOT, "holder-a"));
+  unwrap(await writer.append([started, userInput("hi")]));
+  const bytes = unwrap(await f.store.exportBranch(ROOT));
   return bytes.subarray(0, bytes.lastIndexOf(0x0a, bytes.length - 2) + 1);
 }
 
@@ -59,26 +60,26 @@ function headerOnly(impl: string, version: string): Uint8Array {
 }
 
 describe("an import without a verified head keeps its evidence", () => {
-  test("a torn tail is stored as an artifact and exported back, unverified", () => {
+  test("a torn tail is stored as an artifact and exported back, unverified", async () => {
     const torn = new TextEncoder().encode("x".repeat(57));
-    const input = join2(withoutHead(), torn);
-    const { store, db } = fixture();
-    unwrap(store.importLog(input));
-    expect(unwrap(store.exportBranch(ROOT))).toEqual(input);
-    const log = unwrap(store.read(ROOT));
+    const input = join2(await withoutHead(), torn);
+    const { store, db } = await fixture();
+    unwrap(await store.importLog(input));
+    expect(unwrap(await store.exportBranch(ROOT))).toEqual(input);
+    const log = unwrap(await store.read(ROOT));
     expect(log.headVerified).toBe(false);
     expect(log.torn?.bytes).toEqual(torn);
-    expect(db.all("SELECT state, head_verified FROM branches", [])).toEqual([
-      { state: "inspection_only", head_verified: 0 },
-    ]);
+    expect(await rows(db, "SELECT state, head_verified FROM branches")).toEqual(
+      [{ state: "inspection_only", head_verified: 0 }],
+    );
   });
 
-  test("acquiring a torn import records log_repaired and makes it runnable", () => {
+  test("acquiring a torn import records log_repaired and makes it runnable", async () => {
     const torn = new TextEncoder().encode("x".repeat(57));
-    const prefix = withoutHead();
-    const { store, db } = fixture();
-    unwrap(store.importLog(join2(prefix, torn)));
-    const writer = unwrap(store.acquire(ROOT, "holder-a"));
+    const prefix = await withoutHead();
+    const { store, db } = await fixture();
+    unwrap(await store.importLog(join2(prefix, torn)));
+    const writer = unwrap(await store.acquire(ROOT, "holder-a"));
     const repaired = writer.chain.events.at(-1)?.event;
     expect(repaired?.type).toBe("log_repaired");
     expect(repaired?.critical).toBe(false);
@@ -91,19 +92,21 @@ describe("an import without a verified head keeps its evidence", () => {
         media_type: "application/octet-stream",
       },
     });
-    expect(db.all("SELECT state, head_verified FROM branches", [])).toEqual([
-      { state: "ready", head_verified: 1 },
-    ]);
-    expect(unwrap(store.read(ROOT)).headVerified).toBe(true);
+    expect(await rows(db, "SELECT state, head_verified FROM branches")).toEqual(
+      [{ state: "ready", head_verified: 1 }],
+    );
+    expect(unwrap(await store.read(ROOT)).headVerified).toBe(true);
   });
 
-  test("a terminated prefix without its head line stays unverified", () => {
-    const input = withoutHead();
-    const { store } = fixture();
-    unwrap(store.importLog(input));
-    expect(unwrap(store.exportBranch(ROOT))).toEqual(input);
-    expect(unwrap(store.read(ROOT)).headVerified).toBe(false);
-    expect(code(store.acquire(ROOT, "holder-a"))).toBe("branch_not_runnable");
+  test("a terminated prefix without its head line stays unverified", async () => {
+    const input = await withoutHead();
+    const { store } = await fixture();
+    unwrap(await store.importLog(input));
+    expect(unwrap(await store.exportBranch(ROOT))).toEqual(input);
+    expect(unwrap(await store.read(ROOT)).headVerified).toBe(false);
+    expect(code(await store.acquire(ROOT, "holder-a"))).toBe(
+      "branch_not_runnable",
+    );
   });
 });
 
@@ -117,14 +120,14 @@ describe("re-importing onto a stored leaf compares its head evidence", () => {
     ["verified, then unverified", "head", "", "seq_conflict"],
     ["no tail, then a torn tail", "", "AAA", "seq_conflict"],
   ] as const) {
-    test(`${what}: ${expected}`, () => {
+    test(`${what}: ${expected}`, async () => {
       const prefix = headerOnly("threads-ts", "0.0.0");
       const body = prefix.subarray(0, prefix.indexOf(0x0a) + 1);
       const build = (t: string): Uint8Array =>
         t === "head" ? prefix : join2(body, tail(t));
-      const { store } = fixture();
-      unwrap(store.importLog(build(first)));
-      expect(code(store.importLog(build(second)))).toBe(expected);
+      const { store } = await fixture();
+      unwrap(await store.importLog(build(first)));
+      expect(code(await store.importLog(build(second)))).toBe(expected);
     });
   }
 });
@@ -134,13 +137,13 @@ describe("only the branch's own writer appends", () => {
     ["another implementation", "threads-py", "0.0.0"],
     ["another major version", "threads-ts", "1.0.0"],
   ] as const) {
-    test(`${what}: read and export work, acquire is writer_mismatch`, () => {
+    test(`${what}: read and export work, acquire is writer_mismatch`, async () => {
       const input = headerOnly(impl, version);
-      const { store } = fixture();
-      unwrap(store.importLog(input));
-      expect(unwrap(store.exportBranch(ROOT))).toEqual(input);
-      expect(unwrap(store.read(ROOT)).headVerified).toBe(true);
-      const refused = store.acquire(ROOT, "holder-a");
+      const { store } = await fixture();
+      unwrap(await store.importLog(input));
+      expect(unwrap(await store.exportBranch(ROOT))).toEqual(input);
+      expect(unwrap(await store.read(ROOT)).headVerified).toBe(true);
+      const refused = await store.acquire(ROOT, "holder-a");
       expect(
         refused.ok ? "ok" : [refused.error.code, refused.error.seq],
       ).toEqual(["writer_mismatch", 0]);
@@ -149,32 +152,32 @@ describe("only the branch's own writer appends", () => {
 });
 
 describe("an in-doubt branch requires recovery", () => {
-  test("an effect begun before a crash flags the writer", () => {
+  test("an effect begun before a crash flags the writer", async () => {
     const c = loadCase("effect-crash-after-begin-idempotent");
-    const { store } = caseStore(c);
-    const log = unwrap(store.importLog(c.log ?? new Uint8Array()));
+    const { store } = await caseStore(c);
+    const log = unwrap(await store.importLog(c.log ?? new Uint8Array()));
     const branch = log.segments.at(-1)?.header.branch_id;
     if (branch === undefined) throw new Error("a verified log has a header");
-    expect(unwrap(store.acquire(branch, "holder-a")).requiresRecovery).toBe(
-      true,
-    );
+    expect(
+      unwrap(await store.acquire(branch, "holder-a")).requiresRecovery,
+    ).toBe(true);
   });
 
-  test("a model request awaiting its response flags the writer", () => {
+  test("a model request awaiting its response flags the writer", async () => {
     const c = loadCase("model-response-recovered-by-lookup");
-    const { store } = caseStore(c);
-    const log = unwrap(store.importLog(c.log ?? new Uint8Array()));
+    const { store } = await caseStore(c);
+    const log = unwrap(await store.importLog(c.log ?? new Uint8Array()));
     const branch = log.segments.at(-1)?.header.branch_id;
     if (branch === undefined) throw new Error("a verified log has a header");
-    expect(unwrap(store.acquire(branch, "holder-a")).requiresRecovery).toBe(
-      true,
-    );
+    expect(
+      unwrap(await store.acquire(branch, "holder-a")).requiresRecovery,
+    ).toBe(true);
   });
 
-  test("a settled branch does not", () => {
-    const f = fixture();
-    unwrap(f.store.createBranch(THREAD, ROOT));
-    const writer = unwrap(f.store.acquire(ROOT, "holder-a"));
+  test("a settled branch does not", async () => {
+    const f = await fixture();
+    unwrap(await f.store.createBranch(THREAD, ROOT));
+    const writer = unwrap(await f.store.acquire(ROOT, "holder-a"));
     expect(writer.requiresRecovery).toBe(false);
   });
 });

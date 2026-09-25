@@ -11,7 +11,7 @@ import { openStore } from "../../src/agent/sqlite";
 import { sha256Hex } from "../../src/hash";
 import type { KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
-import { refReader, verifyRequests } from "../../src/render";
+import { verifyRequests } from "../../src/render";
 import { unwrap } from "../store/helpers";
 
 // Skills: listed in line 0, loaded on demand from the host store pinned at thread
@@ -41,8 +41,8 @@ const REVIEW = {
 
 async function logOf<T>(result: RunResult<T>): Promise<readonly KnownEvent[]> {
   const { log, artifacts } = await openStore(result.thread.store);
-  const events = knownEvents(unwrap(log.read(result.thread.branch)));
-  unwrap(verifyRequests(events, refReader(artifacts)));
+  const events = knownEvents(unwrap(await log.read(result.thread.branch)));
+  unwrap(await verifyRequests(events, artifacts));
   return events;
 }
 

@@ -52,13 +52,13 @@ async function logs(
   readonly child: readonly KnownEvent[];
 }> {
   const { log } = await openStore(store);
-  const parent = knownEvents(unwrap(log.read(thread.branch)));
+  const parent = knownEvents(unwrap(await log.read(thread.branch)));
   const spawned = parent.filter((e) => e.type === "agent_spawned");
   const first = spawned[0];
   if (spawned.length !== 1 || first?.type !== "agent_spawned")
     throw new Error(`expected one agent_spawned, got ${spawned.length}`);
-  const branch = unwrap(log.mainBranch(first.data.child_thread_id));
-  return { parent, child: knownEvents(unwrap(log.read(branch))) };
+  const branch = unwrap(await log.mainBranch(first.data.child_thread_id));
+  return { parent, child: knownEvents(unwrap(await log.read(branch))) };
 }
 
 const count = (log: readonly KnownEvent[], type: KnownEvent["type"]) =>

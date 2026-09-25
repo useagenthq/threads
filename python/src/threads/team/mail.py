@@ -1,13 +1,13 @@
 """Mail envelopes (spec/schema/README.md, "Teams", Mail): what a sender's message_sent records and
 every receipt copies byte for byte."""
 
-import sqlite3
 from collections.abc import Callable
 
 from pydantic import JsonValue
 
 from threads.log import MailEnvelope
 from threads.reduce.handlers import to_json
+from threads.store.conn import Conn
 from threads.store.lines import Draft
 from threads.team.constants import TEAM_CONSTANTS
 from threads.team.rows import member_rows
@@ -16,7 +16,7 @@ type PutText = Callable[[str], JsonValue]
 """Stores text in the content-addressed store before the append that names it: its ArtifactRef."""
 
 
-def address_of(conn: sqlite3.Connection, team: str, branch: str) -> JsonValue:
+def address_of(conn: Conn, team: str, branch: str) -> JsonValue:
     """The mail's `to`: the member whose branch it is, at its generation, or the team log."""
     row = next((r for r in member_rows(conn, team) if r.branch_id == branch), None)
     return "team_log" if row is None else {"name": row.name, "generation": row.generation}

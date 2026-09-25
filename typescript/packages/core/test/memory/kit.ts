@@ -3,7 +3,7 @@ import { openStore } from "../../src/agent/sqlite";
 import type { EventOf } from "../../src/fold/state";
 import type { KnownEvent, Principal } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
-import { refReader, verifyRequests } from "../../src/render";
+import { verifyRequests } from "../../src/render";
 import type { LogStore } from "../../src/store";
 import { unwrap } from "../store/helpers";
 
@@ -43,8 +43,8 @@ export async function eventsOf<T>(
   result: RunResult<T>,
 ): Promise<readonly KnownEvent[]> {
   const { log, artifacts } = await openStore(result.thread.store);
-  const events = knownEvents(unwrap(log.read(result.thread.branch)));
-  unwrap(verifyRequests(events, refReader(artifacts)));
+  const events = knownEvents(unwrap(await log.read(result.thread.branch)));
+  unwrap(await verifyRequests(events, artifacts));
   return events;
 }
 
@@ -54,11 +54,13 @@ export async function requestsOf<T>(
 ): Promise<readonly string[]> {
   const { artifacts } = await openStore(result.thread.store);
   const decoder = new TextDecoder();
-  return (await eventsOf(result)).flatMap((e) =>
-    e.type === "model_request"
-      ? [decoder.decode(unwrap(artifacts.get(e.data.request_ref.sha256)))]
-      : [],
+  const requests = (await eventsOf(result)).flatMap((e) =>
+    e.type === "model_request" ? [e.data.request_ref.sha256] : [],
   );
+  const out: string[] = [];
+  for (const sha256 of requests)
+    out.push(decoder.decode(unwrap(await artifacts.get(sha256))));
+  return out;
 }
 
 export function injectedOf(

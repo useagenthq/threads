@@ -72,7 +72,7 @@ export async function events(
   thread: ThreadRef,
 ): Promise<readonly KnownEvent[]> {
   const { log } = await openStore(store);
-  return knownEvents(unwrap(log.read(thread.branch)));
+  return knownEvents(unwrap(await log.read(thread.branch)));
 }
 
 /** Every late result is followed, after its append's block, by a woken naming the block. */

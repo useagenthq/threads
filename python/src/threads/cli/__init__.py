@@ -13,7 +13,8 @@ API. Serving needs the `host` extra.
                  [--strict] [--out <file>]  check saved cases (replay, rerun, drift, live judge)
 
 `module` is `module`, `module:attribute` or `file.py[:attribute]`, default `app`. The store is
-`--store` (default `.threads`) scoped to `--tenant` (default `local`).
+`--store` (a directory or a postgres:// URL; default `.threads`) scoped to
+`--tenant` (default `local`).
 """
 
 import argparse
@@ -28,7 +29,9 @@ from threads.store import LOCAL_TENANT
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="threads", description="The threads host and store CLI.")
-    parser.add_argument("--store", default=".threads", help="store directory (default .threads)")
+    parser.add_argument(
+        "--store", default=".threads", help="store directory or postgres:// URL (default .threads)"
+    )
     parser.add_argument("--tenant", default=LOCAL_TENANT, help="tenant (default local)")
     commands = parser.add_subparsers(dest="command", required=True)
     for name, port in (("dev", 8787), ("start", int(os.environ.get("PORT", "8000")))):

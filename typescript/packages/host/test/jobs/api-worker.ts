@@ -7,7 +7,13 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { agent, type Model, scriptedModel, sqlite, tool } from "@threads/core";
+import {
+  agent,
+  type Model,
+  scriptedModel,
+  type sqlite,
+  tool,
+} from "@threads/core";
 import {
   BranchId,
   knownEvents,
@@ -18,6 +24,8 @@ import {
 } from "@threads/core/host";
 import { z } from "zod";
 import { host } from "../../src";
+import { sqlAll } from "../sql";
+import { drillStore } from "./stores";
 import { reached, record, until } from "./worker";
 
 export const TENANT = "acme";
@@ -41,10 +49,10 @@ async function branchLog(
   const { db } = await storeConnection(store);
   const [row] = z
     .array(z.strictObject({ branch_id: BranchId }))
-    .parse(db.all("SELECT branch_id FROM run_receipts LIMIT 1", []));
+    .parse(await sqlAll(db, "SELECT branch_id FROM run_receipts LIMIT 1", []));
   if (row === undefined) return undefined;
   const { log } = await openStore(tenantStore(store, TENANT));
-  const read = log.read(row.branch_id);
+  const read = await log.read(row.branch_id);
   return read.ok ? read.value : undefined;
 }
 
@@ -61,7 +69,7 @@ function model(where: string, script: readonly unknown[]): Model {
 }
 
 async function serve(where: string): Promise<void> {
-  const store = sqlite(where);
+  const store = await drillStore(where);
   const before = await branchLog(store);
   // A restart answers only what the log has not: the script is the model's, not the process's.
   const answered =

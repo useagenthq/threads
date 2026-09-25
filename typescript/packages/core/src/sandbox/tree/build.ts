@@ -102,12 +102,12 @@ function headers(e: TreeEntry, owner: Owner): readonly Uint8Array[] {
  * tree that breaks a tree rule is artifact_corrupt before any byte is written.
  * A missing or corrupt file artifact, or one whose size isn't the tree's, stops it.
  */
-export function buildTar(
+export async function buildTar(
   tree: Tree,
   artifacts: Pick<ArtifactStore, "get">,
   owner: Owner,
   out: (chunk: Uint8Array) => void,
-): Result<void, LogError> {
+): Promise<Result<void, LogError>> {
   if (
     ![owner.uid, owner.gid].every(
       (id) => Number.isInteger(id) && id >= 0 && id <= MAX_ID,
@@ -120,7 +120,7 @@ export function buildTar(
   for (const e of tree.entries) {
     for (const block of headers(e, owner)) out(block);
     if (e.kind !== "file") continue;
-    const bytes = artifacts.get(e.sha256);
+    const bytes = await artifacts.get(e.sha256);
     if (!bytes.ok) return bytes;
     if (bytes.value.length !== e.size)
       return err(

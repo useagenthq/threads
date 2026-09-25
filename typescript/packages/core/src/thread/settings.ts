@@ -7,7 +7,7 @@ import type {
   Principal,
 } from "../log";
 import { err, ok, type Result } from "../result";
-import type { Writer } from "../store";
+import type { Chain } from "../verify";
 import {
   type ControlError,
   type Plan,
@@ -26,12 +26,9 @@ type Settings = z.infer<typeof ModelSettings>;
  */
 export function cancel(
   principal: Principal,
-): (
-  events: readonly KnownEvent[],
-  writer: Writer,
-) => Result<Plan, ControlError> {
-  return (_events, writer) => {
-    const waiting = writer.chain.fold.parked.filter(
+): (events: readonly KnownEvent[], chain: Chain) => Result<Plan, ControlError> {
+  return (_events, chain) => {
+    const waiting = chain.fold.parked.filter(
       (a) => a.kind === "approval" || a.kind === "input",
     );
     return ok({
@@ -56,10 +53,7 @@ export function cancel(
  */
 export function stopWhenIdle(
   principal: Principal,
-): (
-  events: readonly KnownEvent[],
-  writer: Writer,
-) => Result<Plan, ControlError> {
+): (events: readonly KnownEvent[], chain: Chain) => Result<Plan, ControlError> {
   return () =>
     ok({
       record: {
@@ -76,18 +70,15 @@ export function stopWhenIdle(
 export function setMode(
   mode: Mode,
   principal: Principal,
-): (
-  events: readonly KnownEvent[],
-  writer: Writer,
-) => Result<Plan, ControlError> {
-  return (_events, writer) =>
+): (events: readonly KnownEvent[], chain: Chain) => Result<Plan, ControlError> {
+  return (_events, chain) =>
     ok({
       record: {
         type: "mode_changed",
         type_version: 1,
         critical: true,
         actor: { kind: "user", principal },
-        data: { from: writer.chain.fold.mode, to: mode },
+        data: { from: chain.fold.mode, to: mode },
       },
     });
 }
@@ -100,12 +91,9 @@ export function setMode(
 export function setModel(
   change: SettingsChange,
   principal: Principal,
-): (
-  events: readonly KnownEvent[],
-  writer: Writer,
-) => Result<Plan, ControlError> {
-  return (events, writer) => {
-    const known = recordedSettings(events, writer).findLast(
+): (events: readonly KnownEvent[], chain: Chain) => Result<Plan, ControlError> {
+  return (events, chain) => {
+    const known = recordedSettings(events, chain).findLast(
       (s) =>
         s.model.provider === change.model.provider &&
         s.model.name === change.model.name,
@@ -137,9 +125,9 @@ export function setModel(
 
 function recordedSettings(
   events: readonly KnownEvent[],
-  writer: Writer,
+  chain: Chain,
 ): readonly Settings[] {
-  const fallback = writer.chain.fold.policy?.fallback ?? [];
+  const fallback = chain.fold.policy?.fallback ?? [];
   const recorded = events.flatMap((e): Settings[] => {
     if (e.type === "settings_changed") return [e.data.settings];
     if (e.type !== "thread_started") return [];

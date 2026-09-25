@@ -15,7 +15,6 @@ Each path may move a row only from the states it names, along `MOVES`:
 A pending row a crash left behind is resolved by its owner once it takes the lease again.
 """
 
-import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final, Literal
@@ -23,6 +22,7 @@ from typing import Final, Literal
 from threads.log import BranchId, ParseError
 from threads.result import Err, Ok
 from threads.store import lease
+from threads.store.conn import Conn
 from threads.store.lines import uuid7
 from threads.store.sql import branch, int_of, text_of, transaction
 from threads.store.worker import Worker
@@ -104,7 +104,7 @@ class Ledger:
         )
         tenant = self._tenant
 
-        def insert(conn: sqlite3.Connection) -> Resource | ParseError:
+        def insert(conn: Conn) -> Resource | ParseError:
             with transaction(conn):
                 refused = _fence(conn, tenant, owner, now)
                 if refused is None:
@@ -139,7 +139,7 @@ class Ledger:
         when the row is not this tenant's or not collectable."""
         tenant, token = self._tenant, uuid7(now)
 
-        def put(conn: sqlite3.Connection) -> Resource | None:
+        def put(conn: Conn) -> Resource | None:
             with transaction(conn):
                 conn.execute(
                     "UPDATE resources SET cleanup_claim = ? WHERE tenant_id = ?"  # noqa: S608 - fixed text
@@ -155,15 +155,15 @@ class Ledger:
         """The cleanup fence: the row still carries `claim` and is still collectable."""
         tenant = self._tenant
 
-        def check(conn: sqlite3.Connection) -> bool:
-            found: tuple[object] | None = conn.execute(
+        def check(conn: Conn) -> bool:
+            found = conn.execute(
                 "SELECT 1 FROM resources WHERE tenant_id = ? AND resource_id = ?"  # noqa: S608 - fixed text
                 f" AND cleanup_claim = ? AND {_COLLECTABLE}",
                 (tenant, resource_id, claim, now),
             ).fetchone()
             return found is not None
 
-        return await self._worker.call(check)
+        return await self._worker.read(check)
 
     async def gc_retry(self, row: Resource, now: int) -> Resource | None:
         """Moves a release_failed row back to releasing, only under its current claim."""
@@ -178,22 +178,22 @@ class Ledger:
         """This tenant's rows in the given states (all when none), oldest first."""
         tenant = self._tenant
 
-        def select(conn: sqlite3.Connection) -> tuple[Resource, ...]:
-            found: list[tuple[object, ...]] = conn.execute(
+        def select(conn: Conn) -> tuple[Resource, ...]:
+            found = conn.execute(
                 f"SELECT {_COLUMNS} FROM resources WHERE tenant_id = ? ORDER BY rowid",  # noqa: S608 - fixed columns
                 (tenant,),
             ).fetchall()
             parsed = (_row(values) for values in found)
             return tuple(r for r in parsed if not states or r.state in states)
 
-        return await self._worker.call(select)
+        return await self._worker.read(select)
 
     async def _owned(
         self, owner: lease.Owner, row: Resource, step: "_Step"
     ) -> Ok[Resource] | Err[ParseError]:
         tenant = self._tenant
 
-        def apply(conn: sqlite3.Connection) -> Resource | ParseError:
+        def apply(conn: Conn) -> Resource | ParseError:
             with transaction(conn):
                 refused = _fence(conn, tenant, owner, step.now)
                 if refused is None and row.owner_branch_id != owner.branch_id:
@@ -209,7 +209,7 @@ class Ledger:
     async def _moved(self, row: Resource, step: "_Step") -> Resource | None:
         tenant = self._tenant
 
-        def apply(conn: sqlite3.Connection) -> Resource | None:
+        def apply(conn: Conn) -> Resource | None:
             with transaction(conn):
                 return _move(conn, tenant, row.resource_id, step)
 
@@ -218,7 +218,7 @@ class Ledger:
     async def _claimed(self, row: Resource, step: "_Step") -> Resource | None:
         tenant, claim = self._tenant, row.cleanup_claim
 
-        def apply(conn: sqlite3.Connection) -> Resource | None:
+        def apply(conn: Conn) -> Resource | None:
             with transaction(conn):
                 current = _select(conn, tenant, row.resource_id)
                 if claim is None or current is None or current.cleanup_claim != claim:
@@ -242,9 +242,7 @@ class _Step:
     """Recorded by `found`."""
 
 
-def _fence(
-    conn: sqlite3.Connection, tenant_id: str, owner: lease.Owner, now: int
-) -> ParseError | None:
+def _fence(conn: Conn, tenant_id: str, owner: lease.Owner, now: int) -> ParseError | None:
     """The owner is this tenant's branch and its lease is still live at its epoch."""
     found = branch(conn, owner.branch_id)
     if found is None or found.tenant_id != tenant_id:
@@ -252,7 +250,7 @@ def _fence(
     return lease.check(conn, owner.branch_id, owner.lease, now)
 
 
-def _insert(conn: sqlite3.Connection, tenant_id: str, row: Resource) -> None:
+def _insert(conn: Conn, tenant_id: str, row: Resource) -> None:
     conn.execute(
         f"INSERT INTO resources (tenant_id, {_COLUMNS}) VALUES ({', '.join('?' * 13)})",  # noqa: S608 - fixed columns
         (
@@ -273,9 +271,7 @@ def _insert(conn: sqlite3.Connection, tenant_id: str, row: Resource) -> None:
     )
 
 
-def _move(
-    conn: sqlite3.Connection, tenant_id: str, resource_id: str, step: _Step
-) -> Resource | None:
+def _move(conn: Conn, tenant_id: str, resource_id: str, step: _Step) -> Resource | None:
     """Moves this tenant's row by `step`; None if the row is not in the step's source state
     now, or the move is not legal from there."""
     current = _select(conn, tenant_id, resource_id)
@@ -303,8 +299,8 @@ def _move(
     return _select(conn, tenant_id, resource_id)
 
 
-def _select(conn: sqlite3.Connection, tenant_id: str, resource_id: str) -> Resource | None:
-    found: tuple[object, ...] | None = conn.execute(
+def _select(conn: Conn, tenant_id: str, resource_id: str) -> Resource | None:
+    found = conn.execute(
         f"SELECT {_COLUMNS} FROM resources WHERE tenant_id = ? AND resource_id = ?",  # noqa: S608 - fixed columns
         (tenant_id, resource_id),
     ).fetchone()

@@ -16,6 +16,7 @@ import { HostContext } from "../src/context";
 import { Recovery } from "../src/recovery";
 import { bindSchedules, type Schedule, tick } from "../src/schedules";
 import { eventsOf, say } from "./kit";
+import { sqlAll } from "./sql";
 
 // One thread per schedule, replayed from the shared vector
 // spec/conformance/vectors/schedule-threads.json (the Python host suite replays the same file).
@@ -165,10 +166,10 @@ class Replay {
     const branch = await this.branch("local", on);
     if (thread === undefined || branch === undefined)
       throw new Error("no schedule thread to hold");
-    const writer = log.acquire(branch, "outside");
+    const writer = await log.acquire(branch, "outside");
     if (!writer.ok) throw new Error(writer.error.message);
     if (kind === "run") {
-      const busy = writer.value.append([
+      const busy = await writer.value.append([
         {
           type: "user_input",
           type_version: 1,
@@ -185,7 +186,7 @@ class Replay {
   async release(how: "done" | "crash"): Promise<void> {
     const held = this.held;
     if (held === undefined) throw new Error("nothing is held");
-    held.writer.release();
+    await held.writer.release();
     this.held = undefined;
     const last = this.last;
     if (how === "crash" || held.kind === "outbound") return;
@@ -198,7 +199,7 @@ class Replay {
     const { db } = await storeConnection(this.store);
     const thread = await this.thread("local");
     if (thread === undefined) throw new Error("no schedule thread to delete");
-    const done = deleteThread(db, "local", thread, Date.now());
+    const done = await deleteThread(db, "local", thread, Date.now());
     if (!done.ok) throw new Error(done.error.message);
   }
 
@@ -216,7 +217,8 @@ class Replay {
         }),
       )
       .parse(
-        db.all(
+        await sqlAll(
+          db,
           `SELECT occurrence_at, state, reason FROM schedule_occurrences WHERE tenant_id = ?
             ORDER BY occurrence_at`,
           [tenant],
@@ -258,9 +260,11 @@ class Replay {
     const [count] = z
       .array(z.strictObject({ n: z.int() }))
       .parse(
-        db.all("SELECT count(*) AS n FROM threads WHERE tenant_id = ?", [
-          tenant,
-        ]),
+        await sqlAll(
+          db,
+          "SELECT count(*) AS n FROM threads WHERE tenant_id = ?",
+          [tenant],
+        ),
       );
     return {
       log: logged.map((l) => l.line),
@@ -300,13 +304,17 @@ class Replay {
     const threads = z
       .array(z.strictObject({ thread_id: ThreadId }))
       .parse(
-        db.all("SELECT thread_id FROM threads WHERE tenant_id = ?", [tenant]),
+        await sqlAll(db, "SELECT thread_id FROM threads WHERE tenant_id = ?", [
+          tenant,
+        ]),
       );
-    return threads.filter(({ thread_id }) => {
-      const main = log.mainBranch(thread_id);
-      const read = main.ok ? log.read(main.value) : undefined;
-      return read?.ok === true && read.value.fold.turnOpen;
-    }).length;
+    let open = 0;
+    for (const { thread_id } of threads) {
+      const main = await log.mainBranch(thread_id);
+      const read = main.ok ? await log.read(main.value) : undefined;
+      if (read?.ok === true && read.value.fold.turnOpen) open += 1;
+    }
+    return open;
   }
 
   /** The schedule's current thread, or the latest one it moved off. */
@@ -316,7 +324,8 @@ class Replay {
   ): Promise<ThreadId | undefined> {
     const { db } = await storeConnection(this.store);
     const [row] = z.array(z.strictObject({ thread_id: ThreadId })).parse(
-      db.all(
+      await sqlAll(
+        db,
         `SELECT thread_id FROM schedule_threads
             WHERE tenant_id = ? AND schedule_id = ? AND current = ?
             ORDER BY created_at DESC LIMIT 1`,
@@ -333,7 +342,7 @@ class Replay {
     const thread = await this.thread(tenant, which);
     if (thread === undefined) return undefined;
     const { log } = await openStore(tenantStore(this.store, tenant));
-    const main = log.mainBranch(thread);
+    const main = await log.mainBranch(thread);
     return main.ok ? main.value : undefined;
   }
 

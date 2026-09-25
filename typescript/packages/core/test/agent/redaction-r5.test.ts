@@ -99,7 +99,7 @@ describe("web_fetch stores its cited page redacted", () => {
     const cited = got.content?.find((p) => p.type === "citation");
     const ref = cited?.type === "citation" ? cited.ref : undefined;
     if (ref === undefined) throw new Error("web_fetch cites its page");
-    const stored = artifacts.get(ref.sha256);
+    const stored = await artifacts.get(ref.sha256);
     if (!stored.ok) throw new Error(stored.error.message);
     expect(decoder.decode(stored.value)).toBe(
       "the key is [secret fake.apiKey]",

@@ -26,8 +26,8 @@ const FINAL = {
 };
 
 test("each call is recorded with its before_tool decision before the next", async () => {
-  const h = harness([EMAIL], [], [BOTH, FINAL]);
-  const writer = unwrap(h.store.acquire(ROOT, "owner"));
+  const h = await harness([EMAIL], [], [BOTH, FINAL]);
+  const writer = unwrap(await h.store.acquire(ROOT, "owner"));
   const gate = {
     name: "guard",
     timeoutMs: 50,
@@ -61,7 +61,7 @@ test("each call is recorded with its before_tool decision before the next", asyn
 
 test("a crash right after a refused call's tool_call never lets it run", async () => {
   const refused = { ...send("call_1"), input: {} };
-  const h = harness(
+  const h = await harness(
     [EMAIL],
     [],
     [{ content: [refused], stop_reason: "tool_use", usage }, FINAL],
@@ -72,7 +72,7 @@ test("a crash right after a refused call's tool_call never lets it run", async (
   const tools = new Map([
     ["send_email", { ...impl, input: z.strictObject({ to: z.string() }) }],
   ]);
-  const first = unwrap(h.store.acquire(ROOT, "owner"));
+  const first = unwrap(await h.store.acquire(ROOT, "owner"));
   await resume(
     first,
     h.artifacts,
@@ -85,7 +85,7 @@ test("a crash right after a refused call's tool_call never lets it run", async (
     { input: userInput("mail nobody") },
   ).catch(() => undefined);
   h.clock.now += 60_000;
-  const again = unwrap(h.store.acquire(ROOT, "owner-2"));
+  const again = unwrap(await h.store.acquire(ROOT, "owner-2"));
   await resume(again, h.artifacts, h.config({ tools }));
   const log = events(again);
   expect(h.runs.get("send_email") ?? 0).toBe(0);
@@ -97,11 +97,11 @@ test("a crash right after a refused call's tool_call never lets it run", async (
 });
 
 test("an ask's challenge and its park are one batch, so a crash between them can't split them", async () => {
-  const h = harness([EMAIL], [], [BOTH]);
+  const h = await harness([EMAIL], [], [BOTH]);
   const ask = h.config({
     authorize: () => ({ decision: "ask", source: "policy" }),
   });
-  const first = unwrap(h.store.acquire(ROOT, "owner"));
+  const first = unwrap(await h.store.acquire(ROOT, "owner"));
   await resume(
     first,
     h.artifacts,
@@ -114,7 +114,7 @@ test("an ask's challenge and its park are one batch, so a crash between them can
     { input: userInput("mail bob twice") },
   ).catch(() => undefined);
   h.clock.now += 60_000;
-  const again = unwrap(h.store.acquire(ROOT, "owner-2"));
+  const again = unwrap(await h.store.acquire(ROOT, "owner-2"));
   await resume(again, h.artifacts, ask);
   const parks = events(again).filter((e) => e.type === "parked");
   expect(parks.map((e) => e.actor.kind)).toEqual(["host"]);

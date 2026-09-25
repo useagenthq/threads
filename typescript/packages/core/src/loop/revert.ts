@@ -67,7 +67,7 @@ export async function revert(s: Session): Promise<Halt | undefined | "none"> {
   const cause = due.input.event_id;
   const gate = await switchGate(s, due.settings, { input_event_id: cause });
   if (!gate.allowed) return s.append(...gate.decisions);
-  const reverted = s.appendWork(
+  const reverted = await s.appendWork(
     ...gate.decisions,
     draft.settingsChanged({
       reason: "revert",

@@ -73,8 +73,8 @@ const READ_ERRORS: ReadonlySet<string> = new Set([
 
 async function sandboxOf(call: Call, threadId: ThreadId) {
   const { log } = await call.ctx.open(call.principal.tenant);
-  const main = log.mainBranch(threadId);
-  const read = main.ok ? log.read(main.value) : undefined;
+  const main = await log.mainBranch(threadId);
+  const read = main.ok ? await log.read(main.value) : undefined;
   if (read?.ok !== true) return undefined;
   return call.ctx.agentOf(knownEvents(read.value))?.runner.sandbox;
 }

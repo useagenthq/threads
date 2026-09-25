@@ -96,7 +96,7 @@ describe("tree.json", () => {
         artifacts.sink,
       );
       const parts: Uint8Array[] = [];
-      const built = buildTar(
+      const built = await buildTar(
         tree.value,
         artifacts,
         { uid: 1000, gid: 1000 },

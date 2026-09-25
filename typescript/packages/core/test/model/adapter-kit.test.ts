@@ -16,13 +16,13 @@ const encoder = new TextEncoder();
 
 describe("Session.modelContext: bound to the writer that made it", () => {
   test("after a takeover the old writer's context fails its fence; the new one's passes", async () => {
-    const h = harness([], [], []);
-    const old = unwrap(h.store.acquire(ROOT, "holder-a"));
+    const h = await harness([], [], []);
+    const old = unwrap(await h.store.acquire(ROOT, "holder-a"));
     const stale = new Session(old, h.artifacts, h.config()).modelContext();
     expect(stale.branchId).toBe(ROOT);
     expect((await stale.fence()).ok).toBe(true);
     h.clock.now += 31_000;
-    const fresh = unwrap(h.store.acquire(ROOT, "holder-b"));
+    const fresh = unwrap(await h.store.acquire(ROOT, "holder-b"));
     const live = new Session(fresh, h.artifacts, h.config()).modelContext();
     expect(live.epoch).toBe(stale.epoch + 1);
     const fenced = await stale.fence();
@@ -31,8 +31,8 @@ describe("Session.modelContext: bound to the writer that made it", () => {
   });
 
   test("read verifies sha256 and length; put is readable back", async () => {
-    const h = harness([], [], []);
-    const writer = unwrap(h.store.acquire(ROOT, "holder-a"));
+    const h = await harness([], [], []);
+    const writer = unwrap(await h.store.acquire(ROOT, "holder-a"));
     const ctx = new Session(writer, h.artifacts, h.config()).modelContext();
     const ref = await ctx.put(encoder.encode("{}"), "application/json");
     expect(unwrap(await ctx.read(ref))).toEqual(encoder.encode("{}"));

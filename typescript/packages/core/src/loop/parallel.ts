@@ -81,13 +81,13 @@ async function runGroup(
   const started: Promise<ToolRun>[] = [];
   let stopped: Halt | undefined;
   for (const [i, call] of calls.entries()) {
-    stopped = start(s, calls, started, i + WINDOW, signal);
+    stopped = await start(s, calls, started, i + WINDOW, signal);
     const running = started[i];
     // Not started: a failed fence, or a cancel before it.
     if (stopped !== undefined || running === undefined) break;
     const before = s.fold.seq;
     stopped =
-      recordRead(s, call.data.call_id, await running) ??
+      (await recordRead(s, call.data.call_id, await running)) ??
       (await afterTool(s, call, before));
     if (stopped !== undefined) break;
   }
@@ -99,18 +99,18 @@ async function runGroup(
 }
 
 /** Starts queued calls up to `limit`, each fenced immediately before its body. */
-function start(
+async function start(
   s: Session,
   calls: readonly Call[],
   started: Promise<ToolRun>[],
   limit: number,
   signal: AbortSignal,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   while (started.length < limit) {
     const next = calls[started.length];
     if (next === undefined || cancelRequested(s.events, s.fold) !== undefined)
       return undefined;
-    const fenced = s.fence();
+    const fenced = await s.fence();
     if (fenced !== undefined) return fenced;
     started.push(body(s, next, signal));
   }

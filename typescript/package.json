@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "generate": "../scripts/generate.sh ts",
-    "typecheck": "tsc -p packages/core --noEmit && tsc -p packages/adapter-testkit --noEmit && tsc -p packages/anthropic --noEmit && tsc -p packages/openai --noEmit && tsc -p packages/ai-sdk --noEmit && tsc -p packages/e2b --noEmit && tsc -p packages/daytona --noEmit && tsc -p packages/modal --noEmit && tsc -p packages/mcp --noEmit && tsc -p packages/mem0 --noEmit && tsc -p packages/supermemory --noEmit && tsc -p packages/zep --noEmit && tsc -p packages/slack --noEmit && tsc -p packages/whatsapp --noEmit && tsc -p packages/github --noEmit && tsc -p packages/host --noEmit && tsc -p packages/otel --noEmit && tsc -p packages/cli --noEmit && tsc -p packages/core/test/api-surface && tsc -p examples --noEmit",
+    "typecheck": "tsc -p packages/core --noEmit && tsc -p packages/adapter-testkit --noEmit && tsc -p packages/anthropic --noEmit && tsc -p packages/openai --noEmit && tsc -p packages/ai-sdk --noEmit && tsc -p packages/e2b --noEmit && tsc -p packages/daytona --noEmit && tsc -p packages/modal --noEmit && tsc -p packages/mcp --noEmit && tsc -p packages/mem0 --noEmit && tsc -p packages/supermemory --noEmit && tsc -p packages/zep --noEmit && tsc -p packages/slack --noEmit && tsc -p packages/whatsapp --noEmit && tsc -p packages/github --noEmit && tsc -p packages/postgres --noEmit && tsc -p packages/host --noEmit && tsc -p packages/otel --noEmit && tsc -p packages/cli --noEmit && tsc -p packages/core/test/api-surface && tsc -p examples --noEmit",
     "lint": "biome check --error-on-warnings .",
     "test": "bun test --reporter=junit --reporter-outfile=junit.xml",
     "check": "bun run generate && bun run typecheck && bun run lint && bun run test && bun run schema:check",

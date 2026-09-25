@@ -10,7 +10,7 @@ import { knownEvents } from "../reduce";
 import { err, ok, type Result } from "../result";
 import type { LogStore, Writer } from "../store";
 import type { ArtifactStore } from "../store/artifacts";
-import type { SqliteDriver } from "../store/driver";
+import { READ_ONLY, type Tx } from "../store/driver";
 import { uuidv7 } from "../store/encode";
 import { type LogError, logError } from "../verify/error";
 import { Batch, MINT, type Mint } from "./batch";
@@ -92,7 +92,7 @@ export async function materialize(
   name: string,
   o: MaterializeOptions,
 ): Promise<Result<Materialized, LogError>> {
-  const found = starting(store, team, name);
+  const found = await starting(store, team, name);
   if (!found.ok) return found;
   if (found.value === undefined) return ok({ status: "not_starting" });
   const { started, task } = found.value;
@@ -101,21 +101,28 @@ export async function materialize(
     started.data.config_hash,
     choiceOf(started, task),
   );
-  const config = o.artifacts.get(started.data.config_hash);
+  const config = await o.artifacts.get(started.data.config_hash);
   if (!config.ok) return config;
   const pinned = Pinned.parse(
     JSON.parse(new TextDecoder().decode(config.value)),
   );
   const branchId = o.branchId ?? BranchId.parse(uuidv7(store.now()));
-  const opened = store.openBranchChecked((db, now) => {
-    const row = memberNamed(db, team, name);
+  const opened = await store.openBranchChecked(async (tx, now) => {
+    const row = await memberNamed(tx, team, name);
     if (
       row?.state !== "starting" ||
       row.generation !== found.value?.row.generation
     )
       return ok(undefined);
     const batch = new Batch(0, now, o.mint ?? MINT);
-    firstEvents(db, batch, { ...found.value, row }, pinned, rebind, branchId);
+    await firstEvents(
+      tx,
+      batch,
+      { ...found.value, row },
+      pinned,
+      rebind,
+      branchId,
+    );
     return ok({
       threadId: started.data.thread_id,
       branchId,
@@ -140,14 +147,14 @@ export async function materialize(
  * whose actor is the task's principal; after a failed rebind, the turn closes before any model
  * request and the member ends failed with everything an end carries.
  */
-function firstEvents(
-  db: SqliteDriver,
+async function firstEvents(
+  tx: Tx,
   batch: Batch,
   s: Starting,
   pinned: z.infer<typeof Pinned>,
   rebind: Rebind,
   branchId: string,
-): void {
+): Promise<void> {
   const { started, task } = s;
   // start writes a task's body inline.
   const text = task.body?.text;
@@ -185,14 +192,14 @@ function firstEvents(
     actor: { kind: "host" },
     data: { reason: "error", code },
   });
-  settle(
+  await settle(
     {
-      db,
+      tx,
       batch,
       threadId: started.data.thread_id,
       branchId,
       provenance: task.provenance,
-      put: () => {
+      put: async () => {
         throw new Error("a failed rebind's result has no text");
       },
     },
@@ -201,17 +208,21 @@ function firstEvents(
 }
 
 /** The starting row, its pending task and its member_started, read from the starter's log. */
-function starting(
+async function starting(
   store: LogStore,
   team: string,
   name: string,
-): Result<Starting | undefined, LogError> {
-  const db = store.driver;
-  const row = memberNamed(db, team, name);
-  if (row?.state !== "starting") return ok(undefined);
-  const task = pendingTo(db, team, name).find((m) => m.kind === "task");
-  if (task === undefined) return ok(undefined);
-  const started = startedBy(store, row, task);
+): Promise<Result<Starting | undefined, LogError>> {
+  const rows = await store.driver.transaction(async (tx) => {
+    const row = await memberNamed(tx, team, name);
+    if (row?.state !== "starting") return undefined;
+    const pending = await pendingTo(tx, team, name);
+    const task = pending.find((m) => m.kind === "task");
+    return task === undefined ? undefined : { row, task };
+  }, READ_ONLY);
+  if (rows === undefined) return ok(undefined);
+  const { row, task } = rows;
+  const started = await startedBy(store, row, task);
   if (!started.ok) return started;
   return started.value === undefined
     ? ok(undefined)
@@ -222,19 +233,22 @@ function starting(
  * A member's member_started, read from its starter's log (the lead's, or the team log for an
  * operator start) as its task mail names it.
  */
-function startedBy(
+async function startedBy(
   store: LogStore,
   row: MemberRow,
   task: MailEnvelope,
-): Result<EventOf<"member_started"> | undefined, LogError> {
-  const teams = teamRow(store.driver, row.team_id);
+): Promise<Result<EventOf<"member_started"> | undefined, LogError>> {
+  const teams = await store.driver.transaction(
+    (tx) => teamRow(tx, row.team_id),
+    READ_ONLY,
+  );
   if (teams === undefined) return ok(undefined);
   const starter =
     "operator" in task.from
       ? ok(teams.team_log_branch_id)
-      : store.mainBranch(task.causal.thread_id);
+      : await store.mainBranch(task.causal.thread_id);
   if (!starter.ok) return starter;
-  const log = store.read(starter.value);
+  const log = await store.read(starter.value);
   if (!log.ok) return log;
   const started = knownEvents(log.value).find(
     (e): e is EventOf<"member_started"> =>
@@ -251,15 +265,20 @@ function startedBy(
  * A running member's recorded choice (every continuation rebinds with it): from its task mail
  * and its starter's member_started. Undefined for a member of a static agent.
  */
-export function recordedChoice(
+export async function recordedChoice(
   store: LogStore,
   row: MemberRow,
   mailId: string | undefined,
-): DynamicChoice | undefined {
+): Promise<DynamicChoice | undefined> {
   const task =
-    mailId === undefined ? undefined : mailEnvelope(store.driver, mailId);
+    mailId === undefined
+      ? undefined
+      : await store.driver.transaction(
+          (tx) => mailEnvelope(tx, mailId),
+          READ_ONLY,
+        );
   if (task === undefined) return undefined;
-  const started = startedBy(store, row, task);
+  const started = await startedBy(store, row, task);
   if (!started.ok)
     throw new Error(`member ${row.name}: ${started.error.message}`);
   return started.value === undefined

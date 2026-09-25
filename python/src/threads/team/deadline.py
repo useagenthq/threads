@@ -4,12 +4,11 @@ transaction. A wait counts every settlement already committed (commit order, nev
 settlement counts iff its append deleted the monitor row first); an ask still answers a reply
 that committed before its deadline. Reference: spec/tools/fixtures/ops_consume.py, deadline."""
 
-import sqlite3
-
 from pydantic import JsonValue
 
 from threads.log import WaitStartedEvent
 from threads.reduce import Fold
+from threads.store.conn import Conn
 from threads.team.close import CloseContext, committed_notices, complete_ask, finish_wait
 from threads.team.rows import ask_row, due_asks, team_of_log
 from threads.team.view import ask_open, open_waits
@@ -52,7 +51,7 @@ def deadline(ctx: CloseContext, ident: str) -> JsonValue:
     return finish_wait(ctx, ident, cause=None, deadline=True)
 
 
-def due_ids(conn: sqlite3.Connection, fold: Fold, branch: str, now: int) -> list[str]:
+def due_ids(conn: Conn, fold: Fold, branch: str, now: int) -> list[str]:
     """This writer's asks and waits whose deadline has passed by `now`."""
     asks = [a for a, _ in due_asks(conn, branch, now)]
     waits = [
@@ -65,7 +64,7 @@ def due_ids(conn: sqlite3.Connection, fold: Fold, branch: str, now: int) -> list
     return asks + waits
 
 
-def next_deadline(conn: sqlite3.Connection, fold: Fold, branch: str) -> int | None:
+def next_deadline(conn: Conn, fold: Fold, branch: str) -> int | None:
     """The earliest deadline among this writer's open asks and waits, if any."""
     asks = [d for _, d in due_asks(conn, branch, _NEVER)]
     waits = [s.data.deadline for w in fold.team.waits if (s := _started(fold, w)) is not None]

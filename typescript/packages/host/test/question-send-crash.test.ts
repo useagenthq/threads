@@ -24,6 +24,7 @@ import {
   use,
   webhook,
 } from "./kit";
+import { sqlAll } from "./sql";
 
 // Invariant 3 for the host's own channel sends while an ask_user turn is open (review of lane
 // 14A, plans/reviews/claude-14a-question-send-crash.ts): a question or correction send left in
@@ -108,14 +109,14 @@ async function branchOf(store: Store): Promise<BranchId> {
   const { db } = await storeConnection(store);
   const [row] = z
     .array(z.object({ branch_id: BranchId }))
-    .parse(db.all(CONVERSATION, []));
+    .parse(await sqlAll(db, CONVERSATION, []));
   if (row === undefined) throw new Error("no branch");
   return row.branch_id;
 }
 
 async function log(store: Store): Promise<readonly KnownEvent[]> {
   const { db } = await storeConnection(store);
-  if (db.all(CONVERSATION, []).length === 0) return [];
+  if ((await sqlAll(db, CONVERSATION, [])).length === 0) return [];
   return knownEventsOf(store, TENANT, await branchOf(store));
 }
 
@@ -125,15 +126,15 @@ async function appendByHand(
   drafts: (events: readonly KnownEvent[]) => readonly EventDraft[],
 ): Promise<void> {
   const { log: l } = await openStore(tenantStore(store, TENANT));
-  const w = l.acquire(await branchOf(store), "test");
+  const w = await l.acquire(await branchOf(store), "test");
   if (!w.ok) throw new Error(w.error.message);
   try {
     for (const d of drafts(await log(store))) {
-      const added = w.value.append([d]);
+      const added = await w.value.append([d]);
       if (!added.ok) throw new Error(added.error.message);
     }
   } finally {
-    w.value.release();
+    await w.value.release();
   }
 }
 

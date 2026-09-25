@@ -6,8 +6,8 @@ import {
 } from "@threads/core";
 import {
   canonicalize,
-  type SqliteDriver,
   storeConnection,
+  type Tx,
   uuidv7,
 } from "@threads/core/host";
 import type { HostContext } from "./context";
@@ -57,8 +57,8 @@ export async function receive(
     return { response: responseOf(adapter, raw), threads: [] };
   }
   const { db } = await storeConnection(ctx.store);
-  const threads = db.transaction(() =>
-    insertBatch(db, channel, delivery.data, parsed.value),
+  const threads = await db.transaction((tx) =>
+    insertBatch(tx, channel, delivery.data, parsed.value),
   );
   return { response: responseOf(adapter, raw), threads };
 }
@@ -102,13 +102,13 @@ function responseOf(adapter: ChannelAdapter, raw: RawRequest): Response {
  * item inserts nothing. An item whose principal is of another tenant than the verified
  * installation's is dropped: message content never selects a tenant.
  */
-export function insertBatch(
-  db: SqliteDriver,
+export async function insertBatch(
+  tx: Tx,
   channel: string,
   delivery: VerifiedDelivery,
   items: readonly unknown[],
   now: number = Date.now(),
-): Received["threads"] {
+): Promise<Received["threads"]> {
   const touched = new Map<string, { tenant: string; threadId: string }>();
   for (const candidate of items) {
     const item = Inbound.safeParse(candidate);
@@ -120,10 +120,10 @@ export function insertBatch(
       installation: delivery.installation_id,
       address: item.data.address,
     };
-    const threadId = threadFor(db, at, uuidv7(now));
+    const threadId = await threadFor(tx, at, uuidv7(now));
     const bytes = canonicalize(item.data);
     if (!bytes.ok) throw new Error("a parsed item is JSON");
-    db.run(
+    await tx.run(
       `INSERT INTO inbox (tenant_id, channel, installation_id, item_key, delivery_id, thread_id,
         item, received_at, consumed_seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
         ON CONFLICT DO NOTHING`,

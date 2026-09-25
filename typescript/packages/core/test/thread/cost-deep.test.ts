@@ -38,17 +38,17 @@ function spawned(child: ThreadId): EventDraft {
 }
 
 /** Thread i's log: its thread_started (a child names the spawn that started it), then a spawn. */
-function append(i: number, parent: Link | undefined): Link {
+async function append(i: number, parent: Link | undefined): Promise<Link> {
   const { store } = deep;
-  unwrap(store.createBranch(threadId(i), branchId(i)));
-  const writer = unwrap(store.acquire(branchId(i), "deep-test"));
+  unwrap(await store.createBranch(threadId(i), branchId(i)));
+  const writer = unwrap(await store.acquire(branchId(i), "deep-test"));
   // The deepest thread spawns the root again: the walk only meets it by reaching the bottom.
   const child = threadId(i + 1 < DEPTH ? i + 1 : 0);
   const first: EventDraft =
     parent === undefined || started.type !== "thread_started"
       ? started
       : { ...started, data: { ...started.data, parent } };
-  const [, spawn] = unwrap(writer.append([first, spawned(child)]));
+  const [, spawn] = unwrap(await writer.append([first, spawned(child)]));
   if (spawn === undefined) throw new Error("agent_spawned was not appended");
   return {
     thread_id: threadId(i),
@@ -58,13 +58,17 @@ function append(i: number, parent: Link | undefined): Link {
   };
 }
 
-const deep = fixture();
+const deep = await fixture();
 
-test("a chain of 10,000 subagents is walked to the bottom without recursion", () => {
+test("a chain of 10,000 subagents is walked to the bottom without recursion", async () => {
   let parent: Link | undefined;
-  for (let i = 0; i < DEPTH; i++) parent = append(i, parent);
+  for (let i = 0; i < DEPTH; i++) parent = await append(i, parent);
   const { store } = deep;
-  const total = treeCost(store, threadId(0), unwrap(store.read(branchId(0))));
+  const total = await treeCost(
+    store,
+    threadId(0),
+    unwrap(await store.read(branchId(0))),
+  );
   expect(code(total)).toBe("log_corrupt");
   // The path names every thread down to the bottom one.
   expect(total.ok ? "" : total.error.message).toEndWith(

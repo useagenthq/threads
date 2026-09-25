@@ -10,7 +10,7 @@ export function contextReader(
 ): ModelContext["read"] {
   const read = refReader(artifacts);
   return async (ref) => {
-    const bytes = read(ref, 0);
+    const bytes = await read(ref, 0);
     if (bytes.ok) return bytes;
     const { code, message } = bytes.error;
     return err({
@@ -71,7 +71,7 @@ export function memoryContext(live: () => boolean = () => true): ModelContext {
         : err({ code: "stale_epoch", message: "lease lost" }),
     read: contextReader(artifacts),
     put: async (data, mediaType) => ({
-      sha256: artifacts.put(data),
+      sha256: await artifacts.put(data),
       bytes: data.length,
       media_type: mediaType,
     }),

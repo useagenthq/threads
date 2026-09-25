@@ -87,11 +87,11 @@ export class Recovery {
     key: string,
   ): Promise<"done" | "busy"> {
     const { log } = await this.#ctx.open(tenant);
-    const main = known === undefined ? log.mainBranch(id) : undefined;
+    const main = known === undefined ? await log.mainBranch(id) : undefined;
     const branch = known ?? (main?.ok === true ? main.value : undefined);
     if (branch === undefined) return "done";
     if (this.#ctx.busy(branch)) return "busy";
-    const read = log.read(branch);
+    const read = await log.read(branch);
     if (!read.ok) {
       console.error(
         `threads host: run on ${branch} not recovered (${read.error.code}: ${read.error.message})`,
@@ -147,7 +147,7 @@ export class Recovery {
           : undefined;
     if (why === undefined) return;
     const { log } = await this.#ctx.open(tenant);
-    const read = log.read(thread.branch);
+    const read = await log.read(thread.branch);
     this.#notRetried.set(thread.branch, read.ok ? read.value.fold.seq : -1);
     console.error(`threads host: run on ${thread.branch} not retried (${why})`);
   }

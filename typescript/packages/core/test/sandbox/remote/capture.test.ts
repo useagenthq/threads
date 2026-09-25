@@ -30,11 +30,11 @@ const utf8 = new TextEncoder();
 
 class Crash extends Error {}
 
-function owner() {
-  const f = fixture();
-  unwrap(f.store.createBranch(THREAD, ROOT));
-  const writer = unwrap(f.store.acquire(ROOT, "holder-a"));
-  unwrap(writer.append([started]));
+async function owner() {
+  const f = await fixture();
+  unwrap(await f.store.createBranch(THREAD, ROOT));
+  const writer = unwrap(await f.store.acquire(ROOT, "holder-a"));
+  unwrap(await writer.append([started]));
   return { ...f, writer };
 }
 
@@ -48,19 +48,19 @@ async function parent(
   return { sandbox, box };
 }
 
-const rows = (f: ReturnType<typeof owner>) =>
-  unwrap(f.store.ledger.rows()).map((r) => [r.kind, r.state]);
+const rows = async (f: Awaited<ReturnType<typeof owner>>) =>
+  unwrap(await f.store.ledger.rows()).map((r) => [r.kind, r.state]);
 
 describe("a ledgered snapshot capture", () => {
   test("the image is verified by a scratch sandbox that is ledgered and released", async () => {
     const world = new World();
-    const f = owner();
+    const f = await owner();
     const { sandbox, box } = await parent(world);
     const snap = unwrap(
       await captureSnapshot(f.store.ledger, f.writer, sandbox, box),
     ).data;
     expect(snap.manifest_hash).toBe(world.hashOf(snap.snapshot_id));
-    expect(rows(f)).toEqual([
+    expect(await rows(f)).toEqual([
       ["snapshot", "live"],
       ["sandbox", "released"],
     ]);
@@ -85,13 +85,13 @@ describe("a ledgered snapshot capture", () => {
         },
       },
     });
-    const f = owner();
+    const f = await owner();
     const snap = await captureSnapshot(f.store.ledger, f.writer, sandbox, box);
     expect(code(snap)).toBe("not_quiescent");
     expect(world.snapshots.size).toBe(0);
     // The restore released the scratch sandbox itself on the mismatch (its contract); a
     // nonfinal lookup can't prove that, so the row parks for an operator rather than guess.
-    expect(rows(f)).toEqual([
+    expect(await rows(f)).toEqual([
       ["snapshot", "released"],
       ["sandbox", "unknown"],
     ]);
@@ -100,7 +100,7 @@ describe("a ledgered snapshot capture", () => {
 
   test("a crash between the scratch create and its kill: the live row is released on recovery", async () => {
     const world = new World();
-    const f = owner();
+    const f = await owner();
     const { sandbox, box } = await parent(world);
     // The host dies as it closes the scratch sandbox: the row is releasing, the sandbox lives.
     const dies: Sandbox = {
@@ -124,7 +124,7 @@ describe("a ledgered snapshot capture", () => {
     ).rejects.toThrow(Crash);
     await Bun.sleep(0);
     expect(world.machines.size).toBe(2);
-    expect(rows(f)).toEqual([
+    expect(await rows(f)).toEqual([
       ["snapshot", "live"],
       ["sandbox", "releasing"],
     ]);
@@ -138,7 +138,7 @@ describe("a ledgered snapshot capture", () => {
 
   test("a crash inside the scratch restore: the pending row is found by its key and released", async () => {
     const world = new World();
-    const f = owner();
+    const f = await owner();
     const { sandbox, box } = await parent(world);
     const dies: Sandbox = {
       ...sandbox,
@@ -151,14 +151,14 @@ describe("a ledgered snapshot capture", () => {
       captureSnapshot(f.store.ledger, f.writer, dies, box),
     ).rejects.toThrow(Crash);
     await Bun.sleep(0);
-    const pending = unwrap(f.store.ledger.rows()).find(
+    const pending = unwrap(await f.store.ledger.rows()).find(
       (r) => r.kind === "sandbox",
     );
     if (pending === undefined)
       throw new Error("the scratch row was written first");
     expect(pending.state).toBe("pending");
     f.clock.now += LEASE + 1;
-    const next = unwrap(f.store.acquire(ROOT, "restarted"));
+    const next = unwrap(await f.store.acquire(ROOT, "restarted"));
     expect(
       unwrap(await resolvePending(f.store.ledger, next, sandbox, pending)),
     ).toBe("released");

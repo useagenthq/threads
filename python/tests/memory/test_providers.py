@@ -2,7 +2,6 @@
 scope, bounds and error values whatever a provider does (F3.4-F3.7, F14.3-F14.8)."""
 
 import asyncio
-import sqlite3
 from collections.abc import Sequence
 
 import pytest
@@ -25,6 +24,7 @@ from threads.memory.types import (
 )
 from threads.result import Err, Ok
 from threads.store import SqliteStore
+from threads.store.conn import Conn
 
 
 async def _store() -> SqliteStore:
@@ -78,7 +78,7 @@ def test_a_foreign_binding_is_dropped_and_audited_never_returned() -> None:
         assert isinstance(own, Ok)
         assert [h.text for h in own.value] == ["tenant A's secret"]
 
-        def audit(conn: sqlite3.Connection) -> list[tuple[str, str, int]]:
+        def audit(conn: Conn) -> list[tuple[object, ...]]:
             return conn.execute("SELECT tenant_id, code, at FROM provider_audit").fetchall()
 
         assert await store.run(audit) == [("tenant_b", "scope_violation", 7)]

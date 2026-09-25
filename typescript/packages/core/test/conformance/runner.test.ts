@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { sha256Hex } from "../../src/hash";
 import { type KnownEvent, principalKey } from "../../src/log";
 import { knownEvents, projections, reduce } from "../../src/reduce";
-import { refReader, render } from "../../src/render";
-import type { ArtifactStore } from "../../src/store";
+import { renderFrom } from "../../src/render";
+import type { ArtifactStore, LogStore } from "../../src/store";
 import { type VerifiedLog, verifyExport } from "../../src/verify";
 import { unwrap } from "../store/helpers";
 import {
@@ -66,12 +66,23 @@ function runReduce(c: Case, bytes: Uint8Array): void {
  * Render kind: import into a store holding the case's artifacts (C7 and the re-render of every
  * recorded request run there), then the next request and the history-prefix property.
  */
-function runRender(c: Case, bytes: Uint8Array): void {
-  const { db, store, artifacts } = caseStore(c);
-  const log = store.importLog(bytes);
-  db.close();
+async function runRender(c: Case, bytes: Uint8Array): Promise<void> {
+  const { db, store, artifacts } = await caseStore(c);
+  try {
+    await rendered(c, await store.importLog(bytes), artifacts);
+  } finally {
+    // Closed after the artifacts are read: on Postgres they are rows of the same database.
+    await db.close();
+  }
+}
+
+async function rendered(
+  c: Case,
+  log: Awaited<ReturnType<LogStore["importLog"]>>,
+  artifacts: ArtifactStore,
+): Promise<void> {
   const events = log.ok ? knownEvents(log.value) : [];
-  const rendered = log.ok ? render(events, refReader(artifacts)) : log;
+  const rendered = log.ok ? await renderFrom(events, artifacts) : log;
   if (c.error !== undefined) {
     expect(rendered.ok ? "ok" : rendered.error.code).toBe(c.error.code);
     if (!rendered.ok) expect(rendered.error.seq).toBe(c.error.seq);
@@ -85,7 +96,7 @@ function runRender(c: Case, bytes: Uint8Array): void {
     bytes: next.prefix.length,
     sha256: sha256Hex(next.prefix),
   }).toEqual(c.render?.declared_prefix ?? { bytes: 0, sha256: "" });
-  historyPrefix(events, artifacts, next.bytes);
+  await historyPrefix(events, artifacts, next.bytes);
 }
 
 /** Events after which the next turn request may legitimately stop extending the last one. */
@@ -118,17 +129,17 @@ function principalShifts(events: readonly KnownEvent[]): ReadonlySet<string> {
  * next) start with the previous turn request's, unless an edit, compaction, settings change or
  * denied input lies between them. Compaction side requests are skipped.
  */
-function historyPrefix(
+async function historyPrefix(
   events: readonly KnownEvent[],
   artifacts: ArtifactStore,
   next: Uint8Array,
-): void {
+): Promise<void> {
   let last: Uint8Array | undefined;
   const shifts = principalShifts(events);
   for (const e of events) {
     if (breaksHistory(e) || shifts.has(e.event_id)) last = undefined;
     if (e.type !== "model_request" || e.data.purpose === "compaction") continue;
-    const bytes = unwrap(artifacts.get(e.data.request_ref.sha256));
+    const bytes = unwrap(await artifacts.get(e.data.request_ref.sha256));
     if (last !== undefined)
       expect(bytes.subarray(0, last.length)).toEqual(last);
     last = bytes;
@@ -147,22 +158,22 @@ function runImport(c: Case, bytes: Uint8Array): void {
  * Replay: SQLite storage and JSONL are one contract. The log stored and exported again is the
  * same bytes (a torn tail is dropped, so only its prefix is), and it reduces to the same state.
  */
-function replay(c: Case, bytes: Uint8Array): void {
+async function replay(c: Case, bytes: Uint8Array): Promise<void> {
   const direct = unwrap(verifyExport(bytes));
-  const { db, store } = caseStore(c);
-  unwrap(store.importLog(bytes));
+  const { db, store } = await caseStore(c);
+  unwrap(await store.importLog(bytes));
   const leaf = direct.segments.at(-1)?.header.branch_id;
   if (leaf === undefined) throw new Error("a verified log has a header");
-  const exported = unwrap(store.exportBranch(leaf));
+  const exported = unwrap(await store.exportBranch(leaf));
   if (direct.torn === undefined) expect(exported).toEqual(bytes);
   else
     expect(exported.subarray(0, direct.committedBytes)).toEqual(
       bytes.subarray(0, direct.committedBytes),
     );
-  const stored = unwrap(store.read(leaf));
+  const stored = unwrap(await store.read(leaf));
   expect(reduce(stored, c.now)).toEqual(reduce(direct, c.now));
   expect(projections(stored)).toEqual(projections(direct));
-  db.close();
+  await db.close();
 }
 
 describe("replay: every importable case log round-trips through SQLite", () => {

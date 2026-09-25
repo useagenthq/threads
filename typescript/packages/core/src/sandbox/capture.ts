@@ -81,7 +81,7 @@ async function verifyImage(
   sandbox: Sandbox,
   data: SnapshotData,
 ): Promise<Result<boolean, LogError>> {
-  const row = ledger.begin(writer, "sandbox", sandbox.info.provider);
+  const row = await ledger.begin(writer, "sandbox", sandbox.info.provider);
   if (!row.ok) return row;
   const scratch = await sandbox.restore(
     data.snapshot_id,
@@ -94,7 +94,7 @@ async function verifyImage(
     const settled = await settleScratch(ledger, writer, sandbox, row.value);
     return settled.ok ? ok(false) : settled;
   }
-  const live = ledger.live(
+  const live = await ledger.live(
     writer,
     row.value.resource_id,
     scratch.value.id,
@@ -121,7 +121,7 @@ export async function captureSnapshot(
   sandbox: Sandbox,
   session: SandboxSession,
 ): Promise<Captured> {
-  const row = ledger.begin(writer, "snapshot", sandbox.info.provider);
+  const row = await ledger.begin(writer, "snapshot", sandbox.info.provider);
   if (!row.ok) return row;
   const taken = await session.snapshot(
     row.value.operation_key,
@@ -130,11 +130,11 @@ export async function captureSnapshot(
   if (!taken.ok) {
     if (isRefusal(taken.error)) return err(refused(taken.error.message));
     // The adapter reports what it did; without a snapshot lookup the row parks for an operator.
-    const parked = ledger.unknown(writer, row.value.resource_id);
+    const parked = await ledger.unknown(writer, row.value.resource_id);
     return parked.ok ? err(taken.error) : parked;
   }
   const data = taken.value;
-  const live = ledger.live(
+  const live = await ledger.live(
     writer,
     row.value.resource_id,
     data.snapshot_id,

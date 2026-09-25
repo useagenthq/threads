@@ -19,7 +19,7 @@ test("started() writes no artifact; put() stores the spec artifacts its event na
     (t) => t.name === "create_issue",
   )?.spec_ref;
   if (ref === undefined) throw new Error("create_issue is pinned by reference");
-  expect(artifacts.get(ref.sha256).ok).toBe(false);
+  expect((await artifacts.get(ref.sha256)).ok).toBe(false);
   await pin.put(store);
-  expect(artifacts.get(ref.sha256).ok).toBe(true);
+  expect((await artifacts.get(ref.sha256)).ok).toBe(true);
 });

@@ -73,7 +73,7 @@ export async function eventsOf(
   thread: ThreadRef,
 ): Promise<readonly KnownEvent[]> {
   const { log } = await openStore(store);
-  return knownEvents(unwrap(log.read(thread.branch)));
+  return knownEvents(unwrap(await log.read(thread.branch)));
 }
 
 /** The recorded Render v1 bytes of every turn request, in order. */
@@ -82,10 +82,15 @@ export async function requestsOf(
   events: readonly KnownEvent[],
 ): Promise<readonly Uint8Array[]> {
   const { artifacts } = await openStore(store);
-  return events.flatMap((e) =>
-    e.type === "model_request" && e.data.purpose !== "compaction"
-      ? [unwrap(artifacts.get(e.data.request_ref.sha256))]
-      : [],
+  const requests = events.filter(
+    (e) => e.type === "model_request" && e.data.purpose !== "compaction",
+  );
+  return Promise.all(
+    requests.map(async (e) =>
+      e.type === "model_request"
+        ? unwrap(await artifacts.get(e.data.request_ref.sha256))
+        : new Uint8Array(),
+    ),
   );
 }
 

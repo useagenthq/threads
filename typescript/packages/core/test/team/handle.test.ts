@@ -15,6 +15,7 @@ import { takeTeamLogMail } from "../../src/agent/team/log-mail";
 import { MemberName, TeamId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import type { LogStore } from "../../src/store";
+import { reading } from "../../src/store/driver";
 import { rebuildTeamIndex } from "../../src/team/rebuild";
 import { teamRow } from "../../src/team/rows";
 import { unwrap } from "../store/helpers";
@@ -54,9 +55,9 @@ async function ran(store = sqlite(":memory:")) {
 
 async function teamLog(store: ReturnType<typeof sqlite>, team: Team) {
   const log = await logOf(store);
-  const row = teamRow(log.driver, team.ref.id);
+  const row = await reading(log.driver, (tx) => teamRow(tx, team.ref.id));
   if (row === undefined) throw new Error("no team");
-  return knownEvents(unwrap(log.read(row.team_log_branch_id)));
+  return knownEvents(unwrap(await log.read(row.team_log_branch_id)));
 }
 
 const refIn = (team: Team, name: string): MemberRef => ({
@@ -99,7 +100,7 @@ describe("team.start and team.send", () => {
       status: "completed",
       output: "Ready.",
     });
-    assertTeamReplays(await logOf(store), team.ref.id);
+    await assertTeamReplays(await logOf(store), team.ref.id);
   });
 
   test("the lead's next run materializes and runs an operator's member", async () => {
@@ -115,7 +116,7 @@ describe("team.start and team.send", () => {
     });
     // Its task notification goes to the team log, which takes it as a receipt only.
     const log = await logOf(store);
-    takeTeamLogMail(
+    await takeTeamLogMail(
       log,
       (await openStore(store)).artifacts,
       team.ref.id,
@@ -125,7 +126,7 @@ describe("team.start and team.send", () => {
       (e) => e.type === "message_received",
     );
     expect(received.map((e) => e.type)).toEqual(["message_received"]);
-    assertTeamReplays(log, team.ref.id);
+    await assertTeamReplays(log, team.ref.id);
   });
 
   test("an unknown agent and a member not started yet are refused, and logged", async () => {
@@ -138,7 +139,7 @@ describe("team.start and team.send", () => {
     expect(sent).toEqual({ status: "refused", code: "unknown_member" });
     const log = await teamLog(store, team);
     expect(types(log).filter((t) => t === "operator_refused")).toHaveLength(2);
-    assertTeamReplays(await logOf(store), team.ref.id);
+    await assertTeamReplays(await logOf(store), team.ref.id);
   });
 
   test("team.send reaches a started member once; its key replays the outcome", async () => {
@@ -179,7 +180,7 @@ describe("team.start and team.send", () => {
         e.type === "operator_request" ? e.data.idempotency_key : "",
       ),
     ).toEqual([undefined, "s1", undefined, undefined]);
-    assertTeamReplays(await logOf(store), team.ref.id);
+    await assertTeamReplays(await logOf(store), team.ref.id);
   });
 });
 
@@ -187,10 +188,12 @@ describe("the busy bound", () => {
   test("a held team-log lease past the bound is busy, and nothing is recorded", async () => {
     const { store, team, lead } = await ran();
     const log = await logOf(store);
-    const row = teamRow(log.driver, team.ref.id);
+    const row = await reading(log.driver, (tx) => teamRow(tx, team.ref.id));
     const entry = memberEntry(lead);
     if (row === undefined || entry === undefined) throw new Error("no team");
-    const held = unwrap(log.acquire(row.team_log_branch_id, "someone-else"));
+    const held = unwrap(
+      await log.acquire(row.team_log_branch_id, "someone-else"),
+    );
     const { artifacts } = await openStore(store);
     const bounded = teamHandle({
       log,
@@ -209,7 +212,7 @@ describe("the busy bound", () => {
     held.release();
     // Released: the same request goes through.
     expect((await bounded.start("writer", "Go.")).status).toBe("started");
-    assertTeamReplays(log, team.ref.id);
+    await assertTeamReplays(log, team.ref.id);
   });
 });
 
@@ -223,7 +226,7 @@ describe("openTeam", () => {
       (e) => e.type === "operator_request",
     );
     expect(request?.actor.principal).toEqual(BOB);
-    assertTeamReplays(await logOf(store), team.ref.id);
+    await assertTeamReplays(await logOf(store), team.ref.id);
   });
 
   test("two leads of one name: openTeam binds the one that ran, by its config_hash", async () => {
@@ -242,7 +245,7 @@ describe("openTeam", () => {
       status: "refused",
       code: "unknown_agent",
     });
-    assertTeamReplays(await logOf(store), team.ref.id);
+    await assertTeamReplays(await logOf(store), team.ref.id);
   });
 
   test("a process that doesn't define the lead that ran gets unavailable, and nothing is logged", async () => {
@@ -258,9 +261,10 @@ describe("openTeam", () => {
     const before = (await teamLog(store, r.team)).length;
     // Stand-in for another process: this lead's definition is gone, another of its name is here.
     const log = await logOf(store);
-    log.driver.run(
-      "UPDATE team_members SET config_hash = ? WHERE role = 'lead'",
-      ["0".repeat(64)],
+    await log.driver.transaction((tx) =>
+      tx.run("UPDATE team_members SET config_hash = ? WHERE role = 'lead'", [
+        "0".repeat(64),
+      ]),
     );
     const opened = await openTeam(store, r.team.ref, { principal: BOB });
     expect(!opened.ok && opened.error.code).toBe("unavailable");
@@ -314,7 +318,7 @@ describe("team.events", () => {
     if (third === undefined) throw new Error("three items");
     const rest = await collect(team.events({ after: third.cursor }));
     expect(rest).toEqual(items.slice(3));
-    assertTeamReplays(await logOf(store), team.ref.id);
+    await assertTeamReplays(await logOf(store), team.ref.id);
   });
 
   test("a feed read while the team grows past a page yields what was committed at the start", async () => {
@@ -329,14 +333,14 @@ describe("team.events", () => {
     }
     expect(seen).toBe(committed);
     expect(await collect(team.events())).toHaveLength(committed + 4);
-    assertTeamReplays(await logOf(store), team.ref.id);
+    await assertTeamReplays(await logOf(store), team.ref.id);
   });
 
   test("a rebuilt feed restarts: epoch_restarted, then the whole new epoch", async () => {
     const { store, team } = await ran();
     const before = await collect(team.events());
     const log: LogStore = await logOf(store);
-    unwrap(rebuildTeamIndex(log, team.ref.id));
+    unwrap(await rebuildTeamIndex(log, team.ref.id));
     const cursor = before.at(-1)?.cursor;
     if (cursor === undefined) throw new Error("a feed");
     const after = await collect(team.events({ after: cursor }));
@@ -352,6 +356,6 @@ describe("team.events", () => {
       ),
     );
     expect(after).toHaveLength(before.length + 1);
-    assertTeamReplays(log, team.ref.id);
+    await assertTeamReplays(log, team.ref.id);
   });
 });

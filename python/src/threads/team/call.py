@@ -3,7 +3,6 @@ policy decision, its refusal and its success are recorded the same way for every
 call's one tool_result carries the op's result as RFC 8785 JSON. Reference:
 spec/tools/fixtures/ops_request.py."""
 
-import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal
@@ -22,6 +21,7 @@ from threads.log import (
 from threads.log.jcs import canonicalize
 from threads.reduce import Fold
 from threads.result import Ok
+from threads.store.conn import Conn
 from threads.store.lines import Draft
 from threads.team.batch import Batch
 from threads.team.dynamic import InvalidDefinition
@@ -38,7 +38,7 @@ type ReadText = Callable[[ArtifactRef], str]
 class CallContext:
     """What an op's decision reads, inside the caller's append transaction."""
 
-    conn: sqlite3.Connection
+    conn: Conn
     fold: Fold
     """The caller's committed fold: its turn, the call and what its log recorded."""
     batch: Batch

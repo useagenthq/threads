@@ -5,13 +5,13 @@ conditional update in the transaction that appends approval_granted or approval_
 row carries the bindings the log doesn't: the tenant and the channel installation.
 """
 
-import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
 from threads.log import ApprovalRequestedEvent, BranchId, CallId, ParseError, ThreadId
 from threads.store.companion import Companion
+from threads.store.conn import Conn
 from threads.store.sql import int_of, text_of
 from threads.store.verify import StoredEvent
 
@@ -30,7 +30,7 @@ class Challenge:
     state: str
 
 
-def record(conn: sqlite3.Connection, tenant_id: str, events: Sequence[StoredEvent]) -> None:
+def record(conn: Conn, tenant_id: str, events: Sequence[StoredEvent]) -> None:
     """One open row per approval_requested of an append, bound to the thread's channel
     installation when the thread is a channel conversation's (null otherwise)."""
     for event in events:
@@ -58,9 +58,9 @@ def record(conn: sqlite3.Connection, tenant_id: str, events: Sequence[StoredEven
         )
 
 
-def find(conn: sqlite3.Connection, tenant_id: str, challenge_id: str) -> Challenge | None:
+def find(conn: Conn, tenant_id: str, challenge_id: str) -> Challenge | None:
     """The tenant's challenge; another tenant's is not found."""
-    row: tuple[object, ...] | None = conn.execute(
+    row = conn.execute(
         "SELECT installation_id, thread_id, branch_id, call_id, args_hash, expires_at, state"
         " FROM approvals WHERE challenge_id = ? AND tenant_id = ?",
         (challenge_id, tenant_id),
@@ -80,7 +80,7 @@ def find(conn: sqlite3.Connection, tenant_id: str, challenge_id: str) -> Challen
     )
 
 
-def expire(conn: sqlite3.Connection, challenge_id: str, now: int) -> None:
+def expire(conn: Conn, challenge_id: str, now: int) -> None:
     """An answer at or after the expiry moves an open row to expired: a denial."""
     conn.execute(
         "UPDATE approvals SET state = 'expired', decided_at = ?"
@@ -93,7 +93,7 @@ def consume(challenge_id: str, state: Decided, principal_key: str, now: int) -> 
     """The conditional update that makes the answer single-use: only an open, unexpired row
     moves, so a second answer (or a race) is approval_duplicate and appends nothing."""
 
-    def update(conn: sqlite3.Connection, _events: Sequence[StoredEvent]) -> ParseError | None:
+    def update(conn: Conn, _events: Sequence[StoredEvent]) -> ParseError | None:
         done = conn.execute(
             "UPDATE approvals SET state = ?, decided_by = ?, decided_at = ?"
             " WHERE challenge_id = ? AND state = 'open' AND expires_at > ?",

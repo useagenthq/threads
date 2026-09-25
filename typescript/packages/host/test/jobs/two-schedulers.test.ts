@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { join } from "node:path";
 import { LogStore, memoryArtifacts } from "@threads/core";
-import { openBunSqlite } from "@threads/core/bun-sqlite";
 import {
   type KnownEvent,
   knownEvents,
-  type SqliteDriver,
+  type StoreDriver,
   ThreadId,
 } from "@threads/core/host";
 import { z } from "zod";
+import { sqlAll } from "../sql";
 import { finish, go, logged, reap, scratch, spawn } from "./drill";
+import { drillDriver } from "./stores";
 import { rows } from "./worker";
 
 // Job schedule-two-schedulers-one-run: two host processes tick the same
@@ -34,19 +34,20 @@ describe("schedule-two-schedulers-one-run", () => {
     expect(await finish(a)).toBe(0);
     expect(await finish(b)).toBe(0);
 
-    const db = openBunSqlite(join(dir, "threads.db"));
+    const db = (await drillDriver(dir)).db;
     try {
       const claimed = z
         .array(z.strictObject({ occurrence_at: z.int(), state: z.string() }))
         .parse(
-          db.all(
+          await sqlAll(
+            db,
             "SELECT occurrence_at, state FROM schedule_occurrences ORDER BY occurrence_at",
             [],
           ),
         );
       // Each occurrence is claimed exactly once, by one scheduler.
       expect(claimed.map((c) => c.occurrence_at)).toEqual(OCCURRENCES);
-      const all = scheduleLog(db);
+      const all = await scheduleLog(db);
       const fired = all.flatMap((e) =>
         e.type === "schedule_fired" ? [e.data.scheduled_for] : [],
       );
@@ -77,21 +78,27 @@ describe("schedule-two-schedulers-one-run", () => {
         ]),
       );
     } finally {
-      db.close();
+      await db.close();
     }
     expect(logged(dir)).toBe("");
   }, 60_000);
 });
 
 /** The schedule's one thread, read back from the log. */
-function scheduleLog(db: SqliteDriver): readonly KnownEvent[] {
+async function scheduleLog(db: StoreDriver): Promise<readonly KnownEvent[]> {
   const [row] = z
     .array(z.strictObject({ thread_id: ThreadId }))
-    .parse(db.all("SELECT DISTINCT thread_id FROM schedule_occurrences", []));
-  const store = LogStore.open(db, Date.now, memoryArtifacts(), "local");
+    .parse(
+      await sqlAll(
+        db,
+        "SELECT DISTINCT thread_id FROM schedule_occurrences",
+        [],
+      ),
+    );
+  const store = await LogStore.open(db, Date.now, memoryArtifacts(), "local");
   if (!store.ok || row === undefined) throw new Error("no schedule thread");
-  const main = store.value.mainBranch(row.thread_id);
-  const read = main.ok ? store.value.read(main.value) : undefined;
+  const main = await store.value.mainBranch(row.thread_id);
+  const read = main.ok ? await store.value.read(main.value) : undefined;
   if (read?.ok !== true) throw new Error("no schedule log");
   return knownEvents(read.value);
 }

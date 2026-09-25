@@ -7,7 +7,6 @@ the team, then `change_rows` over every log. Inserts come first, so a rebuild do
 the order the logs are read in. The reference is spec/tools/fixtures/team_index.py.
 """
 
-import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
@@ -44,9 +43,11 @@ from threads.log.keys import principal_key
 from threads.reduce import Fold, apply, enter_segment
 from threads.reduce.handlers import to_json
 from threads.result import Err
+from threads.store.conn import Conn
+from threads.store.sql import text_of
 from threads.store.verify import VerifiedLog
 
-_SCOPED: Final = "(? IS NULL OR team_id = ?)"
+_SCOPED: Final = "(CAST(? AS TEXT) IS NULL OR team_id = ?)"
 """A rebuild of one team writes only that team's rows (a nested lead's log also names its own)."""
 _STATES: Final[Mapping[type, str]] = {
     ParkedEvent: "parked",
@@ -90,7 +91,7 @@ def turn_openers(log: VerifiedLog) -> frozenset[str]:
 
 
 def insert_rows(
-    conn: sqlite3.Connection, log: TeamLog, events: Sequence[Event], scope: str | None = None
+    conn: Conn, log: TeamLog, events: Sequence[Event], scope: str | None = None
 ) -> None:
     for event in events:
         insert = _INSERTS.get(type(event))
@@ -100,7 +101,7 @@ def insert_rows(
 
 @dataclass(frozen=True, slots=True)
 class _Write:
-    conn: sqlite3.Connection
+    conn: Conn
     log: TeamLog
     scope: str | None
 
@@ -186,12 +187,12 @@ def _receipt(w: _Write, e: OperatorRequestEvent) -> None:
     d = e.data
     if d.idempotency_key is MISSING:
         return
-    found: tuple[str, str] | None = w.conn.execute(
+    found = w.conn.execute(
         "SELECT tenant_id, team_id FROM teams WHERE team_log_branch_id = ?", (w.log.branch_id,)
     ).fetchone()
-    if found is None or not w.ours(found[1]):
+    if found is None or not w.ours(text_of(found[1])):
         return
-    key = {"tenant_id": found[0], "team_id": found[1], "op": d.op}
+    key = {"tenant_id": text_of(found[0]), "team_id": text_of(found[1]), "op": d.op}
     w.insert(
         "operator_receipts",
         {**key, "idempotency_key": d.idempotency_key, "principal_key": principal_key(d.principal)}
@@ -241,7 +242,7 @@ _INSERTS: Final[Mapping[type, _Step]] = dict(
 
 
 def change_rows(
-    conn: sqlite3.Connection,
+    conn: Conn,
     log: TeamLog,
     events: Sequence[Event],
     opened: frozenset[str],

@@ -11,6 +11,7 @@ import { z } from "zod";
 import { type Host, host } from "../src";
 import { hostTicked } from "../src/host";
 import { authenticate, fakeChannel, say, until, use, webhook } from "./kit";
+import { sqlAll } from "./sql";
 
 // A host watches every channel thread it consumed an item on until the thread settles, and each
 // tick runs a turn no process is running. A run still going in this process is never waited on
@@ -91,7 +92,7 @@ describe("recovery around a live run", () => {
     const { log } = await openStore(tenantStore(store, TENANT));
     const acquire = log.acquire.bind(log);
     let lost = false;
-    log.acquire = (branch, holder, ttl) => {
+    log.acquire = async (branch, holder, ttl) => {
       if (lost || !holder.startsWith("run-"))
         return acquire(branch, holder, ttl);
       lost = true;
@@ -134,20 +135,25 @@ describe("recovery around a live run", () => {
     await post(h, "E1", "C1");
     const { log } = await openStore(tenantStore(store, TENANT));
     const { db } = await storeConnection(store);
-    const events = () => {
+    const events = async () => {
       const [row] = z
         .array(z.object({ branch_id: BranchId }))
-        .parse(db.all("SELECT branch_id FROM branches", []));
-      const read = row === undefined ? undefined : log.read(row.branch_id);
+        .parse(await sqlAll(db, "SELECT branch_id FROM branches", []));
+      const read =
+        row === undefined ? undefined : await log.read(row.branch_id);
       return read?.ok === true ? knownEvents(read.value) : [];
     };
-    await until(async () => events().some((e) => e.type === "effect_begin"));
+    await until(async () =>
+      (await events()).some((e) => e.type === "effect_begin"),
+    );
     const stopping = Date.now();
     await h.stop();
     expect(Date.now() - stopping).toBeLessThan(1_000);
     // Begun and unsettled: never assumed unsent, and never re-sent blindly.
-    expect(events().map((e) => e.type)).not.toContain("effect_resolved");
-    expect(events().map((e) => e.type)).not.toContain("tool_result");
+    expect((await events()).map((e) => e.type)).not.toContain(
+      "effect_resolved",
+    );
+    expect((await events()).map((e) => e.type)).not.toContain("tool_result");
     // The next host reconciles it through the channel's lookup.
     const next = fakeChannel("support");
     next.lookups.push("found");
@@ -160,7 +166,7 @@ describe("recovery around a live run", () => {
     hosts.push(restarted);
     await restarted.ready();
     await until(async () =>
-      events().some(
+      (await events()).some(
         (e) =>
           e.type === "effect_resolved" &&
           e.data.outcome === "confirmed_success",

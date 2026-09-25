@@ -3,6 +3,7 @@ import { err, ok, type Result } from "../result";
 import { type Chain, tipHash, type VerifiedLog } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import { newBranch } from "./branch";
+import type { Tx } from "./driver";
 import * as forking from "./fork-reads";
 import { grantLease, type StoreAccess, takeLease } from "./lease";
 import { atomically, ownedBranch, putLease, setBranchState } from "./tables";
@@ -23,11 +24,11 @@ export function beginFork(
   s: StoreAccess,
   request: ForkRequest,
   ttlMs: number,
-): Result<Writer, LogError> {
-  return atomically(s.db, () => {
-    const owned = ownedBranch(s.db, request.parent, s.tenant);
+): Promise<Result<Writer, LogError>> {
+  return atomically(s.db, async (tx) => {
+    const owned = await ownedBranch(tx, request.parent, s.tenant);
     if (!owned.ok) return owned;
-    const parent = s.read(request.parent);
+    const parent = await s.read(tx, request.parent);
     if (!parent.ok) return parent;
     const eligible = forking.forkEligible(
       parent.value.fold,
@@ -35,11 +36,12 @@ export function beginFork(
       s.now(),
     );
     if (!eligible.ok) return eligible;
-    const opened = openChild(s, parent.value, request);
+    const opened = await openChild(s, tx, parent.value, request);
     if (!opened.ok) return opened;
     return ok(
-      grantLease(
+      await grantLease(
         s,
+        tx,
         request.branch,
         request.holderId,
         opened.value.fold.epoch + 1,
@@ -56,17 +58,17 @@ export function reclaimFork(
   branchId: BranchId,
   holderId: string,
   ttlMs: number,
-): Result<Writer, LogError> {
-  return atomically(s.db, () => {
-    const row = ownedBranch(s.db, branchId, s.tenant);
+): Promise<Result<Writer, LogError>> {
+  return atomically(s.db, async (tx) => {
+    const row = await ownedBranch(tx, branchId, s.tenant);
     if (!row.ok) return row;
     if (row.value.state !== "forking")
       return err(
         logError("branch_not_runnable", `branch ${branchId} is not forking`),
       );
-    const chain = forking.loadChain(s.db, branchId);
+    const chain = await forking.loadChain(tx, branchId);
     if (!chain.ok) return chain;
-    return takeLease(s, branchId, holderId, ttlMs, chain.value);
+    return takeLease(s, tx, branchId, holderId, ttlMs, chain.value);
   });
 }
 
@@ -78,11 +80,11 @@ export function finishFork(
     readonly sandboxId: SandboxId;
     readonly knowledgePolicy: "pinned" | "current";
   },
-): Result<void, LogError> {
+): Promise<Result<void, LogError>> {
   const parent = writer.chain.segments.at(-2)?.header.branch_id;
   if (parent === undefined) throw new Error("a forking chain has a parent");
-  return atomically(s.db, () => {
-    const forked = writer.append([
+  return atomically(s.db, async (tx) => {
+    const forked = await writer.appendIn(tx, [
       {
         type: "fork",
         type_version: 1,
@@ -98,9 +100,9 @@ export function finishFork(
       },
     ]);
     if (!forked.ok) return forked;
-    setBranchState(s.db, writer.lease.branchId, "ready");
+    await setBranchState(tx, writer.lease.branchId, "ready");
     // The fork is done with the child; hand the lease back so a run can take it at once.
-    putLease(s.db, writer.lease.branchId, {
+    await putLease(tx, writer.lease.branchId, {
       holder_id: writer.lease.holderId,
       epoch: writer.lease.epoch,
       expires_at: s.now(),
@@ -110,14 +112,15 @@ export function finishFork(
 }
 
 /** Stores the child's row and header, and loads its chain: the parent's through at_seq. */
-function openChild(
+async function openChild(
   s: StoreAccess,
+  tx: Tx,
   parent: VerifiedLog,
   request: ForkRequest,
-): Result<Chain, LogError> {
+): Promise<Result<Chain, LogError>> {
   const threadId = parent.segments[0]?.header.thread_id;
   if (threadId === undefined) throw new Error("a verified log has a header");
-  const stored = newBranch(s.db, {
+  const stored = await newBranch(tx, {
     tenantId: s.tenant,
     threadId,
     branchId: request.branch,
@@ -125,5 +128,5 @@ function openChild(
     state: "forking",
     createdAt: s.now(),
   });
-  return stored.ok ? forking.loadChain(s.db, request.branch) : stored;
+  return stored.ok ? forking.loadChain(tx, request.branch) : stored;
 }

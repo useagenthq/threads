@@ -16,7 +16,7 @@ export function ownerContext(writer: Writer): SandboxContext {
       epoch: writer.lease.epoch,
     },
     fence: async () => {
-      const live = writer.fence();
+      const live = await writer.fence();
       return live.ok
         ? ok(undefined)
         : err({ code: "stale_epoch", message: live.error.message });
@@ -33,7 +33,7 @@ export function cleanupContext(
   return {
     authority: { kind: "cleanup", resource_id: resourceId, claim },
     fence: async () => {
-      const held = ledger.claimed(resourceId, claim);
+      const held = await ledger.claimed(resourceId, claim);
       return held.ok
         ? ok(undefined)
         : err({ code: "cleanup_claim_lost", message: held.error.message });

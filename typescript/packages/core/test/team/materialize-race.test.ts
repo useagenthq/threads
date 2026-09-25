@@ -4,6 +4,7 @@ import { BranchId, ThreadId } from "../../src/log";
 import { deleteThread } from "../../src/store/deletion";
 import { materialize } from "../../src/team/materialize";
 import { code, unwrap } from "../store/helpers";
+import { query } from "./kit";
 import { DOC, seeded, TEAM, worldLogs } from "./vectors";
 
 // Materialize versus delete (design §4.15), with a barrier between materialize's prework (the
@@ -26,13 +27,13 @@ function lead(): ThreadId {
 
 describe("materialize racing a delete", () => {
   test("delete first: the row check finds the member gone and nothing is opened", async () => {
-    const fx = seeded(vector);
+    const fx = await seeded(vector);
     const got = unwrap(
       await materialize(fx.store, TEAM, "researcher-1", {
         artifacts: fx.artifacts,
         // The barrier: the lead is deleted after the prework, before the write transaction.
         rebind: async () => {
-          unwrap(deleteThread(fx.db, "acme", lead(), fx.clock.now));
+          unwrap(await deleteThread(fx.db, "acme", lead(), fx.clock.now));
           return { status: "ok" };
         },
         holder: "worker",
@@ -42,14 +43,16 @@ describe("materialize racing a delete", () => {
     );
     expect(got.status).toBe("not_starting");
     const branches = Count.parse(
-      fx.db.all("SELECT COUNT(*) AS n FROM branches", []),
+      await query(fx.db, "SELECT COUNT(*) AS n FROM branches", []),
     )[0]?.n;
     expect(branches).toBe(0);
-    expect(code(fx.store.branchState(MEMBER_BRANCH))).toBe("branch_not_found");
+    expect(code(await fx.store.branchState(MEMBER_BRANCH))).toBe(
+      "branch_not_found",
+    );
   });
 
   test("materialize first: the member's live lease makes the delete busy", async () => {
-    const fx = seeded(vector);
+    const fx = await seeded(vector);
     const got = unwrap(
       await materialize(fx.store, TEAM, "researcher-1", {
         artifacts: fx.artifacts,
@@ -61,15 +64,16 @@ describe("materialize racing a delete", () => {
     );
     expect(got.status).toBe("materialized");
     const before = Count.parse(
-      fx.db.all("SELECT COUNT(*) AS n FROM events", []),
+      await query(fx.db, "SELECT COUNT(*) AS n FROM events", []),
     )[0]?.n;
-    expect(code(deleteThread(fx.db, "acme", lead(), fx.clock.now))).toBe(
+    expect(code(await deleteThread(fx.db, "acme", lead(), fx.clock.now))).toBe(
       "busy",
     );
     expect(
-      Count.parse(fx.db.all("SELECT COUNT(*) AS n FROM events", []))[0]?.n,
+      Count.parse(await query(fx.db, "SELECT COUNT(*) AS n FROM events", []))[0]
+        ?.n,
     ).toBe(before);
-    expect(fx.store.branchState(MEMBER_BRANCH)).toEqual({
+    expect(await fx.store.branchState(MEMBER_BRANCH)).toEqual({
       ok: true,
       value: "ready",
     });

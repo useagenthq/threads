@@ -36,8 +36,8 @@ export async function startPin(
   const pinned =
     define === undefined ? listed : await pin(args.agent, { define, starter });
   if (pinned !== undefined) {
-    artifacts.put(utf8.encode(pinned.config));
-    for (const bytes of pinned.artifacts) artifacts.put(bytes);
+    await artifacts.put(utf8.encode(pinned.config));
+    for (const bytes of pinned.artifacts) await artifacts.put(bytes);
   }
   return { pinned, resolved };
 }

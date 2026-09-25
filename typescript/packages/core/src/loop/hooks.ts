@@ -125,9 +125,9 @@ export async function observe<K extends HookName>(
     const notes = out.kind === "ok" ? annotations(out.value) : [];
     const stopped =
       out.kind === "failed"
-        ? s.append(decision(ext.name, hook, "failed", key, out.reason))
+        ? await s.append(decision(ext.name, hook, "failed", key, out.reason))
         : notes.length > 0
-          ? s.append(
+          ? await s.append(
               decision(ext.name, hook, "annotate", key, notes.join("\n")),
             )
           : undefined;
@@ -157,12 +157,12 @@ export async function context(
     if (recorded(window, ext.name, hook) !== undefined) continue;
     const out = await run(ext, hook, args);
     if (out.kind === "failed") {
-      const stopped = s.append(
+      const stopped = await s.append(
         decision(ext.name, hook, "failed", {}, out.reason),
       );
       return stopped ?? "failed";
     }
-    const stopped = s.append(
+    const stopped = await s.append(
       decision(ext.name, hook, "proceed"),
       ...out.value.map((text) => injection(ext.name, text)),
     );

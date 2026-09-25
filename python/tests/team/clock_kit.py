@@ -13,6 +13,7 @@ from team.run_kit import sq_of
 from threads import Store, scripted_model
 from threads.loop.model import ModelChunk, ModelContext, ModelRequest
 from threads.loop.scripted import ScriptedModel
+from threads.store.sql import int_of
 
 
 class Held(ScriptedModel):
@@ -62,5 +63,5 @@ async def until(check: Callable[[], Awaitable[bool]]) -> None:
 
 async def count(store: Store, sql: str) -> int:
     sq = await sq_of(store)
-    rows: list[tuple[int]] = await sq.run(lambda c: c.execute(sql).fetchall())
-    return rows[0][0]
+    rows = await sq.run(lambda c: c.execute(sql).fetchall())
+    return int_of(rows[0][0])

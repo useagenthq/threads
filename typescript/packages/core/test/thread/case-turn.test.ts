@@ -18,7 +18,7 @@ async function refundTurn(): Promise<Turn> {
     store: memory(),
   });
   const { log } = await openStore(run.thread.store);
-  return unwrap(findTurn(unwrap(log.read(run.thread.branch)), undefined));
+  return unwrap(findTurn(unwrap(await log.read(run.thread.branch)), undefined));
 }
 
 const renamed = (e: KnownEvent, name: string): KnownEvent =>
@@ -46,7 +46,7 @@ describe("offlineReason", () => {
     });
   });
 
-  test("an effect begun and never settled is unsettled_effect", () => {
+  test("an effect begun and never settled is unsettled_effect", async () => {
     const bytes = readFileSync(
       join(CASES_DIR, "cancelled-with-unsettled-effect", "log.jsonl"),
       "utf8",

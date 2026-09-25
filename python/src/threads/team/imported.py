@@ -3,7 +3,6 @@ index is folded again from the logs: each imported branch's wake rows, and every
 belongs to, rebuilt whole. A team whose lead is not stored yet has no rows until its lead is
 imported (that import rebuilds it). A log that breaks rule 43 with the stored team is refused."""
 
-import sqlite3
 import time
 
 from pydantic.experimental.missing_sentinel import MISSING
@@ -11,6 +10,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 from threads.log import ParseError, TeamOpenedEvent, ThreadStartedEvent
 from threads.result import Err
 from threads.store import receipts, sql, wakes
+from threads.store.conn import Conn
 from threads.store.indexing import known
 from threads.store.started import opened_threads
 from threads.store.verify import VerifiedLog
@@ -23,7 +23,7 @@ class _UndoError(Exception):
 
 
 def import_indexed(
-    conn: sqlite3.Connection, log: VerifiedLog, tenant: str, dropped_ref: str | None
+    conn: Conn, log: VerifiedLog, tenant: str, dropped_ref: str | None
 ) -> ParseError | None:
     """Stores the log's segments and folds the index rows they change, in one transaction."""
     try:
@@ -36,7 +36,7 @@ def import_indexed(
     return None
 
 
-def _index(conn: sqlite3.Connection, log: VerifiedLog, tenant: str) -> ParseError | None:
+def _index(conn: Conn, log: VerifiedLog, tenant: str) -> ParseError | None:
     now = int(time.time() * 1000)
     for s in log.segments:
         events = known([e for e, _ in s.events])
@@ -49,7 +49,7 @@ def _index(conn: sqlite3.Connection, log: VerifiedLog, tenant: str) -> ParseErro
     return None
 
 
-def _teams_of(conn: sqlite3.Connection, log: VerifiedLog, tenant: str) -> list[str]:
+def _teams_of(conn: Conn, log: VerifiedLog, tenant: str) -> list[str]:
     """The teams the log's thread belongs to, from its opening event: the team it leads, the
     team whose log it is, and, for a member, its lead's team."""
     events = log.segments[0].events

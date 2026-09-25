@@ -90,19 +90,19 @@ export function knowledgeSpecs(): readonly ToolSpec[] {
  * Hits whose binding the host issued to this scope (the rest audited as scope_violation), at
  * most k and MAX_HIT_BYTES of text: a hit that would pass the budget ends the list.
  */
-function kept<
+async function kept<
   H extends { readonly binding: MemoryHit["binding"]; readonly text: string },
 >(
   env: MemoryEnv,
   kind: "memory" | "knowledge",
   hits: readonly H[],
   k: number,
-): readonly H[] {
+): Promise<readonly H[]> {
   const out: H[] = [];
   let size = 0;
   for (const h of hits) {
-    if (!env.bindings.owns(kind, env.scope, h.binding)) {
-      env.bindings.violation(kind, env.scope, h.binding);
+    if (!(await env.bindings.owns(kind, env.scope, h.binding))) {
+      await env.bindings.violation(kind, env.scope, h.binding);
       continue;
     }
     size += encoder.encode(h.text).length;
@@ -146,7 +146,7 @@ function searchMemory(provider: MemoryProvider, env: MemoryEnv): ToolImpl {
       const parsed = MemoryHit.array().safeParse(got.value);
       if (!parsed.success)
         return failedRun({ code: "invalid", message: "malformed hits" });
-      const hits = kept(env, "memory", parsed.data, k);
+      const hits = await kept(env, "memory", parsed.data, k);
       // The provider chose each id and version: they reach the model only inside the
       // reference wrapper (invariant 6), never in this bare text.
       return listed(
@@ -184,7 +184,7 @@ function saveMemory(provider: MemoryProvider, env: MemoryEnv): ToolImpl {
           event_ids: ids.slice(-2),
         },
         // Derived from the key, so a re-dispatch writes the same record.
-        binding: env.bindings.issue("memory", env.scope, ctx.effectKey),
+        binding: await env.bindings.issue("memory", env.scope, ctx.effectKey),
       };
       const got = await called(ctx, () =>
         provider.remember(env.scope, record, ctx.effectKey),
@@ -251,7 +251,7 @@ function searchKnowledge(
       const parsed = KnowledgeHit.array().safeParse(got.value);
       if (!parsed.success)
         return failedRun({ code: "invalid", message: "malformed hits" });
-      const refs = kept(env, "knowledge", parsed.data, k).map(
+      const refs = (await kept(env, "knowledge", parsed.data, k)).map(
         (h): Inject => ({
           source: "knowledge",
           trust: "untrusted_reference",

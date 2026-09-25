@@ -7,9 +7,8 @@ import {
   control,
   decide,
   type EventDraft,
-  type EventId,
+  EventId,
   knownEvents,
-  type SqliteDriver,
   type Store,
   stopWhenIdle,
   storeConnection,
@@ -45,7 +44,7 @@ export async function consume(
 ): Promise<void> {
   const { db } = await storeConnection(ctx.store);
   for (;;) {
-    const pending = pendingItems(db, tenant, threadId);
+    const pending = await pendingItems(db, tenant, threadId);
     if (!pending.ok || !(await step(ctx, tenant, threadId, pending.value)))
       return;
   }
@@ -93,8 +92,8 @@ async function target(
   const adapter = ctx.channels.get(next.channel);
   if (adapter === undefined) return undefined;
   const { log } = await ctx.open(tenant);
-  const main = log.mainBranch(threadId);
-  const read = main.ok ? log.read(main.value) : undefined;
+  const main = await log.mainBranch(threadId);
+  const read = main.ok ? await log.read(main.value) : undefined;
   const events = read?.ok === true ? knownEvents(read.value) : [];
   // A root another host just made has no thread_started yet: it pins no agent, like no root.
   // Read as "no host agent", the item would be discarded and the message lost (F9.6 drill).
@@ -136,32 +135,32 @@ async function message(
 ): Promise<"busy" | "done" | "held"> {
   const { tenant } = t.conversation;
   const { log } = await ctx.open(tenant);
-  const { db } = await storeConnection(ctx.store);
-  const main = log.mainBranch(t.threadId);
+  const main = await log.mainBranch(t.threadId);
   let branchId = main.ok ? main.value : BranchId.parse(uuidv7(log.now()));
   if (!main.ok) {
-    const made = log.createBranch(t.threadId, branchId);
-    // Another process may have made the thread's root at the same moment: the first is the one.
-    const root = log.mainBranch(t.threadId);
-    if (!made.ok || !root.ok) return "busy";
+    // Another process may have made the thread's root at the same moment: one root stands
+    // (store.sql branches_root), and this process continues it whichever made it.
+    await log.createBranch(t.threadId, branchId);
+    const root = await log.mainBranch(t.threadId);
+    if (!root.ok) return "busy";
     branchId = root.value;
   }
-  const writer = log.acquire(branchId, `host-${crypto.randomUUID()}`);
+  const writer = await log.acquire(branchId, `host-${crypto.randomUUID()}`);
   if (!writer.ok) return "busy";
   let outcome: Replied | "input";
   try {
     const w = writer.value;
     // A turn in progress takes no new input, but the asker's reply answers its open question.
     outcome = w.chain.fold.turnOpen
-      ? replyToQuestion(w, db, {
+      ? await replyToQuestion(w, log.now(), {
           inboxId: next.inbox_id,
           principal: next.item.principal,
           text: textOf(next),
           delivery: delivery(next),
         })
-      : await appendInput(w, t, next, db, ctx.storeFor(tenant));
+      : await appendInput(w, t, next, ctx.storeFor(tenant), log.now());
   } finally {
-    writer.value.release();
+    await writer.value.release();
   }
   const thread = { id: t.threadId, branch: branchId };
   if (outcome === "busy" || outcome === "held") return outcome;
@@ -178,8 +177,8 @@ async function appendInput(
   w: Writer,
   t: Target,
   next: Message,
-  db: SqliteDriver,
   store: Store,
+  now: number,
 ): Promise<"input" | "busy"> {
   // Only the thread's first event is its thread_started, whichever process creates it.
   const first: readonly EventDraft[] =
@@ -188,16 +187,13 @@ async function appendInput(
   // since target() looked, and nothing can be appended under it until release.
   if (first.length === 0 && !(await samePin(knownEvents(w.chain), t.hosted)))
     return "busy";
-  const done = w.fenced(() => {
-    const delivered = w.append([...first, delivery(next)]);
-    if (!delivered.ok) return delivered;
-    const cause = delivered.value.at(-1);
-    if (cause?.kind !== "event") throw new Error("channel_delivery is known");
-    return w.append(
-      [input(next, cause.event.event_id)],
-      consumes(db, next.inbox_id),
-    );
-  });
+  // One append: the delivery names its own id so the input can cite it, and the item is
+  // consumed at the input's seq in the same transaction.
+  const cause = EventId.parse(uuidv7(now));
+  const done = await w.append(
+    [...first, { ...delivery(next), event_id: cause }, input(next, cause)],
+    consumes(next.inbox_id),
+  );
   return done.ok ? "input" : "busy";
 }
 
@@ -258,19 +254,19 @@ async function applied(
   const { db } = await storeConnection(ctx.store);
   const { item } = next;
   const { log } = await ctx.open(tenant);
-  const main = log.mainBranch(t.threadId);
+  const main = await log.mainBranch(t.threadId);
   const plan = await planOf(ctx, t, item);
   if (!main.ok || plan === undefined) {
-    consumed(db, next.inbox_id, 0);
+    await db.transaction((tx) => consumed(tx, next.inbox_id, 0));
     return "done";
   }
-  const alongside = consumes(db, next.inbox_id);
+  const alongside = consumes(next.inbox_id);
   const done = await control(log, main.value, item.principal, plan, {
     alongside,
   });
   if (!done.ok) {
     if (done.error.code === "branch_busy") return "busy";
-    consumed(db, next.inbox_id, 0);
+    await db.transaction((tx) => consumed(tx, next.inbox_id, 0));
     return "done";
   }
   // Only a hard cancel reaches the tree; a soft stop lets running children finish.

@@ -6,7 +6,6 @@ own mail in its run. One member branch runs at a time; members run concurrently.
 
 import asyncio
 import contextlib
-import sqlite3
 import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -37,7 +36,9 @@ from threads.loop.team_runtime import TeamAgentPin
 from threads.reduce import Fold
 from threads.result import Err
 from threads.store import SqliteStore, lease
+from threads.store.conn import Conn
 from threads.store.lines import uuid7
+from threads.store.sql import int_of, text_of
 from threads.team.batch import Mint
 from threads.team.claim import claim_mail
 from threads.team.constants import TEAM_CONSTANTS
@@ -221,11 +222,11 @@ class TeamWorker:
         return due is not None and due <= now_ms()
 
     async def _free(self, branch: str) -> bool:
-        def expired(conn: sqlite3.Connection) -> bool:
-            row: tuple[int] | None = conn.execute(
+        def expired(conn: Conn) -> bool:
+            row = conn.execute(
                 "SELECT expires_at FROM leases WHERE branch_id = ?", (branch,)
             ).fetchone()
-            return row is None or row[0] <= now_ms()
+            return row is None or int_of(row[0]) <= now_ms()
 
         return await self._env.sq.run(expired)
 
@@ -330,7 +331,7 @@ class TeamWorker:
         await self._env.run(found, run)
 
 
-def principal_of(conn: sqlite3.Connection, fold: Fold, row: MemberRow) -> Principal | None:
+def principal_of(conn: Conn, fold: Fold, row: MemberRow) -> Principal | None:
     """The one principal a member run acts under (design §2.6: one turn, one authority): its open
     turn's, else that of the first mail it would take. Mail of another principal waits for the
     next run."""
@@ -343,20 +344,20 @@ def principal_of(conn: sqlite3.Connection, fold: Fold, row: MemberRow) -> Princi
     return None if first is None else first.provenance.principal
 
 
-def _closed(conn: sqlite3.Connection, team: str) -> bool:
+def _closed(conn: Conn, team: str) -> bool:
     found = team_row(conn, team)
     return found is not None and found.closed_at is not None
 
 
-def _members(conn: sqlite3.Connection, root: str) -> list[MemberRow]:
+def _members(conn: Conn, root: str) -> list[MemberRow]:
     """The member rows of the team and of every team led by one of its members, recursively."""
     teams, out = [root], list[MemberRow]()
     while teams:
         rows = [r for r in member_rows(conn, teams.pop()) if r.role == "member"]
         out += rows
         for r in rows:
-            led: list[tuple[str]] = conn.execute(
+            led = conn.execute(
                 "SELECT team_id FROM teams WHERE lead_thread_id = ?", (r.thread_id,)
             ).fetchall()
-            teams += [t for (t,) in led]
+            teams += [text_of(t) for (t,) in led]
     return out

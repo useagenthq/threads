@@ -34,7 +34,7 @@ export async function recordCalls(s: Session): Promise<Halt | undefined> {
 }
 
 /** Behind a cancel: each part not yet recorded gets its tool_call and not_executed result. */
-export function closeUnrecorded(s: Session): Halt | undefined {
+export async function closeUnrecorded(s: Session): Promise<Halt | undefined> {
   const owed = owedCalls(s.events, s.fold);
   if (owed === undefined) return undefined;
   const requestId = owed.response.data.request_event_id;
@@ -72,7 +72,7 @@ async function recordCall(
   if (failure !== undefined)
     return s.append(...refused(use, requestEventId, failure));
   const { call_id, name, input } = use;
-  const stopped = s.append(
+  const stopped = await s.append(
     draft.toolCall({ call_id, name, input, request_event_id: requestEventId }),
   );
   if (stopped !== undefined) return stopped;

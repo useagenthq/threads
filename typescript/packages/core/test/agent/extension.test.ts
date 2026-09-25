@@ -36,7 +36,7 @@ const ping = tool<Record<string, never>, string, { user: string }>({
 
 async function logOf(store: ReturnType<typeof sqlite>, branch: string) {
   const { log } = await openStore(store);
-  const read = unwrap(log.read(BranchId.parse(branch)));
+  const read = unwrap(await log.read(BranchId.parse(branch)));
   return knownEvents(read);
 }
 
@@ -193,7 +193,8 @@ describe("observers (observer-failure-isolated)", () => {
       model: scriptedModel({ responses: [say("ok")] }),
     }).run("hi", { store });
     const branch = result.thread.branch;
-    const events = () => knownEvents(unwrap(log.read(branch)));
+    const read = knownEvents(unwrap(await log.read(branch)));
+    const events = () => read;
     let fail = true;
     const seen: number[] = [];
     const observer = {
@@ -206,24 +207,22 @@ describe("observers (observer-failure-isolated)", () => {
       },
     };
     const pump = new ObserverPump(log.cursors, branch, events, [observer]);
-    pump.poke();
+    await pump.poke();
     await pump.idle();
     expect(seen).toEqual([1, 2]);
-    expect(unwrap(log.cursors.get("audit", branch))).toBe(2);
+    expect(unwrap(await log.cursors.get("audit", branch))).toBe(2);
     fail = false;
     // A new pump (a restart) starts from the durable cursor, not from the beginning.
     const again = new ObserverPump(log.cursors, branch, events, [observer]);
-    again.poke();
+    await again.poke();
     await again.idle();
     expect(seen).toEqual([
       1,
       2,
-      ...events()
-        .slice(2)
-        .map((e) => e.seq),
+      ...(await events()).slice(2).map((e) => e.seq),
     ]);
-    expect(unwrap(log.cursors.get("audit", branch))).toBe(
-      events().at(-1)?.seq ?? 0,
+    expect(unwrap(await log.cursors.get("audit", branch))).toBe(
+      (await events()).at(-1)?.seq ?? 0,
     );
   });
 });

@@ -65,7 +65,7 @@ async function imported(c: Case, runId: EventId): Promise<Log> {
   const opened = await openStore(store);
   for (const a of c.artifacts) await opened.artifacts.put(a);
   if (c.log === undefined) throw new Error("a ui case has a log");
-  const log = opened.log.importLog(c.log);
+  const log = await opened.log.importLog(c.log);
   if (!log.ok) throw new Error(`${log.error.code}: ${log.error.message}`);
   const events = knownEvents(log.value);
   const first = events[0];

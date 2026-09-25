@@ -3,7 +3,6 @@ rolls the append back, every appended event gets one feed row, and mail.claim's 
 
 import asyncio
 import json
-import sqlite3
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict
 
@@ -14,6 +13,7 @@ from team.writes import ReplayClock, draft_of
 from threads.log import Event
 from threads.result import Ok
 from threads.store import SqliteStore, Writer
+from threads.store.conn import Conn
 from threads.team.claim import claim_mail
 from threads.team.constants import TEAM_CONSTANTS
 
@@ -53,7 +53,7 @@ async def _open_lead(store: SqliteStore, clock: ReplayClock, n: int) -> Writer:
     return opened.value
 
 
-def _rows(sql: str) -> Callable[[sqlite3.Connection], list[tuple[object, ...]]]:
+def _rows(sql: str) -> Callable[[Conn], list[tuple[object, ...]]]:
     return lambda conn: conn.execute(sql).fetchall()
 
 

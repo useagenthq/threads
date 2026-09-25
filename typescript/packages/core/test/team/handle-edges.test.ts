@@ -13,8 +13,9 @@ import {
   type ArtifactStore,
   LogStore,
   memoryArtifacts,
-  type SqliteDriver,
   type SqlValue,
+  type StoreDriver,
+  type Tx,
 } from "../../src/store";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
 import { materialize } from "../../src/team/materialize";
@@ -22,7 +23,7 @@ import { teamRow } from "../../src/team/rows";
 import { logError } from "../../src/verify/error";
 import { unwrap } from "../store/helpers";
 import { specialist } from "./dynamic-kit";
-import { assertTeamReplays } from "./kit";
+import { assertTeamReplays, query, reading } from "./kit";
 import { say, start } from "./run-kit";
 
 // The operator's handle at its edges: crash drills at each commit point of an operator request
@@ -36,19 +37,25 @@ const OPERATOR = { issuer: "api", tenant: "local", subject: "operator" };
 
 /** The same database, through a driver that dies once at the first write `at` matches. */
 function crashing(
-  base: SqliteDriver,
+  base: StoreDriver,
   at: (sql: string, params: readonly SqlValue[]) => boolean,
-): SqliteDriver {
+): StoreDriver {
   let crashed = false;
-  return {
-    ...base,
-    run: (sql, params) => {
+  const wrap = (tx: Tx): Tx => ({
+    ...tx,
+    run: (sql, params = []) => {
       if (!crashed && at(sql, params)) {
         crashed = true;
         throw new Crash(sql);
       }
-      base.run(sql, params);
+      return tx.run(sql, params);
     },
+    transaction: (fn) => tx.transaction((inner) => fn(wrap(inner))),
+  });
+  return {
+    ...base,
+    transaction: (fn, options) =>
+      base.transaction((tx) => fn(wrap(tx)), options),
   };
 }
 
@@ -61,9 +68,9 @@ function breakable(): ArtifactStore & {
   return {
     ...inner,
     broken,
-    get: (sha) => {
+    get: async (sha) => {
       const how = broken.get(sha);
-      const got = inner.get(sha);
+      const got = await inner.get(sha);
       if (how === "missing")
         return err(logError("artifact_missing", `no artifact ${sha}`));
       return how === "short" && got.ok ? ok(got.value.slice(1)) : got;
@@ -74,7 +81,7 @@ function breakable(): ArtifactStore & {
 async function world(writer: readonly string[], leadStarts = false) {
   const db = openBunSqlite(":memory:");
   const artifacts = breakable();
-  const log = unwrap(LogStore.open(db, Date.now, artifacts));
+  const log = unwrap(await LogStore.open(db, Date.now, artifacts));
   const store = storeOf({ log, artifacts });
   const lead = agent({
     name: "lead",
@@ -96,18 +103,18 @@ async function world(writer: readonly string[], leadStarts = false) {
   const entry = memberEntry(lead);
   if (entry === undefined) throw new Error("agent() registers the lead");
   /** A handle through another driver of the same database. */
-  const through = (driver: SqliteDriver) =>
+  const through = async (driver: StoreDriver) =>
     teamHandle({
-      log: unwrap(LogStore.open(driver, Date.now, artifacts)),
+      log: unwrap(await LogStore.open(driver, Date.now, artifacts)),
       artifacts,
       ref: r.team.ref,
       principal: OPERATOR,
       lead: entry,
     });
-  const teamLog = () => {
-    const row = teamRow(db, r.team.ref.id);
+  const teamLog = async () => {
+    const row = await reading(db, (tx) => teamRow(tx, r.team.ref.id));
     if (row === undefined) throw new Error("no team");
-    return knownEvents(unwrap(log.read(row.team_log_branch_id)));
+    return knownEvents(unwrap(await log.read(row.team_log_branch_id)));
   };
   return { db, log, artifacts, team: r.team, through, teamLog };
 }
@@ -118,13 +125,13 @@ const count = (events: readonly { type: string }[], type: string): number =>
 describe("operator crash drills", () => {
   test("a crash inside team.start stores none of it; the keyed retry starts once", async () => {
     const w = await world([]);
-    const dying = w.through(
+    const dying = await w.through(
       crashing(w.db, (sql) => sql.includes("INSERT INTO operator_receipts")),
     );
     await expect(
       dying.start("writer", "Draft.", { idempotencyKey: "k" }),
     ).rejects.toThrow(Crash);
-    expect(count(w.teamLog(), "operator_request")).toBe(0);
+    expect(count(await w.teamLog(), "operator_request")).toBe(0);
     const retried = await w.team.start("writer", "Draft.", {
       idempotencyKey: "k",
     });
@@ -133,15 +140,15 @@ describe("operator crash drills", () => {
     expect(
       await w.team.start("writer", "Draft.", { idempotencyKey: "k" }),
     ).toEqual(retried);
-    expect(count(w.teamLog(), "member_started")).toBe(1);
-    assertTeamReplays(w.log, w.team.ref.id);
+    expect(count(await w.teamLog(), "member_started")).toBe(1);
+    await assertTeamReplays(w.log, w.team.ref.id);
   });
 
   test("a crash inside team.send stores none of it; the keyed retry sends once", async () => {
     const w = await world([]);
     const started = await w.team.start("writer", "Draft.");
     if (started.status !== "started") throw new Error("started");
-    const dying = w.through(
+    const dying = await w.through(
       crashing(w.db, (sql) => sql.includes("INSERT INTO mail")),
     );
     await expect(
@@ -151,13 +158,11 @@ describe("operator crash drills", () => {
       idempotencyKey: "s",
     });
     expect(sent.status).toBe("sent");
-    const messages = w
-      .teamLog()
-      .filter(
-        (e) => e.type === "message_sent" && e.data.envelope.kind === "message",
-      );
+    const messages = (await w.teamLog()).filter(
+      (e) => e.type === "message_sent" && e.data.envelope.kind === "message",
+    );
     expect(messages).toHaveLength(1);
-    assertTeamReplays(w.log, w.team.ref.id);
+    await assertTeamReplays(w.log, w.team.ref.id);
   });
 
   test("a crash inside the team log's receipt leaves the notice pending; the next step takes it once", async () => {
@@ -173,7 +178,7 @@ describe("operator crash drills", () => {
       }),
     );
     const dying = unwrap(
-      LogStore.open(
+      await LogStore.open(
         crashing(w.db, (sql) =>
           sql.includes("UPDATE mail SET state = 'consumed'"),
         ),
@@ -181,14 +186,14 @@ describe("operator crash drills", () => {
         w.artifacts,
       ),
     );
-    expect(() =>
+    await expect(
       takeTeamLogMail(dying, w.artifacts, w.team.ref.id, undefined),
-    ).toThrow(Crash);
-    expect(count(w.teamLog(), "message_received")).toBe(0);
-    takeTeamLogMail(w.log, w.artifacts, w.team.ref.id, undefined);
-    takeTeamLogMail(w.log, w.artifacts, w.team.ref.id, undefined);
-    expect(count(w.teamLog(), "message_received")).toBe(1);
-    assertTeamReplays(w.log, w.team.ref.id);
+    ).rejects.toThrow(Crash);
+    expect(count(await w.teamLog(), "message_received")).toBe(0);
+    await takeTeamLogMail(w.log, w.artifacts, w.team.ref.id, undefined);
+    await takeTeamLogMail(w.log, w.artifacts, w.team.ref.id, undefined);
+    expect(count(await w.teamLog(), "message_received")).toBe(1);
+    await assertTeamReplays(w.log, w.team.ref.id);
   });
 });
 
@@ -201,7 +206,7 @@ describe("hydration", () => {
     expect(writer?.result?.status === "completed" && writer.result.output).toBe(
       big,
     );
-    assertTeamReplays(w.log, w.team.ref.id);
+    await assertTeamReplays(w.log, w.team.ref.id);
   });
 
   for (const how of ["missing", "short"] as const)
@@ -210,7 +215,8 @@ describe("hydration", () => {
       const [row] = z
         .array(z.object({ result: z.instanceof(Uint8Array) }))
         .parse(
-          w.db.all(
+          await query(
+            w.db,
             "SELECT result FROM team_members WHERE name = 'writer-1'",
             [],
           ),
@@ -232,15 +238,15 @@ describe("hydration", () => {
       const feed: Json[] = [];
       for await (const item of w.team.events()) feed.push(item.kind);
       expect(feed.length).toBeGreaterThan(0);
-      assertTeamReplays(w.log, w.team.ref.id);
+      await assertTeamReplays(w.log, w.team.ref.id);
     });
 });
 
-test("an output artifact that isn't UTF-8 throws StoreCorruptError", () => {
+test("an output artifact that isn't UTF-8 throws StoreCorruptError", async () => {
   const artifacts = memoryArtifacts();
   const bytes = new Uint8Array([0xff, 0xfe]);
   const ref = {
-    sha256: artifacts.put(bytes),
+    sha256: await artifacts.put(bytes),
     bytes: bytes.length,
     media_type: "text/plain",
   };
@@ -255,14 +261,14 @@ test("an output artifact that isn't UTF-8 throws StoreCorruptError", () => {
     status: "completed",
     output: { ref },
   });
-  expect(() => hydrated(stored, artifacts)).toThrow(StoreCorruptError);
+  await expect(hydrated(stored, artifacts)).rejects.toThrow(StoreCorruptError);
 });
 
 describe("an operator's dynamic member", () => {
   test("team.start with a dynamic agent's fields, and its refusal's detail replayed", async () => {
     const db = openBunSqlite(":memory:");
     const artifacts = memoryArtifacts();
-    const log = unwrap(LogStore.open(db, Date.now, artifacts));
+    const log = unwrap(await LogStore.open(db, Date.now, artifacts));
     const store = storeOf({ log, artifacts });
     const lead = agent({
       name: "lead",
@@ -277,9 +283,9 @@ describe("an operator's dynamic member", () => {
       model: "strong",
     });
     expect(started.status).toBe("started");
-    const row = teamRow(db, team.ref.id);
+    const row = await reading(db, (tx) => teamRow(tx, team.ref.id));
     if (row === undefined) throw new Error("no team");
-    const events = knownEvents(unwrap(log.read(row.team_log_branch_id)));
+    const events = knownEvents(unwrap(await log.read(row.team_log_branch_id)));
     const member = events.find((e) => e.type === "member_started");
     expect(member?.type === "member_started" && member.data.define).toEqual({
       instructions: "Answer yes or no.",
@@ -312,6 +318,6 @@ describe("an operator's dynamic member", () => {
         idempotencyKey: "bad",
       }),
     ).toEqual(refused);
-    assertTeamReplays(log, team.ref.id);
+    await assertTeamReplays(log, team.ref.id);
   });
 });

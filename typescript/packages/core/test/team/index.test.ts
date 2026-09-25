@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { TeamId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
-import type { SqliteDriver } from "../../src/store";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
 import { TEAM_TABLES } from "../../src/store/deletion";
+import { READ_ONLY, type StoreDriver, type Tx } from "../../src/store/driver";
 import { checkTeamLogs } from "../../src/team/cross";
 import { changeRows, insertRows, turnOpeners } from "../../src/team/index";
 import { rebuildTeamIndex } from "../../src/team/rebuild";
@@ -33,8 +33,8 @@ const CASES: Readonly<Record<string, readonly string[]>> = {
 const branches = (t: Team) =>
   [...t.logs.values()].flatMap((l) => l.segments[0]?.header.branch_id ?? []);
 
-function rowsOf(t: Team) {
-  const { team_feed: _feed, ...rest } = teamIndexRows(
+async function rowsOf(t: Team) {
+  const { team_feed: _feed, ...rest } = await teamIndexRows(
     t.db,
     [t.team],
     branches(t),
@@ -46,9 +46,11 @@ function rowsOf(t: Team) {
  * Wipes the team's rows, then appends every event as the team's writers would: one log at a
  * time, each event once the rows it moves exist, insertRows then changeRows.
  */
-function written(t: Team): void {
-  for (const table of TEAM_TABLES.filter((t) => t !== "team_feed"))
-    t.db.run(`DELETE FROM ${table} WHERE team_id = ?`, [t.team]);
+async function written(t: Team): Promise<void> {
+  await t.db.transaction(async (tx) => {
+    for (const table of TEAM_TABLES.filter((t) => t !== "team_feed"))
+      await tx.run(`DELETE FROM ${table} WHERE team_id = ?`, [t.team]);
+  });
   const queues = [...t.logs.values()].map((chain) => {
     const header = chain.segments[0]?.header;
     if (header === undefined) throw new Error("no header");
@@ -65,12 +67,15 @@ function written(t: Team): void {
     for (const q of queues)
       for (
         let e = q.events[0];
-        e !== undefined && appendable(t.db, e);
+        e !== undefined && (await appendable(t.db, e));
         e = q.events[0]
       ) {
         q.events.shift();
-        insertRows(t.db, q.log, [e]);
-        changeRows(t.db, q.log, [e], q.opened);
+        const event = e;
+        await t.db.transaction(async (tx) => {
+          await insertRows(tx, q.log, [event]);
+          await changeRows(tx, q.log, [event], q.opened);
+        });
         moved = true;
       }
   }
@@ -79,26 +84,29 @@ function written(t: Team): void {
 
 describe("the replay rule", () => {
   for (const [name, labels] of Object.entries(CASES))
-    test(`${name}: appends and a rebuild leave the same rows`, () => {
-      const t = teamStore(caseLogs(name, labels));
-      const rebuilt = rowsOf(t);
-      written(t);
-      expect(rowsOf(t)).toEqual(rebuilt);
+    test(`${name}: appends and a rebuild leave the same rows`, async () => {
+      const t = await teamStore(caseLogs(name, labels));
+      const rebuilt = await rowsOf(t);
+      await written(t);
+      expect(await rowsOf(t)).toEqual(rebuilt);
     });
 
-  test("a rebuild is idempotent and starts a new feed epoch", () => {
-    const t = teamStore(
+  test("a rebuild is idempotent and starts a new feed epoch", async () => {
+    const t = await teamStore(
       caseLogs("team-settle-wakes-lead", CASES["team-settle-wakes-lead"] ?? []),
     );
-    const first = teamIndexRows(t.db, [t.team], branches(t));
-    unwrap(rebuildTeamIndex(t.store, t.team));
-    expect(teamIndexRows(t.db, [t.team], branches(t))).toEqual(first);
-    expect(t.db.all("SELECT DISTINCT epoch FROM team_feed", [])).toEqual([
-      { epoch: 2 },
-    ]);
+    const first = await teamIndexRows(t.db, [t.team], branches(t));
+    unwrap(await rebuildTeamIndex(t.store, t.team));
+    expect(await teamIndexRows(t.db, [t.team], branches(t))).toEqual(first);
+    expect(
+      await t.db.transaction(
+        (tx) => tx.all("SELECT DISTINCT epoch FROM team_feed"),
+        READ_ONLY,
+      ),
+    ).toEqual([{ epoch: 2 }]);
   });
 
-  test("a rebuild refuses a bounce of another run, and nested own-team mail in a task turn", () => {
+  test("a rebuild refuses a bounce of another run, and nested own-team mail in a task turn", async () => {
     for (const [name, labels] of [
       [
         "team-bounce-provenance-rejected",
@@ -109,47 +117,56 @@ describe("the replay rule", () => {
         ["inner", "lead", "researcher", "team"],
       ],
     ] as const) {
-      const { store } = fixture(TENANT);
-      storeLogs(
+      const { store } = await fixture(TENANT);
+      await storeLogs(
         store,
         [...caseLogs(name, labels).values()].map((b) => verified(b)),
       );
       const outer = TeamId.parse("0192c000-0000-7000-8000-000000000001");
-      expect(code(rebuildTeamIndex(store, outer))).toBe("invalid_transition");
+      expect(code(await rebuildTeamIndex(store, outer))).toBe(
+        "invalid_transition",
+      );
     }
   });
 
-  test("a rebuild reads the logs inside the transaction that refolds them", () => {
+  test("a rebuild reads the logs inside the transaction that refolds them", async () => {
     const base = openBunSqlite(":memory:");
-    let depth = 0;
+    // Each read of the logs, and whether it ran in a write transaction.
     const reads: boolean[] = [];
-    const spy: SqliteDriver = {
-      ...base,
-      transaction: (fn) =>
-        base.transaction(() => {
-          depth += 1;
-          try {
-            return fn();
-          } finally {
-            depth -= 1;
-          }
-        }),
+    const watched = (tx: Tx, writing: boolean): Tx => ({
+      ...tx,
       all: (sql, params) => {
-        if (sql.includes("FROM events")) reads.push(depth > 0);
-        return base.all(sql, params);
+        if (sql.includes("FROM events")) reads.push(writing);
+        return tx.all(sql, params);
       },
+      transaction: (fn) =>
+        tx.transaction((inner) => fn(watched(inner, writing))),
+    });
+    const spy: StoreDriver = {
+      ...base,
+      transaction: (fn, options) =>
+        base.transaction(
+          (tx) => fn(watched(tx, options?.readOnly !== true)),
+          options,
+        ),
     };
-    const t = teamStore(caseLogs(SETTLE, CASES[SETTLE] ?? []), TENANT, spy);
+    const t = await teamStore(
+      caseLogs(SETTLE, CASES[SETTLE] ?? []),
+      TENANT,
+      spy,
+    );
     reads.length = 0;
-    unwrap(rebuildTeamIndex(t.store, t.team));
+    unwrap(await rebuildTeamIndex(t.store, t.team));
     expect(reads.length).toBeGreaterThan(0);
     expect(reads.every((inside) => inside)).toBe(true);
   });
 
-  test("a team no lead names is not_found", () => {
-    const t = teamStore(caseLogs("team-settle-wakes-lead", ["lead", "team"]));
+  test("a team no lead names is not_found", async () => {
+    const t = await teamStore(
+      caseLogs("team-settle-wakes-lead", ["lead", "team"]),
+    );
     const other = TeamId.parse("0192c000-0000-7000-8000-0000000000ff");
-    expect(code(rebuildTeamIndex(t.store, other))).toBe("not_found");
+    expect(code(await rebuildTeamIndex(t.store, other))).toBe("not_found");
   });
 });
 

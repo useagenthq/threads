@@ -25,9 +25,9 @@ const requests = (writer: Writer): number =>
 
 describe("capability pre-check before dispatch", () => {
   test("an image to a text-only model is content_unsupported; nothing is sent", async () => {
-    const h = harness([], [], [NEVER]);
+    const h = await harness([], [], [NEVER]);
     const png = encoder.encode("png");
-    h.artifacts.put(png);
+    await h.artifacts.put(png);
     const input: EventDraft = {
       type: "user_input",
       type_version: 1,
@@ -53,7 +53,7 @@ describe("capability pre-check before dispatch", () => {
         ],
       },
     };
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     const end = await resume(writer, h.artifacts, h.config(), { input });
     expect(end).toEqual({ kind: "idle" });
     expect(events(writer).at(-1)).toMatchObject({
@@ -77,7 +77,7 @@ describe("capability pre-check before dispatch", () => {
         media_type: "application/json",
       },
     };
-    const h = harness(
+    const h = await harness(
       [],
       [],
       [
@@ -89,8 +89,8 @@ describe("capability pre-check before dispatch", () => {
         NEVER,
       ],
     );
-    h.artifacts.put(block);
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    await h.artifacts.put(block);
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     const first = await resume(writer, h.artifacts, h.config(), {
       input: userInput("hi"),
     });
@@ -109,7 +109,7 @@ describe("capability pre-check before dispatch", () => {
 });
 
 /** A model whose one send ends in `reason`, counting its sends. */
-function refusing(h: ReturnType<typeof harness>, reason: SendError) {
+function refusing(h: Awaited<ReturnType<typeof harness>>, reason: SendError) {
   let sends = 0;
   const model: Model = {
     info: h.model.info,
@@ -129,9 +129,9 @@ describe("the send's terminal error (Model.send returns.errors)", () => {
   ] as const)(
     "an adapter's send-time refusal %s is not_sent and ends the turn with its code, once",
     async (code) => {
-      const h = harness([], [], []);
+      const h = await harness([], [], []);
       const m = refusing(h, code);
-      const writer = unwrap(h.store.acquire(ROOT, "owner"));
+      const writer = unwrap(await h.store.acquire(ROOT, "owner"));
       const end = await resume(
         writer,
         h.artifacts,
@@ -154,9 +154,9 @@ describe("the send's terminal error (Model.send returns.errors)", () => {
   );
 
   test("stale_epoch appends nothing more and halts: the writer lost its lease", async () => {
-    const h = harness([], [], []);
+    const h = await harness([], [], []);
     const m = refusing(h, "stale_epoch");
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     const end = await resume(
       writer,
       h.artifacts,
@@ -175,12 +175,12 @@ describe("stub mode and hosted tools", () => {
   const stub = { answer: () => undefined };
 
   test("a live model declaring hosted tools is refused before anything runs", async () => {
-    const h = harness([], [], [NEVER]);
+    const h = await harness([], [], [NEVER]);
     const live: Model = {
       info: { ...h.model.info, hosted_tools: ["web_search"] },
       send: h.model.send,
     };
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     const before = events(writer).length;
     await expect(
       resume(writer, h.artifacts, h.config({ models: () => live, stub }), {
@@ -191,8 +191,8 @@ describe("stub mode and hosted tools", () => {
   });
 
   test("a test-kit model runs in stub mode", async () => {
-    const h = harness([], [], [NEVER]);
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const h = await harness([], [], [NEVER]);
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     const end = await resume(writer, h.artifacts, h.config({ stub }), {
       input: userInput("hi"),
     });

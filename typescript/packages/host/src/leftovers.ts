@@ -63,7 +63,8 @@ export async function settleLeftover(
     await sendOp(adapter, writer, artifacts, left, stopping);
     return;
   }
-  writer.append([
+  // A refused append means this writer lost its lease: the next holder closes the leftover.
+  await writer.append([
     {
       type: "tool_result",
       type_version: 1,

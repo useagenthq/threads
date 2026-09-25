@@ -31,7 +31,7 @@ async function seeded(): Promise<string> {
   });
   await waitAt(seed, "webhook_ack");
   await kill(seed);
-  expireLeases(dir);
+  await expireLeases(dir);
   return dir;
 }
 
@@ -43,7 +43,7 @@ describe("two-writers-fenced", () => {
     go(dir);
     expect(await finish(a)).toBe(0);
     expect(await finish(b)).toBe(0);
-    const log = events(dir);
+    const log = await events(dir);
     expect(log.filter((e) => e.type === "user_input")).toHaveLength(1);
     expect(sends(dir)).toHaveLength(1);
     expect(rows(dir, "model.jsonl")).toHaveLength(1);
@@ -60,14 +60,14 @@ describe("two-writers-fenced", () => {
     const stale = spawn("serve", dir, { DRILL_STOP_AT: "effect_begin" });
     await waitAt(stale, "effect_begin");
     // Its reply's effect_begin is durable and its send is about to leave; its lease runs out.
-    expireLeases(dir);
+    await expireLeases(dir);
     const next = spawn("serve", dir);
     expect(await finish(next)).toBe(0);
-    const taken = events(dir).map((e) => e.event_id);
+    const taken = (await events(dir)).map((e) => e.event_id);
 
     release(dir);
     expect(await finish(stale)).toBe(0);
-    const log = events(dir);
+    const log = await events(dir);
     expect(log.map((e) => e.event_id)).toEqual(taken);
     const [sent] = rows(dir, "sends.jsonl");
     expect(sends(dir)).toHaveLength(1);

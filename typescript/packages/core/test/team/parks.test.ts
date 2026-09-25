@@ -4,7 +4,7 @@ import { agent, openThread, scriptedModel, sqlite, tool } from "../../src";
 import { hostRunner } from "../../src/agent/registry";
 import { memberRows } from "../../src/team/rows";
 import { unwrap } from "../store/helpers";
-import { assertTeamReplays } from "./kit";
+import { assertTeamReplays, reading } from "./kit";
 import {
   call,
   events,
@@ -57,9 +57,9 @@ async function parkedTeam(leadAnswers: readonly string[]) {
   const r = await lead.run("Get bob mailed.", { store });
   const approve = async (): Promise<void> => {
     const log = await logOf(store);
-    const row = memberRows(log.driver, r.team.ref.id).find(
-      (m) => m.name === "researcher-1",
-    );
+    const row = (
+      await reading(log.driver, (tx) => memberRows(tx, r.team.ref.id))
+    ).find((m) => m.name === "researcher-1");
     if (row === undefined) throw new Error("the member has a row");
     const handle = unwrap(await openThread(store, row.thread_id));
     const [pending] = unwrap(await handle.pendingApprovals());
@@ -84,7 +84,7 @@ describe("a member that parks", () => {
     expect(
       receipts(await events(store, r.thread), "member_parked"),
     ).toHaveLength(1);
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("after the member's approval, the host's recovery runs the member on and resumes the lead", async () => {
@@ -106,7 +106,7 @@ describe("a member that parks", () => {
     const lead0 = await events(store, r.thread);
     expect(receipts(lead0, "member_settled")).toHaveLength(1);
     expect(types(lead0)).toContain("resumed");
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("after the member's approval, a new input first resumes the lead, then starts its turn", async () => {
@@ -125,6 +125,6 @@ describe("a member that parks", () => {
       (e) => e.type === "user_input",
     );
     expect(inputs).toHaveLength(2);
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 });

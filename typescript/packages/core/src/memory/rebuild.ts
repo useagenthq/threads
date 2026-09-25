@@ -2,7 +2,7 @@ import { z } from "zod";
 import { containsSecret } from "../redact";
 import { err, ok, type Result } from "../result";
 import type { ArtifactStore } from "../store/artifacts";
-import type { SqliteDriver } from "../store/driver";
+import { READ_ONLY, type StoreDriver, type Tx } from "../store/driver";
 import { decodeText } from "./passages";
 import type { ProviderError } from "./protocol";
 
@@ -18,31 +18,31 @@ type Source = {
   readonly text: string;
 };
 
-function admitted(db: SqliteDriver): string {
-  return JSON.stringify(
-    db.all(
-      "SELECT rowid, content_sha256 FROM local_knowledge_docs ORDER BY rowid",
-      [],
-    ),
-  );
+const ADMITTED =
+  "SELECT rowid, content_sha256 FROM local_knowledge_docs ORDER BY rowid";
+
+async function admitted(tx: Tx): Promise<string> {
+  return JSON.stringify(await tx.all(ADMITTED));
 }
 
-function read(db: SqliteDriver, artifacts: ArtifactStore): readonly Source[] {
+async function read(
+  db: StoreDriver,
+  artifacts: ArtifactStore,
+): Promise<readonly Source[]> {
   const rows = IndexRow.array().parse(
-    db.all(
-      "SELECT rowid, content_sha256 FROM local_knowledge_docs ORDER BY rowid",
-      [],
-    ),
+    await db.transaction((tx) => tx.all(ADMITTED), READ_ONLY),
   );
-  return rows.map((r) => {
-    const got = artifacts.get(r.content_sha256);
+  const sources: Source[] = [];
+  for (const r of rows) {
+    const got = await artifacts.get(r.content_sha256);
     const text = got.ok ? decodeText(got.value) : undefined;
     if (!got.ok || text === undefined)
       throw new Error(
         `an admitted version's artifact is gone: ${r.content_sha256}`,
       );
-    return { rowid: r.rowid, bytes: got.value, text };
-  });
+    sources.push({ rowid: r.rowid, bytes: got.value, text });
+  }
+  return sources;
 }
 
 /**
@@ -51,23 +51,23 @@ function read(db: SqliteDriver, artifacts: ArtifactStore): readonly Source[] {
  * runs only if the admitted rows are still the ones it read, so a source another connection
  * admits meanwhile is never dropped from search.
  */
-export function rebuildIndex(
-  db: SqliteDriver,
+export async function rebuildIndex(
+  db: StoreDriver,
   artifacts: ArtifactStore,
-  index: (rowid: number, text: string) => void,
-): Result<void, ProviderError> {
+  index: (tx: Tx, rowid: number, text: string) => Promise<void>,
+): Promise<Result<void, ProviderError>> {
   for (let attempt = 0; attempt < ATTEMPTS; attempt += 1) {
-    const seen = admitted(db);
-    const sources = read(db, artifacts);
+    const seen = await db.transaction(admitted, READ_ONLY);
+    const sources = await read(db, artifacts);
     if (sources.some((s) => containsSecret(s.bytes)))
       return err({
         code: "invalid",
         message: "a source holds a registered secret; index kept",
       });
-    const done = db.transaction(() => {
-      if (admitted(db) !== seen) return false;
-      db.run("DELETE FROM local_knowledge_fts", []);
-      for (const s of sources) index(s.rowid, s.text);
+    const done = await db.transaction(async (tx) => {
+      if ((await admitted(tx)) !== seen) return false;
+      await tx.run("DELETE FROM local_knowledge_fts");
+      for (const s of sources) await index(tx, s.rowid, s.text);
       return true;
     });
     if (done) return ok(undefined);

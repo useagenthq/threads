@@ -38,13 +38,13 @@ export async function* uiFrames(
 ): AsyncGenerator<Out, void, undefined> {
   try {
     const run = await runLog(ctx, plan);
-    const first = run.read();
+    const first = await run.read();
     if (first === undefined) return;
     const session = new UiSession(plan, first.events, listener.missed);
     yield* session.opening(first.events);
     for (;;) {
       yield* session.deltas(listener.take());
-      const read = run.read();
+      const read = await run.read();
       if (read === undefined) return;
       const step = session.read(read.events);
       yield* step.frames;
@@ -78,7 +78,7 @@ async function runLog(
   ctx: HostContext,
   plan: StreamPlan,
 ): Promise<{
-  readonly read: () => Read | undefined;
+  readonly read: () => Promise<Read | undefined>;
   readonly outcome: (read: Read) => RunOutcome | undefined;
 }> {
   const store = ctx.storeFor(plan.tenant);
@@ -88,8 +88,8 @@ async function runLog(
     store,
   });
   return {
-    read: () => {
-      const r = log.read(plan.thread.branch);
+    read: async () => {
+      const r = await log.read(plan.thread.branch);
       return r.ok
         ? { events: knownEvents(r.value), parked: loopParked(r.value.fold) }
         : undefined;

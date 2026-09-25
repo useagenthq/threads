@@ -32,29 +32,29 @@ import {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-function writer() {
-  const f = fixture();
-  unwrap(f.store.createBranch(THREAD, ROOT));
-  return { f, w: unwrap(f.store.acquire(ROOT, "holder")) };
+async function writer() {
+  const f = await fixture();
+  unwrap(await f.store.createBranch(THREAD, ROOT));
+  return { f, w: unwrap(await f.store.acquire(ROOT, "holder")) };
 }
 
 describe("the writer checks the canonical bytes it stores (#359 HIGH 1)", () => {
-  test("a marker whose quote canonical JSON escapes into another value", () => {
+  test("a marker whose quote canonical JSON escapes into another value", async () => {
     register("FIRSTVALUE", 'X"Y');
     register('[secret X\\"Y]', "Z");
-    const { f, w } = writer();
-    unwrap(w.append([started]));
-    const appended = w.append([input("FIRSTVALUE")]);
+    const { f, w } = await writer();
+    unwrap(await w.append([started]));
+    const appended = await w.append([input("FIRSTVALUE")]);
     expect(appended.ok ? "ok" : appended.error.code).toBe(
       "secret_in_stored_bytes",
     );
-    const bytes = unwrap(f.store.exportBranch(ROOT));
+    const bytes = unwrap(await f.store.exportBranch(ROOT));
     expect(decoder.decode(bytes)).not.toContain('[secret X\\"Y]');
   });
 
-  test("separate strings that JSON punctuation joins into a value", () => {
+  test("separate strings that JSON punctuation joins into a value", async () => {
     register('alpha","beta', "Z");
-    const { w } = writer();
+    const { w } = await writer();
     const joined: EventDraft = {
       type: "thread_started",
       type_version: 1,
@@ -74,7 +74,7 @@ describe("the writer checks the canonical bytes it stores (#359 HIGH 1)", () => 
         tools: [],
       },
     };
-    const appended = w.append([joined]);
+    const appended = await w.append([joined]);
     expect(appended.ok ? "ok" : appended.error.code).toBe(
       "secret_in_stored_bytes",
     );
@@ -155,14 +155,16 @@ describe("MCP failures of any shape are redacted values (#359 HIGH 2)", () => {
 });
 
 describe("a value registered while a spill streams (#359 HIGH 3)", () => {
-  test("the spill is dropped, never committed across the value", () => {
+  test("the spill is dropped, never committed across the value", async () => {
     const artifacts = memoryArtifacts();
     const sink = redactingSink(artifacts.sink());
     sink.write(encoder.encode("abcd"));
     register("abcdefgh", "late");
     sink.write(encoder.encode("efgh"));
-    expect(sink.finish()).toBeUndefined();
-    expect(artifacts.get(sha256Hex(encoder.encode("abcdefgh"))).ok).toBe(false);
+    expect(await sink.finish()).toBeUndefined();
+    expect(
+      (await artifacts.get(sha256Hex(encoder.encode("abcdefgh")))).ok,
+    ).toBe(false);
   });
 });
 
@@ -170,7 +172,7 @@ describe("the local knowledge provider refuses a source holding a value (#359 HI
   test("a direct ingest stores nothing", async () => {
     const key = credential("fake", "apiKey", "sk-l9-ingest-5e6f", "U")();
     const artifacts = memoryArtifacts();
-    const bound = bindLocalKnowledge(
+    const bound = await bindLocalKnowledge(
       localKnowledge({ paths: [] }),
       openBunSqlite(":memory:"),
       artifacts,
@@ -190,14 +192,14 @@ describe("the local knowledge provider refuses a source holding a value (#359 HI
     );
     expect(got.ok ? "ok" : got.error.code).toBe("invalid");
     expect(unwrap(await bound.local.search(scope, "key"))).toEqual([]);
-    expect(artifacts.get(sha256Hex(content)).ok).toBe(false);
+    expect((await artifacts.get(sha256Hex(content))).ok).toBe(false);
   });
 });
 
 describe("a rebuild of the knowledge index checks every source first", () => {
   test("a source holding a value registered since keeps the old index", async () => {
     const raced = "raced-abcdefgh";
-    const bound = bindLocalKnowledge(
+    const bound = await bindLocalKnowledge(
       localKnowledge({ paths: [] }),
       openBunSqlite(":memory:"),
       memoryArtifacts(),
@@ -219,7 +221,7 @@ describe("a rebuild of the knowledge index checks every source first", () => {
     );
     const before = unwrap(await bound.local.search(scope, "hello"));
     register(raced, "later");
-    const rebuilt = bound.local.rebuild();
+    const rebuilt = await bound.local.rebuild();
     expect(rebuilt.ok ? "ok" : rebuilt.error.code).toBe("invalid");
     expect(unwrap(await bound.local.search(scope, "hello"))).toEqual(before);
   });
@@ -236,7 +238,7 @@ describe("a rebuild never drops a source another connection admits meanwhile", (
       content: encoder.encode(text),
       binding: { namespace: "n", record_id: id },
     });
-    const other = bindLocalKnowledge(
+    const other = await bindLocalKnowledge(
       localKnowledge({ paths: [] }),
       openBunSqlite(path),
       shared,
@@ -245,14 +247,14 @@ describe("a rebuild never drops a source another connection admits meanwhile", (
       other?.local.ingest(scope, source("b.md", "zebra second"), "b");
     const reading: ArtifactStore = {
       ...shared,
-      get: (sha256) => {
+      get: async (sha256) => {
         const run = meanwhile;
         meanwhile = undefined;
-        void run?.();
+        await run?.();
         return shared.get(sha256);
       },
     };
-    const mine = bindLocalKnowledge(
+    const mine = await bindLocalKnowledge(
       localKnowledge({ paths: [] }),
       openBunSqlite(path),
       reading,
@@ -260,27 +262,29 @@ describe("a rebuild never drops a source another connection admits meanwhile", (
     if (mine === undefined || other === undefined)
       throw new Error("localKnowledge binds");
     unwrap(await mine.local.ingest(scope, source("a.md", "alpha first"), "a"));
-    unwrap(mine.local.rebuild());
+    unwrap(await mine.local.rebuild());
     const found = unwrap(await mine.local.search(scope, "zebra"));
     expect(found.map((h) => h.doc_id)).toEqual(["b.md"]);
   });
 });
 
 describe("an import's torn tail is checked (#359 MEDIUM)", () => {
-  test("a torn tail holding a value refuses the import", () => {
+  test("a torn tail holding a value refuses the import", async () => {
     const later = "sk-l9-torn-7a8b";
-    const { f, w } = writer();
-    unwrap(w.append([started, input("hi")]));
-    const bytes = unwrap(f.store.exportBranch(ROOT));
+    const { f, w } = await writer();
+    unwrap(await w.append([started, input("hi")]));
+    const bytes = unwrap(await f.store.exportBranch(ROOT));
     const body = bytes.subarray(
       0,
       bytes.lastIndexOf(0x0a, bytes.length - 2) + 1,
     );
     const tail = encoder.encode(`{"torn":"${later}`);
     const torn = new Uint8Array([...body, ...tail]);
-    expect(unwrap(fixture().store.importLog(torn)).torn?.bytes).toEqual(tail);
+    expect(
+      unwrap(await (await fixture()).store.importLog(torn)).torn?.bytes,
+    ).toEqual(tail);
     credential("fake", "apiKey", later, "U")();
-    const imported = fixture().store.importLog(torn);
+    const imported = await (await fixture()).store.importLog(torn);
     expect(imported.ok ? "ok" : imported.error.code).toBe(
       "secret_in_stored_bytes",
     );

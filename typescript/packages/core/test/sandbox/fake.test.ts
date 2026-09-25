@@ -230,7 +230,7 @@ describe("scripted exec", () => {
     if (ref === undefined)
       throw new Error("a truncated result has full_output");
     expect(ref.bytes).toBe(big.length);
-    expect(text(unwrap(artifacts.get(ref.sha256)))).toBe(big);
+    expect(text(unwrap(await artifacts.get(ref.sha256)))).toBe(big);
   });
 
   test("a script with an unknown key is refused", () => {

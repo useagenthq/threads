@@ -51,11 +51,14 @@ export async function finish(s: Session): Promise<Halt | undefined> {
     const out = await run(ext, "on_stop", [s.state()]);
     if (out.kind === "failed")
       return (
-        s.append(decision(ext.name, "on_stop", "failed", key, out.reason)) ??
-        endTurn(s, "end_turn")
+        (await s.append(
+          decision(ext.name, "on_stop", "failed", key, out.reason),
+        )) ?? (await endTurn(s, "end_turn"))
       );
     if (out.value.decision === "stop") {
-      const stopped = s.append(decision(ext.name, "on_stop", "stop", key));
+      const stopped = await s.append(
+        decision(ext.name, "on_stop", "stop", key),
+      );
       if (stopped !== undefined) return stopped;
       continue;
     }

@@ -1,14 +1,13 @@
 import {
-  type ChainEvent,
   type EventDraft,
-  type EventId,
+  EventId,
   knownEvents,
   matchAnswer,
   openQuestions,
   type Principal,
   principalKey,
   resumed,
-  type SqliteDriver,
+  uuidv7,
   type Writer,
 } from "@threads/core/host";
 import { consumes } from "./inbox";
@@ -33,11 +32,11 @@ type Reply = {
  * held: the thread waits on a question another principal must answer, so the message waits as
  * ordinary input; busy: no question is open, or the append failed.
  */
-export function replyToQuestion(
+export async function replyToQuestion(
   w: Writer,
-  db: SqliteDriver,
+  now: number,
   reply: Reply,
-): Replied {
+): Promise<Replied> {
   const oldest = openQuestions(knownEvents(w.chain), w.chain.fold)[0];
   if (oldest === undefined) return "busy";
   if (
@@ -47,30 +46,21 @@ export function replyToQuestion(
     return "held";
   const recorded = matchAnswer(oldest.ask, reply.text);
   const address = { kind: "input", id: oldest.callId } as const;
-  const done = w.fenced(() => {
-    const delivered = w.append([reply.delivery]);
-    if (!delivered.ok) return delivered;
-    const cause = idOf(delivered.value.at(-1));
-    if (recorded === undefined)
-      return w.append(
-        [rejection(oldest.callId, cause)],
-        consumes(db, reply.inboxId),
-      );
-    const answered = w.append([answer(oldest.callId, recorded, reply)]);
-    if (!answered.ok) return answered;
-    return w.append(
-      [resumed(address, idOf(answered.value.at(-1)))],
-      consumes(db, reply.inboxId),
-    );
-  });
+  // One append, its events citing each other by ids minted here; consumed at its last event.
+  const mint = (): EventId => EventId.parse(uuidv7(now));
+  const delivery = { ...reply.delivery, event_id: mint() };
+  const answered = mint();
+  const drafts =
+    recorded === undefined
+      ? [delivery, rejection(oldest.callId, delivery.event_id)]
+      : [
+          delivery,
+          { ...answer(oldest.callId, recorded, reply), event_id: answered },
+          resumed(address, answered),
+        ];
+  const done = await w.append(drafts, consumes(reply.inboxId));
   if (!done.ok) return "busy";
   return recorded === undefined ? "rejected" : "answered";
-}
-
-function idOf(line: ChainEvent | undefined): EventId {
-  if (line?.kind !== "event")
-    throw new Error("the append just recorded a known event");
-  return line.event.event_id;
 }
 
 function rejection(callId: string, delivery: EventId): EventDraft {

@@ -11,11 +11,13 @@ import {
 import {
   LogStore,
   memoryArtifacts,
-  type SqliteDriver,
   type SqlValue,
+  type StoreDriver,
+  type Tx,
 } from "../../src/store";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
 import { unwrap } from "../store/helpers";
+import { query } from "./kit";
 
 // Shared by the team crash drills: a driver that dies once inside one commit point's transaction,
 // and the restart, the host's recovery of the lead's open run with no new input.
@@ -41,17 +43,23 @@ export const mentions = (params: readonly SqlValue[], text: string): boolean =>
  * The same database, through a driver that dies once at `point`: that transaction rolls back and
  * the run rejects. Work still in flight may go on, as a sibling process's would.
  */
-export function crashing(base: SqliteDriver, point: Point): SqliteDriver {
+export function crashing(base: StoreDriver, point: Point): StoreDriver {
   let crashed = false;
-  return {
-    ...base,
-    run: (sql, params) => {
+  const wrap = (tx: Tx): Tx => ({
+    ...tx,
+    run: (sql, params = []) => {
       if (!crashed && point.at(sql, params)) {
         crashed = true;
         throw new Crash(`killed at ${point.name}`);
       }
-      base.run(sql, params);
+      return tx.run(sql, params);
     },
+    transaction: (fn) => tx.transaction((inner) => fn(wrap(inner))),
+  });
+  return {
+    ...base,
+    transaction: (fn, options) =>
+      base.transaction((tx) => fn(wrap(tx)), options),
   };
 }
 
@@ -59,10 +67,10 @@ const Row = z.object({ thread_id: ThreadId, team_id: z.string() });
 
 /** A drill's database, its log store, and the host's restart of the lead. */
 export type Drill = {
-  readonly db: SqliteDriver;
+  readonly db: StoreDriver;
   readonly log: LogStore;
   /** The store over the drill's database, through `driver`. */
-  readonly open: (driver: SqliteDriver) => Store;
+  readonly open: (driver: StoreDriver) => Promise<Store>;
   readonly restart: (lead: TeamAgent) => Promise<{
     readonly result: RunResult<unknown>;
     readonly branch: BranchId;
@@ -71,13 +79,13 @@ export type Drill = {
 };
 
 /** One database, opened as a store through any driver over it. */
-export function drill(): Drill {
+export async function drill(): Promise<Drill> {
   const db = openBunSqlite(":memory:");
   const artifacts = memoryArtifacts();
-  const log = unwrap(LogStore.open(db, Date.now, artifacts));
-  const open = (driver: SqliteDriver): Store =>
+  const log = unwrap(await LogStore.open(db, Date.now, artifacts));
+  const open = async (driver: StoreDriver): Promise<Store> =>
     storeOf({
-      log: unwrap(LogStore.open(driver, Date.now, artifacts)),
+      log: unwrap(await LogStore.open(driver, Date.now, artifacts)),
       artifacts,
     });
   /**
@@ -85,16 +93,22 @@ export function drill(): Drill {
    * have expired.
    */
   const restart: Drill["restart"] = async (lead) => {
-    db.run("UPDATE leases SET expires_at = 0", []);
+    await db.transaction((tx) =>
+      tx.run("UPDATE leases SET expires_at = 0", []),
+    );
     const [row] = z
       .array(Row)
       .parse(
-        db.all("SELECT lead_thread_id AS thread_id, team_id FROM teams", []),
+        await query(
+          db,
+          "SELECT lead_thread_id AS thread_id, team_id FROM teams",
+          [],
+        ),
       );
     if (row === undefined)
       throw new Error("the lead's first append opened its team");
-    const store = open(db);
-    const branch = unwrap(log.mainBranch(row.thread_id));
+    const store = await open(db);
+    const branch = unwrap(await log.mainBranch(row.thread_id));
     const runner = hostRunner(lead);
     if (runner === undefined)
       throw new Error("agent() registers a host runner");

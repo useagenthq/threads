@@ -13,6 +13,7 @@ import {
   code,
   fixture,
   ROOT,
+  run,
   started,
   THREAD,
   turnCompleted,
@@ -31,10 +32,10 @@ const SCRIPT = {
   snapshots: { snap_01: { restore_sandbox_id: "sbx_child_01", manifest: [] } },
 };
 
-function parent() {
-  const f = fixture();
-  unwrap(f.store.createBranch(THREAD, ROOT));
-  const writer = unwrap(f.store.acquire(ROOT, "holder-a"));
+async function parent() {
+  const f = await fixture();
+  unwrap(await f.store.createBranch(THREAD, ROOT));
+  const writer = unwrap(await f.store.acquire(ROOT, "holder-a"));
   const snapshot: EventDraft = {
     type: "snapshot",
     type_version: 1,
@@ -50,7 +51,9 @@ function parent() {
       quiesced: { frozen: [], stopped: [], excluded: [] },
     },
   };
-  unwrap(writer.append([started, userInput("hi"), turnCompleted, snapshot]));
+  unwrap(
+    await writer.append([started, userInput("hi"), turnCompleted, snapshot]),
+  );
   return f;
 }
 
@@ -104,10 +107,10 @@ export function ledgerSuite(harness: SandboxHarness): void {
   describe(`ledger crash and takeover: ${harness.name}`, () => {
     describe("a stale restore can't escape recovery", () => {
       test("the creator loses its lease while queued: recovery retires the row, the late restore creates nothing", async () => {
-        const f = parent();
+        const f = await parent();
         const { sandbox: base, creates } = harness.make(SCRIPT);
         const g = gate();
-        const log = unwrap(f.store.read(ROOT));
+        const log = unwrap(await f.store.read(ROOT));
         const point = log.events.at(-1)?.event.event_id;
         if (point === undefined)
           throw new Error("the parent ends with its snapshot");
@@ -127,27 +130,29 @@ export function ledgerSuite(harness: SandboxHarness): void {
         expect(code(await forking)).toBe("stale_epoch");
         expect(creates()).toBe(0);
         expect((await base.attach("sbx_child_01", CTX)).ok).toBe(false);
-        expect(unwrap(f.store.branchState(CHILD))).toBe("fork_failed");
+        expect(unwrap(await f.store.branchState(CHILD))).toBe("fork_failed");
       });
     });
 
     describe("only the row's provider can resolve it", () => {
       test("another provider's adapter is refused before lookup; the row waits for the right one", async () => {
-        const f = parent();
+        const f = await parent();
         const fake = harness.make(SCRIPT).sandbox;
         const other: Sandbox = {
           ...harness.make(SCRIPT).sandbox,
           info: { ...fake.info, provider: "other" },
         };
         const writer = unwrap(
-          f.store.beginFork({
+          await f.store.beginFork({
             parent: ROOT,
             atSeq: 4,
             branch: CHILD,
             holderId: "c",
           }),
         );
-        const row = unwrap(f.store.ledger.begin(writer, "sandbox", "fake"));
+        const row = unwrap(
+          await f.store.ledger.begin(writer, "sandbox", "fake"),
+        );
         unwrap(
           await fake.restore(
             "snap_01",
@@ -161,10 +166,10 @@ export function ledgerSuite(harness: SandboxHarness): void {
         expect(code(await recoverFork(f.store, other, CHILD, "r"))).toBe(
           "invalid_request",
         );
-        expect(unwrap(f.store.ledger.rows()).map((r) => r.state)).toEqual([
-          "pending",
-        ]);
-        expect(unwrap(f.store.branchState(CHILD))).toBe("forking");
+        expect(unwrap(await f.store.ledger.rows()).map((r) => r.state)).toEqual(
+          ["pending"],
+        );
+        expect(unwrap(await f.store.branchState(CHILD))).toBe("forking");
 
         expect(unwrap(await recoverFork(f.store, fake, CHILD, "r"))).toEqual([
           "released",
@@ -178,17 +183,19 @@ export function ledgerSuite(harness: SandboxHarness): void {
     describe("gc works under a cleanup claim", () => {
       /** A live child sandbox row its owner has marked releasing, as deleting the thread does. */
       async function releasing() {
-        const f = parent();
+        const f = await parent();
         const fake = harness.make(SCRIPT).sandbox;
         const writer = unwrap(
-          f.store.beginFork({
+          await f.store.beginFork({
             parent: ROOT,
             atSeq: 4,
             branch: CHILD,
             holderId: "c",
           }),
         );
-        const row = unwrap(f.store.ledger.begin(writer, "sandbox", "fake"));
+        const row = unwrap(
+          await f.store.ledger.begin(writer, "sandbox", "fake"),
+        );
         const made = unwrap(
           await fake.restore(
             "snap_01",
@@ -197,15 +204,17 @@ export function ledgerSuite(harness: SandboxHarness): void {
             ownerContext(writer),
           ),
         );
-        unwrap(f.store.ledger.live(writer, row.resource_id, made.id, null));
-        unwrap(f.store.ledger.releasing(writer, row.resource_id));
+        unwrap(
+          await f.store.ledger.live(writer, row.resource_id, made.id, null),
+        );
+        unwrap(await f.store.ledger.releasing(writer, row.resource_id));
         return { f, fake };
       }
 
       test("after the owning branch is deleted, gc still releases its resource", async () => {
         const { f, fake } = await releasing();
         for (const table of ["events", "leases", "branches"])
-          f.db.run(`DELETE FROM ${table} WHERE branch_id = ?`, [CHILD]);
+          await run(f.db, `DELETE FROM ${table} WHERE branch_id = ?`, [CHILD]);
         const done = unwrap(await collect(f.store.ledger, fake));
         expect(done.map((r) => [r.state, r.release_outcome])).toEqual([
           ["released", "released"],
@@ -224,7 +233,7 @@ export function ledgerSuite(harness: SandboxHarness): void {
         g.release();
         expect(unwrap(await first)).toEqual([]); // A's fence fails: it dispatches and records nothing
         expect(
-          unwrap(f.store.ledger.rows()).map((r) => r.release_outcome),
+          unwrap(await f.store.ledger.rows()).map((r) => r.release_outcome),
         ).toEqual(["released"]);
       });
     });
@@ -232,7 +241,7 @@ export function ledgerSuite(harness: SandboxHarness): void {
     // the exact adversarial schedules of the #153 repros, kept as regression tests.
     describe(" repro schedules", () => {
       test("stale creator: takeover and recovery run inside the old creator's restore, before the provider", async () => {
-        const f = parent();
+        const f = await parent();
         const { sandbox: base, creates } = harness.make(SCRIPT);
         let recovery: Awaited<ReturnType<typeof recoverFork>> | undefined;
         const sandbox: Sandbox = {
@@ -243,7 +252,8 @@ export function ledgerSuite(harness: SandboxHarness): void {
             return base.restore(snapshotId, expected, operationKey, context);
           },
         };
-        const point = unwrap(f.store.read(ROOT)).events.at(-1)?.event.event_id;
+        const point = unwrap(await f.store.read(ROOT)).events.at(-1)?.event
+          .event_id;
         if (point === undefined)
           throw new Error("the parent ends with its snapshot");
         const forked = await forkBranch(f.store, sandbox, {
@@ -256,9 +266,9 @@ export function ledgerSuite(harness: SandboxHarness): void {
         expect(recovery?.ok ? recovery.value : recovery?.error.code).toEqual([
           retired(base),
         ]);
-        expect(unwrap(f.store.branchState(CHILD))).toBe("fork_failed");
+        expect(unwrap(await f.store.branchState(CHILD))).toBe("fork_failed");
         expect(
-          unwrap(f.store.ledger.rows(CHILD)).map((r) => [
+          unwrap(await f.store.ledger.rows(CHILD)).map((r) => [
             r.state,
             r.release_outcome,
           ]),
@@ -273,9 +283,9 @@ export function ledgerSuite(harness: SandboxHarness): void {
       });
 
       test("wrong provider: a final not_found from another adapter settles nothing", async () => {
-        const f = parent();
+        const f = await parent();
         const creator = unwrap(
-          f.store.beginFork({
+          await f.store.beginFork({
             parent: ROOT,
             atSeq: 4,
             branch: CHILD,
@@ -283,7 +293,9 @@ export function ledgerSuite(harness: SandboxHarness): void {
           }),
         );
         const actual = harness.make(SCRIPT).sandbox;
-        const row = unwrap(f.store.ledger.begin(creator, "sandbox", "fake"));
+        const row = unwrap(
+          await f.store.ledger.begin(creator, "sandbox", "fake"),
+        );
         await actual.restore(
           "snap_01",
           manifestHash([]),
@@ -300,7 +312,7 @@ export function ledgerSuite(harness: SandboxHarness): void {
         const recovered = await recoverFork(f.store, wrong, CHILD, "recovery");
         expect(code(recovered)).toBe("invalid_request");
         expect(
-          unwrap(f.store.ledger.rows(CHILD)).map((r) => [
+          unwrap(await f.store.ledger.rows(CHILD)).map((r) => [
             r.provider,
             r.state,
             r.release_outcome,

@@ -20,6 +20,7 @@ import {
   use,
   webhook,
 } from "./kit";
+import { sqlAll } from "./sql";
 
 // An approval card is the host's own send too (spec/schema/README.md, "The host's calls are the
 // host's"): a card left in doubt by a crash is reconciled by outbound after its challenge is
@@ -70,14 +71,15 @@ async function thread(store: Store) {
   const { db } = await storeConnection(store);
   const [row] = z
     .array(z.object({ thread_id: ThreadId, branch_id: BranchId }))
-    .parse(db.all("SELECT thread_id, branch_id FROM branches", []));
+    .parse(await sqlAll(db, "SELECT thread_id, branch_id FROM branches", []));
   if (row === undefined) throw new Error("no branch");
   return row;
 }
 
 async function log(store: Store): Promise<readonly KnownEvent[]> {
   const { db } = await storeConnection(store);
-  if (db.all("SELECT branch_id FROM branches", []).length === 0) return [];
+  if ((await sqlAll(db, "SELECT branch_id FROM branches", [])).length === 0)
+    return [];
   return knownEventsOf(store, TENANT, (await thread(store)).branch_id);
 }
 

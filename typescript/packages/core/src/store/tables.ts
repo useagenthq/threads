@@ -4,10 +4,7 @@ import type { EnumOf, Strict } from "../log/zod-types";
 import { err, ok, type Result } from "../result";
 import type { ChainEvent } from "../verify";
 import { type LogError, logError } from "../verify/error";
-import type { SqliteDriver } from "./driver";
-import { STORE_SQL, STORE_VERSION } from "./generated/sql";
-
-//. The DDL is spec/schema/store.sql, embedded by spec/tools/gen_store_sql.py.
+import { type Sql, type Tx, writing } from "./driver";
 
 /** The tenant of local use: the local operator's (spec/api.json). */
 export const LOCAL_TENANT = "local";
@@ -57,10 +54,6 @@ export const LeaseRow: Strict<{
 }> = z.strictObject({ holder_id: z.string(), epoch: PosInt, expires_at: Int });
 export type LeaseRow = z.infer<typeof LeaseRow>;
 
-const VersionRow: Strict<{ user_version: typeof Int }> = z.strictObject({
-  user_version: Int,
-});
-
 const LineRow: Strict<{ line: typeof Bytes }> = z.strictObject({ line: Bytes });
 
 /** A row that fails its schema is corruption, reported, never trusted. */
@@ -78,39 +71,13 @@ export function parseRows<T>(
   return ok(parsed);
 }
 
-/**
- * Creates the store.sql tables on a new database. A database a newer schema wrote is refused,
- * never downgraded; one an earlier version wrote is refused too, since stores are not migrated.
- */
-export function installSchema(db: SqliteDriver): Result<void, LogError> {
-  const rows = parseRows(VersionRow, db.all("PRAGMA user_version", []));
-  if (!rows.ok) return rows;
-  const found = rows.value[0]?.user_version ?? 0;
-  if (found > STORE_VERSION)
-    return err(
-      logError(
-        "unsupported_format",
-        `store schema ${found} is newer than ${STORE_VERSION}`,
-      ),
-    );
-  if (found !== 0 && found < STORE_VERSION)
-    return err(
-      logError(
-        "unsupported_format",
-        `this store was created by an earlier threads version (schema ${found}); create a new store`,
-      ),
-    );
-  db.exec(STORE_SQL);
-  return ok(undefined);
-}
-
-export function getBranch(
-  db: SqliteDriver,
+export async function getBranch(
+  tx: Tx,
   branchId: string,
-): Result<BranchRow | undefined, LogError> {
+): Promise<Result<BranchRow | undefined, LogError>> {
   const rows = parseRows(
     BranchRow,
-    db.all(
+    await tx.all(
       `SELECT branch_id, thread_id, tenant_id, parent_branch_id, fork_at_seq, header_line, state,
         head_seq, head_hash, head_verified, dropped_ref FROM branches WHERE branch_id = ?`,
       [branchId],
@@ -128,15 +95,15 @@ const BranchIdRow: Strict<{ branch_id: typeof BranchId }> = z.strictObject({
 });
 
 /** A thread's main branch: its root, the one without a parent. */
-export function rootBranch(
-  db: SqliteDriver,
+export async function rootBranch(
+  tx: Tx,
   threadId: string,
   tenantId: string,
-): Result<BranchId | undefined, LogError> {
+): Promise<Result<BranchId | undefined, LogError>> {
   const rows = parseRows(
     BranchIdRow,
-    db.all(
-      "SELECT branch_id FROM branches WHERE thread_id = ? AND tenant_id = ? AND parent_branch_id IS NULL",
+    await tx.all(
+      "SELECT branch_id FROM branches WHERE thread_id = ? AND tenant_id = ? AND parent_branch_id IS NULL ORDER BY rowid LIMIT 1",
       [threadId, tenantId],
     ),
   );
@@ -144,41 +111,47 @@ export function rootBranch(
 }
 
 /** The tenant that owns a thread, if the thread is stored. */
-export function threadOwner(
-  db: SqliteDriver,
+export async function threadOwner(
+  tx: Tx,
   threadId: string,
-): Result<string | undefined, LogError> {
+): Promise<Result<string | undefined, LogError>> {
   const rows = parseRows(
     TenantRow,
-    db.all("SELECT tenant_id FROM threads WHERE thread_id = ?", [threadId]),
+    await tx.all("SELECT tenant_id FROM threads WHERE thread_id = ?", [
+      threadId,
+    ]),
   );
   return rows.ok ? ok(rows.value[0]?.tenant_id) : rows;
 }
 
 /** The branch, if it exists and belongs to `tenantId`; any other is `branch_not_found`. */
-export function ownedBranch(
-  db: SqliteDriver,
+export async function ownedBranch(
+  tx: Tx,
   branchId: string,
   tenantId: string,
-): Result<BranchRow, LogError> {
-  const row = getBranch(db, branchId);
+): Promise<Result<BranchRow, LogError>> {
+  const row = await getBranch(tx, branchId);
   if (!row.ok) return row;
   return row.value?.tenant_id === tenantId
     ? ok(row.value)
     : err(logError("branch_not_found", `no branch ${branchId}`));
 }
 
-/** Inserts the branch and, for a new thread, its thread row. The foreign key refuses a branch
- * whose tenant is not its thread's. */
-export function insertBranch(db: SqliteDriver, row: BranchRow): void {
-  db.run(
+/**
+ * Inserts the branch and, for a new thread, its thread row. The foreign key refuses a branch
+ * whose tenant is not its thread's. False when the branch is a root of a thread that has one
+ * (store.sql branches_root): nothing was inserted.
+ */
+export async function insertBranch(tx: Tx, row: BranchRow): Promise<boolean> {
+  await tx.run(
     "INSERT INTO threads (thread_id, tenant_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
     [row.thread_id, row.tenant_id],
   );
-  db.run(
+  const inserted = await tx.run(
     `INSERT INTO branches (branch_id, thread_id, tenant_id, parent_branch_id, fork_at_seq,
       header_line, state, head_seq, head_hash, head_verified, dropped_ref)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (thread_id) WHERE parent_branch_id IS NULL DO NOTHING`,
     [
       row.branch_id,
       row.thread_id,
@@ -193,27 +166,28 @@ export function insertBranch(db: SqliteDriver, row: BranchRow): void {
       row.dropped_ref,
     ],
   );
+  return inserted === 1;
 }
 
-export function setBranchState(
-  db: SqliteDriver,
+export async function setBranchState(
+  tx: Tx,
   branchId: string,
   state: BranchRow["state"],
-): void {
-  db.run("UPDATE branches SET state = ? WHERE branch_id = ?", [
+): Promise<void> {
+  await tx.run("UPDATE branches SET state = ? WHERE branch_id = ?", [
     state,
     branchId,
   ]);
 }
 
 /** Inserts a branch's own event rows and advances its head checkpoint. */
-export function insertEvents(
-  db: SqliteDriver,
+export async function insertEvents(
+  tx: Tx,
   branchId: string,
   events: readonly ChainEvent[],
-): void {
+): Promise<void> {
   for (const { event, bytes } of events) {
-    db.run(
+    await tx.run(
       `INSERT INTO events (branch_id, seq, event_id, type, type_version, critical, epoch, line)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -230,21 +204,21 @@ export function insertEvents(
   }
   const last = events.at(-1);
   if (last === undefined) return;
-  db.run(
+  await tx.run(
     "UPDATE branches SET head_seq = ?, head_hash = ? WHERE branch_id = ?",
     [last.event.seq, last.hash, branchId],
   );
 }
 
 /** A branch's own event lines with seq ≤ `through`, in seq order. */
-export function eventLines(
-  db: SqliteDriver,
+export async function eventLines(
+  tx: Tx,
   branchId: string,
   through: number,
-): Result<readonly Uint8Array[], LogError> {
+): Promise<Result<readonly Uint8Array[], LogError>> {
   const rows = parseRows(
     LineRow,
-    db.all(
+    await tx.all(
       "SELECT line FROM events WHERE branch_id = ? AND seq <= ? ORDER BY seq",
       [branchId, through],
     ),
@@ -252,13 +226,13 @@ export function eventLines(
   return rows.ok ? ok(rows.value.map((row) => row.line)) : rows;
 }
 
-export function getLease(
-  db: SqliteDriver,
+export async function getLease(
+  tx: Tx,
   branchId: string,
-): Result<LeaseRow | undefined, LogError> {
+): Promise<Result<LeaseRow | undefined, LogError>> {
   const rows = parseRows(
     LeaseRow,
-    db.all(
+    await tx.all(
       "SELECT holder_id, epoch, expires_at FROM leases WHERE branch_id = ?",
       [branchId],
     ),
@@ -266,12 +240,12 @@ export function getLease(
   return rows.ok ? ok(rows.value[0]) : rows;
 }
 
-export function putLease(
-  db: SqliteDriver,
+export async function putLease(
+  tx: Tx,
   branchId: string,
   lease: LeaseRow,
-): void {
-  db.run(
+): Promise<void> {
+  await tx.run(
     `INSERT INTO leases (branch_id, holder_id, epoch, expires_at) VALUES (?, ?, ?, ?)
       ON CONFLICT (branch_id) DO UPDATE SET holder_id = excluded.holder_id,
       epoch = excluded.epoch, expires_at = excluded.expires_at`,
@@ -288,14 +262,17 @@ class Rollback extends Error {
   }
 }
 
-/** Runs `fn` in one transaction and rolls it back when `fn` returns an error value. */
-export function atomically<T>(
-  db: SqliteDriver,
-  fn: () => Result<T, LogError>,
-): Result<T, LogError> {
+/**
+ * Runs `fn` in one transaction (a savepoint inside an open one) and rolls it back when `fn`
+ * returns an error value. `fn` may run again from the start (see `Tx`).
+ */
+export async function atomically<T>(
+  sql: Sql,
+  fn: (tx: Tx) => Promise<Result<T, LogError>>,
+): Promise<Result<T, LogError>> {
   try {
-    return db.transaction(() => {
-      const result = fn();
+    return await writing(sql, async (tx) => {
+      const result = await fn(tx);
       if (!result.ok) throw new Rollback(result.error);
       return result;
     });

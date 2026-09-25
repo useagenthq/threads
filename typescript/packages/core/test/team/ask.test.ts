@@ -64,7 +64,7 @@ describe("ask and reply", () => {
     expect(types(log)).toContain("parked");
     const member = await memberEvents(store, r.team.ref.id, "researcher-1");
     expect(receipts(member, "ask")).toHaveLength(1);
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("a member asks another member and parks; the reply runs it on and it settles", async () => {
@@ -112,7 +112,7 @@ describe("ask and reply", () => {
     expect(
       receipts(await events(store, r.thread), "member_parked"),
     ).toHaveLength(1);
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("an ask of an unknown member is refused as the call's result, and nothing parks", async () => {
@@ -137,7 +137,7 @@ describe("ask and reply", () => {
       status: "refused",
     });
     expect(types(log)).not.toContain("parked");
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 });
 
@@ -171,6 +171,6 @@ describe("ask headroom", () => {
     });
     const member = await memberEvents(store, r.team.ref.id, "a-1");
     expect(receipts(member, "ask")).toHaveLength(0);
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 });

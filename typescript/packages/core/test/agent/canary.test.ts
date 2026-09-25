@@ -26,6 +26,7 @@ function recording(): {
       all.push(bytes.slice());
       return inner.put(bytes);
     },
+    sweep: inner.sweep,
     sink: () => {
       const sink = inner.sink();
       const chunks: Uint8Array[] = [];
@@ -69,7 +70,7 @@ test("the canary secret is nowhere but the host tool that used it", async () => 
   const sandbox = fakeSandbox({ tools: { env: { output: "PATH=/bin\n" } } });
   const artifacts = recording();
   const log = unwrap(
-    LogStore.open(openBunSqlite(":memory:"), Date.now, artifacts.store),
+    await LogStore.open(openBunSqlite(":memory:"), Date.now, artifacts.store),
   );
   const bot = agent({
     model: scriptedModel({
@@ -105,7 +106,9 @@ test("the canary secret is nowhere but the host tool that used it", async () => 
   for (const file of sandbox.files())
     expect(utf8.decode(file)).not.toContain(CANARY);
   // Every event line, and every artifact: rendered requests, results, spills.
-  const lines = utf8.decode(unwrap(log.exportBranch(result.thread.branch)));
+  const lines = utf8.decode(
+    unwrap(await log.exportBranch(result.thread.branch)),
+  );
   expect(lines).toContain("secret(THREADS_CANARY_SECRET)");
   expect(lines).not.toContain(CANARY);
   expect(artifacts.all.length).toBeGreaterThan(0);

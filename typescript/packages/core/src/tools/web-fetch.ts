@@ -79,13 +79,13 @@ async function follow(
   }
 }
 
-function record(
+async function record(
   url: URL,
   res: Response,
   fetched: Uint8Array,
   ctx: ToolContext,
-  put: (bytes: Uint8Array) => string,
-): ToolRun {
+  put: (bytes: Uint8Array) => Promise<string>,
+): Promise<ToolRun> {
   const type =
     (res.headers.get("content-type") ?? "")
       .split(";")[0]
@@ -116,7 +116,11 @@ function record(
     page.length <= PART_CHARS
       ? page
       : `${page.slice(0, PART_CHARS)}\n[page truncated: read_tool_result(call_id="${ctx.callId}", offset, length) returns all of it]`;
-  const ref = { sha256: put(bytes), bytes: bytes.length, media_type: media };
+  const ref = {
+    sha256: await put(bytes),
+    bytes: bytes.length,
+    media_type: media,
+  };
   return {
     kind: "done",
     output: wrap(page),

@@ -193,7 +193,7 @@ describe("AG-UI retries after a drop", () => {
     await h.host.stop();
     cpSync(join(from, "artifacts"), join(to, "artifacts"), { recursive: true });
     const store = sqlite(to);
-    const imported = (
+    const imported = await (
       await openStore(tenantStore(store, "acme"))
     ).log.importLog(bytes);
     if (!imported.ok) throw new Error(imported.error.message);
@@ -214,16 +214,16 @@ function temp(): string {
 
 async function mainBranch(store: Store): Promise<string> {
   const { log } = await openStore(tenantStore(store, "acme"));
-  const main = log.mainBranch(thread);
+  const main = await log.mainBranch(thread);
   if (!main.ok) throw new Error(main.error.message);
   return main.value;
 }
 
 async function exportMain(store: Store): Promise<Uint8Array> {
   const { log } = await openStore(tenantStore(store, "acme"));
-  const main = log.mainBranch(thread);
+  const main = await log.mainBranch(thread);
   if (!main.ok) throw new Error(main.error.message);
-  const bytes = log.exportBranch(main.value);
+  const bytes = await log.exportBranch(main.value);
   if (!bytes.ok) throw new Error(bytes.error.message);
   return bytes.value;
 }

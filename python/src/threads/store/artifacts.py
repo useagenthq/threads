@@ -11,6 +11,7 @@ memory: the hash is computed as the bytes arrive.
 import hashlib
 import os
 import tempfile
+import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -19,6 +20,7 @@ from typing import Protocol
 from threads.log import ParseError
 from threads.log.digest import sha256_hex
 from threads.result import Err, Ok
+from threads.store.retention import sweep
 from threads.store.trash import SEAMS, read_if_present, restore_from_trash, seam
 from threads.store.worker import StoreError
 
@@ -52,6 +54,11 @@ class MemoryArtifacts:
 
     def sink(self) -> ArtifactSink:
         return _MemorySink(self)
+
+    def sweep(self, keep: frozenset[str], older_than: int) -> tuple[str, ...]:
+        """An in-memory store lives as long as its process: nothing to reclaim."""
+        del keep, older_than
+        return ()
 
 
 class _MemorySink:
@@ -101,6 +108,10 @@ class FileArtifacts:
 
     def path(self, sha256: str) -> Path:
         return self._root / "sha256" / sha256[:2] / sha256
+
+    def sweep(self, keep: frozenset[str], older_than: int) -> tuple[str, ...]:
+        # By trash names only, so a concurrent put or get can restore it (retention.sweep).
+        return sweep(self._root, keep, time.time() - older_than / 1000)
 
 
 class _FileSink:
@@ -177,7 +188,20 @@ def _refreshed(path: Path) -> bool:
     return True
 
 
-type ArtifactStore = MemoryArtifacts | FileArtifacts
+class ArtifactStore(Protocol):
+    """Content-addressed bytes: files (SQLite), rows (Postgres), or memory. Its methods run on
+    the store's thread."""
+
+    def put(self, data: bytes) -> str: ...
+
+    def get(self, sha256: str) -> Ok[bytes] | Err[ParseError]: ...
+
+    def sink(self) -> ArtifactSink: ...
+
+    def sweep(self, keep: frozenset[str], older_than: int) -> tuple[str, ...]:
+        """Deletes the artifacts not in `keep` stored before `older_than` (epoch ms): a younger
+        one may belong to an append in flight. Returns their hashes."""
+        ...
 
 
 @contextmanager

@@ -12,6 +12,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import Final
 
+from threads.agents.config import ConfigError
 from threads.log import ArtifactRef
 from threads.memory import passages
 from threads.memory.sqlite_fts import install, match_query, transaction
@@ -73,9 +74,7 @@ def _where(scope: Scope) -> tuple[str, str, str]:
 
 
 def _revision(conn: sqlite3.Connection) -> int:
-    row: tuple[int] | None = conn.execute(
-        "SELECT revision FROM local_knowledge_revision WHERE one = 1"
-    ).fetchone()
+    row = conn.execute("SELECT revision FROM local_knowledge_revision WHERE one = 1").fetchone()
     return 0 if row is None else row[0]
 
 
@@ -106,13 +105,18 @@ class LocalKnowledge:
     store: SqliteStore | None = None
 
     async def bind(self, store: SqliteStore) -> "LocalKnowledge":
-        await store.run(install(_DDL))
+        if store.dialect != "sqlite":
+            raise ConfigError(
+                "invalid_config",
+                "localKnowledge keeps its index in a SQLite store; run this agent on sqlite()",
+            )
+        await store.run_sqlite(install(_DDL))
         return replace(self, store=store)
 
     async def revision(self, scope: Scope) -> Outcome[int]:
         """The store's current revision (0 before the first ingest). One revision covers every
         scope, so `scope` only satisfies the protocol."""
-        return Ok(0 if self.store is None else await self.store.run(_revision))
+        return Ok(0 if self.store is None else await self.store.run_sqlite(_revision))
 
     async def ingest(self, scope: Scope, source: KnowledgeSource, key: str) -> Outcome[DocVersion]:
         if self.store is None:
@@ -132,7 +136,7 @@ class LocalKnowledge:
         try:
             # The bytes are durable before the rows (and passages) that reference them, and a
             # value registered after the check above can't slip in between.
-            return await self.store.run(admit, publishing=source.content)
+            return await self.store.run_sqlite(admit, publishing=source.content)
         except SecretInStoredBytesError:
             message = f"{source.source_id}: holds a registered secret; not ingested"
             return Err(ProviderError("invalid", message))
@@ -156,7 +160,7 @@ class LocalKnowledge:
             )
             return Ok(None)
 
-        return await self.store.run(transaction(write))
+        return await self.store.run_sqlite(transaction(write))
 
     async def search(
         self,
@@ -182,7 +186,7 @@ class LocalKnowledge:
             at = _revision(conn) if as_of is None else as_of
             return conn.execute(sql, (match, at, at, at, *_where(scope), *only, k)).fetchall()
 
-        return Ok(tuple(_hit(row) for row in await self.store.run(read)))
+        return Ok(tuple(_hit(row) for row in await self.store.run_sqlite(read)))
 
     async def get(self, scope: Scope, doc_id: str, version: str) -> Outcome[Doc]:
         if self.store is None:
@@ -195,7 +199,7 @@ class LocalKnowledge:
                 (doc_id, version, *_where(scope)),
             ).fetchone()
 
-        row = await self.store.run(read)
+        row = await self.store.run_sqlite(read)
         if row is None:
             return Err(ProviderError("not_found", f"no {doc_id}@{version} in this scope"))
         sha, size, media_type, namespace, record_id = row
@@ -236,7 +240,7 @@ async def _rebuilt(store: SqliteStore) -> bool:
     """One rebuild attempt: reads the admitted sources, then checks them and refills the index
     in one transaction, with registration paused through its commit. False when an ingest
     moved the rows."""
-    read = await store.run(_admitted)
+    read = await store.run_sqlite(_admitted)
     sources: list[tuple[int, bytes]] = []
     for rowid, sha in read:
         got = await store.get_artifact(sha)
@@ -250,7 +254,7 @@ async def _rebuilt(store: SqliteStore) -> bool:
         # rows are written: the check covers the index until it is durable.
         return published(pieces, lambda: transaction(lambda c: _refill(c, read, sources))(conn))
 
-    return await store.run(refill)
+    return await store.run_sqlite(refill)
 
 
 def _insert(
@@ -285,7 +289,7 @@ def _admit(
     version = digest[:16]
 
     def write(conn: sqlite3.Connection) -> Outcome[DocVersion]:
-        done: tuple[str, str, str, int] | None = conn.execute(
+        done = conn.execute(
             "SELECT digest, doc_id, version, revision FROM local_knowledge_keys WHERE key = ?",
             (key,),
         ).fetchone()
@@ -294,7 +298,7 @@ def _admit(
                 return Err(ProviderError("invalid", f"key {key} reused with other content"))
             return Ok(_version(done[1], done[2], digest, done[3]))
         revision = _bump(conn)
-        found: tuple[int] | None = conn.execute(
+        found = conn.execute(
             f"SELECT rowid FROM local_knowledge_docs AS d WHERE doc_id = ? AND version = ?"
             f" AND {_SCOPE}",
             (source.source_id, version, *_where(scope)),

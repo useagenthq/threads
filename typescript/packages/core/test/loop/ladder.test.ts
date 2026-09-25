@@ -37,13 +37,13 @@ async function turn(
   text: string,
   config: Partial<LoopConfig> = {},
 ): Promise<readonly KnownEvent[]> {
-  const writer = unwrap(h.store.acquire(ROOT, `owner-${text}`));
+  const writer = unwrap(await h.store.acquire(ROOT, `owner-${text}`));
   const before = writer.chain.fold.seq;
   const end = await resume(writer, h.artifacts, h.config(config), {
     input: userInput(text),
   });
   expect(end.kind).toBe("idle");
-  writer.release();
+  await writer.release();
   return events(writer).filter((e) => e.seq > before);
 }
 
@@ -56,7 +56,7 @@ const types = (log: readonly KnownEvent[]): readonly string[] =>
 
 describe("L2 threshold compaction and L3 restore", () => {
   test("over compact.trigger the loop compacts before the turn request; the next run reads the recorded summary", async () => {
-    const h = harness(
+    const h = await harness(
       [],
       [],
       [say("one", 160_000), SUMMARY, say("two", 10), say("three", 10)],
@@ -102,7 +102,7 @@ describe("L2 threshold compaction and L3 restore", () => {
         text: "Deploy with make deploy.",
       },
     };
-    const h = harness(
+    const h = await harness(
       [],
       [],
       [say("one", 160_000), SUMMARY, say("two", 10)],
@@ -110,9 +110,9 @@ describe("L2 threshold compaction and L3 restore", () => {
       policy({}),
     );
     await turn(h, "first");
-    const writer = unwrap(h.store.acquire(ROOT, "skill"));
-    unwrap(writer.append([skill]));
-    writer.release();
+    const writer = unwrap(await h.store.acquire(ROOT, "skill"));
+    unwrap(await writer.append([skill]));
+    await writer.release();
     const ops: LoopExtension = {
       name: "ops",
       timeoutMs: 50,
@@ -135,7 +135,7 @@ describe("L2 threshold compaction and L3 restore", () => {
   });
 
   test("before_compact deny records compaction_failed{hook} and sends no side request", async () => {
-    const h = harness(
+    const h = await harness(
       [],
       [],
       [say("one", 160_000), say("two", 10)],
@@ -169,7 +169,7 @@ describe("L2 threshold compaction and L3 restore", () => {
 
 describe("L4 preflight", () => {
   test("at the window no request is created: preflight, one reactive compaction, then the request", async () => {
-    const h = harness(
+    const h = await harness(
       [],
       [],
       [say("one", 185_000), SUMMARY, say("two", 10)],
@@ -198,7 +198,7 @@ describe("L4 preflight", () => {
   });
 
   test("with the breaker open it fails: context_exhausted and nothing sent", async () => {
-    const h = harness(
+    const h = await harness(
       [],
       [],
       [say("one", 185_000)],
@@ -206,9 +206,9 @@ describe("L4 preflight", () => {
       policy({ trigger: { tokens: 10_000_000 }, max_failures: 1 }),
     );
     await turn(h, "first");
-    const writer = unwrap(h.store.acquire(ROOT, "breaker"));
+    const writer = unwrap(await h.store.acquire(ROOT, "breaker"));
     unwrap(
-      writer.append([
+      await writer.append([
         {
           type: "compaction_failed",
           type_version: 1,
@@ -218,7 +218,7 @@ describe("L4 preflight", () => {
         },
       ]),
     );
-    writer.release();
+    await writer.release();
     const second = await turn(h, "second");
     expect(types(second)).toEqual([
       "user_input",
@@ -234,7 +234,7 @@ describe("L4 preflight", () => {
 
 describe("a gate hook that outlives its deadline", () => {
   test("ignoring its abort signal and answering proceed late: recorded failed at the deadline, nothing sent", async () => {
-    const h = harness([], [], [say("never", 10)]);
+    const h = await harness([], [], [say("never", 10)]);
     let late: (() => void) | undefined;
     const slow: LoopExtension = {
       name: "slow",
@@ -266,7 +266,7 @@ describe("a gate hook that outlives its deadline", () => {
 describe("a compaction summary is recorded redacted (C5)", () => {
   test("a key the summary repeats is in neither the log nor the summary artifact", async () => {
     const key = credential("fake", "apiKey", "sk-l9-summary-2e3f", "U")();
-    const h = harness(
+    const h = await harness(
       [],
       [],
       [say("one", 160_000), say(`The key was ${key}.`, 900), say("two", 10)],
@@ -278,7 +278,7 @@ describe("a compaction summary is recorded redacted (C5)", () => {
     expect(JSON.stringify(second)).not.toContain(key);
     const compacted = second.find((e) => e.type === "compacted");
     if (compacted?.type !== "compacted") throw new Error("the run compacted");
-    const summary = h.artifacts.get(compacted.data.summary_ref.sha256);
+    const summary = await h.artifacts.get(compacted.data.summary_ref.sha256);
     if (!summary.ok) throw new Error(summary.error.message);
     expect(new TextDecoder().decode(summary.value)).toBe(
       "The key was [secret fake.apiKey].",

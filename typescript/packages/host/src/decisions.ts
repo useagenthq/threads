@@ -71,7 +71,7 @@ export async function resumeThread(
   const { log } = await ctx.open(principal.tenant);
   let at = { id: thread.id, branch: thread.branch };
   for (;;) {
-    const read = log.read(at.branch);
+    const read = await log.read(at.branch);
     if (!read.ok) return;
     const events = knownEvents(read.value);
     const started = events.find((e) => e.type === "thread_started");

@@ -18,6 +18,7 @@ from threads.host import start as host_start
 from threads.host.runs import Bound, Runner
 from threads.log import BranchId, Principal, ThreadId, UserInputEvent
 from threads.result import Err, Ok
+from threads.store.sql import text_of
 from threads.thread import tree
 from threads.thread.handle import Thread
 
@@ -275,7 +276,7 @@ async def _inputs(_thread: object, store: Store) -> list[UserInputEvent]:
     rows = await sq.run(lambda c: c.execute("SELECT thread_id FROM branches").fetchall())
     found: list[UserInputEvent] = []
     for (thread_id,) in rows or []:
-        root = await sq.root(ThreadId(thread_id))
+        root = await sq.root(ThreadId(text_of(thread_id)))
         read = None if not isinstance(root, Ok) else await sq.read(root.value, 0)
         if isinstance(read, Ok):
             found += [e for e in read.value.fold.events if isinstance(e, UserInputEvent)]

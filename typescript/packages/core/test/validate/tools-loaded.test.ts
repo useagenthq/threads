@@ -21,7 +21,7 @@ const CASES = [
 
 describe("a writer refuses what import refuses", () => {
   for (const name of CASES)
-    test(name, () => {
+    test(name, async () => {
       const c = loadCase(name);
       const lines = new TextDecoder()
         .decode(c.log)
@@ -32,8 +32,8 @@ describe("a writer refuses what import refuses", () => {
       const [first, ...rest] = lines;
       const last = rest.pop();
       if (first === undefined || last === undefined) throw new Error("a log");
-      const fx = fixture();
-      const opened = fx.store.openBranch({
+      const fx = await fixture();
+      const opened = await fx.store.openBranch({
         threadId: first.thread_id,
         branchId: first.branch_id,
         lease: { holderId: "t", ttlMs: 1e12 },
@@ -41,8 +41,8 @@ describe("a writer refuses what import refuses", () => {
       });
       const writer = unwrap(opened);
       if (typeof writer === "string") throw new Error("already open");
-      for (const e of rest) unwrap(writer.append([draftOf(e)]));
-      const refused = writer.append([draftOf(last)]);
+      for (const e of rest) unwrap(await writer.append([draftOf(e)]));
+      const refused = await writer.append([draftOf(last)]);
       expect(refused.ok ? "ok" : refused.error.code).toBe("invalid_transition");
     });
 });

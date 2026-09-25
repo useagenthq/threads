@@ -14,11 +14,13 @@ import time
 from pathlib import Path
 
 import pytest
-from jobs.drill import WAIT_S, expire_leases
+from jobs.drill import TESTS, WAIT_S, expire_leases
+from jobs.stores import drill_store
 from loop_kit import BYPASS, text, use
 from pydantic import BaseModel
 
-from threads import Completed, RunContext, agent, scripted_model, sqlite, tool
+from threads import Completed, RunContext, agent, scripted_model, tool
+from threads.agents.store import Store, open_store
 
 pytestmark = pytest.mark.jobs
 RESIST = Path(__file__).with_name("resist_worker.py")
@@ -42,7 +44,7 @@ def test_first_ctrl_c_is_cooperative(tmp_path: Path) -> None:
     waits = tool(name="slow", description="Waits.", input=Nothing, execute=slow, effect="read_only")
     replies = [text("ok"), use("slow", {}), text("after"), text("after")]
     bot = agent(model=scripted_model({"responses": replies}), tools=[waits], permissions=BYPASS)
-    store = sqlite(str(tmp_path))
+    store = drill_store(tmp_path)
     first = bot.run_sync("hi", store=store, deps=None)
 
     def interrupt() -> None:
@@ -55,11 +57,17 @@ def test_first_ctrl_c_is_cooperative(tmp_path: Path) -> None:
     # Cleaned up on the way out: the lease was handed back, so the thread runs at once.
     again = bot.run_sync("again", thread=first.thread, deps=None)
     assert isinstance(again, Completed), again
+    asyncio.run(_close(store))
+
+
+async def _close(store: Store) -> None:
+    await (await open_store(store)).close()
 
 
 def _spawn(*args: str) -> subprocess.Popen[str]:
     return subprocess.Popen(  # noqa: S603 - this repo's own test script
         [sys.executable, str(RESIST), *args],
+        env={**os.environ, "PYTHONPATH": TESTS},
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,

@@ -40,7 +40,7 @@ async function events(
   thread: ThreadRef,
 ): Promise<readonly KnownEvent[]> {
   const { log } = await openStore(store);
-  return knownEvents(unwrap(log.read(thread.branch)));
+  return knownEvents(unwrap(await log.read(thread.branch)));
 }
 
 /** The log of the child the parent's first agent_spawned names. */
@@ -51,8 +51,8 @@ async function childEvents(
   const spawned = parent.find((e) => e.type === "agent_spawned");
   if (spawned?.type !== "agent_spawned") throw new Error("no child");
   const { log } = await openStore(store);
-  const branch = unwrap(log.mainBranch(spawned.data.child_thread_id));
-  return knownEvents(unwrap(log.read(branch)));
+  const branch = unwrap(await log.mainBranch(spawned.data.child_thread_id));
+  return knownEvents(unwrap(await log.read(branch)));
 }
 
 function only<T extends KnownEvent["type"]>(

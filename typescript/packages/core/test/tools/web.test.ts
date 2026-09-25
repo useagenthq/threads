@@ -105,7 +105,7 @@ describe("web_fetch", () => {
     });
     if (cite?.type !== "citation" || cite.ref === undefined)
       throw new Error("no ref");
-    expect(tool.artifacts.get(cite.ref.sha256).ok).toBe(true);
+    expect((await tool.artifacts.get(cite.ref.sha256)).ok).toBe(true);
     expect(cite.ref.media_type).toBe("text/html");
   });
 

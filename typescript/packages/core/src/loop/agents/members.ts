@@ -44,7 +44,7 @@ export async function teamTurns(
     // Taken before the checks, so progress made after them still wakes the wait.
     const progress = team.progress?.();
     const moved = s.moved();
-    const halted = teamStep(s);
+    const halted = await teamStep(s);
     if (halted !== undefined) return { kind: "halted", halt: halted };
     if (s.fold.turnOpen && loopParked(s.fold).length === 0) end = await turn();
     else if (progress === undefined || !waits(s, team)) return idleOrParked(s);
@@ -77,31 +77,32 @@ async function waitFor(
 }
 
 /** One step between turns: the pending mail, then every ask or wait whose deadline has passed. */
-function teamStep(s: Session): Halt | undefined {
+async function teamStep(s: Session): Promise<Halt | undefined> {
   return (
-    consumeMail(s) ??
-    decided(s, (ctx) => {
-      for (const id of dueIds(ctx, ctx.batch.now)) deadline(ctx, id);
+    (await consumeMail(s)) ??
+    decided(s, async (ctx) => {
+      for (const id of await dueIds(ctx, ctx.batch.now))
+        await deadline(ctx, id);
     })
   );
 }
 
 /** mail.consume under this writer: a receipt that opens a turn leaves the loop a turn to run. */
-function consumeMail(s: Session): Halt | undefined {
-  return decided(s, (ctx) => {
-    consume(ctx);
+function consumeMail(s: Session): Promise<Halt | undefined> {
+  return decided(s, async (ctx) => {
+    await consume(ctx);
   });
 }
 
-function decided(
+async function decided(
   s: Session,
-  step: (ctx: ConsumeContext) => void,
-): Halt | undefined {
+  step: (ctx: ConsumeContext) => Promise<void>,
+): Promise<Halt | undefined> {
   const team = teamOf(s);
-  const appended = s.appendDecided((tx: DecideTx) => {
+  const appended = await s.appendDecided(async (tx: DecideTx) => {
     const batch = new Batch(tx.chain.fold.seq, tx.now, team.mint);
-    step({
-      db: tx.db,
+    await step({
+      tx: tx.tx,
       chain: tx.chain,
       batch,
       threadId: s.threadId,

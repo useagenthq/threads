@@ -34,11 +34,11 @@ export async function settleBackground(s: Session): Promise<Halt | undefined> {
   for (const { spawned, end } of recordable(s)) {
     s.finished.delete(spawned.data.call_id);
     if (end.status === "parked") {
-      const stopped = parkOn(s, spawned, end.reason);
+      const stopped = await parkOn(s, spawned, end.reason);
       if (stopped !== undefined) return stopped;
       continue;
     }
-    const next = await stopGate(s, spawned, finished(s, spawned, end));
+    const next = await stopGate(s, spawned, await finished(s, spawned, end));
     if (next === "continue") launch(s, spawned);
     else if (next !== "stop") return next;
     else ready.push({ spawned, end });
@@ -74,10 +74,13 @@ function recordable(s: Session): readonly Ended[] {
 }
 
 /** One append: each child's agent_finished and late result, and the wake when no turn is open. */
-function record(s: Session, ready: readonly Done[]): Halt | undefined {
-  const drafts: EventDraft[] = ready.flatMap(({ spawned, end }) =>
-    endDrafts(s, spawned, end, true),
-  );
+async function record(
+  s: Session,
+  ready: readonly Done[],
+): Promise<Halt | undefined> {
+  const drafts: EventDraft[] = [];
+  for (const { spawned, end } of ready)
+    drafts.push(...(await endDrafts(s, spawned, end, true)));
   const causes = drafts.flatMap((d) =>
     d.type === "tool_result_late" && d.event_id !== undefined
       ? [d.event_id]

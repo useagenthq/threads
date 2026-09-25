@@ -1,7 +1,8 @@
 import type { DryPin } from "../agent/registry";
+import { sha256Hex } from "../hash";
 import { canonicalize, type KnownEvent, type ToolSpec } from "../log";
 import { knownEvents } from "../reduce";
-import { refReader, verifyRequests } from "../render";
+import { verifyRequests } from "../render";
 import { memoryArtifacts } from "../store";
 import { verifyExport } from "../verify";
 import { type CaseDir, inputOf } from "./case-dir";
@@ -31,10 +32,10 @@ export type CaseLog = {
 };
 
 /** B.1: the verifier Thread.replay() runs, over the case log and its artifacts. */
-export function replayCheck(c: CaseDir): {
+export async function replayCheck(c: CaseDir): Promise<{
   readonly check: Replay;
   readonly log?: CaseLog;
-} {
+}> {
   const verified = verifyExport(c.log);
   if (!verified.ok) {
     const { code, seq } = verified.error;
@@ -43,9 +44,9 @@ export function replayCheck(c: CaseDir): {
     };
   }
   const artifacts = memoryArtifacts();
-  for (const a of c.artifacts) artifacts.put(a);
+  for (const a of c.artifacts) await artifacts.put(a);
   const events = knownEvents(verified.value);
-  const checked = verifyRequests(events, refReader(artifacts));
+  const checked = await verifyRequests(events, artifacts);
   if (!checked.ok) {
     const { code, seq } = checked.error;
     return {
@@ -174,10 +175,10 @@ export function driftCheck(
 function lastLine0(c: CaseDir, log: CaseLog): Uint8Array | undefined {
   const request = log.events.findLast((e) => e.type === "model_request");
   if (request?.type !== "model_request") return undefined;
-  const artifacts = memoryArtifacts();
-  for (const a of c.artifacts) artifacts.put(a);
-  const bytes = artifacts.get(request.data.request_ref.sha256);
-  return bytes.ok ? firstLine(bytes.value) : undefined;
+  // The artifact whose hash the request names: content-addressed, so found is verified.
+  const { sha256 } = request.data.request_ref;
+  const bytes = c.artifacts.find((a) => sha256Hex(a) === sha256);
+  return bytes === undefined ? undefined : firstLine(bytes);
 }
 
 /** A drift result as its one-line report reason. */

@@ -5,7 +5,7 @@ import { knownEvents } from "../../src/reduce";
 import { memberRows, teamRow } from "../../src/team/rows";
 import { unwrap } from "../store/helpers";
 import { Crash, crashing, drill, mentions, type Point } from "./crash-kit";
-import { assertTeamReplays } from "./kit";
+import { assertTeamReplays, reading } from "./kit";
 import { say, start } from "./run-kit";
 
 // Crash drills at each commit point of a team run (design §7, Phase 1 proofs): the process dies
@@ -62,10 +62,10 @@ function team(lead: string, researcher: readonly string[]) {
 describe("team crash drills", () => {
   for (const point of POINTS)
     test(`a crash inside ${point.name} stores none of it; the restart finishes once`, async () => {
-      const d = drill();
+      const d = await drill();
       const first = team("fresh", ["Done."]);
       await expect(
-        first.run("Work.", { store: d.open(crashing(d.db, point)) }),
+        first.run("Work.", { store: await d.open(crashing(d.db, point)) }),
       ).rejects.toThrow(Crash);
       const {
         result,
@@ -74,14 +74,18 @@ describe("team crash drills", () => {
       } = await d.restart(team("restart", ["Done.", "Done."]));
       expect(result.status).toBe("completed");
       const { db, log } = d;
-      const lead = knownEvents(unwrap(log.read(leadBranch)));
+      const lead = knownEvents(unwrap(await log.read(leadBranch)));
       expect(lead.filter((e) => e.type === "member_started")).toHaveLength(1);
-      const members = memberRows(db, teamId).filter((r) => r.role === "member");
+      const members = (
+        await reading(db, (tx) => memberRows(tx, teamId))
+      ).filter((r) => r.role === "member");
       expect(members.map((r): string => r.name)).toEqual(["researcher-1"]);
       const branch = members[0]?.branch_id;
       if (branch === null || branch === undefined)
         throw new Error("materialized");
-      const member = knownEvents(unwrap(log.read(BranchId.parse(branch))));
+      const member = knownEvents(
+        unwrap(await log.read(BranchId.parse(branch))),
+      );
       expect(member.filter((e) => e.type === "user_input")).toHaveLength(1);
       const notices = lead.filter(
         (e) =>
@@ -90,7 +94,9 @@ describe("team crash drills", () => {
             e.data.envelope.kind === "member_ended"),
       );
       expect(notices).toHaveLength(1);
-      expect(teamRow(db, teamId)?.closed_at).toBeNull();
-      assertTeamReplays(log, teamId);
+      expect(
+        (await reading(db, (tx) => teamRow(tx, teamId)))?.closed_at,
+      ).toBeNull();
+      await assertTeamReplays(log, teamId);
     });
 });

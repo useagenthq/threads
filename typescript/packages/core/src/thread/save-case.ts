@@ -128,14 +128,14 @@ function write(path: string, files: Files): void {
 }
 
 /** Copies each ref's bytes into artifacts/; the shas that are gone from the store. */
-function copy(
+async function copy(
   files: Files,
   refs: ReadonlySet<string>,
   artifacts: ArtifactStore,
-): readonly string[] {
+): Promise<readonly string[]> {
   const gone: string[] = [];
   for (const sha of refs) {
-    const got = artifacts.get(sha);
+    const got = await artifacts.get(sha);
     if (got.ok) files.set(join("artifacts", sha), got.value);
     else gone.push(sha);
   }
@@ -143,10 +143,13 @@ function copy(
 }
 
 /** Line 0 of the turn's first request artifact: what drift compares the agent against. */
-function line0(turn: Turn, artifacts: ArtifactStore): Uint8Array | undefined {
+async function line0(
+  turn: Turn,
+  artifacts: ArtifactStore,
+): Promise<Uint8Array | undefined> {
   const request = turn.events.find((e) => e.type === "model_request");
   if (request?.type !== "model_request") return undefined;
-  const bytes = artifacts.get(request.data.request_ref.sha256);
+  const bytes = await artifacts.get(request.data.request_ref.sha256);
   return bytes.ok ? firstLine(bytes.value) : undefined;
 }
 
@@ -159,11 +162,11 @@ type Saving = {
 };
 
 /** The log, expected and artifact files of the case, per implementation. */
-function logFiles(
+async function logFiles(
   saving: Saving,
   files: Files,
   stubs: number,
-): Result<void, LogError> {
+): Promise<Result<void, LogError>> {
   const { read, turn, context } = saving;
   for (const impl of IMPLS) {
     const bytes = caseLog(read, turn.restoreSeq, impl);
@@ -183,23 +186,26 @@ function logFiles(
     knownEvents(read).filter((e) => e.seq <= turn.restoreSeq),
     refs,
   );
-  const gone = copy(files, refs, context.artifacts);
+  const gone = await copy(files, refs, context.artifacts);
   return gone[0] === undefined
     ? ok(undefined)
     : err(logError("case_missing_dependency", `artifact ${gone[0]} is gone`));
 }
 
 /** Every file of the case directory, by its path inside it, and why it can't rerun offline. */
-function caseFiles(
-  saving: Saving,
-): Result<
-  { readonly files: Files; readonly offline: ReturnType<typeof offlineReason> },
-  LogError
+async function caseFiles(saving: Saving): Promise<
+  Result<
+    {
+      readonly files: Files;
+      readonly offline: ReturnType<typeof offlineReason>;
+    },
+    LogError
+  >
 > {
   const { read, turn, name, options, context } = saving;
   const files: Files = new Map();
-  const stubs = stubScript(turn.events, context.artifacts);
-  const logged = logFiles(saving, files, stubs.stubs.length);
+  const stubs = await stubScript(turn.events, context.artifacts);
+  const logged = await logFiles(saving, files, stubs.stubs.length);
   if (!logged.ok) return logged;
   const turnRefs = new Set<string>();
   refsIn(
@@ -208,12 +214,12 @@ function caseFiles(
   );
   const later = knownEvents(read).filter((e) => e.seq > turn.restoreSeq);
   const offline =
-    copy(files, turnRefs, context.artifacts).length > 0
+    (await copy(files, turnRefs, context.artifacts)).length > 0
       ? { reason: "artifact_missing" as const }
       : offlineReason(turn, later);
   const sandbox = sandboxResults(turn.events);
   const extensions = extensionScript(turn.events);
-  const prefix = line0(turn, context.artifacts);
+  const prefix = await line0(turn, context.artifacts);
   if (sandbox !== undefined) files.set("sandbox.json", sandbox);
   if (extensions !== undefined) files.set("extensions.json", extensions);
   if (prefix !== undefined) files.set("line0.json", prefix);
@@ -263,22 +269,22 @@ function checkMust(
     : invalid(`must ${missed.type} matches nothing the recorded turn appended`);
 }
 
-export function saveCase(
+export async function saveCase(
   log: LogStore,
   branchId: BranchId,
   name: string,
   options: SaveCaseOptions,
   context: SaveContext,
-): Result<SavedCase, LogError> {
+): Promise<Result<SavedCase, LogError>> {
   const valid = checkRequest(options, name, context.sandbox);
   if (!valid.ok) return valid;
-  const read = log.read(branchId);
+  const read = await log.read(branchId);
   if (!read.ok) return read;
   const turn = findTurn(read.value, options.at);
   if (!turn.ok) return turn;
   const met = checkMust(options.expect.must, turn.value.events);
   if (!met.ok) return met;
-  const built = caseFiles({
+  const built = await caseFiles({
     read: read.value,
     turn: turn.value,
     name,

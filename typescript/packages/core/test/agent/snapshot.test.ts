@@ -31,13 +31,13 @@ const A = "/workspace/a.txt";
 
 async function outcome<T>(result: RunResult<T>) {
   const { log } = await openStore(result.thread.store);
-  const chain = unwrap(log.read(result.thread.branch));
+  const chain = unwrap(await log.read(result.thread.branch));
   return {
     snapshots: knownEvents(chain).flatMap((e) =>
       e.type === "snapshot" ? [e.data] : [],
     ),
     forkPoints: reduce(chain, Date.now()).fork_points.length,
-    rows: unwrap(log.ledger.rows()).map((r) => [r.kind, r.state]),
+    rows: unwrap(await log.ledger.rows()).map((r) => [r.kind, r.state]),
   };
 }
 

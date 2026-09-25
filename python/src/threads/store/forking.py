@@ -1,7 +1,6 @@
 """A child branch in two steps: `forking` with its header and lease, then its
 `fork` event and final state once whatever it restores is in hand."""
 
-import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
 
@@ -13,6 +12,7 @@ from threads.redaction import SecretInStoredBytesError, published
 from threads.reduce import Fold
 from threads.result import Err, Ok
 from threads.store import lease
+from threads.store.conn import Conn
 from threads.store.lease import TTL_MS, Lease, Owner
 from threads.store.lines import Draft, Position, header_line, stored_secret
 from threads.store.opening import opening
@@ -112,7 +112,7 @@ def start_child(
     return Ok(ChildStart(row, (event, line), fold, content))
 
 
-def publish_fork(conn: sqlite3.Connection, start: ChildStart, held: Lease) -> ParseError | None:
+def publish_fork(conn: Conn, start: ChildStart, held: Lease) -> ParseError | None:
     """Step 4 on the store's thread, unless a value registered since `start_child` checked the
     fork event is in its content: registration is paused until it is durable (C5)."""
     try:

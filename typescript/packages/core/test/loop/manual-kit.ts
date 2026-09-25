@@ -2,7 +2,7 @@ import { sha256Hex } from "../../src/hash";
 import type { LoopExtension } from "../../src/hooks/types";
 import type { EventId, KnownEvent, Policy } from "../../src/log";
 import { type LoopConfig, resume } from "../../src/loop";
-import { compactionSide, refReader, render } from "../../src/render";
+import { compactionSide, renderFrom } from "../../src/render";
 import type { EventDraft } from "../../src/store";
 import { ROOT, unwrap, userInput } from "../store/helpers";
 import { events, type Harness, harness } from "./harness";
@@ -41,12 +41,12 @@ const turnDone: EventDraft = {
 };
 
 /** first input and its end, the request, then the next input: the log a crash left. */
-export function asked(
+export async function asked(
   responses: readonly unknown[],
   policy?: Policy,
   before: readonly EventDraft[] = [],
   idle: readonly EventDraft[] = [],
-): Harness {
+): Promise<Harness> {
   return harness(
     [],
     [
@@ -69,22 +69,24 @@ export async function resumeOnce(
   config: Partial<LoopConfig> = {},
 ): Promise<readonly KnownEvent[]> {
   h.clock.now += 60_000;
-  const writer = unwrap(h.store.acquire(ROOT, `owner-${h.clock.now}`));
+  const writer = unwrap(await h.store.acquire(ROOT, `owner-${h.clock.now}`));
   const seq = writer.chain.fold.seq;
   await resume(writer, h.artifacts, h.config(config));
-  writer.release();
+  await writer.release();
   return events(writer).filter((e) => e.seq > seq);
 }
 
 /** Appends drafts built from the current log, as the crashed owner did. */
-export function crashed(
+export async function crashed(
   h: Harness,
-  build: (log: readonly KnownEvent[]) => readonly EventDraft[],
-): void {
+  build: (
+    log: readonly KnownEvent[],
+  ) => readonly EventDraft[] | Promise<readonly EventDraft[]>,
+): Promise<void> {
   h.clock.now += 1;
-  const writer = unwrap(h.store.acquire(ROOT, `crashed-${h.clock.now}`));
-  unwrap(writer.append(build(events(writer))));
-  writer.release();
+  const writer = unwrap(await h.store.acquire(ROOT, `crashed-${h.clock.now}`));
+  unwrap(await writer.append(await build(events(writer))));
+  await writer.release();
 }
 
 export function requestOf(log: readonly KnownEvent[]): EventId {
@@ -94,15 +96,15 @@ export function requestOf(log: readonly KnownEvent[]): EventId {
 }
 
 /** The side request the crashed owner sent: its bytes stored as Render v1 makes them. */
-export function side(
+export async function side(
   h: Harness,
   log: readonly KnownEvent[],
   attempt: number,
-): EventDraft {
+): Promise<EventDraft> {
   const cause = requestOf(log);
-  const rendered = render(
+  const rendered = await renderFrom(
     log,
-    refReader(h.artifacts),
+    h.artifacts,
     compactionSide(log, cause),
   );
   const { bytes, prefix } = unwrap(rendered);
@@ -116,7 +118,7 @@ export function side(
       purpose: "compaction",
       cause_event_id: cause,
       request_ref: {
-        sha256: h.artifacts.put(bytes),
+        sha256: await h.artifacts.put(bytes),
         bytes: bytes.length,
         media_type: "application/x-ndjson",
       },

@@ -27,9 +27,10 @@ from functools import partial
 from pathlib import Path
 from typing import Final
 
+from jobs.stores import drill_store
 from pydantic import JsonValue, TypeAdapter
 
-from threads import agent, extension, scripted_model, sqlite
+from threads import agent, extension, scripted_model
 from threads.agents.context import RunContext
 from threads.agents.store import open_store, scoped
 from threads.hooks.types import ModelGate
@@ -184,7 +185,7 @@ def settled(fold: Fold | None) -> bool:
 async def serve(where: Path) -> None:
     if os.environ.get("DRILL_GO") == "1":
         await started(where)
-    store = sqlite(str(where))
+    store = drill_store(where)
     before = await read(await open_store(scoped(store, TEAM)))
     # A restart answers only what the log has not: the script is the model's, not the process's.
     model = scripted_model({"responses": [DONE] if before is None or not before.responses else []})
@@ -231,7 +232,7 @@ async def until(probe: Callable[[], Awaitable[bool]]) -> None:
 
 async def schedule(where: Path) -> None:
     occurrences = _OCCURRENCES.validate_json(os.environ["DRILL_OCCURRENCES"])
-    store = sqlite(str(where))
+    store = drill_store(where)
     answers: list[JsonValue] = [DONE] * len(occurrences)
     model = scripted_model({"responses": answers})
     model.before_send = lambda _r: record(where / "model.jsonl", {})

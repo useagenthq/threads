@@ -4,12 +4,12 @@ Both run inside one `BEGIN IMMEDIATE` transaction, so a check and the write it g
 split by another process.
 """
 
-import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from threads.log import BranchId, ParseError
 from threads.store import approvals, questions
+from threads.store.conn import Conn
 from threads.store.sql import Branch, branch, insert_branch, insert_events, root, transaction
 from threads.store.verify import StoredEvent
 
@@ -33,8 +33,8 @@ class Owner:
     lease: Lease
 
 
-def _lease(conn: sqlite3.Connection, branch_id: BranchId) -> Lease | None:
-    row: tuple[object, object, object] | None = conn.execute(
+def _lease(conn: Conn, branch_id: BranchId) -> Lease | None:
+    row = conn.execute(
         "SELECT holder_id, epoch, expires_at FROM leases WHERE branch_id = ?", (branch_id,)
     ).fetchone()
     if row is None:
@@ -45,7 +45,7 @@ def _lease(conn: sqlite3.Connection, branch_id: BranchId) -> Lease | None:
     return Lease(holder, epoch, expires)
 
 
-def _put(conn: sqlite3.Connection, branch_id: BranchId, lease: Lease) -> None:
+def _put(conn: Conn, branch_id: BranchId, lease: Lease) -> None:
     conn.execute(
         "INSERT INTO leases (branch_id, holder_id, epoch, expires_at) VALUES (?, ?, ?, ?)"
         " ON CONFLICT (branch_id) DO UPDATE SET holder_id = excluded.holder_id,"
@@ -55,7 +55,7 @@ def _put(conn: sqlite3.Connection, branch_id: BranchId, lease: Lease) -> None:
 
 
 def take(
-    conn: sqlite3.Connection, branch_id: BranchId, holder_id: str, chain_epoch: int, now: int
+    conn: Conn, branch_id: BranchId, holder_id: str, chain_epoch: int, now: int
 ) -> Lease | ParseError:
     """Acquires the lease if it is free or expired. The epoch is max(lease epoch, max epoch in
     the resolved chain) + 1, so a child continues its parent's epochs (wire rule 11)."""
@@ -70,25 +70,21 @@ def take(
     return lease
 
 
-def _stale(conn: sqlite3.Connection, branch_id: BranchId, mine: Lease, now: int) -> bool:
+def _stale(conn: Conn, branch_id: BranchId, mine: Lease, now: int) -> bool:
     current = _lease(conn, branch_id)
     if current is None or current.expires_at <= now:
         return True
     return (current.holder_id, current.epoch) != (mine.holder_id, mine.epoch)
 
 
-def check(
-    conn: sqlite3.Connection, branch_id: BranchId, mine: Lease, now: int
-) -> ParseError | None:
+def check(conn: Conn, branch_id: BranchId, mine: Lease, now: int) -> ParseError | None:
     """The gateway fence: the lease is still ours, live, at our epoch."""
     if _stale(conn, branch_id, mine, now):
         return ParseError("stale_epoch", f"epoch {mine.epoch} no longer holds the lease")
     return None
 
 
-def renew(
-    conn: sqlite3.Connection, branch_id: BranchId, mine: Lease, now: int
-) -> Lease | ParseError:
+def renew(conn: Conn, branch_id: BranchId, mine: Lease, now: int) -> Lease | ParseError:
     """Extends a live lease by one TTL. A lost or expired lease is never revived: the holder
     must stop and re-acquire, which takes a new epoch."""
     with transaction(conn):
@@ -99,7 +95,7 @@ def renew(
     return renewed
 
 
-def release(conn: sqlite3.Connection, branch_id: BranchId, mine: Lease, now: int) -> None:
+def release(conn: Conn, branch_id: BranchId, mine: Lease, now: int) -> None:
     """Hands a live lease back at once, only while this holder and epoch still hold it: a stale
     holder never clears a newer owner's lease. Only the lease changes; in-doubt work stays in the
     log for recovery."""
@@ -140,17 +136,17 @@ class Head:
     expected_seq: int
 
 
-type Build = Callable[[sqlite3.Connection], Batch | Refused]
+type Build = Callable[[Conn], Batch | Refused]
 """The batch of an append, made inside its transaction after the fence (a decided append reads
 the store to make it); Refused rolls back and leaves the writer usable."""
 
-type After = Callable[[sqlite3.Connection, Branch, Batch], ParseError | None]
+type After = Callable[[Conn, Branch, Batch], ParseError | None]
 """Runs after the rows, in their transaction: the index hooks (`threads.store.indexing`), then a
 companion's host rows. The writer passes it in; an error rolls the append back."""
 
 
 def append(
-    conn: sqlite3.Connection, head: Head, now: int, build: Build, after: After
+    conn: Conn, head: Head, now: int, build: Build, after: After
 ) -> Batch | ParseError | Refused:
     """The conditional append: the lease is still ours and live, and the committed head is where
     the writer expects it. Then `build` makes the batch, and the rows and the head move together,
@@ -179,7 +175,7 @@ def append(
     return batch
 
 
-def create(conn: sqlite3.Connection, row: Branch, lease: Lease | None) -> ParseError | None:
+def create(conn: Conn, row: Branch, lease: Lease | None) -> ParseError | None:
     """Inserts a new branch and, when given, its first lease, in one transaction. A child
     starts `forking` with the lease that fences its fork (step 1): it is
     neither listed nor runnable until `finish_fork`."""
@@ -187,30 +183,33 @@ def create(conn: sqlite3.Connection, row: Branch, lease: Lease | None) -> ParseE
         return insert_new(conn, row, lease)
 
 
-def insert_new(conn: sqlite3.Connection, row: Branch, lease: Lease | None) -> ParseError | None:
+def insert_new(conn: Conn, row: Branch, lease: Lease | None) -> ParseError | None:
     """`create` in the caller's transaction: the branch `branch.open` inserts inside another
     writer's append."""
     if branch(conn, row.branch_id) is not None:
         return ParseError("seq_conflict", f"branch {row.branch_id} already exists")
-    insert_branch(conn, row)
+    if not insert_branch(conn, row):
+        return ParseError("invalid_transition", f"thread {row.thread_id} already exists")
     if lease is not None:
         _put(conn, row.branch_id, lease)
     return None
 
 
-def root_or_create(conn: sqlite3.Connection, row: Branch) -> BranchId:
+def root_or_create(conn: Conn, row: Branch) -> BranchId:
     """The thread's root, else `row` inserted as it, in one transaction: processes racing to
     start a thread all get the root that stood first."""
     with transaction(conn):
         found = root(conn, row.thread_id, row.tenant_id)
         if found is not None:
             return found
-        insert_branch(conn, row)
+        if not insert_branch(conn, row):
+            # Only another tenant's thread of this id has a root: a thread id is one tenant's.
+            raise ValueError(f"thread {row.thread_id} belongs to another tenant")
     return row.branch_id
 
 
 def finish_fork(
-    conn: sqlite3.Connection,
+    conn: Conn,
     row: Branch,
     fork: tuple[StoredEvent, bytes],
     mine: Lease,
@@ -233,7 +232,7 @@ def finish_fork(
     return None
 
 
-def fail_fork(conn: sqlite3.Connection, branch_id: BranchId) -> None:
+def fail_fork(conn: Conn, branch_id: BranchId) -> None:
     """A fork that can't finish: its forking row becomes `fork_failed` and is never listed."""
     with transaction(conn):
         conn.execute(

@@ -7,6 +7,7 @@ import { fixture, unwrap } from "../store/helpers";
 import {
   assertTeamReplays,
   caseLog,
+  query,
   TENANT,
   teamIndexRows,
   teamOf,
@@ -22,23 +23,27 @@ const TEAM_LOG = BranchId.parse("0192b000-0000-7000-8000-0000000000b3");
 const Rows = z.array(z.record(z.string(), z.unknown()));
 
 describe("an import folds the index again", () => {
-  test("a background child still running has its wake row", () => {
+  test("a background child still running has its wake row", async () => {
     const c = loadCase("legacy-wake-pending-row");
-    const { store, db } = caseStore(c);
-    unwrap(store.importLog(c.log ?? new Uint8Array()));
+    const { store, db } = await caseStore(c);
+    unwrap(await store.importLog(c.log ?? new Uint8Array()));
     expect(
       Rows.parse(
-        db.all("SELECT branch_id, child_thread_id FROM pending_wakes", []),
+        await query(
+          db,
+          "SELECT branch_id, child_thread_id FROM pending_wakes",
+          [],
+        ),
       ),
     ).toEqual(Rows.parse(plain(c.projections?.["pending_wakes"])));
   });
 
-  test("a team imported log by log has the rows its appends wrote", () => {
+  test("a team imported log by log has the rows its appends wrote", async () => {
     const lead = verified(caseLog("team-settle-wakes-lead", "lead")).events;
     const team = teamOf([verified(caseLog("team-settle-wakes-lead", "lead"))]);
-    const written = fixture(TENANT);
+    const written = await fixture(TENANT);
     const writer = unwrap(
-      written.store.openBranch({
+      await written.store.openBranch({
         threadId: ThreadId.parse("0192a000-0000-7000-8000-0000000000b1"),
         branchId: LEAD,
         lease: { holderId: "lead", ttlMs: 30_000 },
@@ -48,20 +53,22 @@ describe("an import folds the index again", () => {
       }),
     );
     expect(writer).not.toBe(ALREADY_OPEN);
-    const imported = fixture(TENANT);
+    const imported = await fixture(TENANT);
     for (const branch of [LEAD, TEAM_LOG])
       unwrap(
-        imported.store.importLog(unwrap(written.store.exportBranch(branch))),
+        await imported.store.importLog(
+          unwrap(await written.store.exportBranch(branch)),
+        ),
       );
-    const rows = (db: typeof written.db) => {
-      const { team_feed: _feed, ...rest } = teamIndexRows(
+    const rows = async (db: typeof written.db) => {
+      const { team_feed: _feed, ...rest } = await teamIndexRows(
         db,
         [team],
         [LEAD, TEAM_LOG],
       );
       return rest;
     };
-    expect(rows(imported.db)).toEqual(rows(written.db));
-    assertTeamReplays(imported.store, team);
+    expect(await rows(imported.db)).toEqual(await rows(written.db));
+    await assertTeamReplays(imported.store, team);
   });
 });

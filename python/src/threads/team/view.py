@@ -3,7 +3,6 @@ batch's drafts. The index moves only at commit, so a read later in the same batc
 the batch already took, closed, finished or resumed (the reference re-reads its log after every
 event it adds: spec/tools/fixtures/ops_world.py)."""
 
-import sqlite3
 from collections.abc import Sequence
 
 from pydantic import JsonValue
@@ -11,6 +10,7 @@ from pydantic import JsonValue
 from threads.log import MailEnvelope, ParkAddress, WaitStartedData
 from threads.reduce import Fold
 from threads.reduce.handlers import to_json
+from threads.store.conn import Conn
 from threads.team.batch import Batch
 from threads.team.rows import ask_row
 
@@ -74,7 +74,7 @@ def settle_monitors(fold: Fold, batch: Batch, branch: str) -> dict[str, str]:
     return out
 
 
-def ask_open(conn: sqlite3.Connection, branch: str, ask_id: str, batch: Batch) -> bool:
+def ask_open(conn: Conn, branch: str, ask_id: str, batch: Batch) -> bool:
     """The ask is this branch's and open: its row says so and the batch hasn't closed it."""
     closed = any(d.type == "ask_closed" and d.data.get("ask_id") == ask_id for d in batch.drafts)
     row = ask_row(conn, ask_id)

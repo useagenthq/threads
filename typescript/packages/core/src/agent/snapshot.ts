@@ -35,5 +35,5 @@ export async function snapshotTurn(
   const captured = await captureSnapshot(ledger, writer, sandbox, live.value);
   // ponytail: a refused capture only costs this turn its fork point; it is not reported yet.
   if (captured.ok)
-    writer.append([snapshotEvent(captured.value, revision?.value)]);
+    await writer.append([snapshotEvent(captured.value, revision?.value)]);
 }

@@ -1,12 +1,12 @@
 import { containsSecret } from "../redact";
 import { knownEvents } from "../reduce";
-import { refReader, verifyRequests } from "../render";
+import { verifyRequests } from "../render";
 import { err, ok, type Result } from "../result";
 import { type Segment, type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
 import { projectApprovals } from "./approvals";
 import type { ArtifactStore } from "./artifacts";
-import type { SqliteDriver } from "./driver";
+import type { Tx } from "./driver";
 import { knownOf } from "./indexing";
 import { projectQuestions } from "./questions";
 import {
@@ -22,10 +22,10 @@ import {
  * the artifacts already stored (C7, Render v1). Imported bytes are stored exactly as exported,
  * torn tail included, so one holding a registered value is refused (C5).
  */
-export function verifiedImport(
+export async function verifiedImport(
   bytes: Uint8Array,
   artifacts: ArtifactStore,
-): Result<VerifiedLog, LogError> {
+): Promise<Result<VerifiedLog, LogError>> {
   if (containsSecret(bytes))
     return err(
       logError(
@@ -35,7 +35,7 @@ export function verifiedImport(
     );
   const log = verifyExport(bytes);
   if (!log.ok) return log;
-  const replayed = verifyRequests(knownEvents(log.value), refReader(artifacts));
+  const replayed = await verifyRequests(knownEvents(log.value), artifacts);
   return replayed.ok ? log : replayed;
 }
 
@@ -52,13 +52,13 @@ export type ImportTarget = {
  * verified head keeps that evidence and stays inspection-only until recovery repairs it.
  */
 // ponytail: an ancestor stored shorter than the segment is refused, not extended.
-export function importSegments(
-  db: SqliteDriver,
+export async function importSegments(
+  tx: Tx,
   log: VerifiedLog,
   target: ImportTarget,
-): Result<void, LogError> {
+): Promise<Result<void, LogError>> {
   for (const index of log.segments.keys()) {
-    const stored = importSegment(db, log, target, index);
+    const stored = await importSegment(tx, log, target, index);
     if (!stored.ok) return stored;
   }
   return ok(undefined);
@@ -68,25 +68,25 @@ export function importSegments(
  * A new segment is inserted, unless another tenant owns its thread (`branch_exists`, the owner
  * unnamed). A stored one must hold the same lines and, for the leaf, the same head evidence.
  */
-function importSegment(
-  db: SqliteDriver,
+async function importSegment(
+  tx: Tx,
   log: VerifiedLog,
   target: ImportTarget,
   index: number,
-): Result<void, LogError> {
+): Promise<Result<void, LogError>> {
   const segment = log.segments[index];
   if (segment === undefined) throw new Error("segment index in range");
   const leaf = index === log.segments.length - 1;
-  const existing = getBranch(db, segment.header.branch_id);
+  const existing = await getBranch(tx, segment.header.branch_id);
   if (!existing.ok) return existing;
   const row = existing.value;
   if (row === undefined) {
     const thread = segment.header.thread_id;
-    const owner = threadOwner(db, thread);
+    const owner = await threadOwner(tx, thread);
     if (!owner.ok) return owner;
     if (owner.value !== undefined && owner.value !== target.tenantId)
       return err(logError("branch_exists", `thread ${thread} already exists`));
-    return insertSegment(db, log, target, index, leaf);
+    return await insertSegment(tx, log, target, index, leaf);
   }
   if (row.tenant_id !== target.tenantId)
     return err(logError("branch_not_found", `no branch ${row.branch_id}`));
@@ -97,22 +97,22 @@ function importSegment(
       row.head_verified === (log.headVerified ? 1 : 0) &&
       row.dropped_ref === target.droppedRef);
   return sameEvidence
-    ? sameLines(db, segment, row.header_line)
+    ? await sameLines(tx, segment, row.header_line)
     : err(conflict(segment));
 }
 
-function insertSegment(
-  db: SqliteDriver,
+async function insertSegment(
+  tx: Tx,
   log: VerifiedLog,
   target: ImportTarget,
   index: number,
   leaf: boolean,
-): Result<void, LogError> {
+): Promise<Result<void, LogError>> {
   const segment = log.segments[index];
   if (segment === undefined) throw new Error("segment index in range");
   const fork = index === 0 ? undefined : segment.events[0]?.event;
   const inspect = leaf && (log.fold.repair || !log.headVerified);
-  insertBranch(db, {
+  const inserted = await insertBranch(tx, {
     branch_id: segment.header.branch_id,
     thread_id: segment.header.thread_id,
     tenant_id: target.tenantId,
@@ -125,18 +125,25 @@ function insertSegment(
     head_verified: leaf && !log.headVerified ? 0 : 1,
     dropped_ref: leaf ? target.droppedRef : null,
   });
-  insertEvents(db, segment.header.branch_id, segment.events);
+  if (!inserted)
+    return err(
+      logError(
+        "branch_exists",
+        `thread ${segment.header.thread_id} already exists`,
+      ),
+    );
+  await insertEvents(tx, segment.header.branch_id, segment.events);
   // The historical projector: rows from the segment's settlement events, never today's clock,
   // so a grant made before its challenge expired imports as granted.
   const { thread_id, branch_id } = segment.header;
   const events = knownOf(segment.events);
-  projectApprovals(
-    db,
+  await projectApprovals(
+    tx,
     { tenant_id: target.tenantId, thread_id, branch_id },
     events,
   );
-  projectQuestions(
-    db,
+  await projectQuestions(
+    tx,
     { tenant: target.tenantId, branch: branch_id },
     events,
     (e) => e.time,
@@ -144,13 +151,13 @@ function insertSegment(
   return ok(undefined);
 }
 
-function sameLines(
-  db: SqliteDriver,
+async function sameLines(
+  tx: Tx,
   segment: Segment,
   headerLine: Uint8Array,
-): Result<void, LogError> {
+): Promise<Result<void, LogError>> {
   const through = segment.events.at(-1)?.event.seq ?? 0;
-  const lines = eventLines(db, segment.header.branch_id, through);
+  const lines = await eventLines(tx, segment.header.branch_id, through);
   if (!lines.ok) return lines;
   const same =
     equal(headerLine, segment.bytes) &&

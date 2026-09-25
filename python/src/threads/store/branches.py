@@ -1,7 +1,6 @@
 """The store's branches and forks: each branch's row, and the fork steps that create a child
 branch. `SqliteStore` is this plus the log's reads, writes and artifacts."""
 
-import sqlite3
 from collections.abc import Mapping
 
 from pydantic import JsonValue
@@ -10,6 +9,7 @@ from threads.log import BranchId, ParseError
 from threads.result import Err, Ok
 from threads.store import lease, sql
 from threads.store.artifacts import ArtifactStore
+from threads.store.conn import Conn
 from threads.store.forking import Forking, ForkRequest, forking, publish_fork, start_child
 from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
@@ -81,7 +81,7 @@ class BranchStore:
         releases what it created and marks it `fork_failed`."""
         tenant, now = self._tenant, clock()
 
-        def take_over(conn: sqlite3.Connection) -> tuple[lease.Owner, ...]:
+        def take_over(conn: Conn) -> tuple[lease.Owner, ...]:
             owners: list[lease.Owner] = []
             for child in sql.forking(conn, tenant):
                 taken = lease.take(conn, child, holder_id, 0, now)
@@ -102,7 +102,7 @@ class BranchStore:
         owned = await self._owned(parent)
         if isinstance(owned, Err):
             return owned
-        prefix = await self._worker.call(lambda c: sql.prefix(c, parent, at_seq))
+        prefix = await self._worker.read(lambda c: sql.prefix(c, parent, at_seq))
         read = verify_export(prefix, now)
         if isinstance(read, Err):
             return Err(corrupt(read.error))
@@ -111,7 +111,7 @@ class BranchStore:
         return read
 
     async def _owned(self, branch_id: BranchId) -> Ok[sql.Branch] | Err[ParseError]:
-        found = await self._worker.call(lambda c: sql.branch(c, branch_id))
+        found = await self._worker.read(lambda c: sql.branch(c, branch_id))
         if found is None or found.tenant_id != self._tenant:
             return Err(ParseError("branch_not_found", f"no branch {branch_id}"))
         return Ok(found)

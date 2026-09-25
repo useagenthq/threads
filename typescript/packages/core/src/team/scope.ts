@@ -14,7 +14,7 @@ export const inScope = (scope: Scope, team: string): boolean =>
   scope === undefined || scope === team;
 
 /** `AND` clause and params that keep an update or delete inside the scope. */
-export const SCOPED = "AND (? IS NULL OR team_id = ?)";
+export const SCOPED = "AND (CAST(? AS TEXT) IS NULL OR team_id = ?)";
 export const scoped = (scope: Scope): readonly SqlValue[] => [
   scope ?? null,
   scope ?? null,

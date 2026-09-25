@@ -15,16 +15,18 @@ import { type Item, itemsOf, openWaits, parkedOn } from "./view";
 type ParkReason = EventOf<"parked">["data"]["reason"];
 
 /** The one member_parked notice of a member's first park, after the parked draft. */
-export function parkNotice(
+export async function parkNotice(
   ctx: Omit<SettleContext, "put">,
   parked: { readonly eventId: string; readonly reason: ParkReason },
-): void {
-  const row = ownRows(ctx.db, ctx.threadId).find((r) => r.role === "member");
+): Promise<void> {
+  const row = (await ownRows(ctx.tx, ctx.threadId)).find(
+    (r) => r.role === "member",
+  );
   if (row === undefined) return;
-  const task = monitorsOn(ctx.db, row.team_id, row).find(
+  const task = (await monitorsOn(ctx.tx, row.team_id, row)).find(
     (m) => m.kind === "task",
   );
-  const team = teamRow(ctx.db, row.team_id);
+  const team = await teamRow(ctx.tx, row.team_id);
   if (task === undefined || team === undefined) return;
   ctx.batch.add(
     sent({
@@ -32,7 +34,7 @@ export function parkNotice(
       kind: "member_parked",
       team: row.team_id,
       from: refOf(team, row),
-      to: addressOf(ctx.db, row.team_id, task.watcher_branch_id),
+      to: await addressOf(ctx.tx, row.team_id, task.watcher_branch_id),
       provenance: ctx.provenance,
       causal: { thread_id: ctx.threadId, event_id: parked.eventId },
       monitor_id: task.monitor_id,
@@ -45,15 +47,16 @@ export function parkNotice(
  * The starter takes a member_parked notice as control mail: its receipt, and a park on the
  * member while the task monitor it names is still live. The team log never parks.
  */
-export function takeParkNotice(
+export async function takeParkNotice(
   ctx: AppendContext,
   env: MailEnvelope,
   teamLog: boolean,
-): boolean {
+): Promise<boolean> {
   const monitor = env.monitor_id ?? "";
   const live =
-    ctx.db.all("SELECT 1 FROM monitors WHERE monitor_id = ?", [monitor])
-      .length > 0;
+    (await (
+      await ctx.tx.all("SELECT 1 FROM monitors WHERE monitor_id = ?", [monitor])
+    ).length) > 0;
   ctx.batch.add(received(env));
   if (!live || teamLog) return false;
   const address: ParkAddress = { kind: "member", id: monitor };
@@ -72,7 +75,10 @@ export function takeParkNotice(
  * is an opened ask or wait of this log (a call the batch closes no longer counts). Each gets one
  * park, and the member's first park carries its member_parked notice. The team log never parks.
  */
-export function parkCall(ctx: CallContext, caller: Caller): void {
+export async function parkCall(
+  ctx: CallContext,
+  caller: Caller,
+): Promise<void> {
   const addresses = waitingOn(ctx);
   if (addresses === undefined) return;
   let first = !itemsOf(ctx.chain, ctx.batch).some((e) => e.type === "parked");
@@ -87,9 +93,9 @@ export function parkCall(ctx: CallContext, caller: Caller): void {
     });
     if (!first) continue;
     first = false;
-    parkNotice(
+    await parkNotice(
       {
-        db: ctx.db,
+        tx: ctx.tx,
         batch: ctx.batch,
         threadId: ctx.call.thread_id,
         branchId: ctx.call.branch_id,

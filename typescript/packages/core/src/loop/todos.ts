@@ -10,10 +10,10 @@ import type { Halt } from "./types";
 
 const REMINDER_TURNS = 10;
 
-export function writeTodos(
+export async function writeTodos(
   s: Session,
   call: EventOf<"tool_call">,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const { call_id } = call.data;
   // Arguments already parsed before authorization; ids must also be unique (rule 24).
   const { todos } = TodoWriteInput.parse(call.data.input);
@@ -44,7 +44,7 @@ export function writeTodos(
  * Right after a turn's input, before its first request: with open items and 10 completed turns
  * since the last todo_write or reminder, show the list once as untrusted reference.
  */
-export function todoReminder(s: Session): Halt | undefined {
+export async function todoReminder(s: Session): Promise<Halt | undefined> {
   const open = s.fold.todos.filter((t) => t.status !== "completed");
   if (open.length === 0) return undefined;
   const turn = turnEvents(s.events, s.fold);

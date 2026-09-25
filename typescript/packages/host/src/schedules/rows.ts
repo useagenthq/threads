@@ -5,8 +5,8 @@ import {
   JsonValue,
   NonEmpty,
   parseRows,
-  type SqliteDriver,
   ThreadId,
+  type Tx,
 } from "@threads/core/host";
 import { z } from "zod";
 
@@ -57,27 +57,27 @@ const PENDING = `SELECT schedule_id, occurrence_at, thread_id, reason, agent, in
   FROM schedule_occurrences WHERE tenant_id = ? AND state = 'pending'`;
 
 /** The tenant's pending rows in occurrence order, whatever schedules are configured now. */
-export function pendingRows(
-  db: SqliteDriver,
+export async function pendingRows(
+  tx: Tx,
   tenant: string,
-): readonly Pending[] {
+): Promise<readonly Pending[]> {
   return rows(
     Row,
-    db.all(`${PENDING} ORDER BY occurrence_at, thread_id, schedule_id`, [
+    await tx.all(`${PENDING} ORDER BY occurrence_at, thread_id, schedule_id`, [
       tenant,
     ]),
   );
 }
 
 /** One thread's pending rows, in occurrence order. */
-export function pendingOf(
-  db: SqliteDriver,
+export async function pendingOf(
+  tx: Tx,
   tenant: string,
   threadId: ThreadId,
-): readonly Pending[] {
+): Promise<readonly Pending[]> {
   return rows(
     Row,
-    db.all(
+    await tx.all(
       `${PENDING} AND thread_id = ? ORDER BY occurrence_at, thread_id, schedule_id`,
       [tenant, threadId],
     ),
@@ -85,25 +85,31 @@ export function pendingOf(
 }
 
 /** Whether the occurrence's key is already reserved, in any state. */
-export function reserved(db: SqliteDriver, tenant: string, row: Due): boolean {
+export async function reserved(
+  tx: Tx,
+  tenant: string,
+  row: Due,
+): Promise<boolean> {
   return (
-    db.all(
-      `SELECT 1 FROM schedule_occurrences
+    (
+      await tx.all(
+        `SELECT 1 FROM schedule_occurrences
         WHERE tenant_id = ? AND schedule_id = ? AND occurrence_at = ?`,
-      [tenant, row.schedule_id, row.occurrence_at],
+        [tenant, row.schedule_id, row.occurrence_at],
+      )
     ).length > 0
   );
 }
 
 /** Inserts a pending row; a key another scheduler reserved first wins silently. */
-export function insertPending(
-  db: SqliteDriver,
+export async function insertPending(
+  tx: Tx,
   tenant: string,
   threadId: ThreadId,
   row: Due,
   now: number,
-): void {
-  db.run(
+): Promise<void> {
+  await tx.run(
     `INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state, reason,
       thread_id, claimed_at, agent, input_json, timezone)
       VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
@@ -122,12 +128,12 @@ export function insertPending(
 }
 
 /** Marks a thread's undecided pending rows as overlaps: its log shows a turn still open. */
-export function markOverlaps(
-  db: SqliteDriver,
+export async function markOverlaps(
+  tx: Tx,
   tenant: string,
   threadId: ThreadId,
-): void {
-  db.run(
+): Promise<void> {
+  await tx.run(
     `UPDATE schedule_occurrences SET reason = 'overlap'
       WHERE tenant_id = ? AND thread_id = ? AND state = 'pending' AND reason IS NULL`,
     [tenant, threadId],
@@ -138,38 +144,40 @@ export function markOverlaps(
  * Decides a pending row, in the transaction of the append that logs it at `seq`. False when it
  * is no longer pending (another scheduler decided it): the caller rolls its append back.
  */
-export function decide(
-  db: SqliteDriver,
+export async function decide(
+  tx: Tx,
   tenant: string,
   row: Pending,
   outcome: { readonly reason: Reason | null; readonly seq: number },
-): boolean {
+): Promise<boolean> {
   return (
-    db.all(
-      `UPDATE schedule_occurrences SET state = ?, reason = ?, logged_seq = ?
+    (
+      await tx.all(
+        `UPDATE schedule_occurrences SET state = ?, reason = ?, logged_seq = ?
         WHERE tenant_id = ? AND schedule_id = ? AND occurrence_at = ? AND state = 'pending'
         RETURNING occurrence_at`,
-      [
-        outcome.reason === null ? "fired" : "skipped",
-        outcome.reason,
-        outcome.seq,
-        tenant,
-        row.schedule_id,
-        row.occurrence_at,
-      ],
+        [
+          outcome.reason === null ? "fired" : "skipped",
+          outcome.reason,
+          outcome.seq,
+          tenant,
+          row.schedule_id,
+          row.occurrence_at,
+        ],
+      )
     ).length === 1
   );
 }
 
 /** The latest reserved occurrence of a schedule, in any state. */
-export function lastOccurrence(
-  db: SqliteDriver,
+export async function lastOccurrence(
+  tx: Tx,
   tenant: string,
   scheduleId: string,
-): number | undefined {
+): Promise<number | undefined> {
   const [last] = rows(
     z.strictObject({ at: Int.nullable() }),
-    db.all(
+    await tx.all(
       `SELECT max(occurrence_at) AS at FROM schedule_occurrences
         WHERE tenant_id = ? AND schedule_id = ?`,
       [tenant, scheduleId],
@@ -179,13 +187,13 @@ export function lastOccurrence(
 }
 
 /** Every thread the tenant's schedules have had: what recovery walks. */
-export function scheduleThreads(
-  db: SqliteDriver,
+export async function scheduleThreads(
+  tx: Tx,
   tenant: string,
-): readonly ThreadId[] {
+): Promise<readonly ThreadId[]> {
   return rows(
     z.strictObject({ thread_id: ThreadId }),
-    db.all(
+    await tx.all(
       "SELECT DISTINCT thread_id FROM schedule_threads WHERE tenant_id = ?",
       [tenant],
     ),
@@ -193,14 +201,14 @@ export function scheduleThreads(
 }
 
 /** The schedule's current thread. */
-export function currentThread(
-  db: SqliteDriver,
+export async function currentThread(
+  tx: Tx,
   tenant: string,
   scheduleId: string,
-): ThreadId | undefined {
+): Promise<ThreadId | undefined> {
   const [found] = rows(
     z.strictObject({ thread_id: ThreadId }),
-    db.all(
+    await tx.all(
       `SELECT thread_id FROM schedule_threads
         WHERE tenant_id = ? AND schedule_id = ? AND current = 1`,
       [tenant, scheduleId],
@@ -210,19 +218,19 @@ export function currentThread(
 }
 
 /** Makes `threadId` the schedule's current thread; the old one stays listed for recovery. */
-export function makeCurrent(
-  db: SqliteDriver,
+export async function makeCurrent(
+  tx: Tx,
   tenant: string,
   scheduleId: string,
   threadId: ThreadId,
   now: number,
-): void {
-  db.run(
+): Promise<void> {
+  await tx.run(
     `UPDATE schedule_threads SET current = 0
       WHERE tenant_id = ? AND schedule_id = ? AND current = 1`,
     [tenant, scheduleId],
   );
-  db.run(
+  await tx.run(
     `INSERT INTO schedule_threads (tenant_id, schedule_id, thread_id, current, created_at)
       VALUES (?, ?, ?, 1, ?)`,
     [tenant, scheduleId, threadId, now],

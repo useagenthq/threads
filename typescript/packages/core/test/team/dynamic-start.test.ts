@@ -98,7 +98,7 @@ describe("a lead defines a member of a dynamic agent", () => {
     // The member's recorded requests re-render byte for byte.
     const thread = unwrap(await openThread(store, pinned.thread_id));
     expect(await thread.replay()).toEqual({ ok: true, value: undefined });
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("text that forges the block is refused with nothing started", async () => {

@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { type Budget, MemberName, type MemberRef, type ThreadId } from "../log";
 import type { Result } from "../result";
+import type { Tx } from "../store/driver";
 import { type Refusal, type Refused, refusal } from "./call";
 import type { InvalidDefinition, Resolved } from "./dynamic";
 import { bodyOf, sent } from "./mail";
@@ -34,7 +35,8 @@ export type StartPlan = {
   readonly resolved: Result<Resolved, InvalidDefinition>;
   readonly limits: TeamLimits;
   /** Every budget covering the new member has room for one request of its model. */
-  readonly headroom: (agent: string) => boolean;
+  /** Read in `tx`, the start's append. */
+  readonly headroom: (agent: string, tx: Tx) => Promise<boolean>;
   /** The new member's thread id, minted before the append. */
   readonly threadId: ThreadId;
 };
@@ -49,19 +51,19 @@ const LIVE: ReadonlySet<string> = new Set(["starting", "running"]);
 
 /** member.start: member_started and its task mail, which insert the starting row, the pending
  * task and the starter's task monitor. */
-export function start(
+export async function start(
   req: Request,
   args: { readonly agent: string; readonly task: string },
   plan: StartPlan,
-): Started | Refused {
-  const refused = startChecks(req, args.agent, plan);
+): Promise<Started | Refused> {
+  const refused = await startChecks(req, args.agent, plan);
   if (refused !== undefined) return req.refuse(refused);
   const listed = plan.agents.get(args.agent);
   if (listed === undefined) throw new Error("startChecks lists the agent");
   const team = req.team.team_id;
   const k =
     1 +
-    memberRows(req.db, team).filter(
+    (await memberRows(req.tx, team)).filter(
       (r) => r.role === "member" && r.agent === args.agent,
     ).length;
   const member = {
@@ -81,7 +83,7 @@ export function start(
       agent: args.agent,
       config_hash: listed.configHash,
       thread_id: plan.threadId,
-      parent: req.parent(startedId),
+      parent: await req.parent(startedId),
       provenance: req.provenance,
       ...(listed.budget === undefined ? {} : { budget: listed.budget }),
       ...(plan.resolved.ok ? plan.resolved.value : {}),
@@ -106,32 +108,34 @@ export function start(
  * Policy (a lead, or the operator of the team's tenant, starts), team open, the agent listed, the
  * start's chosen fields, the concurrent cap, headroom.
  */
-function startChecks(
+async function startChecks(
   req: Request,
   agent: string,
   plan: StartPlan,
-): Refusal | undefined {
+): Promise<Refusal | undefined> {
   const denied = req.decide("start", agent);
   if (denied !== undefined) return denied;
   if (req.team.closed_at !== null) return refusal("team_closed");
   if (!plan.agents.has(agent)) return refusal("unknown_agent");
   if (!plan.resolved.ok)
     return refusal("invalid_definition", plan.resolved.error);
-  const live = memberRows(req.db, req.team.team_id).filter(
+  const live = (await memberRows(req.tx, req.team.team_id)).filter(
     (r) => r.role === "member" && LIVE.has(r.state),
   );
   if (live.length >= plan.limits.concurrent) return refusal("concurrency_cap");
-  return plan.headroom(agent) ? undefined : refusal("budget_exceeded");
+  return (await plan.headroom(agent, req.tx))
+    ? undefined
+    : refusal("budget_exceeded");
 }
 
 /** mail.send: a message to a member, pending until its writer consumes it. */
-export function send(
+export async function send(
   req: Request,
   to: Target,
   text: string,
   limits: TeamLimits,
-): Sent | Refused {
-  const row = deliverable(req, "send", to, limits);
+): Promise<Sent | Refused> {
+  const row = await deliverable(req, "send", to, limits);
   if ("refused" in row) return req.refuse(row);
   req.batch.add(
     sent({
@@ -142,7 +146,7 @@ export function send(
       to: { name: row.name, generation: row.generation },
       provenance: req.provenance,
       causal: req.causal,
-      body: bodyOf(text, req.put),
+      body: await bodyOf(text, req.put),
     }),
   );
   return req.done({ id: req.mailId, status: "sent" } satisfies Sent);
@@ -150,19 +154,19 @@ export function send(
 
 /** send and ask, after the policy: team open, the member known at its generation, not ended, not
  * the sender, and its mailbox not full. */
-export function deliverable(
+export async function deliverable(
   req: Request,
   op: "send" | "ask",
   to: Target,
   limits: TeamLimits,
-): MemberRow | Refusal {
+): Promise<MemberRow | Refusal> {
   const denied = req.decide(op, to.name);
   if (denied !== undefined) return denied;
   if (req.team.closed_at !== null) return refusal("team_closed");
-  const row = to.row();
+  const row = await to.row();
   if ("refused" in row) return row;
   if (row.state === "ended") return refusal("member_ended");
   if (row.name === req.self?.name) return refusal("self");
-  const pending = pendingTo(req.db, row.team_id, row.name).length;
+  const pending = (await pendingTo(req.tx, row.team_id, row.name)).length;
   return pending >= limits.mailbox ? refusal("mailbox_full") : row;
 }

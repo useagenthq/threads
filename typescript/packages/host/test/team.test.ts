@@ -12,6 +12,7 @@ import {
   sseMessages,
   use,
 } from "./kit";
+import { sqlAll } from "./sql";
 
 // A team lead behind the host (spec/schema/README.md, "Teams"): a run started over the HTTP API
 // opens the lead's team in its first append, the lead starts a member, and the run's result is
@@ -104,7 +105,7 @@ describe("a team lead behind the host", () => {
     const { log } = await openStore(store);
     const { db } = await storeConnection(store);
     for (const id of ["morning", "evening"])
-      reserveDue(db, log, started, [
+      await reserveDue(db, log, started, [
         {
           schedule_id: id,
           occurrence_at: 60_000,
@@ -116,7 +117,7 @@ describe("a team lead behind the host", () => {
       ]);
     const teams = z
       .array(z.object({ team_id: z.string(), lead_thread_id: z.string() }))
-      .parse(db.all("SELECT team_id, lead_thread_id FROM teams", []));
+      .parse(await sqlAll(db, "SELECT team_id, lead_thread_id FROM teams", []));
     expect(teams).toHaveLength(2);
     expect(new Set(teams.map((t) => t.lead_thread_id)).size).toBe(2);
   });

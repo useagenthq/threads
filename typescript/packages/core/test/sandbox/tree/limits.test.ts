@@ -66,7 +66,7 @@ test("a 40,000-component tree path is refused in well under a second", () => {
   expect(parsed.ok ? undefined : parsed.error.code).toBe("artifact_corrupt");
 });
 
-test("the builder refuses a tree that breaks the tree rules", () => {
+test("the builder refuses a tree that breaks the tree rules", async () => {
   const bad: readonly Tree[] = [
     {
       tree_version: 1,
@@ -86,7 +86,7 @@ test("the builder refuses a tree that breaks the tree rules", () => {
   ];
   for (const tree of bad) {
     const chunks: Uint8Array[] = [];
-    const built = buildTar(
+    const built = await buildTar(
       tree,
       memoryArtifacts(),
       { uid: 1000, gid: 1000 },

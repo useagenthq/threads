@@ -201,9 +201,11 @@ describe("a tree that can't be read fails the call, naming the path", () => {
     ]);
     const [kidId] = await childIds(thread);
     const { db } = await storeConnection(store);
-    db.run(
-      `UPDATE branches SET header_line = CAST(replace(CAST(header_line AS TEXT), '"format_version":1', '"format_version":2') AS BLOB) WHERE thread_id = ?`,
-      [kidId ?? ""],
+    await db.transaction((tx) =>
+      tx.run(
+        `UPDATE branches SET header_line = CAST(replace(CAST(header_line AS TEXT), '"format_version":1', '"format_version":2') AS BLOB) WHERE thread_id = ?`,
+        [kidId ?? ""],
+      ),
     );
     const total = await tree(thread);
     expect(code(total)).toBe("unsupported_format");

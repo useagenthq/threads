@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { afterAll, describe, expect, test } from "bun:test";
 import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -84,15 +85,18 @@ function runSide(
 const templates = new Map<string, string>();
 
 /** The world seeded once into a store file; each schedule starts from a copy. */
-function template(world: Vector): string {
+async function template(world: Vector): Promise<string> {
   const known = templates.get(world.name);
   if (known !== undefined) return known;
   const path = join(dir, `${world.name}.db`);
   const db = openBunSqlite(path);
-  seeded(world, db);
-  // One file: the copy must not need the write-ahead log beside it.
-  db.all("PRAGMA wal_checkpoint(TRUNCATE)", []);
-  db.close();
+  await seeded(world, db);
+  await db.close();
+  // One file: the copy must not need the write-ahead log beside it (the store's driver runs every
+  // statement in a transaction, where a checkpoint can't truncate).
+  const raw = new Database(path);
+  raw.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+  raw.close();
   templates.set(world.name, path);
   return path;
 }
@@ -100,8 +104,8 @@ function template(world: Vector): string {
 /** One schedule: the world in a fresh file, both sides at once; the logs after, by label. */
 async function schedule(n: number, world: Vector, a: Side, b: Side) {
   const path = join(dir, `${world.name}-${n}.db`);
-  copyFileSync(template(world), path);
-  const fx = fixture("acme", openBunSqlite(path));
+  copyFileSync(await template(world), path);
+  const fx = await fixture("acme", openBunSqlite(path));
   const [wa, wb] = processes;
   if (wa === undefined || wb === undefined) throw new Error("two processes");
   await Promise.all([runSide(wa, path, world, a), runSide(wb, path, world, b)]);
@@ -109,7 +113,7 @@ async function schedule(n: number, world: Vector, a: Side, b: Side) {
   for (const [label, ref] of Object.entries(worldLogs(world)))
     logs.set(
       label,
-      knownEvents(unwrap(fx.store.read(BranchId.parse(ref.branch_id)))),
+      knownEvents(unwrap(await fx.store.read(BranchId.parse(ref.branch_id)))),
     );
   return { fx, logs };
 }
@@ -159,7 +163,7 @@ describe("two-process races", () => {
       );
       expect(data?.timed_out).toBe(!fired);
       seen.add(fired);
-      if (n % 50 === 0) assertTeamReplays(fx.store, TEAM);
+      if (n % 50 === 0) await assertTeamReplays(fx.store, TEAM);
     }
     // Both orders happened.
     expect(seen.size).toBe(2);
@@ -197,7 +201,7 @@ describe("two-process races", () => {
       );
       expect(observed !== mailed).toBe(true);
       seen.add(observed ? "observed" : "mailed");
-      if (n % 50 === 0) assertTeamReplays(fx.store, TEAM);
+      if (n % 50 === 0) await assertTeamReplays(fx.store, TEAM);
     }
     expect(seen.size).toBe(2);
   }, 600_000);
@@ -229,7 +233,7 @@ describe("two-process races", () => {
       );
       expect(closed).toEqual([replied ? "answered" : "timed_out"]);
       seen.add(closed[0] ?? "");
-      if (n % 50 === 0) assertTeamReplays(fx.store, TEAM);
+      if (n % 50 === 0) await assertTeamReplays(fx.store, TEAM);
     }
     expect(seen.size).toBe(2);
   }, 600_000);

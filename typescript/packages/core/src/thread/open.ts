@@ -14,18 +14,19 @@ export type OpenThreadOptions = HandleOptions & {
 };
 
 /** The listed branch of this thread: ready or inspection-only, never forking or failed. */
-function listedBranch(
+async function listedBranch(
   log: LogStore,
   threadId: ThreadId,
   branchId: BranchId | undefined,
-): Result<BranchId, LogError> {
-  const branch =
-    branchId === undefined ? log.mainBranch(threadId) : ok(branchId);
-  const state = branch.ok ? log.branchState(branch.value) : branch;
+): Promise<Result<BranchId, LogError>> {
+  const branch = await (branchId === undefined
+    ? log.mainBranch(threadId)
+    : ok(branchId));
+  const state = await (branch.ok ? log.branchState(branch.value) : branch);
   const listed =
     state.ok && (state.value === "ready" || state.value === "inspection_only");
   return branch.ok && listed
-    ? branch
+    ? await branch
     : err(logError("not_found", `no thread ${threadId}`));
 }
 
@@ -35,9 +36,9 @@ export async function openThread(
   options: OpenThreadOptions = {},
 ): Promise<Result<Thread, LogError>> {
   const opened = await openStore(store);
-  const branch = listedBranch(opened.log, threadId, options.branchId);
+  const branch = await listedBranch(opened.log, threadId, options.branchId);
   if (!branch.ok) return branch;
-  const read = readLog(opened.log, branch.value);
+  const read = await readLog(opened.log, branch.value);
   if (!read.ok) return read;
   if (read.value.segments[0]?.header.thread_id !== threadId)
     return err(logError("not_found", `no thread ${threadId}`));

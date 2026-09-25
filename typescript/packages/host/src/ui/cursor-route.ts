@@ -35,10 +35,10 @@ export async function runFrames(
   if (!isProtocol(protocol))
     return failure("not_found", `no UI protocol ${protocol}`);
   const { log } = await call.ctx.open(call.principal.tenant);
-  const branch = runBranch(log, threadId.data, runId.data);
+  const branch = await runBranch(log, threadId.data, runId.data);
   if (branch === undefined) return failure("not_found", `no run ${runId.data}`);
   const raw = request.headers.get("last-event-id") ?? call.query.get("after");
-  const read = log.read(branch);
+  const read = await log.read(branch);
   const events = read.ok ? knownEvents(read.value) : [];
   const after =
     raw === null ? undefined : cursorOf(events, protocol, runId.data, raw);

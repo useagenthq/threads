@@ -3,7 +3,6 @@ store and build the drafts on the store's thread, admits them and commits. A ref
 and the writer goes on; the append settles even when its caller is cancelled mid-decision."""
 
 import asyncio
-import sqlite3
 import threading
 from collections.abc import Sequence
 
@@ -11,12 +10,14 @@ from store.test_writer import ROOT, TTL, Clock, run, started, user
 
 from threads.result import Err, Ok
 from threads.store import Draft, SqliteStore, Writer
+from threads.store.conn import Conn, one
+from threads.store.sql import int_of
 from threads.store.writer import Decide, DecideTx, Refusal
 
 
-def _wakes(conn: sqlite3.Connection) -> int:
-    (n,) = conn.execute("SELECT COUNT(*) FROM pending_wakes").fetchone()
-    return int(n)
+def _wakes(conn: Conn) -> int:
+    (n,) = one(conn.execute("SELECT COUNT(*) FROM pending_wakes").fetchone())
+    return int_of(n)
 
 
 def _drafts(*drafts: Draft) -> Decide[str]:
@@ -29,9 +30,11 @@ def test_the_decision_reads_the_store_in_the_transaction_and_its_drafts_are_appe
         writer = await started(store, clock)
 
         def decide(tx: DecideTx) -> Sequence[Draft] | Refusal[str]:
-            (head,) = tx.conn.execute(
-                "SELECT head_seq FROM branches WHERE branch_id = ?", (ROOT,)
-            ).fetchone()
+            (head,) = one(
+                tx.conn.execute(
+                    "SELECT head_seq FROM branches WHERE branch_id = ?", (ROOT,)
+                ).fetchone()
+            )
             assert head == tx.fold.seq
             assert tx.now == clock()
             return [user(f"after {head}")]
@@ -50,7 +53,9 @@ def test_a_refusal_rolls_back_what_the_decision_wrote_and_the_writer_goes_on() -
         writer = await started(store, Clock())
 
         def decide(tx: DecideTx) -> Refusal[str]:
-            tx.conn.execute("INSERT INTO pending_wakes VALUES (?, 'c')", (ROOT,))
+            tx.conn.execute(
+                "INSERT INTO pending_wakes (branch_id, child_thread_id) VALUES (?, 'c')", (ROOT,)
+            )
             return Refusal("mailbox_full")
 
         assert await writer.append_decided(decide) == Refusal("mailbox_full")

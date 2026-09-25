@@ -6,27 +6,80 @@ import type { ArtifactStore } from "../store/artifacts";
 import { type LogError, logError } from "../verify/error";
 import type { ReadRef } from "./lines";
 import { line0 } from "./prefix";
-import { compactionSide, render } from "./render";
+import { compactionSide, type Rendered, render, type Side } from "./render";
 import { checkSpecs, pinnedSpecs } from "./tool-specs";
 
+type Artifacts = Pick<ArtifactStore, "get">;
+type Fetched = Map<string, Result<Uint8Array, LogError>>;
+
 /**
- * Artifact reads that name the event carrying the ref when they fail. The store verifies the
+ * An artifact read that names the event carrying the ref when it fails. The store verifies the
  * sha256; the ref's byte length is checked here, since only the ref records it.
  */
-export function refReader(artifacts: Pick<ArtifactStore, "get">): ReadRef {
-  return (ref: ArtifactRef, seq: number) => {
-    const bytes = artifacts.get(ref.sha256);
-    if (!bytes.ok) return err({ ...bytes.error, seq });
-    return bytes.value.length === ref.bytes
-      ? bytes
-      : err(
-          logError(
-            "artifact_corrupt",
-            `artifact ${ref.sha256} is ${bytes.value.length} bytes, its ref says ${ref.bytes}`,
-            seq,
-          ),
-        );
-  };
+function checked(
+  ref: ArtifactRef,
+  seq: number,
+  bytes: Result<Uint8Array, LogError>,
+): Result<Uint8Array, LogError> {
+  if (!bytes.ok) return err({ ...bytes.error, seq });
+  return bytes.value.length === ref.bytes
+    ? bytes
+    : err(
+        logError(
+          "artifact_corrupt",
+          `artifact ${ref.sha256} is ${bytes.value.length} bytes, its ref says ${ref.bytes}`,
+          seq,
+        ),
+      );
+}
+
+/** One artifact read from the store, checked against its ref. */
+export function refReader(
+  artifacts: Artifacts,
+): (ref: ArtifactRef, seq: number) => Promise<Result<Uint8Array, LogError>> {
+  return async (ref, seq) => checked(ref, seq, await artifacts.get(ref.sha256));
+}
+
+/**
+ * Render and the checks are synchronous and the store is not: `use` runs over a reader that
+ * serves what was fetched and records what wasn't, until a run reads nothing new (what a run
+ * reads next may depend on the bytes it read). The returned reader serves the fetched artifacts.
+ * `fetched` is a cache shared across calls.
+ */
+export async function prefetch(
+  artifacts: Artifacts,
+  use: (read: ReadRef) => unknown,
+  fetched: Fetched = new Map(),
+): Promise<ReadRef> {
+  for (;;) {
+    const wanted = new Set<string>();
+    use((ref, seq) => {
+      const got = fetched.get(ref.sha256);
+      if (got !== undefined) return checked(ref, seq, got);
+      wanted.add(ref.sha256);
+      return ok(new Uint8Array(ref.bytes));
+    });
+    if (wanted.size === 0) break;
+    for (const sha256 of wanted)
+      fetched.set(sha256, await artifacts.get(sha256));
+  }
+  return (ref, seq) =>
+    checked(
+      ref,
+      seq,
+      fetched.get(ref.sha256) ??
+        err(logError("artifact_missing", `no artifact ${ref.sha256}`)),
+    );
+}
+
+/** Render v1 of `events` over the store's artifacts. */
+export async function renderFrom(
+  events: readonly KnownEvent[],
+  artifacts: Artifacts,
+  side?: Side,
+): Promise<Result<Rendered, LogError>> {
+  const read = await prefetch(artifacts, (r) => render(events, r, side));
+  return render(events, read, side);
 }
 
 /**
@@ -37,7 +90,15 @@ export function refReader(artifacts: Pick<ArtifactStore, "get">): ReadRef {
  * `request_ref` artifact must exist and verify, and last the request re-renders to its bytes.
  */
 // ponytail: each request re-renders from the start, O(requests x events); incremental when logs get long.
-export function verifyRequests(
+export async function verifyRequests(
+  events: readonly KnownEvent[],
+  artifacts: Artifacts,
+): Promise<Result<void, LogError>> {
+  const read = await prefetch(artifacts, (r) => verifyWith(events, r));
+  return verifyWith(events, read);
+}
+
+function verifyWith(
   events: readonly KnownEvent[],
   read: ReadRef,
 ): Result<void, LogError> {

@@ -38,21 +38,21 @@ export type MemberView = {
  * A team member's view, read from its starter's member_started: the lead's log for a model
  * start, else the team log the lead names (an operator start). Undefined for any other thread.
  */
-export function memberView(
+export async function memberView(
   events: readonly KnownEvent[],
-  read: (branch: BranchId) => readonly KnownEvent[] | undefined,
-): MemberView | undefined {
+  read: (branch: BranchId) => Promise<readonly KnownEvent[] | undefined>,
+): Promise<MemberView | undefined> {
   const first = events[0];
   const parent =
     first?.type === "thread_started" ? first.data.parent : undefined;
   if (first === undefined || parent?.relation !== "team_member")
     return undefined;
-  const lead = read(parent.branch_id) ?? [];
+  const lead = (await read(parent.branch_id)) ?? [];
   const team =
     lead[0]?.type === "thread_started" ? lead[0].data.team : undefined;
   const logs = [
     lead,
-    team === undefined ? [] : (read(team.log_branch_id) ?? []),
+    team === undefined ? [] : ((await read(team.log_branch_id)) ?? []),
   ];
   const started = logs
     .flat()

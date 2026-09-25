@@ -3,7 +3,7 @@ import { BranchId, Int } from "../log";
 import type { EnumOf, Strict } from "../log/zod-types";
 import { err, ok, type Result } from "../result";
 import { type LogError, logError } from "../verify/error";
-import type { SqliteDriver } from "./driver";
+import { READ_ONLY, type StoreDriver, type Tx } from "./driver";
 import { uuidv7 } from "./encode";
 import { atomically, getLease, ownedBranch, parseRows } from "./tables";
 import type { Writer } from "./writer";
@@ -67,11 +67,11 @@ const COLUMNS = `resource_id, tenant_id, owner_branch_id, provider, kind, ref, s
   acquired_at, expires_at, released_at, release_outcome, cleanup_claim`;
 
 export class ResourceLedger {
-  readonly #db: SqliteDriver;
+  readonly #db: StoreDriver;
   readonly #now: () => number;
   readonly #tenant: string;
 
-  constructor(db: SqliteDriver, now: () => number, tenantId: string) {
+  constructor(db: StoreDriver, now: () => number, tenantId: string) {
     this.#db = db;
     this.#now = now;
     this.#tenant = tenantId;
@@ -82,9 +82,9 @@ export class ResourceLedger {
     writer: Writer,
     kind: ResourceRow["kind"],
     provider: string,
-  ): Result<ResourceRow, LogError> {
-    return writer.fenced(() => {
-      const branch = ownedBranch(this.#db, writer.lease.branchId, this.#tenant);
+  ): Promise<Result<ResourceRow, LogError>> {
+    return writer.fenced(async (tx) => {
+      const branch = await ownedBranch(tx, writer.lease.branchId, this.#tenant);
       if (!branch.ok) return branch;
       const now = this.#now();
       const row: ResourceRow = {
@@ -102,7 +102,7 @@ export class ResourceLedger {
         release_outcome: null,
         cleanup_claim: null,
       };
-      this.#db.run(
+      await tx.run(
         `INSERT INTO resources (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           row.resource_id,
@@ -130,7 +130,7 @@ export class ResourceLedger {
     resourceId: string,
     ref: string,
     expiresAt: number | null,
-  ): Result<ResourceRow, LogError> {
+  ): Promise<Result<ResourceRow, LogError>> {
     return this.#owned(writer, resourceId, ["pending", "unknown"], "live", {
       ref,
       expiresAt,
@@ -141,19 +141,25 @@ export class ResourceLedger {
   notCreated(
     writer: Writer,
     resourceId: string,
-  ): Result<ResourceRow, LogError> {
+  ): Promise<Result<ResourceRow, LogError>> {
     return this.#owned(writer, resourceId, ["pending"], "released", {
       outcome: "not_created",
     });
   }
 
   /** The outcome can't be established: parks for an operator (resource_unknown). */
-  unknown(writer: Writer, resourceId: string): Result<ResourceRow, LogError> {
+  unknown(
+    writer: Writer,
+    resourceId: string,
+  ): Promise<Result<ResourceRow, LogError>> {
     return this.#owned(writer, resourceId, ["pending", "releasing"], "unknown");
   }
 
   /** The owner starts releasing a live row, or retries a failed release. */
-  releasing(writer: Writer, resourceId: string): Result<ResourceRow, LogError> {
+  releasing(
+    writer: Writer,
+    resourceId: string,
+  ): Promise<Result<ResourceRow, LogError>> {
     return this.#owned(
       writer,
       resourceId,
@@ -167,7 +173,7 @@ export class ResourceLedger {
     writer: Writer,
     resourceId: string,
     outcome: string,
-  ): Result<ResourceRow, LogError> {
+  ): Promise<Result<ResourceRow, LogError>> {
     return this.#owned(writer, resourceId, ["releasing"], "released", {
       outcome,
     });
@@ -177,7 +183,7 @@ export class ResourceLedger {
     writer: Writer,
     resourceId: string,
     reason: string,
-  ): Result<ResourceRow, LogError> {
+  ): Promise<Result<ResourceRow, LogError>> {
     return this.#owned(writer, resourceId, ["releasing"], "release_failed", {
       outcome: reason,
     });
@@ -187,27 +193,33 @@ export class ResourceLedger {
    * What gc may finish: this tenant's rows `releasing` or `release_failed`, and `live` rows
    * whose provider expiry has passed, of owners nobody holds (a deleted owner holds nothing).
    */
-  collectable(): Result<readonly ResourceRow[], LogError> {
-    const rows = this.rows();
-    return rows.ok ? ok(rows.value.filter((r) => this.#collectable(r))) : rows;
+  collectable(): Promise<Result<readonly ResourceRow[], LogError>> {
+    return this.#db.transaction(async (tx) => {
+      const rows = await this.#rows(tx);
+      if (!rows.ok) return rows;
+      const due: ResourceRow[] = [];
+      for (const row of rows.value)
+        if (await this.#collectable(tx, row)) due.push(row);
+      return ok(due);
+    }, READ_ONLY);
   }
 
   /**
    * gc's claim on a collectable row, by compare-and-set: a new token replaces any older claim,
    * so only the latest claimant's fence passes (spec/api.json SandboxAuthority cleanup).
    */
-  claim(resourceId: string): Result<string, LogError> {
-    return atomically(this.#db, () => {
-      const row = this.#get(resourceId);
+  claim(resourceId: string): Promise<Result<string, LogError>> {
+    return atomically(this.#db, async (tx) => {
+      const row = await this.#get(tx, resourceId);
       if (!row.ok) return row;
-      if (!this.#collectable(row.value))
+      if (!(await this.#collectable(tx, row.value)))
         return err(
           logError("invalid_transition", `${resourceId} is not collectable`),
         );
       const token = uuidv7(this.#now());
-      this.#db.run(
+      await tx.run(
         `UPDATE resources SET cleanup_claim = ? WHERE tenant_id = ? AND resource_id = ?
-          AND cleanup_claim IS ?`,
+          AND cleanup_claim IS NOT DISTINCT FROM ?`,
         [token, this.#tenant, resourceId, row.value.cleanup_claim],
       );
       return ok(token);
@@ -215,10 +227,25 @@ export class ResourceLedger {
   }
 
   /** The cleanup fence: the row still carries `claim` and is still collectable. */
-  claimed(resourceId: string, claim: string): Result<ResourceRow, LogError> {
-    const row = this.#get(resourceId);
+  claimed(
+    resourceId: string,
+    claim: string,
+  ): Promise<Result<ResourceRow, LogError>> {
+    return this.#db.transaction(
+      (tx) => this.#claimed(tx, resourceId, claim),
+      READ_ONLY,
+    );
+  }
+
+  async #claimed(
+    tx: Tx,
+    resourceId: string,
+    claim: string,
+  ): Promise<Result<ResourceRow, LogError>> {
+    const row = await this.#get(tx, resourceId);
     if (!row.ok) return row;
-    return row.value.cleanup_claim === claim && this.#collectable(row.value)
+    return row.value.cleanup_claim === claim &&
+      (await this.#collectable(tx, row.value))
       ? row
       : err(
           logError("stale_epoch", `the cleanup claim on ${resourceId} is gone`),
@@ -231,15 +258,22 @@ export class ResourceLedger {
     claim: string,
     to: "released" | "release_failed",
     outcome: string,
-  ): Result<ResourceRow, LogError> {
-    return atomically(this.#db, () => {
-      const row = this.claimed(resourceId, claim);
-      return row.ok ? this.#write(row.value, to, { outcome }) : row;
+  ): Promise<Result<ResourceRow, LogError>> {
+    return atomically(this.#db, async (tx) => {
+      const row = await this.#claimed(tx, resourceId, claim);
+      return row.ok ? this.#write(tx, row.value, to, { outcome }) : row;
     });
   }
 
   /** This tenant's rows, oldest first, optionally only one owner's. */
-  rows(owner?: string): Result<readonly ResourceRow[], LogError> {
+  rows(owner?: string): Promise<Result<readonly ResourceRow[], LogError>> {
+    return this.#db.transaction((tx) => this.#rows(tx, owner), READ_ONLY);
+  }
+
+  async #rows(
+    tx: Tx,
+    owner?: string,
+  ): Promise<Result<readonly ResourceRow[], LogError>> {
     const where =
       owner === undefined
         ? "tenant_id = ?"
@@ -247,7 +281,7 @@ export class ResourceLedger {
     const params = owner === undefined ? [this.#tenant] : [this.#tenant, owner];
     return parseRows(
       ResourceRow,
-      this.#db.all(
+      await tx.all(
         `SELECT ${COLUMNS} FROM resources WHERE ${where} ORDER BY rowid`,
         params,
       ),
@@ -260,9 +294,9 @@ export class ResourceLedger {
     from: readonly ResourceState[],
     to: ResourceState,
     change: Change = {},
-  ): Result<ResourceRow, LogError> {
-    return writer.fenced(() => {
-      const row = this.#get(resourceId);
+  ): Promise<Result<ResourceRow, LogError>> {
+    return writer.fenced(async (tx) => {
+      const row = await this.#get(tx, resourceId);
       if (!row.ok) return row;
       if (row.value.owner_branch_id !== writer.lease.branchId)
         return err(logError("stale_epoch", "the writer does not own this row"));
@@ -273,15 +307,17 @@ export class ResourceLedger {
             `a ${row.value.state} resource can't become ${to}`,
           ),
         );
-      return this.#write(row.value, to, change);
+      return this.#write(tx, row.value, to, change);
     });
   }
 
-  #write(
+  /** A compare-and-set on the row's state: doing it again after an unknown commit is a no-op. */
+  async #write(
+    tx: Tx,
     row: ResourceRow,
     to: ResourceState,
     change: Change,
-  ): Result<ResourceRow, LogError> {
+  ): Promise<Result<ResourceRow, LogError>> {
     const done = to === "released" || to === "release_failed";
     const next: ResourceRow = {
       ...row,
@@ -292,7 +328,7 @@ export class ResourceLedger {
       released_at: done ? this.#now() : row.released_at,
       release_outcome: change.outcome ?? row.release_outcome,
     };
-    this.#db.run(
+    await tx.run(
       `UPDATE resources SET state = ?, ref = ?, expires_at = ?, released_at = ?,
         release_outcome = ? WHERE tenant_id = ? AND resource_id = ? AND state = ?`,
       [
@@ -309,10 +345,13 @@ export class ResourceLedger {
     return ok(next);
   }
 
-  #get(resourceId: string): Result<ResourceRow, LogError> {
+  async #get(
+    tx: Tx,
+    resourceId: string,
+  ): Promise<Result<ResourceRow, LogError>> {
     const rows = parseRows(
       ResourceRow,
-      this.#db.all(
+      await tx.all(
         `SELECT ${COLUMNS} FROM resources WHERE tenant_id = ? AND resource_id = ?`,
         [this.#tenant, resourceId],
       ),
@@ -324,18 +363,18 @@ export class ResourceLedger {
       : ok(row);
   }
 
-  #collectable(r: ResourceRow): boolean {
+  async #collectable(tx: Tx, r: ResourceRow): Promise<boolean> {
     const due =
       r.state === "releasing" ||
       r.state === "release_failed" ||
       (r.state === "live" &&
         r.expires_at !== null &&
         r.expires_at <= this.#now());
-    return due && this.#unheld(r.owner_branch_id);
+    return due && (await this.#unheld(tx, r.owner_branch_id));
   }
 
-  #unheld(branchId: string): boolean {
-    const lease = getLease(this.#db, branchId);
+  async #unheld(tx: Tx, branchId: string): Promise<boolean> {
+    const lease = await getLease(tx, branchId);
     return (
       lease.ok &&
       (lease.value === undefined || lease.value.expires_at <= this.#now())

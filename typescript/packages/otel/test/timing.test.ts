@@ -28,12 +28,12 @@ async function run(
   everyAppend: boolean,
 ): Promise<Outcome> {
   c = collector();
-  const h: Harness = harness();
+  const h: Harness = await harness();
   if (doomed !== undefined) await importGolden(h, doomed);
   await importGolden(h, g);
   const last = g.syncs.at(-1);
   const branch = last?.branch_id ?? "";
-  const rows = cut(
+  const rows = await cut(
     h,
     branch,
     g.syncs.find((s) => s.branch_id === branch)?.cursor_before ?? 0,
@@ -45,9 +45,14 @@ async function run(
   };
   await sync();
   for (const [i, row] of rows.entries()) {
-    grow(h, branch, row);
+    await grow(h, branch, row);
     if (i === Math.floor(rows.length / 2)) {
-      const gone = deleteThread(h.db, "local", DOOMED_THREAD, h.clock.now);
+      const gone = await deleteThread(
+        h.db,
+        "local",
+        DOOMED_THREAD,
+        h.clock.now,
+      );
       if (!gone.ok) throw new Error(gone.error.message);
     }
     if (everyAppend) await sync();

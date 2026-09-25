@@ -23,47 +23,49 @@ const operator: Principal = {
   subject: "operator",
 };
 
-function child(turnOpen: boolean) {
-  const f = fixture();
-  unwrap(f.store.createBranch(THREAD, ROOT));
-  const writer = unwrap(f.store.acquire(ROOT, "child", 1_000));
+async function child(turnOpen: boolean) {
+  const f = await fixture();
+  unwrap(await f.store.createBranch(THREAD, ROOT));
+  const writer = unwrap(await f.store.acquire(ROOT, "child", 1_000));
   const drafts = turnOpen
     ? [started, userInput("Scan.")]
     : [started, userInput("Scan."), turnCompleted];
-  unwrap(writer.append(drafts));
+  unwrap(await writer.append(drafts));
   return { f, writer };
 }
 
-const cancels = (f: ReturnType<typeof fixture>): number =>
-  knownEvents(unwrap(f.store.read(ROOT))).filter(
+const cancels = async (
+  f: Awaited<ReturnType<typeof fixture>>,
+): Promise<number> =>
+  knownEvents(unwrap(await f.store.read(ROOT))).filter(
     (e) => e.type === "cancel_requested",
   ).length;
 
 describe("cancelTree", () => {
   test("a child whose running writer lost its lease is not counted as barred", async () => {
-    const { f, writer } = child(true);
+    const { f, writer } = await child(true);
     const stop = keepLease(writer);
     try {
       f.clock.now += 60_000;
-      unwrap(f.store.acquire(ROOT, "usurper"));
+      unwrap(await f.store.acquire(ROOT, "usurper"));
       expect(await cancelTree(f.store, THREAD, operator)).toBe(false);
-      expect(cancels(f)).toBe(0);
+      expect(await cancels(f)).toBe(0);
     } finally {
-      stop();
+      await stop();
     }
   });
 
   test("a child that has finished gets no stray cancel, and counts as stopped", async () => {
-    const { f, writer } = child(false);
-    writer.release();
+    const { f, writer } = await child(false);
+    await writer.release();
     expect(await cancelTree(f.store, THREAD, operator)).toBe(true);
-    expect(cancels(f)).toBe(0);
+    expect(await cancels(f)).toBe(0);
   });
 
   test("a child with an open turn gets its cancel", async () => {
-    const { f, writer } = child(true);
-    writer.release();
+    const { f, writer } = await child(true);
+    await writer.release();
     expect(await cancelTree(f.store, THREAD, operator)).toBe(true);
-    expect(cancels(f)).toBe(1);
+    expect(await cancels(f)).toBe(1);
   });
 });

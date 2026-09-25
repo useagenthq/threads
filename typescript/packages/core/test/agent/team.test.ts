@@ -28,7 +28,7 @@ type Store = ReturnType<typeof sqlite>;
 
 async function read(store: Store, thread: ThreadRef) {
   const { log } = await openStore(store);
-  return unwrap(log.read(thread.branch));
+  return unwrap(await log.read(thread.branch));
 }
 
 async function childLogs(
@@ -36,15 +36,13 @@ async function childLogs(
   parent: readonly KnownEvent[],
 ): Promise<readonly (readonly KnownEvent[])[]> {
   const { log } = await openStore(store);
-  return parent.flatMap((e) =>
-    e.type === "agent_spawned"
-      ? [
-          knownEvents(
-            unwrap(log.read(unwrap(log.mainBranch(e.data.child_thread_id)))),
-          ),
-        ]
-      : [],
-  );
+  const children: (readonly KnownEvent[])[] = [];
+  for (const e of parent) {
+    if (e.type !== "agent_spawned") continue;
+    const branch = unwrap(await log.mainBranch(e.data.child_thread_id));
+    children.push(knownEvents(unwrap(await log.read(branch))));
+  }
+  return children;
 }
 
 describe("a team: shared tasks and addressed messages", () => {
@@ -145,9 +143,9 @@ describe("a team: shared tasks and addressed messages", () => {
 });
 
 describe("team acts are idempotent per member call (F7.4)", () => {
-  test("a repeated claim, update or message appends nothing and answers the same", () => {
-    const h = harness([], [], []);
-    const writer = unwrap(h.store.acquire(ROOT, "lead"));
+  test("a repeated claim, update or message appends nothing and answers the same", async () => {
+    const h = await harness([], [], []);
+    const writer = unwrap(await h.store.acquire(ROOT, "lead"));
     const agents = {
       name: "lead",
       subagent: () => undefined,
@@ -165,29 +163,32 @@ describe("team acts are idempotent per member call (F7.4)", () => {
     const claim = call("team_task_claim", { task_id: "lead/c1" }, "c2");
     const send = call("send_message", { to: "bob", text: "Mine." }, "c3");
     const first = [
-      team.act("lead", create),
-      team.act("alice", claim),
-      team.act("alice", send),
+      await team.act("lead", create),
+      await team.act("alice", claim),
+      await team.act("alice", send),
     ];
     const seq = s.fold.seq;
     const again = [
-      team.act("lead", create),
-      team.act("alice", claim),
-      team.act("alice", send),
+      await team.act("lead", create),
+      await team.act("alice", claim),
+      await team.act("alice", send),
     ];
     expect(again).toEqual(first);
     expect(first.map((a) => a.isError)).toEqual([false, false, false]);
     expect(s.fold.seq).toBe(seq);
     // A name that is not on the team is refused and appends nothing.
     const stray = call("send_message", { to: "billing", text: "Hi." }, "c4");
-    expect(team.act("alice", stray)).toEqual({
+    expect(await team.act("alice", stray)).toEqual({
       isError: true,
       output:
         "unknown_recipient: billing is not on this team; send to lead, alice, bob or * for everyone",
     });
     expect(s.fold.seq).toBe(seq);
     expect(
-      team.act("bob", call("team_task_claim", { task_id: "lead/c1" }, "c9")),
+      await team.act(
+        "bob",
+        call("team_task_claim", { task_id: "lead/c1" }, "c9"),
+      ),
     ).toEqual({
       isError: true,
       output: "can't claim: team_task_claimed for lead/c1, which is not open",

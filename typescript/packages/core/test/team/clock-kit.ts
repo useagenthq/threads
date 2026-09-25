@@ -3,7 +3,7 @@ import { type Store, storeOf } from "../../src/agent/sqlite";
 import { markTestKit } from "../../src/model/guard";
 import { LogStore, memoryArtifacts } from "../../src/store";
 import { openBunSqlite } from "../../src/store/bun-sqlite";
-import { unwrap } from "../store/helpers";
+import { run as sqlRun, unwrap } from "../store/helpers";
 
 // Shared by the team deadline tests: a store on a clock the test moves, a member held at its
 // first request, and polling until a condition holds.
@@ -12,17 +12,18 @@ import { unwrap } from "../store/helpers";
  * A store on a clock the test moves (deadlines are read from the store's clock). Time passing
  * also renews every live lease, as each holder's renewal timer would have.
  */
-export function clocked(): {
+export async function clocked(): Promise<{
   readonly store: Store;
   readonly log: LogStore;
-  readonly elapse: (ms: number) => void;
-} {
+  readonly elapse: (ms: number) => Promise<void>;
+}> {
   const clock = { now: Date.now() };
   const artifacts = memoryArtifacts();
   const db = openBunSqlite(":memory:");
-  const log = unwrap(LogStore.open(db, () => clock.now, artifacts));
-  const elapse = (ms: number): void => {
-    db.run(
+  const log = unwrap(await LogStore.open(db, () => clock.now, artifacts));
+  const elapse = async (ms: number): Promise<void> => {
+    await sqlRun(
+      db,
       "UPDATE leases SET expires_at = expires_at + ? WHERE expires_at > ?",
       [ms, clock.now],
     );

@@ -55,11 +55,11 @@ function resultOf(
 }
 
 /** A mediated call's full recorded output: the committed artifact, else the result preview. */
-function outputOf(
+async function outputOf(
   turn: readonly KnownEvent[],
   callId: string,
   artifacts: ArtifactStore,
-): string {
+): Promise<string> {
   const commit = turn.find(
     (e): e is Of<"effect_commit"> =>
       e.type === "effect_commit" && e.data.call_id === callId,
@@ -67,7 +67,7 @@ function outputOf(
   const bytes =
     commit === undefined
       ? undefined
-      : artifacts.get(commit.data.result_ref.sha256);
+      : await artifacts.get(commit.data.result_ref.sha256);
   if (bytes?.ok === true) return new TextDecoder().decode(bytes.value);
   return resultOf(turn, callId)?.data.preview ?? "";
 }
@@ -83,27 +83,26 @@ export function argsHash(input: Of<"tool_call">["data"]["input"]): string {
 }
 
 /** Every mediated call (one with effect events) as a stub, by (tool, args_hash, occurrence). */
-export function stubScript(
+export async function stubScript(
   turn: readonly KnownEvent[],
   artifacts: ArtifactStore,
-): StubScriptFile {
+): Promise<StubScriptFile> {
   const seen = new Map<string, number>();
-  const stubs = turn.flatMap((e) => {
-    if (e.type !== "tool_call" || !begun(turn, e.data.call_id)) return [];
+  const stubs: StubScriptFile["stubs"][number][] = [];
+  for (const e of turn) {
+    if (e.type !== "tool_call" || !begun(turn, e.data.call_id)) continue;
     const hash = argsHash(e.data.input);
     const key = `${e.data.name}\n${hash}`;
     const occurrence = seen.get(key) ?? 0;
     seen.set(key, occurrence + 1);
-    return [
-      {
-        tool: e.data.name,
-        args_hash: hash,
-        occurrence,
-        output: outputOf(turn, e.data.call_id, artifacts),
-        is_error: resultOf(turn, e.data.call_id)?.data.is_error ?? false,
-      },
-    ];
-  });
+    stubs.push({
+      tool: e.data.name,
+      args_hash: hash,
+      occurrence,
+      output: await outputOf(turn, e.data.call_id, artifacts),
+      is_error: resultOf(turn, e.data.call_id)?.data.is_error ?? false,
+    });
+  }
   return { stubs };
 }
 

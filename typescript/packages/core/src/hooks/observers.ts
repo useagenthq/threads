@@ -68,13 +68,13 @@ export class ObserverPump {
   }
 
   async #deliver(observer: Observer): Promise<void> {
-    const cursor = this.#cursors.get(observer.name, this.#branch);
+    const cursor = await this.#cursors.get(observer.name, this.#branch);
     if (!cursor.ok) return;
     for (const event of this.#events().filter((e) => e.seq > cursor.value)) {
       const handler = observer.on[event.type] ?? observer.on["*"];
       // A copy: an observer can't change the event the loop holds.
       if (handler !== undefined) await handler(structuredClone(event));
-      this.#cursors.advance(observer.name, this.#branch, event.seq);
+      await this.#cursors.advance(observer.name, this.#branch, event.seq);
     }
   }
 }

@@ -36,7 +36,7 @@ async function run(
   extensions: readonly LoopExtension[],
   text = "mail bob",
 ): Promise<readonly KnownEvent[]> {
-  const writer = unwrap(h.store.acquire(ROOT, "owner"));
+  const writer = unwrap(await h.store.acquire(ROOT, "owner"));
   const end = await resume(writer, h.artifacts, h.config({ extensions }), {
     input: userInput(text),
   });
@@ -62,7 +62,7 @@ const of = <T extends KnownEvent["type"]>(
 
 describe("before_tool (gate)", () => {
   test("a deny is recorded, folded as source hook, and the model gets the reason", async () => {
-    const h = harness([EMAIL], [], [SEND, FINAL]);
+    const h = await harness([EMAIL], [], [SEND, FINAL]);
     const log = await run(h, [
       ext({
         before_tool: async () => ({ decision: "deny", reason: "no email" }),
@@ -104,7 +104,7 @@ describe("before_tool (gate)", () => {
     ["returns junk", async () => ({ decision: "maybe" })],
   ] as const)
     test(`a hook that ${name} fails closed: denied, and the run continues`, async () => {
-      const h = harness([EMAIL], [], [SEND, FINAL]);
+      const h = await harness([EMAIL], [], [SEND, FINAL]);
       const log = await run(h, [ext({ before_tool: hook })]);
       expect(h.runs.get("send_email") ?? 0).toBe(0);
       expect(of(log, "hook_decision")[0]?.data.decision).toBe("failed");
@@ -116,8 +116,8 @@ describe("before_tool (gate)", () => {
     });
 
   test("a hook allow never loosens a policy ask; permission_request can answer it", async () => {
-    const h = harness([EMAIL], [], [SEND, FINAL]);
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const h = await harness([EMAIL], [], [SEND, FINAL]);
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     await resume(
       writer,
       h.artifacts,
@@ -144,7 +144,7 @@ describe("before_tool (gate)", () => {
 
   test("a recorded decision is read back, never re-run", async () => {
     let calls = 0;
-    const h = harness([EMAIL], [], [SEND, FINAL]);
+    const h = await harness([EMAIL], [], [SEND, FINAL]);
     const deny = ext({
       before_tool: async () => {
         calls += 1;
@@ -152,7 +152,7 @@ describe("before_tool (gate)", () => {
       },
     });
     // A crash right after the decision: recovery authorizes the call from the recorded one.
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     await resume(
       writer,
       h.artifacts,
@@ -166,7 +166,7 @@ describe("before_tool (gate)", () => {
     ).catch(() => undefined);
     expect(calls).toBe(1);
     h.clock.now += 60_000;
-    const again = unwrap(h.store.acquire(ROOT, "owner-2"));
+    const again = unwrap(await h.store.acquire(ROOT, "owner-2"));
     await resume(again, h.artifacts, h.config({ extensions: [deny] }));
     expect(calls).toBe(1);
     expect(of(events(again), "permission_decision")[0]?.data.decision).toBe(
@@ -177,7 +177,7 @@ describe("before_tool (gate)", () => {
 
 describe("after_tool (observe)", () => {
   test("a throw after the effect committed is recorded; nothing is undone or re-run", async () => {
-    const h = harness([EMAIL], [], [SEND, FINAL]);
+    const h = await harness([EMAIL], [], [SEND, FINAL]);
     const log = await run(h, [
       ext({
         after_tool: async () => {
@@ -197,7 +197,7 @@ describe("after_tool (observe)", () => {
   });
 
   test("annotations are recorded as annotate", async () => {
-    const h = harness([EMAIL], [], [SEND, FINAL]);
+    const h = await harness([EMAIL], [], [SEND, FINAL]);
     const log = await run(h, [ext({ after_tool: async () => ["sent once"] })]);
     expect(of(log, "hook_decision")[0]?.data).toMatchObject({
       hook: "after_tool",
@@ -210,7 +210,7 @@ describe("after_tool (observe)", () => {
 
 describe("on_stop (gate)", () => {
   test("continue forces one more request each time, then stop_hook_limit", async () => {
-    const h = harness([], [], [FINAL, FINAL, FINAL, FINAL]);
+    const h = await harness([], [], [FINAL, FINAL, FINAL, FINAL]);
     const log = await run(
       h,
       [
@@ -235,7 +235,7 @@ describe("on_stop (gate)", () => {
   });
 
   test("a failing on_stop stops the run", async () => {
-    const h = harness([], [], [FINAL]);
+    const h = await harness([], [], [FINAL]);
     const log = await run(
       h,
       [
@@ -257,7 +257,7 @@ describe("on_stop (gate)", () => {
 
 describe("input, model and result gates", () => {
   test("before_input deny ends the turn input_denied before any request", async () => {
-    const h = harness([], [], []);
+    const h = await harness([], [], []);
     const log = await run(
       h,
       [
@@ -278,7 +278,7 @@ describe("input, model and result gates", () => {
   });
 
   test("before_model injections render as untrusted reference before the request", async () => {
-    const h = harness([], [], [FINAL]);
+    const h = await harness([], [], [FINAL]);
     const log = await run(
       h,
       [
@@ -306,7 +306,7 @@ describe("input, model and result gates", () => {
   });
 
   test("before_tool_result redact appends context_edited{guardrail} before the next request", async () => {
-    const h = harness([EMAIL], [], [SEND, FINAL]);
+    const h = await harness([EMAIL], [], [SEND, FINAL]);
     const log = await run(h, [
       ext({
         before_tool_result: async () => ({
@@ -339,7 +339,7 @@ describe("input, model and result gates", () => {
   ])(
     "before_tool_result redact with %s spans fails and clears the result",
     async (_n, spans) => {
-      const h = harness([EMAIL], [], [SEND, FINAL]);
+      const h = await harness([EMAIL], [], [SEND, FINAL]);
       const log = await run(h, [
         ext({
           before_tool_result: async () => ({ decision: "redact", spans }),
@@ -355,7 +355,7 @@ describe("input, model and result gates", () => {
   );
 
   test("after_model deny closes the undispatched calls, nothing runs and the turn ends error", async () => {
-    const h = harness([EMAIL], [], [SEND]);
+    const h = await harness([EMAIL], [], [SEND]);
     const log = await run(h, [
       ext({
         after_model: async (args) =>
@@ -374,8 +374,8 @@ describe("input, model and result gates", () => {
   });
 
   test("an observer hook failure (notification) is recorded and changes nothing", async () => {
-    const h = harness([EMAIL], [], [SEND]);
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const h = await harness([EMAIL], [], [SEND]);
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     const end = await resume(
       writer,
       h.artifacts,

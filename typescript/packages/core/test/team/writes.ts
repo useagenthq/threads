@@ -37,30 +37,30 @@ export function draftOf(e: KnownEvent): EventDraft {
 }
 
 /** The team log the lead's first append opened, once it has. */
-function takeTeamLog(fx: Fixture, q: Queue): Writer | undefined {
+async function takeTeamLog(fx: Fixture, q: Queue): Promise<Writer | undefined> {
   const header = q.log.segments[0]?.header;
   if (header === undefined) throw new Error("a verified log has a header");
-  if (!fx.store.branchState(header.branch_id).ok) return undefined;
-  return unwrap(fx.store.acquire(header.branch_id, HOLDER, FOREVER));
+  if (!(await fx.store.branchState(header.branch_id)).ok) return undefined;
+  return unwrap(await fx.store.acquire(header.branch_id, HOLDER, FOREVER));
 }
 
 /**
  * Appends `e` to its log, opening the log's branch with it when it is the first event. False:
  * a team log the lead's first append has not opened yet.
  */
-function append(fx: Fixture, q: Queue, e: KnownEvent): boolean {
+async function append(fx: Fixture, q: Queue, e: KnownEvent): Promise<boolean> {
   const header = q.log.segments[0]?.header;
   if (header === undefined) throw new Error("a verified log has a header");
   if (q.writer === undefined && q.teamLog) {
-    q.writer = takeTeamLog(fx, q);
+    q.writer = await takeTeamLog(fx, q);
     if (q.writer === undefined) return false;
   }
   if (q.writer !== undefined) {
-    unwrap(q.writer.append([draftOf(e)]));
+    unwrap(await q.writer.append([draftOf(e)]));
     return true;
   }
   const opened = unwrap(
-    fx.store.openBranch({
+    await fx.store.openBranch({
       threadId: header.thread_id,
       branchId: header.branch_id,
       lease: { holderId: HOLDER, ttlMs: FOREVER },
@@ -73,15 +73,15 @@ function append(fx: Fixture, q: Queue, e: KnownEvent): boolean {
 }
 
 /** Appends what of `q` can go now: each event once the rows it moves exist. */
-function drain(fx: Fixture, q: Queue): boolean {
+async function drain(fx: Fixture, q: Queue): Promise<boolean> {
   let moved = false;
   for (
     let e = q.events[0];
-    e !== undefined && appendable(fx.db, e);
+    e !== undefined && (await appendable(fx.db, e));
     e = q.events[0]
   ) {
     fx.clock.now = e.time;
-    if (!append(fx, q, e)) break;
+    if (!(await append(fx, q, e))) break;
     q.events.shift();
     moved = true;
   }
@@ -89,7 +89,10 @@ function drain(fx: Fixture, q: Queue): boolean {
 }
 
 /** Re-appends `logs` into `fx`'s store through writers, in an order their rows allow. */
-export function reappend(fx: Fixture, logs: readonly VerifiedLog[]): void {
+export async function reappend(
+  fx: Fixture,
+  logs: readonly VerifiedLog[],
+): Promise<void> {
   const queues: Queue[] = logs.map((log) => {
     const events = [...knownEvents(log)];
     const teamLog = events[0]?.type === "team_opened";
@@ -102,7 +105,7 @@ export function reappend(fx: Fixture, logs: readonly VerifiedLog[]): void {
   });
   for (let moved = true; moved; ) {
     moved = false;
-    for (const q of queues) moved = drain(fx, q) || moved;
+    for (const q of queues) moved = (await drain(fx, q)) || moved;
   }
   expect(queues.map((q) => q.events.length)).toEqual(queues.map(() => 0));
 }

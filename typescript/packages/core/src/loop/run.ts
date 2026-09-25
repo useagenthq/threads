@@ -72,7 +72,7 @@ async function cancelChild(
   const end = await runChild(s, spawned, principal);
   if ("code" in end) return end;
   if (end.status === "parked") return parkOn(s, spawned, end.reason);
-  return record(s, spawned, end, false) ?? "recorded";
+  return (await record(s, spawned, end, false)) ?? "recorded";
 }
 
 async function cancel(
@@ -89,7 +89,7 @@ async function cancel(
       if (done !== "recorded") return done;
       continue;
     }
-    const stopped = s.append(
+    const stopped = await s.append(
       draft.toolResult(
         {
           call_id: callId,
@@ -102,7 +102,7 @@ async function cancel(
     );
     if (stopped !== undefined) return stopped;
   }
-  const closed = closeUnrecorded(s);
+  const closed = await closeUnrecorded(s);
   if (closed !== undefined) return closed;
   // One batch: a lease lost between them can't leave the cancellation half recorded.
   return s.append(

@@ -8,6 +8,7 @@ import {
   dueQuestionBranches,
   type EventId,
   type Principal,
+  READ_ONLY,
   type Result,
   type Sandbox,
   type Store,
@@ -157,9 +158,12 @@ export function host(options: HostOptions): Host {
 
   const sweep = async (): Promise<void> => {
     const { db } = await storeConnection(ctx.store);
-    const rows = db.all(
-      "SELECT DISTINCT tenant_id, thread_id FROM inbox WHERE consumed_seq IS NULL",
-      [],
+    const rows = await db.transaction(
+      (tx) =>
+        tx.all(
+          "SELECT DISTINCT tenant_id, thread_id FROM inbox WHERE consumed_seq IS NULL",
+        ),
+      READ_ONLY,
     );
     for (const row of rows)
       if (
@@ -177,20 +181,21 @@ export function host(options: HostOptions): Host {
   const recoverReplies = async (): Promise<void> => {
     if (!seeded) {
       const { db } = await storeConnection(ctx.store);
-      for (const r of channelThreads(db)) watch.add(r.tenant_id, r.thread_id);
+      for (const r of await channelThreads(db))
+        watch.add(r.tenant_id, r.thread_id);
       // ponytail: API runs are found at start only; a live peer's crash waits for a restart.
-      for (const r of unfinishedRuns(db))
+      for (const r of await unfinishedRuns(db))
         watch.add(r.tenant_id, r.thread_id, r.branch_id);
       seeded = true;
     }
     // Every tick: a branch whose background child has not reported is run on, which relaunches
     // the child and records its end with its wake (Gate 1 §2.7.3).
     const { db } = await storeConnection(ctx.store);
-    for (const r of wakeBranches(db))
+    for (const r of await wakeBranches(db))
       watch.add(r.tenant_id, r.thread_id, r.branch_id);
     // Every tick: a question past its expiry is closed by running its branch on, even one that
     // expired while no host ran (its row survives restarts).
-    for (const r of dueQuestionBranches(db, Date.now()))
+    for (const r of await dueQuestionBranches(db, Date.now()))
       watch.add(r.tenant_id, r.thread_id, r.branch_id);
     // Side by side: one thread's slow reply never holds up another's recovery.
     await Promise.all(

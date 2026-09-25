@@ -12,6 +12,7 @@ from typing import Final
 import pytest
 from jobs.api_worker import TENANT, read
 from jobs.drill import expire_leases, finish, kill, one_writer_at_a_time, spawn, wait_at
+from jobs.stores import drill_open
 from jobs.worker import rows
 
 from threads.log import (
@@ -24,7 +25,6 @@ from threads.log import (
 )
 from threads.reduce import Fold
 from threads.result import Ok
-from threads.store import SqliteStore
 
 pytestmark = pytest.mark.jobs
 
@@ -44,7 +44,7 @@ def log(where: Path) -> Fold:
 
 async def _read(where: Path) -> Fold | None:
     # Closed after each read: the drill's processes own the store.
-    opened = await SqliteStore.open(where / "threads.db", tenant_id=TENANT)
+    opened = await drill_open(where, TENANT)
     assert isinstance(opened, Ok)
     try:
         return await read(opened.value)

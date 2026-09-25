@@ -83,7 +83,7 @@ function config(kid: ReturnType<typeof scanner>): Partial<LoopConfig> {
 }
 
 async function twoRuns(): Promise<readonly KnownEvent[]> {
-  const h = harness(
+  const h = await harness(
     [frameworkSpec("spawn_agent")],
     [],
     [
@@ -97,15 +97,15 @@ async function twoRuns(): Promise<readonly KnownEvent[]> {
   );
   // Alice's child can't run the first time: her run halts with it still to report.
   const first = scanner([busy, done, done]);
-  const one = unwrap(h.store.acquire(ROOT, "one", 30_000));
+  const one = unwrap(await h.store.acquire(ROOT, "one", 30_000));
   const end = await resume(one, h.artifacts, h.config(config(first)), {
     input: input(alice, "Scan the dependencies."),
   });
   expect(end.kind).toBe("halted");
   expect(pendingWakes(events(one), ROOT)).toHaveLength(1);
-  one.release();
+  await one.release();
   // Bob's run relaunches it; both children end once Bob's turn has completed.
-  const two = unwrap(h.store.acquire(ROOT, "two", 30_000));
+  const two = unwrap(await h.store.acquire(ROOT, "two", 30_000));
   const again = await resume(two, h.artifacts, h.config(config(first)), {
     input: input(bob, "Scan the licenses."),
   });
@@ -146,19 +146,21 @@ describe("background results of two runs at one boundary", () => {
 
 describe("pending_wakes", () => {
   test("the rows follow the log, and an index wipe rebuilds them", async () => {
-    const h = harness(
+    const h = await harness(
       [frameworkSpec("spawn_agent")],
       [],
       [scan("c1"), say("Running.")],
     );
     const kid = scanner([busy]);
-    const writer = unwrap(h.store.acquire(ROOT, "one", 30_000));
+    const writer = unwrap(await h.store.acquire(ROOT, "one", 30_000));
     await resume(writer, h.artifacts, h.config(config(kid)), {
       input: input(alice, "Scan."),
     });
     const rows = () =>
-      h.db.all("SELECT branch_id, child_thread_id FROM pending_wakes", []);
-    const before = rows();
+      h.db.transaction((tx) =>
+        tx.all("SELECT branch_id, child_thread_id FROM pending_wakes"),
+      );
+    const before = await rows();
     expect(before).toEqual(
       pendingWakes(events(writer), ROOT).map((child) => ({
         branch_id: ROOT,
@@ -166,10 +168,12 @@ describe("pending_wakes", () => {
       })),
     );
     expect(before).toHaveLength(1);
-    h.db.run("DELETE FROM pending_wakes", []);
-    rebuildWakes(h.db, (branch) =>
-      branch === ROOT ? events(writer) : undefined,
+    await h.db.transaction((tx) => tx.run("DELETE FROM pending_wakes"));
+    await h.db.transaction((tx) =>
+      rebuildWakes(tx, async (branch) =>
+        branch === ROOT ? events(writer) : undefined,
+      ),
     );
-    expect(rows()).toEqual(before);
+    expect(await rows()).toEqual(before);
   });
 });

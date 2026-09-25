@@ -161,7 +161,7 @@ describe("rule 29 at the boundary", () => {
   test("the writer refuses an invented text, an unknown name and a model-set style", async () => {
     const { ref } = await finished([say("Hi.")], { outputStyles: STYLES });
     const { log } = await openStore(ref.store);
-    const writer = unwrap(log.acquire(ref.branch, "test"));
+    const writer = unwrap(await log.acquire(ref.branch, "test"));
     try {
       for (const bad of [
         style("Shout.", "user"),
@@ -170,14 +170,16 @@ describe("rule 29 at the boundary", () => {
         // The host re-appends a style only as the restore right after a compaction.
         style(STYLES.concise, "host"),
       ])
-        expect(code(writer.append([bad]))).toBe("invalid_transition");
-      expect(code(writer.append([style(STYLES.concise, "user")]))).toBe("ok");
+        expect(code(await writer.append([bad]))).toBe("invalid_transition");
+      expect(code(await writer.append([style(STYLES.concise, "user")]))).toBe(
+        "ok",
+      );
     } finally {
-      writer.release();
+      await writer.release();
     }
   });
 
-  test("import refuses a log with one", () => {
+  test("import refuses a log with one", async () => {
     for (const name of [
       "output-style-text-mismatch-rejected",
       "output-style-unknown-name-rejected",
@@ -187,8 +189,10 @@ describe("rule 29 at the boundary", () => {
       "output-style-host-late-rejected",
     ]) {
       const c = loadCase(name);
-      const imported = caseStore(c).store.importLog(c.log ?? new Uint8Array());
-      expect(code(imported)).toBe("invalid_transition");
+      const imported = (await caseStore(c)).store.importLog(
+        c.log ?? new Uint8Array(),
+      );
+      expect(code(await imported)).toBe("invalid_transition");
     }
   });
 });

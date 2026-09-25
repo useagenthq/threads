@@ -10,7 +10,12 @@ import {
   type TeamId,
 } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
-import type { SqliteDriver } from "../../src/store";
+import {
+  READ_ONLY,
+  type SqlValue,
+  type StoreDriver,
+  type Tx,
+} from "../../src/store/driver";
 import { importSegments } from "../../src/store/import";
 import type { LogStore } from "../../src/store/store";
 import { checkTeamLogs } from "../../src/team/cross";
@@ -129,13 +134,18 @@ export function verified(bytes: Uint8Array): VerifiedLog {
  * Stores verified logs byte for byte, as import does, without replaying their model requests:
  * the team cases ship no artifacts.
  */
-export function storeLogs(store: LogStore, logs: readonly VerifiedLog[]): void {
+export async function storeLogs(
+  store: LogStore,
+  logs: readonly VerifiedLog[],
+): Promise<void> {
   for (const log of logs)
     unwrap(
-      importSegments(store.driver, log, {
-        tenantId: store.tenant,
-        droppedRef: null,
-      }),
+      await store.driver.transaction((tx) =>
+        importSegments(tx, log, {
+          tenantId: store.tenant,
+          droppedRef: null,
+        }),
+      ),
     );
 }
 
@@ -145,25 +155,25 @@ export const TENANT = "acme";
 /** A team case, by label, stored and indexed as its appends would have left it. */
 export type Team = {
   readonly store: LogStore;
-  readonly db: SqliteDriver;
+  readonly db: StoreDriver;
   readonly team: TeamId;
   readonly logs: ReadonlyMap<string, VerifiedLog>;
 };
 
 /** A store holding `logs` (label to bytes), with the team index rebuilt from them. */
-export function teamStore(
+export async function teamStore(
   logs: ReadonlyMap<string, Uint8Array>,
   tenant: string = TENANT,
-  driver?: SqliteDriver,
-): Team {
-  const { store, db } = fixture(tenant, driver);
+  driver?: StoreDriver,
+): Promise<Team> {
+  const { store, db } = await fixture(tenant, driver);
   const read = new Map(
     [...logs].map(([label, bytes]) => [label, verified(bytes)]),
   );
-  storeLogs(store, [...read.values()]);
+  await storeLogs(store, [...read.values()]);
   const team = teamOf([...read.values()]);
   for (const each of teamsOf([...read.values()]))
-    unwrap(rebuildTeamIndex(store, each));
+    unwrap(await rebuildTeamIndex(store, each));
   return { store, db, team, logs: read };
 }
 
@@ -216,16 +226,18 @@ const CLAIMS: ReadonlySet<string> = new Set([
 ]);
 const utf8 = new TextDecoder();
 
-function rows(
-  db: SqliteDriver,
+async function rows(
+  db: StoreDriver,
   sql: string,
   params: readonly string[],
-): unknown[] {
-  return db.all(sql, params).map((raw) => {
+): Promise<unknown[]> {
+  const raws = await db.transaction((tx) => tx.all(sql, params), READ_ONLY);
+  return raws.map((raw) => {
     const row = Row.parse(raw);
     return Object.fromEntries(
       Object.entries(row)
-        .filter(([key]) => !CLAIMS.has(key))
+        // Postgres keeps SQLite's implicit rowid as a column; SELECT * shows it there only.
+        .filter(([key]) => !CLAIMS.has(key) && key !== "rowid")
         .map(([key, value]) => [
           key,
           JSON_COLUMNS.has(key) && value instanceof Uint8Array
@@ -241,13 +253,13 @@ function rows(
  * its primary key, JSON columns parsed, mail's claim columns left out, the feed as its
  * (branch_id, seq) rows, and the wake rows of the team's branches.
  */
-export function teamIndexRows(
-  db: SqliteDriver,
+export async function teamIndexRows(
+  db: StoreDriver,
   teams: readonly TeamId[],
   branches: readonly BranchId[],
-): Record<string, unknown[]> {
+): Promise<Record<string, unknown[]>> {
   const inTeams = `team_id IN (${teams.map(() => "?").join(", ")})`;
-  const by = (table: string, order: string): unknown[] =>
+  const by = (table: string, order: string): Promise<unknown[]> =>
     rows(
       db,
       `SELECT * FROM ${table} WHERE ${inTeams} ORDER BY ${order}`,
@@ -255,21 +267,21 @@ export function teamIndexRows(
     );
   const marks = branches.map(() => "?").join(", ");
   return {
-    teams: by("teams", "team_id"),
-    team_members: by("team_members", "team_id, name, generation"),
-    mail: by("mail", "mail_id"),
-    asks: by("asks", "ask_id"),
-    monitors: by("monitors", "monitor_id"),
-    operator_receipts: by(
+    teams: await by("teams", "team_id"),
+    team_members: await by("team_members", "team_id, name, generation"),
+    mail: await by("mail", "mail_id"),
+    asks: await by("asks", "ask_id"),
+    monitors: await by("monitors", "monitor_id"),
+    operator_receipts: await by(
       "operator_receipts",
       "tenant_id, team_id, op, idempotency_key",
     ),
-    team_feed: rows(
+    team_feed: await rows(
       db,
       `SELECT team_id, branch_id, seq FROM team_feed WHERE ${inTeams} ORDER BY team_id, branch_id, seq`,
       teams,
     ),
-    pending_wakes: rows(
+    pending_wakes: await rows(
       db,
       `SELECT * FROM pending_wakes WHERE branch_id IN (${marks}) ORDER BY branch_id, child_thread_id`,
       branches,
@@ -277,22 +289,55 @@ export function teamIndexRows(
   };
 }
 
+/** A read of raw rows through the driver, in a read-only transaction of its own. */
+export function query(
+  db: StoreDriver,
+  sql: string,
+  params: readonly SqlValue[] = [],
+): Promise<readonly unknown[]> {
+  return db.transaction((tx) => tx.all(sql, params), READ_ONLY);
+}
+
+/** A store read (a team row helper) in a read-only transaction of its own. */
+export function reading<T>(
+  db: StoreDriver,
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  return db.transaction(fn, READ_ONLY);
+}
+
+/** One raw statement through the driver, in a write transaction of its own. */
+export function exec(
+  db: StoreDriver,
+  sql: string,
+  params: readonly SqlValue[] = [],
+): Promise<number> {
+  return db.transaction((tx) => tx.run(sql, params));
+}
+
 const Count = z.array(z.strictObject({ n: z.int() }));
 
-function has(
-  db: SqliteDriver,
+async function has(
+  db: StoreDriver,
   table: string,
   key: string,
   id: string,
-): boolean {
+): Promise<boolean> {
   const rows = Count.parse(
-    db.all(`SELECT COUNT(*) AS n FROM ${table} WHERE ${key} = ?`, [id]),
+    await db.transaction(
+      (tx) =>
+        tx.all(`SELECT COUNT(*) AS n FROM ${table} WHERE ${key} = ?`, [id]),
+      READ_ONLY,
+    ),
   );
   return (rows[0]?.n ?? 0) > 0;
 }
 
 /** Whether `e`'s append could have happened yet: the rows it moves exist (causal order). */
-export function appendable(db: SqliteDriver, e: KnownEvent): boolean {
+export async function appendable(
+  db: StoreDriver,
+  e: KnownEvent,
+): Promise<boolean> {
   if (e.type === "message_received" || e.type === "mail_refused")
     return has(db, "mail", "mail_id", e.data.mail_id);
   if (e.type === "user_input" && e.data.mail_id !== undefined)
@@ -310,15 +355,18 @@ export function appendable(db: SqliteDriver, e: KnownEvent): boolean {
  * them, and wiping and rebuilding the index leaves the rows the appends wrote, byte for byte
  * (mail's claim columns aside; the feed compared as its (branch_id, seq) rows).
  */
-export function assertTeamReplays(store: LogStore, team: TeamId): void {
-  const chains = unwrap(teamChains(store, team));
+export async function assertTeamReplays(
+  store: LogStore,
+  team: TeamId,
+): Promise<void> {
+  const chains = unwrap(await teamChains(store, team));
   const broken = checkTeamLogs(
     chains.map((c) => ({ ...c, events: knownEvents(c.chain) })),
     team,
   );
   expect(broken).toBeUndefined();
   const branches = chains.map((c) => c.branchId);
-  const live = teamIndexRows(store.driver, [team], branches);
-  unwrap(rebuildTeamIndex(store, team));
-  expect(teamIndexRows(store.driver, [team], branches)).toEqual(live);
+  const live = await teamIndexRows(store.driver, [team], branches);
+  unwrap(await rebuildTeamIndex(store, team));
+  expect(await teamIndexRows(store.driver, [team], branches)).toEqual(live);
 }

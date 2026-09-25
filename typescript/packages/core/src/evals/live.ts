@@ -75,7 +75,7 @@ async function eventsOf(
   thread: ThreadRef,
 ): Promise<readonly KnownEvent[]> {
   const { log } = await openStore(store);
-  const read = log.read(thread.branch);
+  const read = await log.read(thread.branch);
   return read.ok ? knownEvents(read.value) : [];
 }
 
@@ -86,7 +86,7 @@ async function requests(store: Store, thread: ThreadRef): Promise<number> {
   let count = events.filter((e) => e.type === "model_request").length;
   for (const e of events) {
     if (e.type !== "agent_spawned") continue;
-    const branch = log.mainBranch(e.data.child_thread_id);
+    const branch = await log.mainBranch(e.data.child_thread_id);
     if (branch.ok)
       count += await requests(store, {
         ...thread,

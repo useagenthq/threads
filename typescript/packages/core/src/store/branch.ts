@@ -3,7 +3,7 @@ import type { BranchId, ThreadId } from "../log";
 import { err, ok, type Result } from "../result";
 import { type LogError, logError } from "../verify/error";
 import { VERSION } from "../version";
-import type { SqliteDriver } from "./driver";
+import type { Tx } from "./driver";
 import { canonicalLine } from "./encode";
 import { type BranchRow, getBranch, insertBranch } from "./tables";
 import { IMPL } from "./writer";
@@ -25,11 +25,11 @@ export type NewBranch = {
  * Stores a branch row with this implementation's header line, and returns that line; an existing
  * id is refused.
  */
-export function newBranch(
-  db: SqliteDriver,
+export async function newBranch(
+  tx: Tx,
   branch: NewBranch,
-): Result<Uint8Array, LogError> {
-  const existing = getBranch(db, branch.branchId);
+): Promise<Result<Uint8Array, LogError>> {
+  const existing = await getBranch(tx, branch.branchId);
   if (!existing.ok) return existing;
   if (existing.value !== undefined)
     return err(
@@ -47,7 +47,7 @@ export function newBranch(
     writer: { impl: IMPL, version: VERSION },
   });
   if (!header.ok) return header;
-  insertBranch(db, {
+  const inserted = await insertBranch(tx, {
     branch_id: branch.branchId,
     thread_id: branch.threadId,
     tenant_id: branch.tenantId,
@@ -60,5 +60,12 @@ export function newBranch(
     head_verified: 1,
     dropped_ref: null,
   });
-  return ok(header.value);
+  return inserted
+    ? ok(header.value)
+    : err(
+        logError(
+          "invalid_transition",
+          `thread ${branch.threadId} already exists`,
+        ),
+      );
 }

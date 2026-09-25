@@ -25,11 +25,11 @@ function boundary(bytes: Uint8Array, at: number): number {
   return end;
 }
 
-export function recordOutput(
+export async function recordOutput(
   s: Session,
   callId: string,
   output: string,
-): Recorded {
+): Promise<Recorded> {
   // Stored as an artifact beside the event, so redacted here (the writer redacts events).
   const text = redactSecrets(output);
   const bytes = encoder.encode(text);
@@ -44,6 +44,6 @@ export function recordOutput(
   return {
     text,
     preview: `${decoder.decode(head)}${marker}${decoder.decode(tail)}`,
-    ref: s.store(bytes, "text/plain"),
+    ref: await s.store(bytes, "text/plain"),
   };
 }

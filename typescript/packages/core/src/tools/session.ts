@@ -20,7 +20,7 @@ async function reattach(
   writer: Writer,
   sandbox: Sandbox,
 ): Promise<Got | undefined> {
-  const rows = ledger.rows(writer.lease.branchId);
+  const rows = await ledger.rows(writer.lease.branchId);
   if (!rows.ok) return lost(rows.error.message);
   const row = rows.value.findLast(
     (r) =>
@@ -41,14 +41,14 @@ async function create(
   writer: Writer,
   sandbox: Sandbox,
 ): Promise<Got> {
-  const row = ledger.begin(writer, "sandbox", sandbox.info.provider);
+  const row = await ledger.begin(writer, "sandbox", sandbox.info.provider);
   if (!row.ok) return lost(row.error.message);
   const made = await sandbox.create(
     row.value.operation_key,
     ownerContext(writer),
   );
   if (made.ok) {
-    const live = ledger.live(
+    const live = await ledger.live(
       writer,
       row.value.resource_id,
       made.value.id,

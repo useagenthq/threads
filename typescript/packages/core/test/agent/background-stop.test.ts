@@ -39,8 +39,8 @@ async function childLog(
   const spawned = parent.find((e) => e.type === "agent_spawned");
   if (spawned?.type !== "agent_spawned") return [];
   const { log } = await openStore(store);
-  const branch = log.mainBranch(spawned.data.child_thread_id);
-  return branch.ok ? knownEvents(unwrap(log.read(branch.value))) : [];
+  const branch = await log.mainBranch(spawned.data.child_thread_id);
+  return branch.ok ? knownEvents(unwrap(await log.read(branch.value))) : [];
 }
 
 async function until(probe: () => Promise<boolean>): Promise<void> {

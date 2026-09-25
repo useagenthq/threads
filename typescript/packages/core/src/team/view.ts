@@ -1,7 +1,7 @@
 import { type ParkAddress, sameAddress } from "../fold/state";
 import type { KnownEvent, MailEnvelope } from "../log";
 import type { EventDraft } from "../store/admit";
-import type { SqliteDriver } from "../store/driver";
+import type { Tx } from "../store/driver";
 import type { Chain } from "../verify";
 import type { Batch } from "./batch";
 import { askRow } from "./rows";
@@ -61,16 +61,16 @@ export function settleMonitors(
 }
 
 /** The ask is this branch's and open: its row says so and the batch hasn't closed it. */
-export function askOpen(
-  db: SqliteDriver,
+export async function askOpen(
+  tx: Tx,
   branch: string,
   askId: string,
   batch: Batch,
-): boolean {
+): Promise<boolean> {
   const closed = batch.drafts.some(
     (d) => d.type === "ask_closed" && d.data.ask_id === askId,
   );
-  const row = askRow(db, askId);
+  const row = await askRow(tx, askId);
   return !closed && row?.state === "open" && row.asker_branch_id === branch;
 }
 

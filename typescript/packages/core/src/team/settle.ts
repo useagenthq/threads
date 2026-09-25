@@ -5,7 +5,7 @@ import type {
   StoredMemberResult,
   ThreadId,
 } from "../log";
-import type { SqliteDriver } from "../store/driver";
+import type { Tx } from "../store/driver";
 import type { Batch } from "./batch";
 import {
   addressOf,
@@ -45,7 +45,7 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
 
 /** The writer a team append goes through, and its batch. */
 export type AppendContext = {
-  readonly db: SqliteDriver;
+  readonly tx: Tx;
   readonly batch: Batch;
   readonly threadId: ThreadId;
   readonly branchId: string;
@@ -70,17 +70,20 @@ const FIRES = {
 } as const;
 
 /** Appends the settlement to the batch; a thread that is no team member settles nothing. */
-export function settle(ctx: SettleContext, how: Settlement): void {
-  const rows = ownRows(ctx.db, ctx.threadId);
+export async function settle(
+  ctx: SettleContext,
+  how: Settlement,
+): Promise<void> {
+  const rows = await ownRows(ctx.tx, ctx.threadId);
   const primary = rows.find((r) => r.role === "member") ?? rows[0];
   if (primary === undefined) return;
-  const team = teamRow(ctx.db, primary.team_id);
+  const team = await teamRow(ctx.tx, primary.team_id);
   if (team === undefined) throw new Error(`no teams row ${primary.team_id}`);
   const member = refOf(team, primary);
-  const teamOf = (row: MemberRow): TeamRow =>
-    teamRow(ctx.db, row.team_id) ?? team;
+  const teamOf = async (row: MemberRow): Promise<TeamRow> =>
+    (await teamRow(ctx.tx, row.team_id)) ?? team;
   if (how.status === "completed") {
-    const output = bodyOf(how.output, ctx.put);
+    const output = await bodyOf(how.output, ctx.put);
     const result: Result = { member, status: how.status, output };
     const settled = ctx.batch.add({
       ...HOST,
@@ -88,7 +91,7 @@ export function settle(ctx: SettleContext, how: Settlement): void {
       data: { result },
     });
     for (const row of rows)
-      fire(ctx, teamOf(row), row, "member_idle", settled, result);
+      await fire(ctx, await teamOf(row), row, "member_idle", settled, result);
     return;
   }
   const result: Result = { member, ...how };
@@ -98,7 +101,7 @@ export function settle(ctx: SettleContext, how: Settlement): void {
       d.type === "ask_closed" ? [d.data.ask_id] : [],
     ),
   );
-  for (const askId of openAsks(ctx.db, ctx.branchId))
+  for (const askId of await openAsks(ctx.tx, ctx.branchId))
     if (!closed.has(askId))
       ctx.batch.add({
         ...HOST,
@@ -111,9 +114,9 @@ export function settle(ctx: SettleContext, how: Settlement): void {
     data: { result },
   });
   for (const row of rows) {
-    fire(ctx, teamOf(row), row, "member_ended", settled, result);
-    refuseAll(ctx, teamOf(row), row, result, true);
-    if (row.role === "lead") close(ctx, teamOf(row), row, settled);
+    await fire(ctx, await teamOf(row), row, "member_ended", settled, result);
+    await refuseAll(ctx, await teamOf(row), row, result, true);
+    if (row.role === "lead") await close(ctx, await teamOf(row), row, settled);
   }
 }
 
@@ -126,15 +129,15 @@ function causal(ctx: AppendContext, eventId: string): Envelope["causal"] {
 }
 
 /** One notification per monitor row on this generation that the event fires. */
-function fire(
+async function fire(
   ctx: SettleContext,
   team: TeamRow,
   row: MemberRow,
   type: keyof typeof FIRES,
   settled: string,
   result: Result,
-): void {
-  for (const m of monitorsOn(ctx.db, row.team_id, row)) {
+): Promise<void> {
+  for (const m of await monitorsOn(ctx.tx, row.team_id, row)) {
     if (!FIRES[type].has(m.kind)) continue;
     ctx.batch.add(
       sent({
@@ -142,7 +145,7 @@ function fire(
         kind: type === "member_idle" ? "member_settled" : "member_ended",
         team: row.team_id,
         from: refOf(team, row),
-        to: addressOf(ctx.db, row.team_id, m.watcher_branch_id),
+        to: await addressOf(ctx.tx, row.team_id, m.watcher_branch_id),
         provenance: ctx.provenance,
         causal: causal(ctx, settled),
         monitor_id: m.monitor_id,
@@ -157,15 +160,15 @@ function fire(
  * at its end append or for a message or an ask, a bounce to its sender carrying the refused
  * mail's provenance (an ask's bounce also carries the ended member's result).
  */
-export function refuseAll(
+export async function refuseAll(
   ctx: AppendContext,
   team: TeamRow,
   row: MemberRow,
   result: Result,
   bounceAll: boolean,
-): readonly MailEnvelope[] {
+): Promise<readonly MailEnvelope[]> {
   const taken = ctx.batch.taken();
-  const pending = pendingTo(ctx.db, row.team_id, row.name).filter(
+  const pending = (await pendingTo(ctx.tx, row.team_id, row.name)).filter(
     (m) => !taken.has(m.mail_id),
   );
   for (const mail of pending) {
@@ -204,14 +207,14 @@ function bounce(
 }
 
 /** A lead's end closes its team: one cancel per live member, in name order. */
-function close(
+async function close(
   ctx: SettleContext,
   team: TeamRow,
   lead: MemberRow,
   settled: string,
-): void {
+): Promise<void> {
   // memberRows reads in name order.
-  const live = memberRows(ctx.db, lead.team_id).filter(
+  const live = (await memberRows(ctx.tx, lead.team_id)).filter(
     (r) => r.role === "member" && r.state !== "ended",
   );
   for (const r of live)

@@ -124,7 +124,7 @@ def test_h2_a_members_subagent_is_charged_to_the_run_budget() -> None:
         assert isinstance(r, BudgetExhausted), r
         opener = next(e for e in await events(store, r.thread) if isinstance(e, UserInputEvent))
         sq = await sq_of(store)
-        charged: list[tuple[int]] = await sq.run(
+        charged = await sq.run(
             lambda c: c.execute(
                 "SELECT COUNT(*) FROM budget_ledger"
                 " WHERE budget_id = ? AND limit_name = 'max_model_requests'",

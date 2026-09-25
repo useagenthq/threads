@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agent, openThread, scriptedModel, sqlite } from "@threads/core";
 import { storeConnection, tenantStore } from "@threads/core/host";
+import { sqlAll, sqlRun } from "../../host/test/sql";
 import { run, type Served } from "../src";
 
 // The CLI over a real store directory: export, import, repair, delete, gc, timeline and dev.
@@ -127,7 +128,7 @@ describe("threads delete and gc", () => {
     const opened = await openThread(tenantStore(sqlite(a), "local"), thread.id);
     expect(opened.ok).toBe(false);
     const { db } = await storeConnection(sqlite(a));
-    expect(db.all("SELECT thread_id FROM tombstones", [])).toEqual([
+    expect(await sqlAll(db, "SELECT thread_id FROM tombstones", [])).toEqual([
       { thread_id: thread.id },
     ]);
   });
@@ -136,7 +137,8 @@ describe("threads delete and gc", () => {
     const a = temp();
     const thread = await seeded(a);
     const { db } = await storeConnection(sqlite(a));
-    db.run(
+    await sqlRun(
+      db,
       `INSERT INTO leases (branch_id, holder_id, epoch, expires_at) VALUES (?, 'elsewhere', 9, ?)
         ON CONFLICT (branch_id) DO UPDATE SET expires_at = excluded.expires_at`,
       [thread.branch, Date.now() + 60_000],
@@ -144,7 +146,9 @@ describe("threads delete and gc", () => {
     const refused = await cli(["delete", thread.id, "--store", a]);
     expect(refused.code).toBe(1);
     expect(refused.err).toStartWith("busy: ");
-    expect(db.all("SELECT thread_id FROM tombstones", [])).toEqual([]);
+    expect(await sqlAll(db, "SELECT thread_id FROM tombstones", [])).toEqual(
+      [],
+    );
     const everyone = await cli(["delete", "--tenant", "local", "--store", a]);
     expect(everyone.code).toBe(1);
     expect(everyone.err).toStartWith("busy: ");
@@ -178,11 +182,16 @@ describe("threads delete and gc", () => {
     });
     const result = await lead.run("Go.", { store: sqlite(a) });
     const { db } = await storeConnection(sqlite(a));
-    expect(db.all("SELECT thread_id FROM threads", [])).toHaveLength(3);
+    expect(await sqlAll(db, "SELECT thread_id FROM threads", [])).toHaveLength(
+      3,
+    );
     const done = await cli(["delete", result.thread.id, "--store", a]);
     expect(done.code).toBe(0);
-    expect(db.all("SELECT thread_id FROM tombstones", [])).toHaveLength(2);
-    const left = db.all(
+    expect(
+      await sqlAll(db, "SELECT thread_id FROM tombstones", []),
+    ).toHaveLength(2);
+    const left = await sqlAll(
+      db,
       "SELECT e.line FROM events e JOIN branches b ON b.branch_id = e.branch_id WHERE e.seq = 1",
       [],
     );

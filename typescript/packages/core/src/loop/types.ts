@@ -17,6 +17,7 @@ import type { LookupResult, Model } from "../model";
 import type { Result } from "../result";
 import type { Stale } from "../sandbox/protocol";
 import type { BudgetLedger } from "../store/budget";
+import type { Tx } from "../store/driver";
 import type { DynamicChoice } from "../team/dynamic";
 import type { MemberRow } from "../team/rows";
 
@@ -273,7 +274,7 @@ export type Team = {
   readonly act: (
     member: string,
     call: EventOf<"tool_call">["data"],
-  ) => { readonly isError: boolean; readonly output: string };
+  ) => Promise<{ readonly isError: boolean; readonly output: string }>;
   /** Messages to `member` (or to every member) from anyone else, oldest first. */
   readonly inbox: (
     member: string,
@@ -332,12 +333,15 @@ export type TeamRuntime = {
   ) => Promise<TeamAgentPin | undefined>;
   readonly limits: { readonly concurrent: number; readonly mailbox: number };
   /** An asked member's budgets, read from its log (or its pinned config while starting). */
-  readonly recipient: (row: MemberRow) => TeamRecipient | undefined;
+  readonly recipient: (
+    tx: Tx,
+    row: MemberRow,
+  ) => Promise<TeamRecipient | undefined>;
   /**
    * A member's turn is under the run budget of its request: the root request the turn's opener
    * belongs to (its receipt's provenance, or its task's). Absent for a lead, whose run is its own.
    */
-  readonly runCovering?: (opener: KnownEvent) => Covering | undefined;
+  readonly runCovering?: (opener: KnownEvent) => Promise<Covering | undefined>;
   /**
    * A member's: the one principal its run acts under. Its consume takes only mail sent under it;
    * the worker runs the member again under the principal of the mail left pending.

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { openThread, sqlite } from "@threads/core";
+import { openThread, type Store, sqlite } from "@threads/core";
 import {
   BranchId,
   collect,
@@ -37,7 +37,7 @@ const USAGE = `usage: threads <command> [options]
   eval [--agent M] [--cases D] [--case N]... [--live] [--store D] [--strict] [--out F]
                                     run saved cases: replay and rerun for free, drift with
                                     --agent, a judged live run with --live
-options: --store <dir> (default .threads), --tenant <id> (default local)`;
+options: --store <dir or postgres:// URL> (default .threads), --tenant <id> (default local)`;
 
 const OPTIONS = {
   store: { type: "string" },
@@ -188,9 +188,17 @@ async function serve(
   return 0;
 }
 
+/** The store `--store` names: a directory (SQLite), or a postgres:// URL. */
+async function storeAt(at: string): Promise<Store> {
+  if (!/^postgres(ql)?:\/\//.test(at)) return sqlite(at);
+  // Loaded only for a Postgres store: a SQLite user never loads pg.
+  const { postgres } = await import("@threads/postgres");
+  return postgres(at);
+}
+
 async function logOf(p: Parsed) {
   const { log } = await openStore(
-    tenantStore(sqlite(p.store), p.tenant ?? "local"),
+    tenantStore(await storeAt(p.store), p.tenant ?? "local"),
   );
   return log;
 }
@@ -201,7 +209,7 @@ async function timeline(p: Parsed, io: Io): Promise<number> {
     p.branch === undefined ? undefined : BranchId.safeParse(p.branch);
   if (!id.success || branch?.success === false)
     return usage(io, "timeline <thread_id>");
-  const store = tenantStore(sqlite(p.store), p.tenant ?? "local");
+  const store = tenantStore(await storeAt(p.store), p.tenant ?? "local");
   const thread = await openThread(store, id.data, {
     ...(branch === undefined ? {} : { branchId: branch.data }),
   });
@@ -215,7 +223,7 @@ async function timeline(p: Parsed, io: Io): Promise<number> {
 async function exportBranch(p: Parsed, io: Io): Promise<number> {
   const id = BranchId.safeParse(p.args[0]);
   if (!id.success) return usage(io, "export <branch_id>");
-  const bytes = (await logOf(p)).exportBranch(id.data);
+  const bytes = await (await logOf(p)).exportBranch(id.data);
   if (!bytes.ok) return fail(io, bytes.error);
   io.bytes(bytes.value);
   return 0;
@@ -224,7 +232,9 @@ async function exportBranch(p: Parsed, io: Io): Promise<number> {
 async function importFile(p: Parsed, io: Io): Promise<number> {
   const file = p.args[0];
   if (file === undefined) return usage(io, "import <file>");
-  const stored = (await logOf(p)).importLog(new Uint8Array(readFileSync(file)));
+  const stored = await (await logOf(p)).importLog(
+    new Uint8Array(readFileSync(file)),
+  );
   if (!stored.ok) return fail(io, stored.error);
   const leaf = stored.value.segments.at(-1)?.header.branch_id;
   io.out(`${leaf ?? ""}\n`);
@@ -234,21 +244,21 @@ async function importFile(p: Parsed, io: Io): Promise<number> {
 async function repair(p: Parsed, io: Io): Promise<number> {
   const id = BranchId.safeParse(p.args[0]);
   if (!id.success) return usage(io, "repair <branch_id>");
-  const writer = (await logOf(p)).acquire(
+  const writer = await (await logOf(p)).acquire(
     id.data,
     `cli-${crypto.randomUUID()}`,
   );
   if (!writer.ok) return fail(io, writer.error);
-  writer.value.release();
+  await writer.value.release();
   io.out(`${id.data} is runnable\n`);
   return 0;
 }
 
 async function remove(p: Parsed, io: Io): Promise<number> {
-  const { db } = await storeConnection(sqlite(p.store));
+  const { db } = await storeConnection(await storeAt(p.store));
   const thread = p.args[0];
   if (thread === undefined && p.tenant !== undefined) {
-    const done = deleteTenant(db, p.tenant, Date.now());
+    const done = await deleteTenant(db, p.tenant, Date.now());
     if (!done.ok) return fail(io, done.error);
     io.out(`deleted ${done.value} threads of ${p.tenant}\n`);
     return 0;
@@ -258,15 +268,16 @@ async function remove(p: Parsed, io: Io): Promise<number> {
   const id = ThreadId.safeParse(thread);
   if (!id.success)
     return fail(io, { code: "not_found", message: `no thread ${thread}` });
-  const done = deleteThread(db, p.tenant ?? "local", id.data, Date.now());
+  const done = await deleteThread(db, p.tenant ?? "local", id.data, Date.now());
   if (!done.ok) return fail(io, done.error);
   io.out(`deleted ${thread} (${done.value} threads)\n`);
   return 0;
 }
 
 async function gc(p: Parsed, io: Io): Promise<number> {
-  const store = sqlite(p.store);
+  const store = await storeAt(p.store);
   const { db } = await storeConnection(store);
+  const { artifacts } = await openStore(store);
   if (p.args[0] !== undefined) {
     const h = await loadHost(p.args[0], io);
     if (h === undefined) return 1;
@@ -280,11 +291,7 @@ async function gc(p: Parsed, io: Io): Promise<number> {
     }
   }
   const grace = p.graceDays * 86_400_000;
-  const removed = sweepArtifacts(
-    db,
-    join(p.store, "artifacts"),
-    Date.now() - grace,
-  );
+  const removed = await sweepArtifacts(db, artifacts, Date.now() - grace);
   io.out(`removed ${removed.length} unreferenced artifacts\n`);
   return 0;
 }

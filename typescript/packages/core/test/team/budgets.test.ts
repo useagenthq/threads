@@ -3,7 +3,7 @@ import { z } from "zod";
 import { agent, type Model, scriptedModel, sqlite } from "../../src";
 import type { Principal } from "../../src/log";
 import { markTestKit } from "../../src/model/guard";
-import { assertTeamReplays } from "./kit";
+import { assertTeamReplays, query } from "./kit";
 import {
   call,
   events,
@@ -29,7 +29,8 @@ async function reservedFor(
 ): Promise<readonly string[]> {
   const log = await logOf(store);
   return Row.parse(
-    log.driver.all(
+    await query(
+      log.driver,
       "SELECT budget_id, attempt_key FROM budget_ledger WHERE limit_name = 'max_model_requests' ORDER BY attempt_key, budget_id",
       [],
     ),
@@ -99,7 +100,7 @@ describe("team budgets", () => {
       status: "budget_exhausted",
       budget: { scope: "run", limit: "max_model_requests", limit_value: 2 },
     });
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("start without headroom for one request of the member's model is refused budget_exceeded", async () => {
@@ -125,7 +126,7 @@ describe("team budgets", () => {
     expect(result?.type === "tool_result" && result.data.preview).toBe(
       '{"code":"budget_exceeded","status":"refused"}',
     );
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("a member's requests reserve against the lead's thread budget, and each turn against its own request's run budget", async () => {
@@ -180,6 +181,6 @@ describe("team budgets", () => {
       `run:${lead0}:${inputs[1]}`,
       `thread:${lead0}`,
     ]);
-    assertTeamReplays(await logOf(store), first.team.ref.id);
+    await assertTeamReplays(await logOf(store), first.team.ref.id);
   });
 });

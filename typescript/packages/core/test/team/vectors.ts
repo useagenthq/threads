@@ -8,13 +8,13 @@ import {
   type TeamId,
   TeamId as TeamIdSchema,
 } from "../../src/log";
-import type { SqliteDriver } from "../../src/store";
+import type { StoreDriver } from "../../src/store";
 import { IMPL } from "../../src/store/writer";
 import type { Template } from "../../src/team/dynamic";
 import { rebuildTeamIndex } from "../../src/team/rebuild";
 import { VERSION } from "../../src/version";
 import { type Fixture, fixture, unwrap } from "../store/helpers";
-import { storeLogs, teamIndexRows, verified } from "./kit";
+import { query, storeLogs, teamIndexRows, verified } from "./kit";
 
 // The op vectors (spec/conformance/vectors/team-ops.json) as a runtime reads them: a world's logs
 // seeded under this implementation's own headers and chained, its index rebuilt, and the rows it
@@ -167,15 +167,15 @@ export const TEAM: TeamId = TeamIdSchema.parse(
  * A store holding the vector's world at its clock, the team index rebuilt from its logs, and every
  * member config the vectors pin stored under its config_hash (as start writes it).
  */
-export function seeded(v: Vector, db?: SqliteDriver): Fixture {
-  const fx = fixture("acme", db);
+export async function seeded(v: Vector, db?: StoreDriver): Promise<Fixture> {
+  const fx = await fixture("acme", db);
   fx.clock.now = v.now;
   const logs = Object.values(worldLogs(v)).map((ref) =>
     verified(exported(ref)),
   );
-  storeLogs(fx.store, logs);
-  unwrap(rebuildTeamIndex(fx.store, TEAM));
-  for (const config of configs()) fx.artifacts.put(config);
+  await storeLogs(fx.store, logs);
+  unwrap(await rebuildTeamIndex(fx.store, TEAM));
+  for (const config of configs()) await fx.artifacts.put(config);
   return fx;
 }
 
@@ -195,11 +195,11 @@ function configs(): readonly Uint8Array[] {
 }
 
 /** The index rows, per table, as the vectors list them. */
-export function rows(fx: Fixture): Record<string, unknown[]> {
-  const branches = fx.db
-    .all("SELECT branch_id FROM branches", [])
-    .map((r) => z.object({ branch_id: BranchId }).parse(r).branch_id);
-  const { team_feed: _feed, ...tables } = teamIndexRows(
+export async function rows(fx: Fixture): Promise<Record<string, unknown[]>> {
+  const branches = (await query(fx.db, "SELECT branch_id FROM branches")).map(
+    (r) => z.object({ branch_id: BranchId }).parse(r).branch_id,
+  );
+  const { team_feed: _feed, ...tables } = await teamIndexRows(
     fx.db,
     [TEAM],
     branches,

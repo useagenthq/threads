@@ -4,6 +4,7 @@ import { markTestKit } from "@threads/core/adapter";
 import {
   knownEvents,
   openStore,
+  type StoreDriver,
   StoreError,
   storeConnection,
   ThreadId,
@@ -13,6 +14,7 @@ import {
 import { hostTicked } from "../src/host";
 import { cleanup, fold, serve, started } from "./api-kit";
 import { alice, say, until } from "./kit";
+import { sqlRun } from "./sql";
 
 // A store outage is the host's to wait out, never the model's to resend: one met while a model
 // streams fails the run, which the host's recovery runs on with backoff; one met finding a
@@ -69,7 +71,8 @@ describe("a store outage", () => {
     const store = sqlite(":memory:");
     const { db } = await storeConnection(store);
     const thread = ThreadId.parse(uuidv7(Date.now()));
-    db.run(
+    await sqlRun(
+      db,
       `INSERT INTO channel_threads (tenant_id, channel, installation_id, address, thread_id)
         VALUES (?, 'slack', 'T1', 'C1', ?)`,
       [alice.tenant, thread],
@@ -80,13 +83,22 @@ describe("a store outage", () => {
       lookups += 1;
       throw new StoreError("disk I/O error");
     };
-    const all = db.all.bind(db);
+    const transaction = db.transaction.bind(db);
     let sweeps = 0;
-    const counted = (sql: string, params: Parameters<typeof db.all>[1]) => {
-      if (sql.includes("FROM inbox WHERE consumed_seq IS NULL")) sweeps += 1;
-      return all(sql, params);
-    };
-    Object.assign(db, { all: counted });
+    const counted: StoreDriver["transaction"] = (fn, options) =>
+      transaction(
+        (tx) =>
+          fn({
+            ...tx,
+            all: (sql, params) => {
+              if (sql.includes("FROM inbox WHERE consumed_seq IS NULL"))
+                sweeps += 1;
+              return tx.all(sql, params);
+            },
+          }),
+        options,
+      );
+    Object.assign(db, { transaction: counted });
     const logged = spyOn(console, "error");
     try {
       const h = serve(store, scriptedModel({ responses: [] }));
@@ -100,7 +112,7 @@ describe("a store outage", () => {
       expect(said.filter((m) => m.includes("tick failed"))).toHaveLength(0);
     } finally {
       logged.mockRestore();
-      Object.assign(db, { all });
+      Object.assign(db, { transaction });
     }
   }, 20_000);
 });

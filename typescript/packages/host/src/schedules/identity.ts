@@ -4,8 +4,9 @@ import {
   knownEvents,
   type LogStore,
   renewTeam,
-  type SqliteDriver,
+  type StoreDriver,
   ThreadId,
+  type Tx,
   uuidv7,
 } from "@threads/core/host";
 import { pinMatches } from "../context";
@@ -28,23 +29,27 @@ import {
  * thread's, once that thread is quiet. Keys another scheduler reserved are skipped first, so a
  * losing scheduler never moves the schedule.
  */
-export function reserveDue(
-  db: SqliteDriver,
+export async function reserveDue(
+  db: StoreDriver,
   log: LogStore,
   started: EventDraft,
   due: readonly Due[],
-): void {
-  db.transaction(() => {
-    const fresh = due.filter((row) => !reserved(db, log.tenant, row));
+): Promise<void> {
+  // Retry-safe: each attempt picks and makes its thread afresh, from committed rows.
+  await db.transaction(async (tx) => {
+    const fresh: Due[] = [];
+    for (const row of due)
+      if (!(await reserved(tx, log.tenant, row))) fresh.push(row);
     const first = fresh[0];
     if (first === undefined) return;
-    const found = currentThread(db, log.tenant, first.schedule_id);
+    const inTx = log.within(tx);
+    const found = await currentThread(tx, log.tenant, first.schedule_id);
     const threadId =
-      found !== undefined && keeps(db, log, found, started)
+      found !== undefined && (await keeps(tx, inTx, found, started))
         ? found
-        : newThread(db, log, first.schedule_id, started);
+        : await newThread(tx, inTx, first.schedule_id, started);
     for (const row of fresh)
-      insertPending(db, log.tenant, threadId, row, log.now());
+      await insertPending(tx, log.tenant, threadId, row, log.now());
   });
 }
 
@@ -53,38 +58,41 @@ export function reserveDue(
  * thread is still busy. A config change moves to a new thread only once the old one is quiet (no
  * open turn, no undecided reservation), so no new run starts while the old one goes on.
  */
-function keeps(
-  db: SqliteDriver,
+async function keeps(
+  tx: Tx,
   log: LogStore,
   threadId: ThreadId,
   started: EventDraft,
-): boolean {
-  const main = log.mainBranch(threadId);
-  const read = main.ok ? log.read(main.value) : undefined;
+): Promise<boolean> {
+  const main = await log.mainBranch(threadId);
+  const read = main.ok ? await log.read(main.value) : undefined;
   // An unreadable thread can't be shown quiet: the reservation fails, and the identity stays.
   if (read?.ok !== true)
     throw new Error(`schedule thread ${threadId} can't be read`);
   if (pinMatches(knownEvents(read.value), started)) return true;
   return (
-    read.value.fold.turnOpen || pendingOf(db, log.tenant, threadId).length > 0
+    read.value.fold.turnOpen ||
+    (await pendingOf(tx, log.tenant, threadId)).length > 0
   );
 }
 
 /** A new current thread for the schedule, in the caller's transaction, through the log store. */
-function newThread(
-  db: SqliteDriver,
+async function newThread(
+  tx: Tx,
   log: LogStore,
   scheduleId: string,
   started: EventDraft,
-): ThreadId {
+): Promise<ThreadId> {
   const threadId = ThreadId.parse(uuidv7(log.now()));
   const branchId = BranchId.parse(uuidv7(log.now()));
-  makeCurrent(db, log.tenant, scheduleId, threadId, log.now());
-  must(log.createBranch(threadId, branchId));
-  const writer = must(log.acquire(branchId, `schedule-${uuidv7(log.now())}`));
+  await makeCurrent(tx, log.tenant, scheduleId, threadId, log.now());
+  must(await log.createBranch(threadId, branchId));
+  const writer = must(
+    await log.acquire(branchId, `schedule-${uuidv7(log.now())}`),
+  );
   // A lead's new thread names a new team of its own, which its first append opens.
-  must(writer.append([renewTeam(started, log.now())]));
-  writer.release();
+  must(await writer.append([renewTeam(started, log.now())]));
+  await writer.release();
   return threadId;
 }
 

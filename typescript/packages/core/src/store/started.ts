@@ -3,7 +3,7 @@ import type { EventOf } from "../fold/state";
 import { BranchId, parseLogLine, ThreadId } from "../log";
 import { ok, type Result } from "../result";
 import type { LogError } from "../verify/error";
-import type { SqliteDriver } from "./driver";
+import type { Tx } from "./driver";
 import { parseRows } from "./tables";
 
 /** What opened a thread's main branch: a thread_started, or a team log's team_opened. */
@@ -26,17 +26,17 @@ const utf8 = new TextDecoder();
  * thread's parent, the team it leads, and the team logs. A first line that doesn't parse links
  * nothing, so its thread stays deletable on its own.
  */
-export function openedThreads(
-  db: SqliteDriver,
+export async function openedThreads(
+  tx: Tx,
   tenantId: string,
-): Result<readonly Opened[], LogError> {
+): Promise<Result<readonly Opened[], LogError>> {
   const rows = parseRows(
     FirstRow,
-    db.all(
+    await tx.all(
       `SELECT b.thread_id, b.branch_id, e.line FROM events e
         JOIN branches b ON b.branch_id = e.branch_id
         WHERE b.tenant_id = ? AND b.parent_branch_id IS NULL AND e.seq = 1
-          AND e.type IN ('thread_started', 'team_opened')`,
+          AND e.type IN ('thread_started', 'team_opened') ORDER BY b.rowid`,
       [tenantId],
     ),
   );

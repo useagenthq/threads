@@ -76,7 +76,7 @@ async function realPin(bot: Agent<undefined, unknown>) {
   const store = sqlite(":memory:");
   const run = await bot.run("Hi", { store });
   const { log } = await openStore(store);
-  const read = log.read(run.thread.branch);
+  const read = await log.read(run.thread.branch);
   if (!read.ok) throw new Error(read.error.message);
   const first = knownEvents(read.value)[0];
   if (first?.type !== "thread_started") throw new Error("no thread_started");
@@ -84,7 +84,7 @@ async function realPin(bot: Agent<undefined, unknown>) {
 }
 
 describe("dryPin", () => {
-  test("runs no setup, reads no secret and opens no MCP connection; it names what it skipped", () => {
+  test("runs no setup, reads no secret and opens no MCP connection; it names what it skipped", async () => {
     const bot = agent({
       name: "support",
       model: withSetup(scriptedModel({ responses: [] })),

@@ -38,13 +38,16 @@ const put = (): never => {
 const read = put;
 
 /** Appends what `decide` adds to a batch under the op's writer, at the vector's clock. */
-function decided(w: Writer, decide: (ctx: ConsumeContext) => void): void {
+async function decided(
+  w: Writer,
+  decide: (ctx: ConsumeContext) => Promise<void>,
+): Promise<void> {
   const header = w.chain.segments.at(-1)?.header;
   if (header === undefined) throw new Error("a writer has a header");
-  const appended = w.appendDecided((tx) => {
+  const appended = await w.appendDecided(async (tx) => {
     const batch = new Batch(tx.chain.fold.seq, tx.now, vectorMint);
-    decide({
-      db: tx.db,
+    await decide({
+      tx: tx.tx,
       chain: tx.chain,
       batch,
       threadId: header.thread_id,
@@ -57,7 +60,7 @@ function decided(w: Writer, decide: (ctx: ConsumeContext) => void): void {
 }
 
 /** A model call's outcome: what the op returns, else its one tool_result as the value it records. */
-function callOp(w: Writer, v: Op): unknown {
+async function callOp(w: Writer, v: Op): Promise<unknown> {
   const callId = z.string().parse(v.input["call_id"]);
   const call = knownEvents(w.chain).find(
     (e): e is EventOf<"tool_call"> =>
@@ -65,8 +68,8 @@ function callOp(w: Writer, v: Op): unknown {
   );
   if (call === undefined) throw new Error(`no call ${callId}`);
   let out: unknown;
-  decided(w, (ctx) => {
-    out = modelOp({ ...ctx, call, put, read }, v);
+  await decided(w, async (ctx) => {
+    out = await modelOp({ ...ctx, call, put, read }, v);
   });
   if (out !== undefined) return out;
   const result = knownEvents(w.chain).findLast((e) => e.type === "tool_result");
@@ -74,21 +77,26 @@ function callOp(w: Writer, v: Op): unknown {
   return JSON.parse(result.data.preview);
 }
 
-function modelOp(c: CallContext, v: Op): unknown {
+async function modelOp(c: CallContext, v: Op): Promise<unknown> {
   const args = v.input["args"];
   switch (v.op) {
     case "send": {
       const parsed = Args.send.parse(args);
-      return send(callRequest(c), named(c, parsed.to), parsed.text, limits(v));
+      return send(
+        await callRequest(c),
+        named(c, parsed.to),
+        parsed.text,
+        limits(v),
+      );
     }
     case "start": {
       const parsed = StartInput.parse(args);
-      return start(callRequest(c), parsed, startPlan(v, parsed));
+      return start(await callRequest(c), parsed, startPlan(v, parsed));
     }
     case "ask":
       return ask(c, Args.ask.parse(args), {
         limits: limits(v),
-        headroom: () => v.given.headroom ?? true,
+        headroom: async () => v.given.headroom ?? true,
       });
     case "reply":
       return reply(c, Args.reply.parse(args));
@@ -104,7 +112,7 @@ function startPlan(v: Op, args: z.infer<typeof StartInput>): StartPlan {
     agents: agents(v),
     resolved: resolveDefinition(v.given.templates?.[args.agent], args),
     limits: limits(v),
-    headroom: () => v.given.headroom ?? true,
+    headroom: async () => v.given.headroom ?? true,
     threadId: ThreadId.parse(v.input["thread_id"]),
   };
 }
@@ -115,12 +123,12 @@ const Body = {
 };
 
 /** An operator request's outcome: what the op returns, or what its key replays. */
-function operatorOp(w: Writer, v: Op): unknown {
+async function operatorOp(w: Writer, v: Op): Promise<unknown> {
   let out: unknown;
-  decided(w, (ctx) => {
-    const team = teamOfLog(ctx.db, ctx.branchId);
+  await decided(w, async (ctx) => {
+    const team = await teamOfLog(ctx.tx, ctx.branchId);
     if (team === undefined) throw new Error("not a team log");
-    const opened = openOperator(
+    const opened = await openOperator(
       { ...ctx, put, team },
       {
         requestId: z.string().parse(v.input["request_id"]),
@@ -136,11 +144,11 @@ function operatorOp(w: Writer, v: Op): unknown {
     }
     if (v.op === "send") {
       const body = Body.send.parse(v.input["body"]);
-      const to = refTarget(ctx.db, team, body.to);
-      out = send(opened.request, to, body.text, limits(v));
+      const to = refTarget(ctx.tx, team, body.to);
+      out = await send(opened.request, to, body.text, limits(v));
     } else {
       const body = StartInput.parse(v.input["body"]);
-      out = start(opened.request, body, startPlan(v, body));
+      out = await start(opened.request, body, startPlan(v, body));
     }
   });
   return out;
@@ -174,10 +182,10 @@ function agents(v: Op): ReadonlyMap<string, { readonly configHash: string }> {
   return out;
 }
 
-function consumeOp(w: Writer): unknown {
+async function consumeOp(w: Writer): Promise<unknown> {
   let out: unknown;
-  decided(w, (ctx) => {
-    const got = consume(ctx);
+  await decided(w, async (ctx) => {
+    const got = await consume(ctx);
     out =
       got.status === "nothing_pending"
         ? got
@@ -186,10 +194,10 @@ function consumeOp(w: Writer): unknown {
   return out;
 }
 
-function deadlineOp(w: Writer, v: Op): unknown {
+async function deadlineOp(w: Writer, v: Op): Promise<unknown> {
   let out: unknown;
-  decided(w, (ctx) => {
-    out = deadline(ctx, z.string().parse(v.input["id"]));
+  await decided(w, async (ctx) => {
+    out = await deadline(ctx, z.string().parse(v.input["id"]));
   });
   return out;
 }
@@ -214,17 +222,17 @@ function turnEnd(v: Op): EventDraft {
 }
 
 /** A member's own settling append: the turn's end, then its settlement. */
-function settleOp(w: Writer, v: Op): unknown {
+async function settleOp(w: Writer, v: Op): Promise<unknown> {
   const events = knownEvents(w.chain);
   const idle = v.op === "idle";
   const how: Settlement = idle
     ? { status: "completed", output: lastText(events) }
     : endedOf(v.input["result"]);
-  decided(w, (ctx) => {
+  await decided(w, async (ctx) => {
     ctx.batch.add(turnEnd(v));
-    const provenance = turnProvenance(ctx.db, ctx.chain);
+    const provenance = await turnProvenance(ctx.tx, ctx.chain);
     if (provenance === undefined) throw new Error("no turn");
-    settle({ ...ctx, provenance, put }, how);
+    await settle({ ...ctx, provenance, put }, how);
   });
   if (!idle) return { status: "ended" };
   const settled = knownEvents(w.chain).findLast(
@@ -261,7 +269,7 @@ function lastText(events: readonly { type: string }[]): string {
 }
 
 /** The op under `w`: its outcome as the vector states it. */
-export function runOn(w: Writer, v: Op): unknown {
+export function runOn(w: Writer, v: Op): Promise<unknown> {
   switch (v.op) {
     case "send":
     case "start":

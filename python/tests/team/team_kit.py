@@ -6,7 +6,6 @@ Teams contract.
 
 import copy
 import json
-import sqlite3
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
@@ -31,6 +30,7 @@ from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.result import Err, Ok
 from threads.store import SqliteStore, VerifiedLog, sql, verify_export
+from threads.store.conn import Conn
 from threads.team.cross import TeamLogEvents, check_team_logs
 from threads.team.rebuild import rebuild_team_index, team_branches
 
@@ -54,6 +54,30 @@ _PKS: Mapping[str, str] = {
     "monitors": "monitor_id",
     "operator_receipts": "tenant_id, team_id, op, idempotency_key",
 }
+_COLUMNS: Mapping[str, tuple[str, ...]] = {
+    "teams": ("team_id", "tenant_id", "lead_thread_id", "team_log_branch_id", "closed_at"),
+    "team_members": (
+        *("team_id", "name", "generation", "role", "agent", "config_hash", "thread_id"),
+        *("branch_id", "provenance", "state", "result", "updated_seq"),
+    ),
+    "mail": (
+        *("mail_id", "team_id", "kind", "to_name", "to_generation", "principal_key"),
+        *("root_request", "envelope", "created_at", "state", "consumed_seq"),
+    ),
+    "asks": (
+        *("ask_id", "team_id", "asker_branch_id", "recipient_name", "recipient_generation"),
+        *("deadline", "state", "closed_seq"),
+    ),
+    "monitors": (
+        *("monitor_id", "team_id", "watcher_branch_id", "target_name", "target_generation"),
+        *("kind", "wait_id"),
+    ),
+    "operator_receipts": (
+        *("tenant_id", "team_id", "op", "idempotency_key", "principal_key", "body_hash"),
+        "request_id",
+    ),
+}
+"""Each table's columns as store.sql names them; mail's claim columns, wake hints, left out."""
 
 
 def team_cases() -> list[str]:
@@ -117,7 +141,7 @@ async def add(store: SqliteStore, logs: Mapping[str, bytes], tenant: str = TENAN
         assert found is None, (label, found)
 
 
-def index_rows(conn: sqlite3.Connection) -> dict[str, JsonValue]:
+def index_rows(conn: Conn) -> dict[str, JsonValue]:
     """Every team's rows as the conformance `index` holds them: each table by primary key, JSON
     columns parsed, mail's claim columns left out, the feed as the (team_id, branch_id, seq) it
     holds."""
@@ -125,22 +149,25 @@ def index_rows(conn: sqlite3.Connection) -> dict[str, JsonValue]:
     feed = conn.execute(
         "SELECT team_id, branch_id, seq FROM team_feed ORDER BY team_id, branch_id, seq"
     ).fetchall()
-    out["team_feed"] = [{"team_id": t, "branch_id": b, "seq": s} for t, b, s in feed]
+    out["team_feed"] = [
+        {"team_id": _cell("", t), "branch_id": _cell("", b), "seq": _cell("", s)}
+        for t, b, s in feed
+    ]
     wakes = conn.execute(
         "SELECT branch_id, child_thread_id FROM pending_wakes ORDER BY branch_id, child_thread_id"
     ).fetchall()
-    out["pending_wakes"] = [{"branch_id": b, "child_thread_id": c} for b, c in wakes]
+    out["pending_wakes"] = [
+        {"branch_id": _cell("", b), "child_thread_id": _cell("", c)} for b, c in wakes
+    ]
     return out
 
 
-def _rows(conn: sqlite3.Connection, table: str) -> JsonValue:
-    cursor = conn.execute(f"SELECT * FROM {table} ORDER BY {_PKS[table]}")  # noqa: S608
-    names = [d[0] for d in cursor.description]
-    rows: list[JsonValue] = []
-    for values in cursor.fetchall():
-        row = {n: _cell(n, v) for n, v in zip(names, values, strict=True)}
-        rows.append({n: v for n, v in row.items() if n not in ("claim_token", "claim_expires_at")})
-    return rows
+def _rows(conn: Conn, table: str) -> JsonValue:
+    names = _COLUMNS[table]
+    found = conn.execute(
+        f"SELECT {', '.join(names)} FROM {table} ORDER BY {_PKS[table]}"  # noqa: S608
+    ).fetchall()
+    return [{n: _cell(n, v) for n, v in zip(names, values, strict=True)} for values in found]
 
 
 async def rebuild_all(store: SqliteStore, logs: Mapping[str, bytes]) -> None:
@@ -175,7 +202,7 @@ def branch_of(thread: ThreadId) -> BranchId:
     return BranchId(thread.replace("0192a000", "0192b000"))
 
 
-def appendable(conn: sqlite3.Connection, e: Event) -> bool:
+def appendable(conn: Conn, e: Event) -> bool:
     """Whether `e`'s append could have happened yet: the rows it moves exist (causal order)."""
     if isinstance(e, MessageReceivedEvent | UserInputEvent | MailRefusedEvent):
         mail = e.data.mail_id
@@ -192,7 +219,7 @@ def appendable(conn: sqlite3.Connection, e: Event) -> bool:
     return True
 
 
-def _exists(conn: sqlite3.Connection, query: str, key: object) -> bool:
+def _exists(conn: Conn, query: str, key: object) -> bool:
     return conn.execute(query, (key,)).fetchone() is not None
 
 
@@ -202,7 +229,7 @@ async def assert_team_replays(store: SqliteStore, team: str) -> None:
     for byte (mail's claim columns aside; the feed compared as its (branch_id, seq) rows)."""
     tenant = store.tables.tenant_id
 
-    def logs(conn: sqlite3.Connection) -> list[TeamLogEvents]:
+    def logs(conn: Conn) -> list[TeamLogEvents]:
         out: list[TeamLogEvents] = []
         for log in team_branches(conn, tenant, team):
             read = verify_export(sql.export(conn, log.branch_id), 0)

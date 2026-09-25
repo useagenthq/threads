@@ -8,7 +8,7 @@ import type { Strict } from "../log/zod-types";
 import { err, ok, type Result } from "../result";
 import { addLine, type Chain, emptyChain } from "../verify";
 import { type LogError, logError } from "../verify/error";
-import type { SqliteDriver } from "./driver";
+import type { Tx } from "./driver";
 import { branchLines } from "./lines";
 import { parseRows } from "./tables";
 
@@ -17,13 +17,13 @@ const Id: Strict<{ branch_id: typeof BranchId }> = z.strictObject({
 });
 
 /** This tenant's branches a fork left `forking`: a crash stopped them before step 4. */
-export function forkingBranches(
-  db: SqliteDriver,
+export async function forkingBranches(
+  tx: Tx,
   tenantId: string,
-): Result<readonly BranchId[], LogError> {
+): Promise<Result<readonly BranchId[], LogError>> {
   const rows = parseRows(
     Id,
-    db.all(
+    await tx.all(
       "SELECT branch_id FROM branches WHERE tenant_id = ? AND state = 'forking' ORDER BY rowid",
       [tenantId],
     ),
@@ -32,11 +32,11 @@ export function forkingBranches(
 }
 
 /** A stored branch's chain, every line admitted as on import; a forking branch has no head line. */
-export function loadChain(
-  db: SqliteDriver,
+export async function loadChain(
+  tx: Tx,
   branchId: string,
-): Result<Chain, LogError> {
-  const lines = branchLines(db, branchId);
+): Promise<Result<Chain, LogError>> {
+  const lines = await branchLines(tx, branchId);
   if (!lines.ok) return lines;
   const chain = emptyChain();
   for (const line of lines.value.lines) {
@@ -89,14 +89,14 @@ const Listed: Strict<{
 export type ListedBranch = z.infer<typeof Listed>;
 
 /** A thread's listed branches, oldest first: ready or inspection-only, never forking or failed. */
-export function listedBranches(
-  db: SqliteDriver,
+export async function listedBranches(
+  tx: Tx,
   threadId: string,
   tenantId: string,
-): Result<readonly ListedBranch[], LogError> {
+): Promise<Result<readonly ListedBranch[], LogError>> {
   return parseRows(
     Listed,
-    db.all(
+    await tx.all(
       `SELECT branch_id, parent_branch_id, fork_at_seq, state FROM branches
         WHERE thread_id = ? AND tenant_id = ? AND state IN ('ready', 'inspection_only')
         ORDER BY rowid`,

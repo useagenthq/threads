@@ -15,8 +15,8 @@ export async function cancelChildren(
   threadId: ThreadId,
   principal: Principal,
 ): Promise<void> {
-  const branch = log.mainBranch(threadId);
-  const read = branch.ok ? log.read(branch.value) : undefined;
+  const branch = await log.mainBranch(threadId);
+  const read = await (branch.ok ? log.read(branch.value) : undefined);
   if (read?.ok !== true) return;
   for (const [child, status] of read.value.fold.children)
     if (status === "running")
@@ -30,15 +30,15 @@ export async function cancelTree(
   principal: Principal,
   reason = "ancestor cancelled",
 ): Promise<boolean> {
-  const branch = log.mainBranch(threadId);
+  const branch = await log.mainBranch(threadId);
   if (!branch.ok) return false;
   let stopped = false;
-  const done = await control(log, branch.value, principal, (events, writer) => {
+  const done = await control(log, branch.value, principal, (events, chain) => {
     // Nothing to append: it already has a thread or tree cancel since its latest input, or it
     // has finished (its turn is closed and nothing of its own still runs). A child whose turn is
     // closed but that waits on its own background children is barred: an idle tree cancel ends
     // that run and bars its wakes (rule 32).
-    stopped = cancelledSinceInput(events) || finished(writer.chain.fold);
+    stopped = cancelledSinceInput(events) || finished(chain.fold);
     if (stopped)
       return { ok: false, error: { code: "not_found", message: "stopped" } };
     return ok({

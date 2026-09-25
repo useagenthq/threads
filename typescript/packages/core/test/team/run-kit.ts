@@ -13,6 +13,7 @@ import { knownEvents } from "../../src/reduce";
 import type { LogStore } from "../../src/store";
 import { memberRows } from "../../src/team/rows";
 import { unwrap } from "../store/helpers";
+import { reading } from "./kit";
 
 // Shared by the team runtime tests: scripted answers and tool calls, and reads of a team's logs.
 
@@ -97,7 +98,7 @@ export async function events(
   thread: ThreadRef,
 ): Promise<readonly KnownEvent[]> {
   const log = await logOf(store);
-  return knownEvents(unwrap(log.read(thread.branch)));
+  return knownEvents(unwrap(await log.read(thread.branch)));
 }
 
 /** A member's log, by its name in the team. */
@@ -107,10 +108,12 @@ export async function memberEvents(
   name: string,
 ): Promise<readonly KnownEvent[]> {
   const log = await logOf(store);
-  const row = memberRows(log.driver, team).find((r) => r.name === name);
+  const row = (await reading(log.driver, (tx) => memberRows(tx, team))).find(
+    (r) => r.name === name,
+  );
   if (row?.branch_id === undefined || row.branch_id === null)
     throw new Error(`member ${name} has no branch`);
-  return knownEvents(unwrap(log.read(BranchId.parse(row.branch_id))));
+  return knownEvents(unwrap(await log.read(BranchId.parse(row.branch_id))));
 }
 
 export const types = (log: readonly KnownEvent[]): readonly string[] =>

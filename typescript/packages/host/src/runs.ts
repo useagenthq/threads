@@ -94,12 +94,12 @@ export async function start(
   plan: RunPlan,
 ): Promise<Started> {
   const { db } = await storeConnection(ctx.store);
-  const prior = replayed(findReceipt(db, plan.at), plan);
+  const prior = replayed(await findReceipt(db, plan.at), plan);
   if (prior !== undefined) return prior;
   const accepted = await accept(ctx, principal, plan);
   // Another request took the key between our read and our commit: answer as a replay.
   if (!accepted.ok && accepted.error.code === "idempotency_key_reused")
-    return replayed(findReceipt(db, plan.at), plan) ?? accepted;
+    return replayed(await findReceipt(db, plan.at), plan) ?? accepted;
   if (!accepted.ok) return accepted;
   const { thread_id, branch_id, run_id } = accepted.value;
   void ctx.resume(
@@ -119,7 +119,7 @@ export type Binding = {
 
 /** A stored receipt answers the request: the same one replays, anything else is refused. */
 function replayed(
-  found: ReturnType<typeof findReceipt>,
+  found: Awaited<ReturnType<typeof findReceipt>>,
   { binding, keyName }: Pick<RunPlan, "binding" | "keyName">,
 ): Started | undefined {
   if (!found.ok) return fail("invalid_request", found.error.message);
@@ -150,21 +150,21 @@ async function accept(
   if (!target.ok) return target;
   const { threadId, branchId, first } = target.value;
   const holder = `host-${crypto.randomUUID()}`;
-  const writer = log.acquire(branchId, holder);
+  const writer = await log.acquire(branchId, holder);
   if (!writer.ok) return fail(leaseCode(writer.error), writer.error.message);
   try {
     if (writer.value.chain.fold.turnOpen)
       return fail("branch_busy", "the branch is in the middle of a turn");
-    const { db } = await storeConnection(ctx.store);
     // A branch opens with its thread_started, once: a racing request may have written it.
     const empty = writer.value.chain.events.length === 0;
     const drafts = [...(empty ? first : []), plan.input];
+    // Set by each attempt of the append: only the last one's counts.
     let lost = false;
-    const appended = writer.value.append(drafts, (added) => {
+    const appended = await writer.value.append(drafts, async (added, tx) => {
       const run = added.at(-1);
       if (run?.kind !== "event") throw new Error("user_input is a known event");
-      const won = insertReceipt(
-        db,
+      const won = await insertReceipt(
+        tx,
         plan.at,
         {
           ...plan.binding,
@@ -189,7 +189,7 @@ async function accept(
       run_id: run.event.event_id,
     });
   } finally {
-    writer.value.release();
+    await writer.value.release();
   }
 }
 
@@ -226,7 +226,7 @@ async function branchFor(
   if (request.thread_id === undefined) {
     const threadId = ThreadId.parse(uuidv7(log.now()));
     const branchId = BranchId.parse(uuidv7(log.now()));
-    const made = log.createBranch(threadId, branchId);
+    const made = await log.createBranch(threadId, branchId);
     if (!made.ok) return fail("invalid_request", made.error.message);
     // An authenticated caller can answer this run's questions: ask_user is pinned.
     const pin = await hosted.runner.started({ answerer: true });
@@ -235,15 +235,15 @@ async function branchFor(
     return ok({ threadId, branchId, first: [pin.event] });
   }
   const threadId = request.thread_id;
-  const branchId = request.branch_id ?? mainOf(log, threadId);
-  const listed = log.branches(threadId);
+  const branchId = request.branch_id ?? (await mainOf(log, threadId));
+  const listed = await log.branches(threadId);
   if (
     branchId === undefined ||
     !listed.ok ||
     !listed.value.some((b) => b.branch_id === branchId)
   )
     return fail("not_found", `no thread ${threadId}`);
-  const read = log.read(branchId);
+  const read = await log.read(branchId);
   if (!read.ok) return fail("branch_not_runnable", read.error.message);
   if (!(await samePin(knownEvents(read.value), hosted)))
     return fail(
@@ -253,8 +253,11 @@ async function branchFor(
   return ok({ threadId, branchId, first: [] });
 }
 
-function mainOf(log: LogStore, threadId: ThreadId): BranchId | undefined {
-  const main = log.mainBranch(threadId);
+async function mainOf(
+  log: LogStore,
+  threadId: ThreadId,
+): Promise<BranchId | undefined> {
+  const main = await log.mainBranch(threadId);
   return main.ok ? main.value : undefined;
 }
 

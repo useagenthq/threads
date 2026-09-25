@@ -7,8 +7,11 @@ import {
   type LogStore,
   ok,
   type Principal,
+  READ_ONLY,
   type Result,
   type ThreadId,
+  type Tx,
+  uuidv7,
   type Writer,
 } from "@threads/core/host";
 import { pinMatches } from "../context";
@@ -32,19 +35,24 @@ export async function decideThread(
   threadId: ThreadId,
 ): Promise<void> {
   const { ctx, db, log, tenant } = pass;
-  const main = log.mainBranch(threadId);
-  const read = main.ok ? log.read(main.value) : undefined;
+  const main = await log.mainBranch(threadId);
+  const read = main.ok ? await log.read(main.value) : undefined;
   if (!main.ok || read?.ok !== true) return;
-  if (read.value.fold.turnOpen) markOverlaps(db, tenant, threadId);
-  const pins = await pinsOf(pass, pendingOf(db, tenant, threadId));
+  if (read.value.fold.turnOpen)
+    await db.transaction((tx) => markOverlaps(tx, tenant, threadId));
+  const pending = await db.transaction(
+    (tx) => pendingOf(tx, tenant, threadId),
+    READ_ONLY,
+  );
+  const pins = await pinsOf(pass, pending);
   const writer = await briefly(log, main.value);
   // Contention is not an overlap: the rows stay pending for the next tick.
   if (!writer.ok) return;
   let fired: Pending | undefined;
   try {
-    fired = decideRows(pass, writer.value, threadId, pins);
+    fired = await decideRows(pass, writer.value, threadId, pins);
   } finally {
-    writer.value.release();
+    await writer.value.release();
   }
   const hosted = fired === undefined ? undefined : ctx.agents.get(fired.agent);
   if (fired === undefined || hosted === undefined) return;
@@ -55,15 +63,19 @@ export async function decideThread(
 }
 
 /** Decides the pending rows in order under the writer; the one it fires, if any. */
-function decideRows(
+async function decideRows(
   pass: Pass,
   writer: Writer,
   threadId: ThreadId,
   pins: ReadonlyMap<string, EventDraft>,
-): Pending | undefined {
+): Promise<Pending | undefined> {
   const events = knownEvents(writer.chain);
   let fired: Pending | undefined;
-  for (const row of pendingOf(pass.db, pass.tenant, threadId)) {
+  const pending = await pass.db.transaction(
+    (tx) => pendingOf(tx, pass.tenant, threadId),
+    READ_ONLY,
+  );
+  for (const row of pending) {
     const started = pins.get(row.agent);
     // Reserved by another scheduler after the pins were taken: it waits for the next tick.
     // Only an agent this host no longer serves is removed.
@@ -71,7 +83,7 @@ function decideRows(
     const runs = started !== undefined && pinMatches(events, started);
     const reason = classify(row, writer.chain.fold.turnOpen, runs);
     // Another scheduler decided it first: its state is current, so stop here.
-    if (!logOccurrence(pass, writer, row, reason)) break;
+    if (!(await logOccurrence(pass, writer, row, reason))) break;
     if (reason === null) fired = row;
   }
   return fired;
@@ -105,15 +117,17 @@ async function pinsOf(
 }
 
 /**
- * Appends the row's event and decides the row in one transaction. False when the row is no
- * longer pending (a stale copy): the append rolls back and nothing is logged.
+ * Appends the row's event (a fired one with its run's user_input) and decides the row in one
+ * transaction. False when the row is no longer pending (a stale copy): the append rolls back and
+ * nothing is logged. The row's update is a CAS on `state = 'pending'`, so doing it again after
+ * an unknown commit decides nothing twice.
  */
-export function logOccurrence(
+export async function logOccurrence(
   pass: Pass,
   writer: Writer,
   row: Pending,
   reason: Reason | null,
-): boolean {
+): Promise<boolean> {
   const actor = {
     kind: "scheduler" as const,
     principal: principal(pass.tenant, row.schedule_id),
@@ -124,45 +138,48 @@ export function logOccurrence(
     scheduled_for: row.occurrence_at,
     timezone: row.timezone,
   };
-  const settle = (added: readonly ChainEvent[]): Result<void, LogError> => {
+  const settle = async (
+    added: readonly ChainEvent[],
+    tx: Tx,
+  ): Promise<Result<void, LogError>> => {
     const seq = added.at(0)?.event.seq;
     return seq !== undefined &&
-      decide(pass.db, pass.tenant, row, { reason, seq })
+      (await decide(tx, pass.tenant, row, { reason, seq }))
       ? ok(undefined)
       : err({ code: "invalid_request", message: "decided elsewhere" });
   };
-  const done = writer.fenced(() => {
-    if (reason !== null)
-      return writer.append(
-        [
-          {
-            type: "schedule_skipped",
-            type_version: 1,
-            critical: false,
-            actor,
-            data: { ...data, reason },
-          },
-        ],
-        settle,
-      );
-    const fired = writer.append(
+  if (reason !== null) {
+    const skipped = await writer.append(
       [
         {
-          type: "schedule_fired",
+          type: "schedule_skipped",
           type_version: 1,
-          critical: true,
+          critical: false,
           actor,
-          data,
+          data: { ...data, reason },
         },
       ],
       settle,
     );
-    const cause = fired.ok ? fired.value.at(0)?.event.event_id : undefined;
-    return cause === undefined
-      ? fired
-      : writer.append([input(row, actor, cause)]);
-  });
-  return done.ok;
+    return skipped.ok;
+  }
+  // The fired event names its own id, so the run's input in the same append can cite it.
+  const cause = uuidv7(pass.log.now());
+  const fired = await writer.append(
+    [
+      {
+        type: "schedule_fired",
+        type_version: 1,
+        critical: true,
+        actor,
+        data,
+        event_id: cause,
+      },
+      input(row, actor, cause),
+    ],
+    settle,
+  );
+  return fired.ok;
 }
 
 function input(
@@ -197,11 +214,11 @@ const HOLD_TRIES = 10;
 async function briefly(
   log: LogStore,
   branchId: Parameters<LogStore["acquire"]>[0],
-): Promise<ReturnType<LogStore["acquire"]>> {
-  let writer = log.acquire(branchId, `schedule-${crypto.randomUUID()}`);
+): ReturnType<LogStore["acquire"]> {
+  let writer = await log.acquire(branchId, `schedule-${crypto.randomUUID()}`);
   for (let i = 0; i < HOLD_TRIES && !writer.ok; i += 1) {
     await Bun.sleep(20);
-    writer = log.acquire(branchId, `schedule-${crypto.randomUUID()}`);
+    writer = await log.acquire(branchId, `schedule-${crypto.randomUUID()}`);
   }
   return writer;
 }

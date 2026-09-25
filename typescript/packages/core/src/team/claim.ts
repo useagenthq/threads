@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { SqliteDriver } from "../store/driver";
+import { type Sql, writing } from "../store/driver";
 import { TEAM_CONSTANTS } from "./constants";
 
 /**
@@ -11,7 +11,6 @@ import { TEAM_CONSTANTS } from "./constants";
  */
 export type Claim = "claimed" | "taken" | "not_pending" | "not_found";
 
-const Changed = z.array(z.strictObject({ n: z.int() }));
 const State = z.array(z.strictObject({ state: z.string() }));
 
 /**
@@ -21,23 +20,22 @@ const State = z.array(z.strictObject({ state: z.string() }));
  * claim is taken over by the same statement, so a killed worker's row is woken once after `ttlMs`.
  */
 export function claimMail(
-  db: SqliteDriver,
+  sql: Sql,
   mailId: string,
   token: string,
   now: number,
   ttlMs: number = TEAM_CONSTANTS.claimTtlMs,
-): Claim {
-  return db.transaction(() => {
-    db.run(
+): Promise<Claim> {
+  return writing(sql, async (tx) => {
+    const changed = await tx.run(
       `UPDATE mail SET claim_token = ?, claim_expires_at = ?
         WHERE mail_id = ? AND state = 'pending'
           AND (claim_token IS NULL OR claim_expires_at <= ?)`,
       [token, now + ttlMs, mailId, now],
     );
-    const [changed] = Changed.parse(db.all("SELECT changes() AS n", []));
-    if (changed?.n === 1) return "claimed";
+    if (changed === 1) return "claimed";
     const [row] = State.parse(
-      db.all("SELECT state FROM mail WHERE mail_id = ?", [mailId]),
+      await tx.all("SELECT state FROM mail WHERE mail_id = ?", [mailId]),
     );
     if (row === undefined) return "not_found";
     return row.state === "pending" ? "taken" : "not_pending";

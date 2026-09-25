@@ -20,11 +20,11 @@ function parkedOn(s: Session, address: ParkAddress): boolean {
   );
 }
 
-export function parkOn(
+export async function parkOn(
   s: Session,
   spawned: Spawned,
   reason: Reason,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const address = addressOf(spawned);
   if (parkedOn(s, address)) return undefined;
   return s.append({
@@ -48,7 +48,7 @@ export async function unparkChildren(s: Session): Promise<Halt | undefined> {
     const end = await runChild(s, spawned);
     // Still parked, or not runnable right now: this thread stays parked on it.
     if ("code" in end || end.status === "parked") continue;
-    const stopped = s.append({
+    const stopped = await s.append({
       type: "resumed",
       type_version: 1,
       critical: true,

@@ -3,7 +3,7 @@ import { BranchId, type KnownEvent, ThreadId } from "../log";
 import type { Strict } from "../log/zod-types";
 import { ok, type Result } from "../result";
 import type { LogError } from "../verify/error";
-import type { SqliteDriver } from "./driver";
+import { reading, type Sql, type Tx } from "./driver";
 import type { Appended } from "./indexing";
 
 // The pending_wakes index (spec/schema/store.sql; Gate 1 §2.7.3): one row per running background
@@ -27,13 +27,13 @@ function change(
 }
 
 /** The wake rows one append's events insert and delete: an index hook of every append. */
-export function wakeRows(a: Appended): Result<void, LogError> {
+export async function wakeRows(a: Appended): Promise<Result<void, LogError>> {
   for (const e of a.events) {
     const row = change(e);
     if (row === undefined) continue;
-    a.db.run(
+    await a.tx.run(
       row.add
-        ? "INSERT OR IGNORE INTO pending_wakes (branch_id, child_thread_id) VALUES (?, ?)"
+        ? "INSERT INTO pending_wakes (branch_id, child_thread_id) VALUES (?, ?) ON CONFLICT DO NOTHING"
         : "DELETE FROM pending_wakes WHERE branch_id = ? AND child_thread_id = ?",
       [a.branchId, row.child],
     );
@@ -68,11 +68,12 @@ export const WakeBranch: Strict<{
 export type WakeBranch = z.infer<typeof WakeBranch>;
 
 /** Every branch with a background child still to report: what a host resumes. */
-export function wakeBranches(db: SqliteDriver): readonly WakeBranch[] {
-  const rows = db.all(
-    `SELECT DISTINCT b.tenant_id, b.thread_id, w.branch_id FROM pending_wakes w
+export async function wakeBranches(sql: Sql): Promise<readonly WakeBranch[]> {
+  const rows = await reading(sql, (tx) =>
+    tx.all(
+      `SELECT DISTINCT b.tenant_id, b.thread_id, w.branch_id FROM pending_wakes w
       JOIN branches b ON b.branch_id = w.branch_id`,
-    [],
+    ),
   );
   return rows.flatMap((row) => {
     const parsed = WakeBranch.safeParse(row);
@@ -84,28 +85,32 @@ export function wakeBranches(db: SqliteDriver): readonly WakeBranch[] {
  * An index wipe's repair: every row again from the logs alone. `read` is each branch's
  * resolved events.
  */
-export function rebuildWakes(
-  db: SqliteDriver,
-  read: (branch: string) => readonly KnownEvent[] | undefined,
-): void {
-  db.run("DELETE FROM pending_wakes", []);
-  const branches = db.all("SELECT branch_id FROM branches", []);
+export async function rebuildWakes(
+  tx: Tx,
+  read: (branch: string) => Promise<readonly KnownEvent[] | undefined>,
+): Promise<void> {
+  await tx.run("DELETE FROM pending_wakes", []);
+  const branches = await tx.all("SELECT branch_id FROM branches", []);
   for (const row of branches) {
     const branch = z.object({ branch_id: z.string() }).safeParse(row);
     if (branch.success)
-      refoldWakes(db, branch.data.branch_id, read(branch.data.branch_id) ?? []);
+      await refoldWakes(
+        tx,
+        branch.data.branch_id,
+        (await read(branch.data.branch_id)) ?? [],
+      );
   }
 }
 
 /** One branch's wake rows again from its resolved events: a rebuild's or an import's. */
-export function refoldWakes(
-  db: SqliteDriver,
+export async function refoldWakes(
+  tx: Tx,
   branch: string,
   events: readonly KnownEvent[],
-): void {
-  db.run("DELETE FROM pending_wakes WHERE branch_id = ?", [branch]);
+): Promise<void> {
+  await tx.run("DELETE FROM pending_wakes WHERE branch_id = ?", [branch]);
   for (const child of pendingWakes(events, branch))
-    db.run(
+    await tx.run(
       "INSERT INTO pending_wakes (branch_id, child_thread_id) VALUES (?, ?)",
       [branch, child],
     );

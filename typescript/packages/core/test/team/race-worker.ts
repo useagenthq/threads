@@ -22,25 +22,29 @@ const Job = z.object({
   }),
 });
 
-function run(line: string): unknown {
+async function run(line: string): Promise<unknown> {
   const job = Job.parse(JSON.parse(line));
   const db = openBunSqlite(job.path);
   try {
     const log = unwrap(
-      LogStore.open(db, () => job.now, memoryArtifacts(), "acme"),
+      await LogStore.open(db, () => job.now, memoryArtifacts(), "acme"),
     );
-    const writer = unwrap(log.acquire(BranchId.parse(job.branch), "race"));
+    const writer = unwrap(
+      await log.acquire(BranchId.parse(job.branch), "race"),
+    );
     const until = performance.now() + job.spinMs;
     while (performance.now() < until) {
       // Spin, not sleep: both sides start their transactions as close together as they can.
     }
-    return runOn(writer, job.op);
+    return await runOn(writer, job.op);
   } finally {
-    db.close();
+    await db.close();
   }
 }
 
 for await (const line of console) {
   if (line.trim() === "") continue;
-  process.stdout.write(`${JSON.stringify({ outcome: run(line) ?? null })}\n`);
+  process.stdout.write(
+    `${JSON.stringify({ outcome: (await run(line)) ?? null })}\n`,
+  );
 }

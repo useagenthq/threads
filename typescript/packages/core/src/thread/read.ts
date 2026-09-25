@@ -20,11 +20,11 @@ export function readError(
 }
 
 /** A branch's log as a reader sees it; a failure other than an unsupported line is log_corrupt. */
-export function readLog(
+export async function readLog(
   log: LogStore,
   branchId: BranchId,
-): Result<VerifiedLog, ReadError> {
-  const read = log.read(branchId);
+): Promise<Result<VerifiedLog, ReadError>> {
+  const read = await log.read(branchId);
   if (read.ok) return read;
   const { code, message, seq } = read.error;
   const unsupported =

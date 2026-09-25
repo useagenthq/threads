@@ -5,7 +5,12 @@ import { ThreadId } from "../../src/log";
 import type { EventDraft } from "../../src/store";
 import { suggestedRules } from "../../src/thread/pending";
 import { events, say } from "../agent/wake-kit";
-import { type Fixture, unwrap } from "../store/helpers";
+import {
+  type Fixture,
+  rows as sqlAll,
+  run as sqlRun,
+  unwrap,
+} from "../store/helpers";
 import { replayCase } from "./replay";
 
 // spec/schema/README.md, "Questions and remembered rules": only the principal whose input opened
@@ -20,19 +25,19 @@ const asked = () => replayCase("ask-user-parks-then-answered", 7);
 describe("ask_user answers", () => {
   test("only the principal whose input opened the turn answers", async () => {
     const { thread, events } = await asked();
-    const before = events().length;
+    const before = (await events()).length;
     expect(await thread.answer("call_1", "Staging.", bob)).toMatchObject({
       ok: false,
       error: { code: "forbidden" },
     });
-    expect(events()).toHaveLength(before);
+    expect(await events()).toHaveLength(before);
     unwrap(await thread.answer("call_1", "Staging.", alice));
   });
 
   test("a multi-choice answer is joined with newlines", async () => {
     const { thread, events } = await asked();
     unwrap(await thread.answer("call_1", ["staging", "eu, west"], alice));
-    const answered = events().find((e) => e.type === "tool_result");
+    const answered = (await events()).find((e) => e.type === "tool_result");
     expect(answered?.type === "tool_result" && answered.data.preview).toBe(
       "staging\neu, west",
     );
@@ -44,19 +49,19 @@ const colors = () =>
   replayCase("ask-user-rejected-answer-keeps-question-open", 7);
 
 const rows = (f: Fixture) =>
-  f.db.all("SELECT call_id, state FROM questions", []);
+  sqlAll(f.db, "SELECT call_id, state FROM questions", []);
 
 describe("strict answers and the questions table", () => {
   test("a non-option is invalid_answer and appends nothing; a number picks its option", async () => {
     const { thread, events } = await colors();
-    const before = events().length;
+    const before = (await events()).length;
     expect(await thread.answer("call_1", "green", alice)).toMatchObject({
       ok: false,
       error: { code: "invalid_answer", message: "answer one of: red, blue" },
     });
-    expect(events()).toHaveLength(before);
+    expect(await events()).toHaveLength(before);
     unwrap(await thread.answer("call_1", "2", alice));
-    const answered = events().find((e) => e.type === "tool_result");
+    const answered = (await events()).find((e) => e.type === "tool_result");
     expect(answered?.type === "tool_result" && answered.data.preview).toBe(
       "blue",
     );
@@ -64,21 +69,23 @@ describe("strict answers and the questions table", () => {
 
   test("the park opens the question's row and the answer decides it", async () => {
     const { f, thread } = await colors();
-    expect(rows(f)).toEqual([{ call_id: "call_1", state: "open" }]);
+    expect(await rows(f)).toEqual([{ call_id: "call_1", state: "open" }]);
     unwrap(await thread.answer("call_1", "red", alice));
-    expect(rows(f)).toEqual([{ call_id: "call_1", state: "answered" }]);
+    expect(await rows(f)).toEqual([{ call_id: "call_1", state: "answered" }]);
   });
 
   test("a missing row blocks nothing: the log decides", async () => {
     const { f, thread } = await colors();
-    f.db.run("DELETE FROM questions", []);
+    await sqlRun(f.db, "DELETE FROM questions", []);
     unwrap(await thread.answer("call_1", "red", alice));
   });
 
   test("deleting the thread deletes its question rows", async () => {
     const { f, threadId } = await colors();
-    unwrap(deleteThread(f.db, "acme", ThreadId.parse(threadId), f.clock.now));
-    expect(rows(f)).toEqual([]);
+    unwrap(
+      await deleteThread(f.db, "acme", ThreadId.parse(threadId), f.clock.now),
+    );
+    expect(await rows(f)).toEqual([]);
   });
 });
 
@@ -132,7 +139,7 @@ describe("suggested rules", () => {
     expect(suggestedRules("bash", { command })).toEqual(rules);
   });
 
-  test("a blank bash command or any other tool suggests the tool name", () => {
+  test("a blank bash command or any other tool suggests the tool name", async () => {
     expect(suggestedRules("bash", { command: "  " })).toEqual(["bash"]);
     expect(suggestedRules("send_email", { to: "bob" })).toEqual(["send_email"]);
   });

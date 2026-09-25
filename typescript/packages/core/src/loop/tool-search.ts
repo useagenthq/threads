@@ -28,7 +28,7 @@ export function queryTooLong(input: unknown): string | undefined {
 export function searchTools(
   s: Session,
   call: EventOf<"tool_call">,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const { call_id } = call.data;
   // Arguments, the query's length included, were checked before authorization.
   const { query, limit } = ToolSearchInput.parse(call.data.input);

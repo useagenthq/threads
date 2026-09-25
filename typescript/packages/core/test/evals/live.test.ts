@@ -35,7 +35,7 @@ async function eventsOf(
   const thread = await openThread(store, ThreadId.parse(id));
   if (!thread.ok) throw new Error(thread.error.message);
   const { log } = await openStore(store);
-  const read = log.read(thread.value.branch);
+  const read = await log.read(thread.value.branch);
   return read.ok ? knownEvents(read.value) : [];
 }
 

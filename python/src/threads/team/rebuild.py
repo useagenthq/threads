@@ -2,7 +2,6 @@
 log and the team log, read verified, checked across (rule 43), then folded with the same
 `insert_rows` / `change_rows` the writer uses, in one transaction."""
 
-import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -12,8 +11,9 @@ from pydantic.experimental.missing_sentinel import MISSING
 from threads.log import ParseError, TeamOpenedEvent, ThreadId, ThreadStartedEvent
 from threads.result import Err, Ok
 from threads.store import wakes
+from threads.store.conn import Conn, one
 from threads.store.deletion import TEAM_TABLES
-from threads.store.sql import export, transaction
+from threads.store.sql import export, int_of, transaction
 from threads.store.started import Opened, opened_threads
 from threads.store.verify import VerifiedLog, verify_export
 from threads.team.cross import TeamLogEvents, check_team_logs
@@ -29,7 +29,7 @@ class _Read:
     verified: VerifiedLog
 
 
-def team_branches(conn: sqlite3.Connection, tenant_id: str, team_id: str) -> list[TeamLog]:
+def team_branches(conn: Conn, tenant_id: str, team_id: str) -> list[TeamLog]:
     """The team's logs, by branch: its lead's, every member's (parent team_member through the
     lead) and its team log; empty when no lead names the team."""
     opened = opened_threads(conn, tenant_id)
@@ -71,13 +71,13 @@ async def rebuild_team_index(store: "SqliteStore", team_id: str) -> Ok[None] | E
     return await store.run(lambda c: _rebuild(c, tenant, team_id))
 
 
-def _rebuild(conn: sqlite3.Connection, tenant: str, team_id: str) -> Ok[None] | Err[ParseError]:
+def _rebuild(conn: Conn, tenant: str, team_id: str) -> Ok[None] | Err[ParseError]:
     with transaction(conn):
         # Nothing is written before a refusal, so the transaction commits nothing then.
         return refold_team(conn, tenant, team_id)
 
 
-def refold_team(conn: sqlite3.Connection, tenant: str, team_id: str) -> Ok[None] | Err[ParseError]:
+def refold_team(conn: Conn, tenant: str, team_id: str) -> Ok[None] | Err[ParseError]:
     """`rebuild_team_index` in the caller's transaction (an import's)."""
     logs = team_branches(conn, tenant, team_id)
     if not logs:
@@ -96,7 +96,7 @@ def refold_team(conn: sqlite3.Connection, tenant: str, team_id: str) -> Ok[None]
     return Ok(None)
 
 
-def _read_all(conn: sqlite3.Connection, logs: Sequence[TeamLog]) -> list[_Read] | Err[ParseError]:
+def _read_all(conn: Conn, logs: Sequence[TeamLog]) -> list[_Read] | Err[ParseError]:
     """Each log read back through the store's boundary, on the rebuild's own transaction."""
     reads: list[_Read] = []
     for log in logs:
@@ -108,10 +108,12 @@ def _read_all(conn: sqlite3.Connection, logs: Sequence[TeamLog]) -> list[_Read] 
     return reads
 
 
-def _refold(conn: sqlite3.Connection, team_id: str, reads: Sequence[_Read]) -> None:
-    (epoch,) = conn.execute(
-        "SELECT COALESCE(MAX(epoch), 0) FROM team_feed WHERE team_id = ?", (team_id,)
-    ).fetchone()
+def _refold(conn: Conn, team_id: str, reads: Sequence[_Read]) -> None:
+    (epoch,) = one(
+        conn.execute(
+            "SELECT COALESCE(MAX(epoch), 0) FROM team_feed WHERE team_id = ?", (team_id,)
+        ).fetchone()
+    )
     for table in TEAM_TABLES:
         conn.execute(f"DELETE FROM {table} WHERE team_id = ?", (team_id,))  # noqa: S608
     for r in reads:
@@ -126,5 +128,5 @@ def _refold(conn: sqlite3.Connection, team_id: str, reads: Sequence[_Read]) -> N
     conn.executemany(
         "INSERT INTO team_feed (team_id, epoch, feed_offset, branch_id, seq)"
         " VALUES (?, ?, ?, ?, ?)",
-        [(team_id, int(epoch) + 1, i, b, s) for i, (b, s) in enumerate(feed, 1)],
+        [(team_id, int_of(epoch) + 1, i, b, s) for i, (b, s) in enumerate(feed, 1)],
     )

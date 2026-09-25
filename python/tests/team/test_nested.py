@@ -12,6 +12,7 @@ from threads import Completed, Principal, agent, scripted_model, sqlite
 from threads.log import BranchId, ThreadId
 from threads.result import Ok
 from threads.store import SqliteStore
+from threads.store.sql import text_of
 from threads.team.rows import member_rows
 from threads.thread.authority import Checked, refused
 
@@ -20,9 +21,10 @@ BOB = Principal(issuer="api", tenant="local", subject="bob")
 
 
 async def _teams(sq: SqliteStore) -> list[tuple[str, str]]:
-    return await sq.run(
+    rows = await sq.run(
         lambda c: c.execute("SELECT team_id, lead_thread_id FROM teams ORDER BY team_id").fetchall()
     )
+    return [(text_of(team), text_of(lead)) for team, lead in rows]
 
 
 def test_a_nested_lead_starts_its_own_member_which_wakes_it_both_teams_replay() -> None:

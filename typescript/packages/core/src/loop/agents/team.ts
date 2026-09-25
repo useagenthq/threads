@@ -16,7 +16,7 @@ import type { Halt, Team } from "../types";
 // answer and never claims or sends twice (F7.4).
 
 type Call = EventOf<"tool_call">;
-type Answer = ReturnType<Team["act"]>;
+type Answer = Awaited<ReturnType<Team["act"]>>;
 
 const ok = (output: string): Answer => ({ isError: false, output });
 const no = (output: string): Answer => ({ isError: true, output });
@@ -36,7 +36,11 @@ export function teamOf(s: Session): Team {
   };
 }
 
-function act(s: Session, member: string, call: Call["data"]): Answer {
+async function act(
+  s: Session,
+  member: string,
+  call: Call["data"],
+): Promise<Answer> {
   const key = `${member}/${call.call_id}`;
   const { input } = call;
   switch (call.name) {
@@ -58,11 +62,11 @@ function appended(output: string, stopped?: Halt): Answer {
 }
 
 /** The task id is the creating call's key, so a repeated create is the same task. */
-function create(
+async function create(
   s: Session,
   taskId: string,
   input: ReturnType<typeof TeamTaskCreateInput.parse>,
-): Answer {
+): Promise<Answer> {
   if (s.fold.tasks.has(taskId)) return ok(taskId);
   const blockers = input.blocked_by ?? [];
   const unknown = blockers.find((id) => !s.fold.tasks.has(id));
@@ -70,7 +74,7 @@ function create(
   const { subject, description } = input;
   return appended(
     taskId,
-    s.append(
+    await s.append(
       draft.taskCreated({
         task_id: taskId,
         subject,
@@ -81,21 +85,25 @@ function create(
   );
 }
 
-function claim(s: Session, member: string, taskId: string): Answer {
+async function claim(
+  s: Session,
+  member: string,
+  taskId: string,
+): Promise<Answer> {
   const task = s.fold.tasks.get(taskId);
   if (task?.status === "claimed" && task.owner === member)
     return ok(`claimed ${taskId}`);
   const data = { task_id: taskId, member };
   const refused = checkTask(s.fold, { type: "team_task_claimed", data });
   if (refused !== undefined) return no(`can't claim: ${refused.message}`);
-  return appended(`claimed ${taskId}`, s.append(draft.taskClaimed(data)));
+  return appended(`claimed ${taskId}`, await s.append(draft.taskClaimed(data)));
 }
 
-function update(
+async function update(
   s: Session,
   member: string,
   input: ReturnType<typeof TeamTaskUpdateInput.parse>,
-): Answer {
+): Promise<Answer> {
   const { task_id, status } = input;
   const task = s.fold.tasks.get(task_id);
   if (task?.status === status) return ok(`${task_id} ${status}`);
@@ -103,16 +111,16 @@ function update(
     return no(`${task_id} is not claimed by ${member}`);
   return appended(
     `${task_id} ${status}`,
-    s.append(draft.taskUpdated({ task_id, status })),
+    await s.append(draft.taskUpdated({ task_id, status })),
   );
 }
 
-function send(
+async function send(
   s: Session,
   member: string,
   messageId: string,
   input: ReturnType<typeof SendMessageInput.parse>,
-): Answer {
+): Promise<Answer> {
   if (s.fold.messageIds.has(messageId)) return ok("sent");
   const team = teamNames(s);
   if (input.to !== "*" && !team.includes(input.to))
@@ -121,7 +129,7 @@ function send(
     );
   return appended(
     "sent",
-    s.append(
+    await s.append(
       draft.teamMessage({
         message_id: messageId,
         from: member,
@@ -139,12 +147,15 @@ function teamNames(s: Session): readonly string[] {
 }
 
 /** A team tool call in this thread: routed to its lead, or to itself as the lead. */
-export function teamTool(s: Session, call: Call): Halt | undefined {
+export async function teamTool(
+  s: Session,
+  call: Call,
+): Promise<Halt | undefined> {
   const agents = s.config.agents;
   const answer =
     agents === undefined
       ? no("this agent has no team")
-      : (agents.team ?? teamOf(s)).act(agents.name, call.data);
+      : await (agents.team ?? teamOf(s)).act(agents.name, call.data);
   return s.append(
     draft.toolResult(
       {
@@ -162,7 +173,7 @@ export function teamTool(s: Session, call: Call): Halt | undefined {
  * Before a turn request: each team message for this agent not yet delivered here, as
  * untrusted reference keyed by its message_id, so a redelivery never injects it twice.
  */
-export function deliverMessages(s: Session): Halt | undefined {
+export async function deliverMessages(s: Session): Promise<Halt | undefined> {
   const agents = s.config.agents;
   if (agents === undefined) return undefined;
   const seen = new Set(

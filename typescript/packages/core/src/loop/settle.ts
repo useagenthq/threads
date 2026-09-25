@@ -100,7 +100,7 @@ async function reconcile(
   const callId = call.data.call_id;
   const contract = impl?.reconcile;
   if (contract === undefined) return park(s, callId, actor);
-  const fenced = s.fence();
+  const fenced = await s.fence();
   if (fenced !== undefined) return fenced;
   const answer = await lookedUp(
     () =>
@@ -108,8 +108,8 @@ async function reconcile(
     (reason) => ({ status: "unknown" as const, reason }),
   );
   if (answer.status === "found") {
-    const shown = recordOutput(s, callId, answer.value);
-    const ref = shown.ref ?? s.store(shown.text, "text/plain");
+    const shown = await recordOutput(s, callId, answer.value);
+    const ref = shown.ref ?? (await s.store(shown.text, "text/plain"));
     // The resolution and its result commit together.
     return s.append(
       draft.effectResolved(
@@ -148,7 +148,7 @@ async function interrupt(
   impl: ToolImpl | undefined,
   actor: Actor,
 ): Promise<Halt | undefined> {
-  const fenced = s.fence();
+  const fenced = await s.fence();
   if (fenced !== undefined) return fenced;
   const gone = await impl?.terminate?.(effectKey(s.fold, callId, s.branchId));
   if (gone !== "terminated" && gone !== "already_exited")
@@ -199,11 +199,11 @@ export function terminalResult(
  * A recorded terminal resolution whose result never landed (a crash between them): its result
  * again, from the resolution alone.
  */
-export function resolvedResult(
+export async function resolvedResult(
   s: Session,
   resolved: EventOf<"effect_resolved">,
   actor: Actor,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const { call_id: callId, outcome, result_ref: ref } = resolved.data;
   if (outcome === "interrupted")
     return s.append(
@@ -215,10 +215,12 @@ export function resolvedResult(
     );
   if (outcome !== "confirmed_success")
     throw new Error(`${outcome} is not terminal`);
-  const bytes = ref === undefined ? undefined : s.artifacts.get(ref.sha256);
+  const bytes = await (ref === undefined
+    ? undefined
+    : s.artifacts.get(ref.sha256));
   if (bytes !== undefined && !bytes.ok)
     return { code: "artifact_missing", message: bytes.error.message };
-  const shown = recordOutput(
+  const shown = await recordOutput(
     s,
     callId,
     bytes === undefined ? "" : new TextDecoder().decode(bytes.value),
@@ -228,7 +230,11 @@ export function resolvedResult(
   );
 }
 
-function park(s: Session, callId: string, actor: Actor): Halt | undefined {
+async function park(
+  s: Session,
+  callId: string,
+  actor: Actor,
+): Promise<Halt | undefined> {
   const id = effectKey(s.fold, callId, s.branchId);
   if (s.fold.parked.some((a) => a.kind === "effect" && a.id === id))
     return undefined;

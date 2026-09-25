@@ -73,23 +73,26 @@ export function mayResume(env: MailEnvelope): boolean {
 }
 
 /** Consumes this writer's pending mail into the batch. */
-export function consume(ctx: ConsumeContext): Consumed {
+export async function consume(ctx: ConsumeContext): Promise<Consumed> {
   if (ctx.chain.fold.team.teamLog) return consumeTeamLog(ctx);
-  const rows = ownRows(ctx.db, ctx.threadId);
-  const pending = pendingFor(ctx.db, rows);
+  const rows = await ownRows(ctx.tx, ctx.threadId);
+  const pending = await pendingFor(ctx.tx, rows);
   if (pending.length === 0) return { status: "nothing_pending" };
   const ended = rows.find((r) => r.state === "ended");
-  if (ended !== undefined) return refuseEnded(ctx, ended);
+  if (ended !== undefined) return await refuseEnded(ctx, ended);
   const { fold } = ctx.chain;
-  const open = fold.turnOpen ? turnProvenance(ctx.db, ctx.chain) : undefined;
+  const open = fold.turnOpen
+    ? await turnProvenance(ctx.tx, ctx.chain)
+    : undefined;
   const pass: Pass = {
     turn: open === undefined ? undefined : pairOf(open),
     blocked: loopParked(fold).length > 0,
     batch: undefined,
   };
-  const mailIds = pending.flatMap((env) =>
-    take(ctx, pass, env) ? [env.mail_id] : [],
-  );
+  // In order: each row's take reads what the rows before it took.
+  const mailIds: string[] = [];
+  for (const env of pending)
+    if (await take(ctx, pass, env)) mailIds.push(env.mail_id);
   return { status: "consumed", mailIds };
 }
 
@@ -98,27 +101,36 @@ export function consume(ctx: ConsumeContext): Consumed {
  * answers and its waits' notices close them, and anything else (a park notice, a task
  * notification, a returned message) is recorded only.
  */
-function consumeTeamLog(ctx: ConsumeContext): Consumed {
-  const team = teamOfLog(ctx.db, ctx.branchId);
+async function consumeTeamLog(ctx: ConsumeContext): Promise<Consumed> {
+  const team = await teamOfLog(ctx.tx, ctx.branchId);
   const pending =
-    team === undefined ? [] : pendingTo(ctx.db, team.team_id, null);
+    team === undefined ? [] : await pendingTo(ctx.tx, team.team_id, null);
   if (pending.length === 0) return { status: "nothing_pending" };
-  const mailIds = pending.flatMap((env) => {
-    if (ctx.batch.taken().has(env.mail_id)) return [env.mail_id];
-    const control = controlOf(ctx, env);
-    if (control === "later") return [];
-    if (control === "park") takeParkNotice(ctx, env, true);
+  // In order: each row's take reads what the rows before it took.
+  const mailIds: string[] = [];
+  for (const env of pending) {
+    if (ctx.batch.taken().has(env.mail_id)) {
+      mailIds.push(env.mail_id);
+      continue;
+    }
+    const control = await controlOf(ctx, env);
+    if (control === "later") continue;
+    if (control === "park") await takeParkNotice(ctx, env, true);
     else if (control === "ordinary") ctx.batch.add(received(env));
-    return [env.mail_id];
-  });
+    mailIds.push(env.mail_id);
+  }
   return { status: "consumed", mailIds };
 }
 
 /** Whether this pass takes the row: as control mail, or into its one ordinary batch. */
-function take(ctx: ConsumeContext, pass: Pass, env: MailEnvelope): boolean {
+async function take(
+  ctx: ConsumeContext,
+  pass: Pass,
+  env: MailEnvelope,
+): Promise<boolean> {
   // An earlier control row of this pass took it (an ask's reply, a wait's notice).
   if (ctx.batch.taken().has(env.mail_id)) return true;
-  const control = controlOf(ctx, env);
+  const control = await controlOf(ctx, env);
   if (control === "later") {
     pass.blocked = true;
     return false;
@@ -126,7 +138,7 @@ function take(ctx: ConsumeContext, pass: Pass, env: MailEnvelope): boolean {
   if (control === "taken") return true;
   if (control === "park") {
     // Ordinary mail behind a new park waits for the next consume.
-    if (takeParkNotice(ctx, env, false)) pass.blocked = true;
+    if (await takeParkNotice(ctx, env, false)) pass.blocked = true;
     return true;
   }
   if (pass.blocked) return false;
@@ -157,25 +169,25 @@ function underRun(ctx: ConsumeContext, env: MailEnvelope): boolean {
  * an ask's bounce, a wait's notice, and a task or end notice resolving a `{kind: member}` park. A
  * cancel waits for lane 21E.2 ("later"); anything else is ordinary.
  */
-function controlOf(
+async function controlOf(
   ctx: ConsumeContext,
   env: MailEnvelope,
-): "taken" | "park" | "later" | "ordinary" {
+): Promise<"taken" | "park" | "later" | "ordinary"> {
   switch (env.kind) {
     case "member_parked":
       return "park";
     case "cancel":
       return "later";
     case "reply":
-      takeAnswer(ctx, env);
+      await takeAnswer(ctx, env);
       return "taken";
     case "bounce":
       if (env.ask_id === undefined) return "ordinary";
-      takeAnswer(ctx, env);
+      await takeAnswer(ctx, env);
       return "taken";
     case "member_settled":
     case "member_ended":
-      return takeNotice(ctx, env) ? "taken" : "ordinary";
+      return (await takeNotice(ctx, env)) ? "taken" : "ordinary";
     case "message":
     case "ask":
     case "task":
@@ -186,8 +198,11 @@ function controlOf(
 }
 
 /** A settle or end notice: a wait's, or a task or end notice resolving the park on it. */
-function takeNotice(ctx: ConsumeContext, env: MailEnvelope): boolean {
-  if (takeWaitNotice(ctx, env)) return true;
+async function takeNotice(
+  ctx: ConsumeContext,
+  env: MailEnvelope,
+): Promise<boolean> {
+  if (await takeWaitNotice(ctx, env)) return true;
   const address = { kind: "member", id: env.monitor_id ?? "" } as const;
   if (!parkedOn(ctx.chain, ctx.batch, address)) return false;
   const got = ctx.batch.add(received(env));
@@ -202,8 +217,11 @@ function takeNotice(ctx: ConsumeContext, env: MailEnvelope): boolean {
 }
 
 /** An ended member refuses what still reaches it; only a message or an ask is bounced. */
-function refuseEnded(ctx: ConsumeContext, row: MemberRow): Consumed {
-  const team = teamRow(ctx.db, row.team_id);
+async function refuseEnded(
+  ctx: ConsumeContext,
+  row: MemberRow,
+): Promise<Consumed> {
+  const team = await teamRow(ctx.tx, row.team_id);
   const last = ctx.chain.events.findLast(
     (l) => l.kind === "event" && l.event.type === "member_ended",
   );
@@ -213,6 +231,12 @@ function refuseEnded(ctx: ConsumeContext, row: MemberRow): Consumed {
     last.event.type !== "member_ended"
   )
     throw new Error("an ended member's log records its member_ended");
-  const refusedMail = refuseAll(ctx, team, row, last.event.data.result, false);
+  const refusedMail = await refuseAll(
+    ctx,
+    team,
+    row,
+    last.event.data.result,
+    false,
+  );
   return { status: "refused", mailIds: refusedMail.map((m) => m.mail_id) };
 }

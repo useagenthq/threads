@@ -67,7 +67,7 @@ async function parked(): Promise<{
   if (!opened.ok) throw new Error(opened.error.message);
   const ctx = new Racing(on.store, { support: bot }, {});
   const { log } = await ctx.open("acme");
-  const read = log.read(opened.value.branch);
+  const read = await log.read(opened.value.branch);
   if (!read.ok) throw new Error(read.error.message);
   return {
     on,

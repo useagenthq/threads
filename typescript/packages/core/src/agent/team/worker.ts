@@ -2,7 +2,7 @@ import { BranchId, type MailEnvelope, type TeamId } from "../../log";
 import { knownEvents } from "../../reduce";
 import { LEASE_TTL_MS, type LogStore } from "../../store";
 import type { ArtifactStore } from "../../store/artifacts";
-import type { SqliteDriver } from "../../store/driver";
+import { reading, type StoreDriver } from "../../store/driver";
 import { uuidv7 } from "../../store/encode";
 import { getLease } from "../../store/tables";
 import type { Mint } from "../../team/batch";
@@ -58,6 +58,8 @@ export class TeamWorker {
   #changed = Promise.withResolvers<void>();
   #failure: { readonly error: unknown } | undefined;
   #stopped = false;
+  /** The run-start pass hasn't finished: it may still launch a member. */
+  #recovering = false;
   #loop: Promise<void> = Promise.resolve();
   readonly #token = `worker-${crypto.randomUUID()}`;
 
@@ -83,13 +85,14 @@ export class TeamWorker {
       : Promise.reject(this.#failure.error);
 
   /**
-   * A member run is in flight, or one failed: a lead parked on its members then waits on
-   * progress, which rejects with the failure.
+   * A member run is in flight, the run-start pass may still launch one, or one failed: a lead
+   * parked on its members then waits on progress, which rejects with the failure.
    */
   readonly busy = (): boolean =>
-    this.#running.size > 0 || this.#failure !== undefined;
+    this.#recovering || this.#running.size > 0 || this.#failure !== undefined;
 
   start(): void {
+    this.#recovering = true;
     this.#loop = this.#run();
   }
 
@@ -101,7 +104,7 @@ export class TeamWorker {
     this.#stopped = true;
     this.notify();
     await this.#loop;
-    if (!closed(this.#env.log.driver, this.#env.team))
+    if (!(await closed(this.#env.log.driver, this.#env.team)))
       await Promise.allSettled(this.#running.values());
   }
 
@@ -109,7 +112,14 @@ export class TeamWorker {
     let recovering = true;
     while (!this.#stopped) {
       const changed = this.#changed.promise;
-      this.#pass(recovering);
+      try {
+        await this.#pass(recovering);
+      } finally {
+        if (recovering) {
+          this.#recovering = false;
+          this.notify();
+        }
+      }
       recovering = false;
       const poll = Promise.withResolvers<void>();
       const timer = setTimeout(
@@ -121,66 +131,74 @@ export class TeamWorker {
     }
   }
 
-  #pass(recovering: boolean): void {
+  async #pass(recovering: boolean): Promise<void> {
     const db = this.#env.log.driver;
-    for (const team of teamsUnder(db, this.#env.team)) {
-      takeTeamLogMail(this.#env.log, this.#env.artifacts, team, this.#env.mint);
-      for (const row of memberRows(db, team)) {
+    for (const team of await teamsUnder(db, this.#env.team)) {
+      await takeTeamLogMail(
+        this.#env.log,
+        this.#env.artifacts,
+        team,
+        this.#env.mint,
+      );
+      for (const row of await reading(db, (tx) => memberRows(tx, team))) {
         if (row.role !== "member" || this.#running.has(row.thread_id)) continue;
-        const work = this.#work(db, row, recovering);
+        const work = await this.#work(db, row, recovering);
         if (work !== undefined) this.#launch(row.thread_id, work);
       }
     }
   }
 
   /** What a member needs now, if anything. */
-  #work(
-    db: SqliteDriver,
+  async #work(
+    db: StoreDriver,
     row: MemberRow,
     recovering: boolean,
-  ): (() => Promise<void>) | undefined {
+  ): Promise<(() => Promise<void>) | undefined> {
     // A closed team's members are being cancelled: none starts or resumes.
-    if (row.state !== "ended" && closed(db, row.team_id)) return undefined;
+    if (row.state !== "ended" && (await closed(db, row.team_id)))
+      return undefined;
     if (row.state === "starting") return () => this.#materialize(row);
     const branch = row.branch_id;
     if (branch === null) return undefined;
-    const pending = pendingFor(db, ownRows(db, row.thread_id));
+    const pending = await reading(db, async (tx) =>
+      pendingFor(tx, await ownRows(tx, row.thread_id)),
+    );
     // A parked member runs again at a run's start (what it waits on may be answered by now), for
     // mail that may resume it, and once an ask or a wait it parked on is due. Waking on a due
     // deadline or on mail to refuse waits for a free lease: its holder does that work, and a
     // launch that can't acquire would relaunch at once, never yielding.
     if (row.state === "parked") {
-      const wake = recovering || this.#wakesParked(db, branch, pending);
+      const wake = recovering || (await this.#wakesParked(db, branch, pending));
       return wake ? () => this.#member(row, branch) : undefined;
     }
     if (row.state === "ended") return this.#refusing(db, branch, pending);
     // A turn left open with its lease free is resumed (hostless recovery).
     const stranded =
-      row.state === "running" && (recovering || this.#free(db, branch));
-    const woken = this.#claim(db, pending.filter(consumable));
+      row.state === "running" && (recovering || (await this.#free(db, branch)));
+    const woken = await this.#claim(db, pending.filter(consumable));
     return woken || stranded ? () => this.#member(row, branch) : undefined;
   }
 
   /** An ended member's pending mail is refused, once its lease is free. */
-  #refusing(
-    db: SqliteDriver,
+  async #refusing(
+    db: StoreDriver,
     branch: BranchId,
     pending: readonly MailEnvelope[],
-  ): (() => Promise<void>) | undefined {
-    return pending.length > 0 && this.#free(db, branch)
+  ): Promise<(() => Promise<void>) | undefined> {
+    return pending.length > 0 && (await this.#free(db, branch))
       ? async () => refuseEnded(this.#env, branch)
       : undefined;
   }
 
   /** Mail that may resume the parked member, or, with its lease free, a due ask or wait. */
-  #wakesParked(
-    db: SqliteDriver,
+  async #wakesParked(
+    db: StoreDriver,
     branch: BranchId,
     pending: readonly MailEnvelope[],
-  ): boolean {
+  ): Promise<boolean> {
     return (
-      this.#claim(db, pending.filter(mayResume)) ||
-      (this.#free(db, branch) && this.#due(db, branch))
+      (await this.#claim(db, pending.filter(mayResume))) ||
+      ((await this.#free(db, branch)) && (await this.#due(db, branch)))
     );
   }
 
@@ -189,12 +207,16 @@ export class TeamWorker {
    * of another worker means that worker wakes it. Correctness never depends on it: the lease
    * holder consumes.
    */
-  #claim(db: SqliteDriver, mail: readonly MailEnvelope[]): boolean {
+  async #claim(
+    db: StoreDriver,
+    mail: readonly MailEnvelope[],
+  ): Promise<boolean> {
     const first = mail[0];
     if (first === undefined) return false;
     const now = this.#env.log.now();
     const ttl = this.#env.claimTtlMs ?? TEAM_CONSTANTS.claimTtlMs;
-    return claimMail(db, first.mail_id, this.#token, now, ttl) === "claimed";
+    const claim = await claimMail(db, first.mail_id, this.#token, now, ttl);
+    return claim === "claimed";
   }
 
   /**
@@ -202,15 +224,18 @@ export class TeamWorker {
    * ponytail: reads the member's log each pass; keep its next deadline per head if parked members
    * grow many.
    */
-  #due(db: SqliteDriver, branch: BranchId): boolean {
-    const read = this.#env.log.read(branch);
+  async #due(db: StoreDriver, branch: BranchId): Promise<boolean> {
+    const read = await this.#env.log.read(branch);
     if (!read.ok) return false;
-    const next = nextDeadline({ db, chain: read.value, branchId: branch });
+    const chain = read.value;
+    const next = await reading(db, (tx) =>
+      nextDeadline({ tx, chain, branchId: branch }),
+    );
     return next !== undefined && next <= this.#env.log.now();
   }
 
-  #free(db: SqliteDriver, branch: string): boolean {
-    const lease = getLease(db, branch);
+  async #free(db: StoreDriver, branch: string): Promise<boolean> {
+    const lease = await reading(db, (tx) => getLease(tx, branch));
     return lease.ok && (lease.value?.expires_at ?? 0) <= this.#env.log.now();
   }
 
@@ -281,7 +306,7 @@ export class TeamWorker {
     branch: string,
     holder = `team-${crypto.randomUUID()}`,
   ): Promise<void> {
-    const read = this.#env.log.read(BranchId.parse(branch));
+    const read = await this.#env.log.read(BranchId.parse(branch));
     if (!read.ok) throw new Error(`member ${row.name}: ${read.error.message}`);
     const events = knownEvents(read.value);
     const started = events.find((e) => e.type === "thread_started");
@@ -292,7 +317,7 @@ export class TeamWorker {
       throw new Error(`member ${row.name} has no task`);
     const handle = this.#env.agents.get(row.agent);
     const entry = handle === undefined ? undefined : memberEntry(handle);
-    const choice = recordedChoice(this.#env.log, row, task.data.mail_id);
+    const choice = await recordedChoice(this.#env.log, row, task.data.mail_id);
     const rebind = await this.#rebind(
       row.agent,
       started?.data.config_hash ?? "",
@@ -314,11 +339,11 @@ export class TeamWorker {
       },
       parent: { ...parent, relation: "team_member" },
       principal:
-        principalOf(this.#env.log.driver, read.value, row) ??
+        (await principalOf(this.#env.log.driver, read.value, row)) ??
         task.actor.principal,
       holder,
       notify: this.notify,
-      covering: ancestorsOf(this.#env.log, parent),
+      covering: await ancestorsOf(this.#env.log, parent),
       ...(this.#env.signal === undefined ? {} : { signal: this.#env.signal }),
       ...(choice === undefined ? {} : { dynamic: choice }),
       ...(this.#env.deferTools === undefined

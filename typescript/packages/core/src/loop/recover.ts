@@ -107,7 +107,7 @@ async function recoverRequest(
   requestId: string,
 ): Promise<Halt | undefined> {
   const model = s.fold.model && s.config.models(s.fold.model);
-  const fenced = s.fence();
+  const fenced = await s.fence();
   if (fenced !== undefined) return fenced;
   const lookup = model?.info.lookup === "none" ? undefined : model?.lookup;
   const looked =
@@ -163,13 +163,13 @@ async function recoverCall(
     case "committed":
       return materialize(s, callId);
     case "begun": {
-      const stopped = s.append(
+      const stopped = await s.append(
         draft.effectUnknown(
           { call_id: callId, reason: "crash_after_begin" },
           RECOVERY,
         ),
       );
-      return stopped ?? settleUnknown(s, callId, RECOVERY);
+      return stopped ?? (await settleUnknown(s, callId, RECOVERY));
     }
     case "unknown":
       return settleUnknown(s, callId, RECOVERY);
@@ -186,7 +186,7 @@ async function recoverCall(
  * A resolved effect with its call still pending: a terminal resolution closes it from the
  * record; only safe_to_retry, not_sent and assume_not_done may dispatch again.
  */
-function resolved(s: Session, callId: string): Halt | undefined {
+async function resolved(s: Session, callId: string): Promise<Halt | undefined> {
   const last = s.events.findLast(
     (e): e is EventOf<"effect_resolved"> =>
       e.type === "effect_resolved" && e.data.call_id === callId,
@@ -209,16 +209,23 @@ function resolved(s: Session, callId: string): Halt | undefined {
 }
 
 /** effect_commit without tool_result: the result comes from the commit, never a re-run. */
-function materialize(s: Session, callId: string): Halt | undefined {
+async function materialize(
+  s: Session,
+  callId: string,
+): Promise<Halt | undefined> {
   const commit = s.events.findLast(
     (e) => e.type === "effect_commit" && e.data.call_id === callId,
   );
   if (commit?.type !== "effect_commit")
     throw new Error("a committed effect has its commit");
-  const bytes = s.artifacts.get(commit.data.result_ref.sha256);
+  const bytes = await s.artifacts.get(commit.data.result_ref.sha256);
   if (!bytes.ok)
     return { code: "artifact_missing", message: bytes.error.message };
-  const shown = recordOutput(s, callId, new TextDecoder().decode(bytes.value));
+  const shown = await recordOutput(
+    s,
+    callId,
+    new TextDecoder().decode(bytes.value),
+  );
   return s.append(
     draft.toolResult(
       {
@@ -237,7 +244,10 @@ function materialize(s: Session, callId: string): Halt | undefined {
  * A call that never began: not started is not permission. The cancellation barrier and the
  * approval state are read again before the loop may dispatch it.
  */
-function notStarted(s: Session, callId: string): Halt | undefined {
+async function notStarted(
+  s: Session,
+  callId: string,
+): Promise<Halt | undefined> {
   const call = s.fold.calls.get(callId);
   if (call?.barrier === true)
     return closed(s, callId, "not_executed", "not executed: cancelled");
@@ -277,7 +287,7 @@ function closeGoneOrDispatch(
   s: Session,
   callId: string,
   began: boolean,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const spec = s.fold.calls.get(callId)?.spec;
   if (spec === undefined)
     return closed(
@@ -308,7 +318,7 @@ function closed(
   callId: string,
   origin: "not_executed" | "denied",
   preview: string,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   return s.append(
     draft.toolResult(
       { call_id: callId, is_error: true, origin, preview },

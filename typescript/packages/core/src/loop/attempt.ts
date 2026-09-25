@@ -8,7 +8,7 @@ import { type Unsupported, unsupported } from "../model/capabilities";
 import type { ProviderRejection } from "../model/protocol";
 import { parseRender } from "../model/render-lines";
 import { redactStream, SecretInProviderOutput } from "../redact";
-import { compactionSide, refReader, render } from "../render";
+import { compactionSide, renderFrom } from "../render";
 import type { EventDraft } from "../store";
 import { StoreError } from "../store/driver";
 import { draft } from "./drafts";
@@ -84,7 +84,7 @@ export async function attempt(
   const events = s.events;
   const side =
     purpose === "compaction" ? compactionSide(events, cause) : undefined;
-  const rendered = render(events, refReader(s.artifacts), side);
+  const rendered = await renderFrom(events, s.artifacts, side);
   if (!rendered.ok)
     return halt(
       rendered.error.code === "artifact_missing"
@@ -96,14 +96,14 @@ export async function attempt(
   const refused = unsupported(parseRender(bytes), model.info);
   if (refused !== undefined) return { kind: "unsupported", refused };
   // Reserved right before the request is appended, at the seq it will take.
-  const over = reserve(s);
-  if (over !== undefined) return refuse(s, over, purpose, cause);
+  const over = await reserve(s);
+  if (over !== undefined) return refuse(s, await over, purpose, cause);
   const tags = purpose === "compaction" ? sideTags(cause) : {};
-  const stopped = s.appendWork(
+  const stopped = await s.appendWork(
     draft.modelRequest({
       attempt: number,
       ...tags,
-      request_ref: s.store(bytes, "application/x-ndjson"),
+      request_ref: await s.store(bytes, "application/x-ndjson"),
       declared_prefix: { bytes: prefix.length, sha256: sha256Hex(prefix) },
     }),
   );
@@ -111,11 +111,11 @@ export async function attempt(
   if (stopped !== undefined) return { kind: "halt", halt: stopped };
   const requestId = s.events.at(-1)?.event_id ?? "";
   // Fenced in the same synchronous section as the send: a stale owner never sends.
-  const fenced = s.fence();
+  const fenced = await s.fence();
   if (fenced !== undefined) return { kind: "halt", halt: fenced };
   const collected = await collect(s, model, requestId, bytes);
-  const recorded = record(s, requestId, collected, cause);
-  settleOpen(s);
+  const recorded = await record(s, requestId, collected, cause);
+  await settleOpen(s);
   return recorded;
 }
 
@@ -142,26 +142,29 @@ function owed(
 }
 
 /** Nothing is sent after a cancel barrier: a side request's failure, and nothing else. */
-function barred(
+async function barred(
   s: Session,
   purpose: "turn" | "compaction",
   cause: EventId | undefined,
-): Attempted {
+): Promise<Attempted> {
   const answer = owed(purpose, cause);
-  const stopped = answer.length === 0 ? undefined : s.append(...answer);
+  const stopped = answer.length === 0 ? undefined : await s.append(...answer);
   return stopped === undefined
     ? { kind: "barred" }
     : { kind: "halt", halt: stopped };
 }
 
 /** budget_exceeded; a side request's compaction_failed goes in the same batch. */
-function refuse(
+async function refuse(
   s: Session,
   over: Parameters<typeof draft.budgetExceeded>[0],
   purpose: "turn" | "compaction",
   cause: EventId | undefined,
-): Attempted {
-  const stopped = s.append(draft.budgetExceeded(over), ...owed(purpose, cause));
+): Promise<Attempted> {
+  const stopped = await s.append(
+    draft.budgetExceeded(over),
+    ...owed(purpose, cause),
+  );
   return stopped === undefined
     ? { kind: "budget" }
     : { kind: "halt", halt: stopped };
@@ -258,15 +261,15 @@ class Shown {
   }
 }
 
-function record(
+async function record(
   s: Session,
   requestId: string,
   c: Collected,
   cause: EventId | undefined,
-): Attempted {
+): Promise<Attempted> {
   switch (c.kind) {
     case "done": {
-      const stopped = s.append(
+      const stopped = await s.append(
         draft.modelResponse({
           request_event_id: requestId,
           content: [...c.parts],
@@ -285,7 +288,7 @@ function record(
     case "rejected":
       return rejected(s, requestId, c.rejection);
     case "broken": {
-      const stopped = s.append(
+      const stopped = await s.append(
         draft.abandoned({
           request_event_id: requestId,
           provider_outcome: "unknown",
@@ -310,7 +313,7 @@ function record(
               }),
             ];
       // With a cancel pending the end-of-turn barrier leaves the turn to the cancellation step.
-      const stopped = s.append(
+      const stopped = await s.append(
         draft.abandoned({
           request_event_id: requestId,
           provider_outcome: "unknown",
@@ -333,7 +336,11 @@ function record(
  * nothing: this writer lost its lease. An adapter refusal was never sent, so it is not_sent and
  * ends the turn with its code; it is never an unknown outcome that gets re-sent.
  */
-function rejected(s: Session, requestId: string, r: Rejection): Attempted {
+async function rejected(
+  s: Session,
+  requestId: string,
+  r: Rejection,
+): Promise<Attempted> {
   const { reason, http_status, retry_after_ms, billing } = r;
   switch (reason) {
     case "stale_epoch":
@@ -341,7 +348,7 @@ function rejected(s: Session, requestId: string, r: Rejection): Attempted {
     case "content_unsupported":
     case "continuation_unsupported":
     case "transport_fence_unsupported": {
-      const stopped = s.append(
+      const stopped = await s.append(
         draft.abandoned({
           request_event_id: requestId,
           provider_outcome: "not_sent",
@@ -356,7 +363,7 @@ function rejected(s: Session, requestId: string, r: Rejection): Attempted {
       return { kind: "unsupported", refused: { code: reason, message } };
     }
     default: {
-      const stopped = s.append(
+      const stopped = await s.append(
         draft.abandoned({
           request_event_id: requestId,
           provider_outcome: "failed",

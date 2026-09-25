@@ -80,9 +80,9 @@ export function referenceForm(spec: ToolSpec): {
 }
 
 /** Puts a pin's spec artifacts; each is durable before any thread_started names it. */
-export function storeSpecs(
-  artifacts: { readonly put: (bytes: Uint8Array) => string },
+export async function storeSpecs(
+  artifacts: { readonly put: (bytes: Uint8Array) => Promise<string> },
   specs: readonly Uint8Array[],
-): void {
-  for (const bytes of specs) artifacts.put(bytes);
+): Promise<void> {
+  for (const bytes of specs) await artifacts.put(bytes);
 }

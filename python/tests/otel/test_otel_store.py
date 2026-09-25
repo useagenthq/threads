@@ -20,7 +20,9 @@ from threads.otel.ids import span_id
 from threads.result import Ok
 from threads.store import SqliteStore
 from threads.store._feed import Checkpoint, Feed
+from threads.store.conn import Conn, one
 from threads.store.deletion import delete_thread
+from threads.store.sql import blob_of
 from threads.telemetry import SyncReport
 
 GOLDENS = sorted(p.name for p in CASES.iterdir())
@@ -76,7 +78,7 @@ async def _rows(store: Store) -> list[tuple[object, ...]]:
 async def _empty(store: Store) -> None:
     """Every branch back to no rows of its own (a fork at its fork point)."""
 
-    def cut(conn: sqlite3.Connection) -> None:
+    def cut(conn: Conn) -> None:
         conn.execute("DELETE FROM events")
         conn.execute(
             "UPDATE branches SET head_seq = coalesce(fork_at_seq, 0),"
@@ -89,7 +91,7 @@ async def _empty(store: Store) -> None:
 async def _cut(store: Store, branch: str, seq: int) -> None:
     """A root branch's rows after `seq` removed, its head at `seq`."""
 
-    def cut(conn: sqlite3.Connection) -> None:
+    def cut(conn: Conn) -> None:
         conn.execute("DELETE FROM events WHERE branch_id = ? AND seq > ?", (branch, seq))
         found = conn.execute(
             "SELECT line FROM events WHERE branch_id = ? AND seq = ?", (branch, seq)
@@ -97,7 +99,7 @@ async def _cut(store: Store, branch: str, seq: int) -> None:
         header = conn.execute(
             "SELECT header_line FROM branches WHERE branch_id = ?", (branch,)
         ).fetchone()
-        last = bytes(found[0] if found is not None else header[0])
+        last = blob_of((found if found is not None else one(header))[0])
         conn.execute(
             "UPDATE branches SET head_seq = ?, head_hash = ? WHERE branch_id = ?",
             (seq, sha256_hex(last), branch),
@@ -107,7 +109,7 @@ async def _cut(store: Store, branch: str, seq: int) -> None:
 
 
 async def _grow(store: Store, row: tuple[object, ...]) -> None:
-    def put(conn: sqlite3.Connection) -> None:
+    def put(conn: Conn) -> None:
         conn.execute("INSERT INTO events VALUES (?, ?, ?, ?, ?, ?, ?, ?)", row)
         line = row[7]
         assert isinstance(line, bytes)

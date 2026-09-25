@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import Final
 
+from jobs.stores import OnStatement, drill_open
 from jobs.worker import reached
 from pydantic import JsonValue
 
@@ -57,25 +58,24 @@ def _input(text: str) -> Draft:
     )
 
 
-async def _store(where: Path) -> SqliteStore:
-    opened = await SqliteStore.open(where / "threads.db", tenant_id=TENANT)
+async def _store(where: Path, on_statement: OnStatement | None = None) -> SqliteStore:
+    opened = await drill_open(where, TENANT, on_statement)
     assert isinstance(opened, Ok)
     return opened.value
 
 
 async def lead(where: Path) -> str:
-    store = await _store(where)
+    def at_the_feed(sql: str, _params: object) -> None:
+        if sql.startswith("INSERT INTO team_feed"):
+            reached("lead_first_append", where)
 
-    def stop_at_the_feed(conn: sqlite3.Connection) -> None:
-        conn.set_trace_callback(
-            lambda sql: (
-                reached("lead_first_append", where)
-                if sql.startswith("INSERT INTO team_feed")
-                else None
-            )
-        )
+    store = await _store(where, at_the_feed)
 
-    await store.run(stop_at_the_feed)
+    def trace(conn: sqlite3.Connection) -> None:
+        conn.set_trace_callback(lambda sql: at_the_feed(sql, ()))
+
+    if store.dialect == "sqlite":
+        await store.run_sqlite(trace)
     team: JsonValue = {"id": TEAM, "log_thread_id": TEAM_LOG_THREAD, "log_branch_id": TEAM_LOG}
     drafts = [_started(team), _input("Lead the team.")]
     opened = await store.open_branch(LEAD, LEAD_BRANCH, drafts, holder_id="lead", clock=_now)

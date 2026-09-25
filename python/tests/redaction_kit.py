@@ -1,7 +1,6 @@
 """Shared by the secret-redaction tests: a store, a writer on it, event drafts, and a race
 that registers a value when the store's thread is handed a statement."""
 
-import sqlite3
 from collections.abc import Callable
 
 import pytest
@@ -11,6 +10,7 @@ from threads.log import BranchId, ThreadId
 from threads.redaction import register
 from threads.result import Ok
 from threads.store import Draft, SqliteStore, Writer
+from threads.store.conn import Conn
 from threads.store.worker import Worker
 
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
@@ -66,15 +66,16 @@ class Race:
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch, value: str, at: int = 1) -> None:
         self.left = at
-        original = Worker.call
+        original = Worker.free
 
-        async def call[T](worker: Worker, statement: Callable[[sqlite3.Connection], T]) -> T:
+        async def free[T](worker: Worker, statement: Callable[[Conn], T]) -> T:
             self.left -= 1
             if self.left == 0:
                 register(value, "raced")
             return await original(worker, statement)
 
-        monkeypatch.setattr(Worker, "call", call)
+        # Every statement reaches the store's thread through `free`.
+        monkeypatch.setattr(Worker, "free", free)
 
 
 RACED = "raced-abcdefgh"

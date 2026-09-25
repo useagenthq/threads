@@ -26,8 +26,12 @@ const HOST = {
 
 const DAY = 24 * 60 * 60 * 1000;
 
-export function rebindFailed(ctx: Ctx, code: RebindCode, now: number): void {
-  const provenance = turnProvenance(ctx.db, ctx.chain);
+export async function rebindFailed(
+  ctx: Ctx,
+  code: RebindCode,
+  now: number,
+): Promise<void> {
+  const provenance = await turnProvenance(ctx.tx, ctx.chain);
   if (provenance === undefined) throw new Error("a member's log has a turn");
   const { fold } = ctx.chain;
   const status = (callId: string): EffectStatus | undefined =>
@@ -38,7 +42,7 @@ export function rebindFailed(ctx: Ctx, code: RebindCode, now: number): void {
     return s === "begun" || s === "unknown";
   });
   if (doubt.length > 0) {
-    parkOn(ctx, doubt, status, provenance, now);
+    await parkOn(ctx, doubt, status, provenance, now);
     return;
   }
   for (const callId of loopPending(fold))
@@ -49,7 +53,7 @@ export function rebindFailed(ctx: Ctx, code: RebindCode, now: number): void {
       type: "turn_completed",
       data: { reason: "error", code },
     });
-  settle(
+  await settle(
     {
       ...ctx,
       provenance,
@@ -62,13 +66,13 @@ export function rebindFailed(ctx: Ctx, code: RebindCode, now: number): void {
 }
 
 /** Parks on each in-doubt effect not parked on yet; the first park of the log notifies. */
-function parkOn(
+async function parkOn(
   ctx: Ctx,
   calls: readonly string[],
   status: (callId: string) => EffectStatus | undefined,
-  provenance: NonNullable<ReturnType<typeof turnProvenance>>,
+  provenance: NonNullable<Awaited<ReturnType<typeof turnProvenance>>>,
   now: number,
-): void {
+): Promise<void> {
   const { fold, events } = ctx.chain;
   let first = !events.some(
     (l) => l.kind === "event" && l.event.type === "parked",
@@ -96,7 +100,10 @@ function parkOn(
       },
     });
     if (first)
-      parkNotice({ ...ctx, provenance }, { eventId, reason: "effect_unknown" });
+      await parkNotice(
+        { ...ctx, provenance },
+        { eventId, reason: "effect_unknown" },
+      );
     first = false;
   }
 }

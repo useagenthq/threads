@@ -1,7 +1,9 @@
 import type { EventOf, Fold, ModelRef } from "../fold/state";
 import type { JsonObject, KnownEvent, Policy, ThreadId } from "../log";
 import { reservation, settlement, tokenBounds } from "../reduce/cost";
-import type { BudgetLedger, Claim, LimitName } from "../store";
+import type { Claim, LimitName } from "../store";
+import { spentIn } from "../store/budget";
+import type { Tx } from "../store/driver";
 import type { Session } from "./session";
 import type { Covering, TeamAgentPin, TeamRecipient } from "./types";
 
@@ -58,10 +60,12 @@ export function ownCovering(s: View): readonly Covering[] {
  * Every budget covering this thread: its own, then its ancestors'; a team member's turn is also
  * under the run budget of the request it belongs to (spec/schema/README.md, "Teams").
  */
-export function covering(s: Session): readonly Covering[] {
+export async function covering(s: Session): Promise<readonly Covering[]> {
   const opener = s.events.find((e) => e.seq === s.fold.turnStart);
   const run =
-    opener === undefined ? undefined : s.config.team?.runCovering?.(opener);
+    opener === undefined
+      ? undefined
+      : await s.config.team?.runCovering?.(opener);
   return [
     ...ownCovering(s),
     ...(run === undefined ? [] : [run]),
@@ -70,25 +74,29 @@ export function covering(s: Session): readonly Covering[] {
 }
 
 /**
- * start's headroom: every budget that would cover the new member (the starter's, and the
- * member's own) has room for one request of its model. A limit the model can't bound has none.
+ * start's headroom: every budget that would cover the new member (the starter's `covers`, read
+ * before the append, and the member's own) has room for one request of its model. A limit the
+ * model can't bound has none.
  */
-export function roomFor(s: Session, member: TeamAgentPin): boolean {
-  const budgets = s.config.budgets;
-  return (
-    budgets === undefined || startRoom(budgets.ledger, covering(s), member)
-  );
+export async function roomFor(
+  s: Session,
+  member: TeamAgentPin,
+  covers: readonly Covering[],
+  tx: Tx,
+): Promise<boolean> {
+  return s.config.budgets === undefined || startRoom(covers, member, tx);
 }
 
 /**
  * Whether `starter` (every budget covering whoever starts the member) and the member's own
- * budget have room for one request of its model. An operator start's starter is the lead.
+ * budget have room for one request of its model, read in `tx`. An operator start's starter is
+ * the lead.
  */
 export function startRoom(
-  ledger: BudgetLedger,
   starter: readonly Covering[],
   member: TeamAgentPin,
-): boolean {
+  tx: Tx,
+): Promise<boolean> {
   const own = member.budget;
   const all: readonly Covering[] = [
     ...starter,
@@ -96,38 +104,41 @@ export function startRoom(
       ? []
       : [{ budgetId: "member", budget: own, scope: "thread" as const }]),
   ];
-  return fits(
-    ledger,
-    all,
-    boundsFor(member.policy, member.model, member.params),
-  );
+  return fits(all, boundsFor(member.policy, member.model, member.params), tx);
 }
 
 /**
  * ask's headroom: the recipient's own and ancestors' budgets, and the run budget of the asking
  * turn's request (its turn belongs to that request), have room for one request of its model.
  */
-export function roomIn(s: Session, to: TeamRecipient): boolean {
-  const budgets = s.config.budgets;
-  if (budgets === undefined) return true;
-  const run = covering(s).filter((c) => c.scope === "run");
+export async function roomIn(
+  s: Session,
+  to: TeamRecipient,
+  covers: readonly Covering[],
+  tx: Tx,
+): Promise<boolean> {
+  if (s.config.budgets === undefined) return true;
+  const run = covers.filter((c) => c.scope === "run");
   const all = [...to.covering, ...run];
-  return fits(budgets.ledger, all, boundsFor(to.policy, to.model, to.params));
+  return fits(all, boundsFor(to.policy, to.model, to.params), tx);
 }
 
-/** Every limit of `all` has room for `amounts` (a new member's own budget starts empty). */
-function fits(
-  ledger: BudgetLedger,
+/**
+ * Every limit of `all` has room for `amounts` (a new member's own budget starts empty), read in
+ * `tx`, the decided append's transaction.
+ */
+async function fits(
   all: readonly Covering[],
   amounts: ReadonlyMap<LimitName, number>,
-): boolean {
-  return claimsOf(all, amounts).every(
-    (c) =>
-      c.amount !== undefined &&
-      (c.budgetId === "member" ? 0 : ledger.spent(c.budgetId, c.limit)) +
-        c.amount <=
-        c.max,
-  );
+  tx: Tx,
+): Promise<boolean> {
+  for (const c of claimsOf(all, amounts)) {
+    if (c.amount === undefined) return false;
+    const spent =
+      c.budgetId === "member" ? 0 : await spentIn(tx, c.budgetId, c.limit);
+    if (spent + c.amount > c.max) return false;
+  }
+  return true;
 }
 
 /**
@@ -142,8 +153,8 @@ export function inheritedFrom(
 }
 
 /** What a child of this thread inherits: everything covering it, a member's run budget too. */
-export function inheritedBy(s: Session): readonly Covering[] {
-  return asAncestors(s.threadId, covering(s));
+export async function inheritedBy(s: Session): Promise<readonly Covering[]> {
+  return asAncestors(s.threadId, await covering(s));
 }
 
 function asAncestors(
@@ -160,21 +171,27 @@ function asAncestors(
  * budget, or returns the budget_exceeded the refusal records. The ledger is first brought up to
  * date from the log, and earlier attempts settle first.
  */
-export function reserve(s: Session): Refusal | undefined {
+export async function reserve(s: Session): Promise<Refusal | undefined> {
   const budgets = s.config.budgets;
   if (budgets === undefined) return undefined;
-  rebuild(s);
-  settleOpen(s);
-  const all = covering(s);
+  await rebuild(s);
+  await settleOpen(s);
+  const all = await covering(s);
   const claims = claimsOf(all, nextAmounts(s, s.events));
   // A limit this attempt has no bound for is refused, never skipped (Budget enforcement).
   const unbounded = claims.find((c) => c.amount === undefined);
   const refused =
     unbounded === undefined
-      ? budgets.ledger.reserve(key(s, s.fold.seq + 1), claims.filter(bounded))
+      ? await budgets.ledger.reserve(
+          key(s, s.fold.seq + 1),
+          claims.filter(bounded),
+        )
       : {
           claim: { ...unbounded, amount: 0 },
-          observed: budgets.ledger.spent(unbounded.budgetId, unbounded.limit),
+          observed: await budgets.ledger.spent(
+            unbounded.budgetId,
+            unbounded.limit,
+          ),
         };
   if (refused === undefined) return undefined;
   const by = all.find((c) => c.budgetId === refused.claim.budgetId);
@@ -214,22 +231,22 @@ function claimsOf(
  * ponytail: this branch's attempts only; a finished descendant's are re-entered when it runs again,
  * and a team member's without its request's run budget (re-enter by the turn's root to add it).
  */
-function rebuild(s: Session): void {
+async function rebuild(s: Session): Promise<void> {
   const budgets = s.config.budgets;
   if (budgets === undefined) return;
-  const known = budgets.ledger.keys(`${s.branchId}:`);
-  s.events.forEach((e, i) => {
-    if (e.type !== "model_request" || e.branch_id !== s.branchId) return;
+  const known = await budgets.ledger.keys(`${s.branchId}:`);
+  for (const [i, e] of s.events.entries()) {
+    if (e.type !== "model_request" || e.branch_id !== s.branchId) continue;
     const attempt = key(s, e.seq);
-    if (known.has(attempt)) return;
+    if (known.has(attempt)) continue;
     const before = s.events.slice(0, i);
     const view = { threadId: s.threadId, fold: s.fold, events: before };
     const all = [...ownCovering(view), ...budgets.inherited];
-    budgets.ledger.restore(
+    await budgets.ledger.restore(
       attempt,
       claimsOf(all, nextAmounts(s, before)).filter(bounded),
     );
-  });
+  }
 }
 
 const key = (s: Session, seq: number): string => `${s.branchId}:${seq}`;
@@ -277,20 +294,20 @@ function boundsFor(
  * Settles this branch's reserved attempts that now have a disposition, and releases a
  * reservation whose attempt never reached the log (the writer stopped between the two).
  */
-export function settleOpen(s: Session): void {
+export async function settleOpen(s: Session): Promise<void> {
   const budgets = s.config.budgets;
   if (budgets === undefined) return;
   const prefix = `${s.branchId}:`;
-  for (const attempt of budgets.ledger.reserved(prefix)) {
+  for (const attempt of await budgets.ledger.reserved(prefix)) {
     const seq = Number(attempt.slice(prefix.length));
     const request = s.events.find((e) => e.seq === seq);
     if (request?.type !== "model_request") {
-      if (seq <= s.fold.seq) budgets.ledger.release(attempt);
+      if (seq <= s.fold.seq) await budgets.ledger.release(attempt);
       continue;
     }
     if (!settled(s.events, request.event_id)) continue;
     const got = settlement(s.events, s.fold.policy, request.event_id);
-    budgets.ledger.settle(attempt, [
+    await budgets.ledger.settle(attempt, [
       ...defined([
         ["max_cost_nanos", got.cost],
         ["max_input_tokens", got.input],

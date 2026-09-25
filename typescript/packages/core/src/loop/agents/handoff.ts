@@ -14,7 +14,10 @@ import { handoffTranscript } from "./transcript";
 
 type Call = EventOf<"tool_call">;
 
-export function handOff(s: Session, call: Call): Halt | undefined {
+export async function handOff(
+  s: Session,
+  call: Call,
+): Promise<Halt | undefined> {
   const { call_id } = call.data;
   const { agent } = HandoffInput.parse(call.data.input);
   // A target the source didn't list fails before anything happens.
@@ -32,7 +35,7 @@ export function handOff(s: Session, call: Call): Halt | undefined {
     );
   // The turn ends here: calls after the handoff in the same response never run.
   const others = loopPending(s.fold).filter((id) => id !== call_id);
-  const done = s.appendWork(
+  const done = await s.appendWork(
     {
       type: "handoff",
       type_version: 1,
@@ -43,7 +46,7 @@ export function handOff(s: Session, call: Call): Halt | undefined {
         to_agent: agent,
         to_thread_id: ThreadId.parse(uuidv7(s.now())),
         forwarded: "transcript",
-        forwarded_ref: s.store(
+        forwarded_ref: await s.store(
           handoffTranscript(
             s.events,
             contextPolicy(s.fold.policy).spill.threshold_bytes,

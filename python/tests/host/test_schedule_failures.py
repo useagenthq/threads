@@ -48,7 +48,7 @@ def healthy(name: str) -> Agent[None, str]:
     return agent(name=name, model=scripted_model({"responses": [REPLY] * 3}))
 
 
-async def occurrences(store: Store) -> list[tuple[str, str]]:
+async def occurrences(store: Store) -> list[tuple[object, ...]]:
     sq = await open_store(store)
     return await sq.run(
         lambda c: c.execute(

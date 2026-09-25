@@ -11,7 +11,7 @@ import {
   principalKey,
   TeamRefusal,
 } from "../log";
-import type { SqliteDriver } from "../store/driver";
+import type { Tx } from "../store/driver";
 import type { Chain } from "../verify";
 import type { Batch } from "./batch";
 import { type Refusal, type Refused, refusal, refusedOf } from "./call";
@@ -40,7 +40,7 @@ export type OperatorInput = {
 
 /** What an operator request reads, inside the team log's append. */
 export type OperatorContext = {
-  readonly db: SqliteDriver;
+  readonly tx: Tx;
   /** The team log's committed chain. */
   readonly chain: Chain;
   readonly batch: Batch;
@@ -79,14 +79,14 @@ function bodyHash(body: OperatorInput["body"]): string {
  * the bound request's outcome and append nothing; another principal, then another body, is
  * refused, recorded as a request without the key (the key stays bound to the first).
  */
-export function openOperator(
+export async function openOperator(
   ctx: OperatorContext,
   input: OperatorInput,
-): Opened {
+): Promise<Opened> {
   const key = input.idempotencyKey;
   if (key === undefined) return { kind: "open", request: opened(ctx, input) };
   const receipt = z.array(Receipt).parse(
-    ctx.db.all(
+    await ctx.tx.all(
       `SELECT principal_key, body_hash, request_id FROM operator_receipts
           WHERE tenant_id = ? AND team_id = ? AND op = ? AND idempotency_key = ?`,
       [ctx.team.tenant_id, ctx.team.team_id, input.op, key],
@@ -112,7 +112,7 @@ export function openOperator(
 
 /** operator_request, whose own event is the provenance's root request, then the request. */
 function opened(ctx: OperatorContext, input: OperatorInput): Request {
-  const { db, batch, team } = ctx;
+  const { tx, batch, team } = ctx;
   const header = ctx.chain.segments[0]?.header;
   if (header === undefined) throw new Error("a team log has a header");
   const root = {
@@ -144,7 +144,7 @@ function opened(ctx: OperatorContext, input: OperatorInput): Request {
   // An operator acting for a principal of another tenant is denied (Phase 1 policy).
   const allow = input.principal.tenant === team.tenant_id;
   return {
-    db,
+    tx,
     batch,
     put: ctx.put,
     team,
@@ -169,7 +169,7 @@ function opened(ctx: OperatorContext, input: OperatorInput): Request {
       });
       return allow ? undefined : refusal("forbidden");
     },
-    parent: () => leadParent(db, team),
+    parent: () => leadParent(tx, team),
     refuse: (value: Refusal) => {
       batch.add({
         type: "operator_refused",
@@ -190,17 +190,20 @@ function opened(ctx: OperatorContext, input: OperatorInput): Request {
 }
 
 /** An operator start's parent is the lead's thread_started, which carries the team. */
-function leadParent(
-  db: SqliteDriver,
+async function leadParent(
+  tx: Tx,
   team: TeamRow,
 ): ReturnType<Request["parent"]> {
-  const lead = memberRows(db, team.team_id).find((r) => r.role === "lead");
+  const lead = (await memberRows(tx, team.team_id)).find(
+    (r) => r.role === "lead",
+  );
   const first = z
     .array(z.strictObject({ event_id: z.string() }))
     .parse(
-      db.all("SELECT event_id FROM events WHERE branch_id = ? AND seq = 1", [
-        lead?.branch_id ?? null,
-      ]),
+      await tx.all(
+        "SELECT event_id FROM events WHERE branch_id = ? AND seq = 1",
+        [lead?.branch_id ?? null],
+      ),
     )[0];
   if (lead === undefined || lead.branch_id === null || first === undefined)
     throw new Error(`team ${team.team_id} has no lead log`);
@@ -213,17 +216,13 @@ function leadParent(
 }
 
 /** An operator's target: the member a ref names, known in this team at its generation. */
-export function refTarget(
-  db: SqliteDriver,
-  team: TeamRow,
-  ref: MemberRef,
-): Target {
+export function refTarget(tx: Tx, team: TeamRow, ref: MemberRef): Target {
   return {
     name: ref.name,
-    row: () => {
+    row: async () => {
       const row =
         ref.team === team.team_id
-          ? memberNamed(db, team.team_id, ref.name)
+          ? await memberNamed(tx, team.team_id, ref.name)
           : undefined;
       if (row === undefined || ref.generation > row.generation)
         return refusal("unknown_member");

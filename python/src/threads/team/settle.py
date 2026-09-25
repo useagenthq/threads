@@ -5,7 +5,6 @@ mail (in (created_at, mail_id) order) and, for a lead, one cancel per live membe
 The index hooks delete each fired monitor, return each refused row and close the team in the same
 transaction. Reference: spec/tools/fixtures/ops_life.py."""
 
-import sqlite3
 from dataclasses import dataclass
 from typing import Final
 
@@ -13,6 +12,7 @@ from pydantic import JsonValue
 
 from threads.log import MailEnvelope, MemberRef
 from threads.reduce.handlers import to_json
+from threads.store.conn import Conn
 from threads.store.lines import Draft
 from threads.team.batch import Batch
 from threads.team.mail import PutText, address_of, body_of, refused, sent
@@ -44,7 +44,7 @@ type Settlement = Completed | dict[str, JsonValue]
 class AppendContext:
     """The writer a team append goes through, and its batch."""
 
-    conn: sqlite3.Connection
+    conn: Conn
     batch: Batch
     thread_id: str
     branch_id: str

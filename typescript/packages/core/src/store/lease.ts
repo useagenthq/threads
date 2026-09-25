@@ -2,7 +2,7 @@ import type { BranchId } from "../log";
 import { err, ok, type Result } from "../result";
 import type { Chain, VerifiedLog } from "../verify";
 import { type LogError, logError } from "../verify/error";
-import type { SqliteDriver } from "./driver";
+import type { StoreDriver, Tx } from "./driver";
 import { getLease, putLease } from "./tables";
 import { Writer } from "./writer";
 
@@ -11,21 +11,26 @@ export const LEASE_TTL_MS = 30_000;
 
 /** What the lease and fork writes use of a LogStore: one tenant's connection, clock and reads. */
 export type StoreAccess = {
-  readonly db: SqliteDriver;
+  readonly db: StoreDriver;
   readonly now: () => number;
   readonly tenant: string;
-  readonly read: (branchId: BranchId) => Result<VerifiedLog, LogError>;
+  /** A branch's verified chain, read in `tx`. */
+  readonly read: (
+    tx: Tx,
+    branchId: BranchId,
+  ) => Promise<Result<VerifiedLog, LogError>>;
 };
 
 /** The lease if it is free, expired or already this holder's, at the next epoch (rule 11). */
-export function takeLease(
+export async function takeLease(
   s: StoreAccess,
+  tx: Tx,
   branchId: BranchId,
   holderId: string,
   ttlMs: number,
   chain: Chain,
-): Result<Writer, LogError> {
-  const lease = getLease(s.db, branchId);
+): Promise<Result<Writer, LogError>> {
+  const lease = await getLease(tx, branchId);
   if (!lease.ok) return lease;
   const held = lease.value;
   if (
@@ -35,19 +40,20 @@ export function takeLease(
   )
     return err(logError("branch_busy", `branch ${branchId} has a live lease`));
   const epoch = Math.max(held?.epoch ?? 0, chain.fold.epoch) + 1;
-  return ok(grantLease(s, branchId, holderId, epoch, ttlMs, chain));
+  return ok(await grantLease(s, tx, branchId, holderId, epoch, ttlMs, chain));
 }
 
 /** Writes the lease row and returns the writer that holds it. */
-export function grantLease(
+export async function grantLease(
   s: StoreAccess,
+  tx: Tx,
   branchId: string,
   holderId: string,
   epoch: number,
   ttlMs: number,
   chain: Chain,
-): Writer {
-  putLease(s.db, branchId, {
+): Promise<Writer> {
+  await putLease(tx, branchId, {
     holder_id: holderId,
     epoch,
     expires_at: s.now() + ttlMs,

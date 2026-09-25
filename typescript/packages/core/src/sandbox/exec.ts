@@ -180,7 +180,7 @@ async function collect(
     sink.abort();
     return ok(base);
   }
-  const full = sink.finish();
+  const full = await sink.finish();
   // A value registered mid-stream dropped the spill: the previews stand alone.
   if (full === undefined) return ok(base);
   return ok({

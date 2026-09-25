@@ -132,7 +132,8 @@ async function file(
     sink.abort();
     return invalid("truncated", path, s.src.offset);
   }
-  return ok({ path, kind: "file", mode, size, sha256: sink.finish().sha256 });
+  const { sha256 } = await sink.finish();
+  return ok({ path, kind: "file", mode, size, sha256 });
 }
 
 /** The entry a link or directory header describes, or why it is refused. */
@@ -289,7 +290,7 @@ export async function storeTar(
   if (!tree.ok) return tree;
   return ok({
     tree: tree.value,
-    sha256: artifacts.put(encodeTree(tree.value)),
+    sha256: await artifacts.put(encodeTree(tree.value)),
     manifest_hash: treeManifestHash(tree.value),
   });
 }

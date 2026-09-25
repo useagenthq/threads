@@ -4,8 +4,10 @@ import {
   type LogError,
   parseRows,
   type Result,
-  type SqliteDriver,
+  reading,
+  type Sql,
   ThreadId,
+  type Tx,
   UI_RECEIPT,
 } from "@threads/core/host";
 import { z } from "zod";
@@ -39,16 +41,18 @@ export type Keyed = {
   readonly key: string;
 };
 
-export function findReceipt(
-  db: SqliteDriver,
+export async function findReceipt(
+  sql: Sql,
   at: Keyed,
-): Result<Receipt | undefined, LogError> {
+): Promise<Result<Receipt | undefined, LogError>> {
   const rows = parseRows(
     Row,
-    db.all(
-      `SELECT principal_key, body_hash, thread_id, branch_id, run_id FROM run_receipts
-        WHERE tenant_id = ? AND operation = ? AND idempotency_key = ?`,
-      [at.tenant, at.operation, at.key],
+    await reading(sql, (tx) =>
+      tx.all(
+        `SELECT principal_key, body_hash, thread_id, branch_id, run_id FROM run_receipts
+          WHERE tenant_id = ? AND operation = ? AND idempotency_key = ?`,
+        [at.tenant, at.operation, at.key],
+      ),
     ),
   );
   return rows.ok ? { ok: true, value: rows.value[0] } : rows;
@@ -58,13 +62,14 @@ export function findReceipt(
  * Inserts the receipt inside the user_input's append transaction. When another request won the
  * key first, the insert does nothing and this answers false, which rolls that append back.
  */
-export function insertReceipt(
-  db: SqliteDriver,
+export async function insertReceipt(
+  tx: Tx,
   at: Keyed,
   receipt: Receipt,
   now: number,
-): boolean {
-  db.run(
+): Promise<boolean> {
+  // ON CONFLICT DO NOTHING on its key: inserting again after an unknown commit is a no-op.
+  await tx.run(
     `INSERT INTO run_receipts (tenant_id, operation, idempotency_key, principal_key, body_hash,
       thread_id, branch_id, run_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT DO NOTHING`,
@@ -80,7 +85,7 @@ export function insertReceipt(
       now,
     ],
   );
-  const stored = findReceipt(db, at);
+  const stored = await findReceipt(tx, at);
   return stored.ok && stored.value?.run_id === receipt.run_id;
 }
 
@@ -93,17 +98,19 @@ const UiRow = z.strictObject({
  * A thread's `ui` receipts: each run's client message id by run id. Read by the byte range of
  * `<thread_id>:` keys (`;` is the byte after `:`), never LIKE, so the index serves it.
  */
-export function uiReceipts(
-  db: SqliteDriver,
+export async function uiReceipts(
+  sql: Sql,
   tenant: string,
   threadId: ThreadId,
-): Result<ReadonlyMap<string, string>, LogError> {
+): Promise<Result<ReadonlyMap<string, string>, LogError>> {
   const rows = parseRows(
     UiRow,
-    db.all(
-      `SELECT idempotency_key, run_id FROM run_receipts
-        WHERE tenant_id = ? AND operation = ? AND idempotency_key >= ? AND idempotency_key < ?`,
-      [tenant, UI_RUN, `${threadId}:`, `${threadId};`],
+    await reading(sql, (tx) =>
+      tx.all(
+        `SELECT idempotency_key, run_id FROM run_receipts
+          WHERE tenant_id = ? AND operation = ? AND idempotency_key >= ? AND idempotency_key < ?`,
+        [tenant, UI_RUN, `${threadId}:`, `${threadId};`],
+      ),
     ),
   );
   if (!rows.ok) return rows;
@@ -135,13 +142,14 @@ const RunBranchRow: z.ZodType<RunBranch> = z.strictObject({
  * Storage is a boundary: a row that fails its schema is skipped and said, never the reason the
  * valid ones aren't recovered.
  */
-export function unfinishedRuns(db: SqliteDriver): readonly RunBranch[] {
-  const rows = db.all(
-    `SELECT DISTINCT r.tenant_id, r.thread_id, r.branch_id FROM run_receipts r
-      JOIN branches b ON b.branch_id = r.branch_id AND b.tenant_id = r.tenant_id
-      JOIN events e ON e.branch_id = b.branch_id AND e.seq = b.head_seq
-      WHERE e.type <> 'turn_completed'`,
-    [],
+export async function unfinishedRuns(sql: Sql): Promise<readonly RunBranch[]> {
+  const rows = await reading(sql, (tx) =>
+    tx.all(
+      `SELECT DISTINCT r.tenant_id, r.thread_id, r.branch_id FROM run_receipts r
+        JOIN branches b ON b.branch_id = r.branch_id AND b.tenant_id = r.tenant_id
+        JOIN events e ON e.branch_id = b.branch_id AND e.seq = b.head_seq
+        WHERE e.type <> 'turn_completed'`,
+    ),
   );
   return rows.flatMap((row) => {
     const parsed = RunBranchRow.safeParse(row);

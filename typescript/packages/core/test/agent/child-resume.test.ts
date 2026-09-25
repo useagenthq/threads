@@ -30,7 +30,7 @@ async function read(
   branch: BranchId,
 ): Promise<readonly KnownEvent[]> {
   const { log } = await openStore(store);
-  return knownEvents(unwrap(log.read(branch)));
+  return knownEvents(unwrap(await log.read(branch)));
 }
 
 describe("child runs that don't end", () => {
@@ -68,8 +68,8 @@ describe("child runs that don't end", () => {
     );
     if (spawned?.type !== "agent_spawned") throw new Error("no child");
     const { log } = await openStore(store);
-    const child = unwrap(log.mainBranch(spawned.data.child_thread_id));
-    unwrap(log.acquire(child, "zombie-process"));
+    const child = unwrap(await log.mainBranch(spawned.data.child_thread_id));
+    unwrap(await log.acquire(child, "zombie-process"));
     const runner = hostRunner(lead);
     if (runner === undefined) throw new Error("agent() registers a runner");
     const second = await runner.execute(
@@ -120,7 +120,7 @@ describe("child runs that don't end", () => {
         principal: operator,
         thread: {
           id: parentId,
-          branch: unwrap(log.mainBranch(parentId)),
+          branch: unwrap(await log.mainBranch(parentId)),
           store,
         },
       },
@@ -130,11 +130,11 @@ describe("child runs that don't end", () => {
       status: "completed",
       output: "parent done",
     });
-    const childLog = await read(store, unwrap(log.mainBranch(childId)));
+    const childLog = await read(store, unwrap(await log.mainBranch(childId)));
     expect(childLog[0]?.type).toBe("thread_started");
-    const finished = (await read(store, unwrap(log.mainBranch(parentId)))).find(
-      (e) => e.type === "agent_finished",
-    );
+    const finished = (
+      await read(store, unwrap(await log.mainBranch(parentId)))
+    ).find((e) => e.type === "agent_finished");
     expect(finished?.type === "agent_finished" && finished.data.status).toBe(
       "completed",
     );

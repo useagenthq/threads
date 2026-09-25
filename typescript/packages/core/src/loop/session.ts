@@ -24,6 +24,9 @@ import { BARRED, type Barred } from "./types";
 
 const encoder = new TextEncoder();
 
+/** An append the cancel barrier refused whole: nothing is written. */
+const NOTHING = Symbol("nothing admitted");
+
 /**
  * One run's view of its branch: the writer that holds the lease, the artifacts, and the loop
  * config. All state is read back from the committed chain (invariant 1).
@@ -87,10 +90,10 @@ export class Session {
    * Appends in one fenced transaction. A lost lease or a moved head is a halt: this writer must
    * never append or dispatch again.
    */
-  append(...drafts: readonly EventDraft[]): Halt | undefined {
+  append(...drafts: readonly EventDraft[]): Promise<Halt | undefined> {
     if (drafts.some(opensWork))
       throw new Error("a batch that starts work is appended with appendWork");
-    return this.#admit(drafts);
+    return this.#admit(drafts, { barred: false });
   }
 
   /**
@@ -98,11 +101,12 @@ export class Session {
    * wait, a model switch). BARRED: a pending cancel refused it; its hook decisions were kept, and
    * the cancellation step is next.
    */
-  appendWork(...drafts: readonly EventDraft[]): Halt | Barred | undefined {
-    const refused =
-      afterBarrier(this.fold, this.events, drafts).length !== drafts.length;
-    const stopped = this.#admit(drafts);
-    return stopped ?? (refused ? BARRED : undefined);
+  async appendWork(
+    ...drafts: readonly EventDraft[]
+  ): Promise<Halt | Barred | undefined> {
+    const batch = { barred: false };
+    const stopped = await this.#admit(drafts, batch);
+    return stopped ?? (batch.barred ? BARRED : undefined);
   }
 
   /**
@@ -110,12 +114,12 @@ export class Session {
    * transaction and builds the batch, which passes the cancel barrier as `appendWork`'s does, or
    * refuses. A refusal appends nothing and comes back for the caller to record.
    */
-  appendDecided<E>(
-    decide: (tx: DecideTx) => Result<readonly EventDraft[], E>,
-  ): Halt | Barred | Refusal<E> | undefined {
+  async appendDecided<E>(
+    decide: (tx: DecideTx) => Promise<Result<readonly EventDraft[], E>>,
+  ): Promise<Halt | Barred | Refusal<E> | undefined> {
     const batch = { barred: false };
-    const appended = this.#writer.appendDecided((tx) => {
-      const decided = decide(tx);
+    const appended = await this.#writer.appendDecided(async (tx) => {
+      const decided = await decide(tx);
       if (!decided.ok) return decided;
       const kept = afterBarrier(this.fold, this.events, decided.value);
       batch.barred = kept.length !== decided.value.length;
@@ -125,15 +129,28 @@ export class Session {
     return this.#committed(appended) ?? (batch.barred ? BARRED : undefined);
   }
 
-  #admit(drafts: readonly EventDraft[]): Halt | undefined {
-    const admitted = afterBarrier(this.fold, this.events, drafts);
-    if (admitted.length === 0) return undefined;
+  /**
+   * The cancel barrier is read under the writer's lock, inside the append: a cancel another
+   * caller appends on this writer meanwhile (a host's thread.cancel) is on the chain it reads.
+   */
+  async #admit(
+    drafts: readonly EventDraft[],
+    batch: { barred: boolean },
+  ): Promise<Halt | undefined> {
     const team = this.config.team;
-    const settles = admitted.some(
-      (d) => d.type === "turn_completed" || d.type === "parked",
-    );
-    if (team !== undefined && settles) return this.#settled(team, admitted);
-    return this.#committed(this.#writer.append(admitted));
+    const appended = await this.#writer.appendDecided(async (tx) => {
+      const admitted = afterBarrier(this.fold, this.events, drafts);
+      batch.barred = admitted.length !== drafts.length;
+      if (admitted.length === 0) return err(NOTHING);
+      const settles = admitted.some(
+        (d) => d.type === "turn_completed" || d.type === "parked",
+      );
+      return team !== undefined && settles
+        ? ok(await this.#settlement(team, tx, admitted))
+        : ok(admitted);
+    });
+    if (isRefusal(appended)) return undefined;
+    return this.#committed(appended);
   }
 
   /**
@@ -142,41 +159,45 @@ export class Session {
    * lead, the cancels they send, decided from the rows in the append's transaction. A member's
    * first park carries its one member_parked notice to its starter.
    */
-  #settled(team: TeamRuntime, drafts: readonly EventDraft[]): Halt | undefined {
+  async #settlement(
+    team: TeamRuntime,
+    tx: DecideTx,
+    drafts: readonly EventDraft[],
+  ): Promise<readonly EventDraft[]> {
     const events = this.events;
     const turn = events.slice(
       events.findLastIndex((e) => e.type === "turn_completed") + 1,
     );
     const how = settlementOf(turn, drafts);
-    let parkedBefore = events.some((e) => e.type === "parked");
-    const appended = this.#writer.appendDecided((tx) => {
-      const batch = new Batch(tx.chain.fold.seq, tx.now, team.mint);
-      const provenance = turnProvenance(tx.db, tx.chain);
-      const ctx = {
-        db: tx.db,
-        batch,
-        threadId: this.threadId,
-        branchId: this.branchId,
-      };
-      for (const d of drafts) {
-        const id = batch.add(d);
-        if (d.type !== "parked" || parkedBefore || provenance === undefined)
-          continue;
-        parkedBefore = true;
-        parkNotice(
-          { ...ctx, provenance },
-          { eventId: id, reason: d.data.reason },
-        );
-      }
-      if (how !== undefined && provenance !== undefined)
-        settle(
-          { ...ctx, provenance, put: (text) => this.store(text, "text/plain") },
-          how,
-        );
-      return ok(batch.drafts);
-    });
-    if (isRefusal(appended)) throw new Error("a settlement never refuses");
-    return this.#committed(appended);
+    // Per attempt: a retried attempt decides the notice again.
+    let parked = events.some((e) => e.type === "parked");
+    const batch = new Batch(tx.chain.fold.seq, tx.now, team.mint);
+    const provenance = await turnProvenance(tx.tx, tx.chain);
+    const ctx = {
+      tx: tx.tx,
+      batch,
+      threadId: this.threadId,
+      branchId: this.branchId,
+    };
+    for (const d of drafts) {
+      const id = batch.add(d);
+      if (d.type !== "parked" || parked || provenance === undefined) continue;
+      parked = true;
+      await parkNotice(
+        { ...ctx, provenance },
+        { eventId: id, reason: d.data.reason },
+      );
+    }
+    if (how !== undefined && provenance !== undefined)
+      await settle(
+        {
+          ...ctx,
+          provenance,
+          put: (text) => this.store(text, "text/plain"),
+        },
+        how,
+      );
+    return batch.drafts;
   }
 
   /** A lost lease or head halts the run; committed events go to `onEvent`. */
@@ -202,8 +223,8 @@ export class Session {
    * Called right before every adapter call (model send and lookup, tool run, lookup and
    * terminate): a writer that lost its lease or epoch never reaches the adapter.
    */
-  fence(): Halt | undefined {
-    const live = this.#writer.fence();
+  async fence(): Promise<Halt | undefined> {
+    const live = await this.#writer.fence();
     return live.ok
       ? undefined
       : { code: "branch_busy", message: live.error.message };
@@ -223,7 +244,7 @@ export class Session {
       branchId: this.branchId,
       epoch: this.epoch,
       fence: async () => {
-        const halted = this.fence();
+        const halted = await this.fence();
         return halted === undefined
           ? ok(undefined)
           : err({ code: "stale_epoch", message: halted.message });
@@ -238,11 +259,14 @@ export class Session {
   }
 
   /** Stores bytes before any event names them, and returns their ref. Text is redacted (C5). */
-  store(bytes: Uint8Array | string, mediaType: string): ArtifactRef {
+  async store(
+    bytes: Uint8Array | string,
+    mediaType: string,
+  ): Promise<ArtifactRef> {
     const data =
       typeof bytes === "string" ? encoder.encode(redactSecrets(bytes)) : bytes;
     return {
-      sha256: this.artifacts.put(data),
+      sha256: await this.artifacts.put(data),
       bytes: data.length,
       media_type: mediaType,
     };

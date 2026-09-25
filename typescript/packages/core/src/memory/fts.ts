@@ -1,12 +1,29 @@
 import { ConfigError } from "../agent/errors";
-import type { SqliteDriver } from "../store/driver";
+import type { StoreDriver } from "../store/driver";
 
-// SQLite FTS5 for the built-in providers (FTS5 is a setup check).
+// SQLite FTS5 for the built-in providers (FTS5 is a setup check). They keep their index in a
+// SQLite store only: on any other store they are refused at setup.
 
-/** Creates the provider's tables; a SQLite build without FTS5 is a setup error that says so. */
-export function installFts(db: SqliteDriver, ddl: string, who: string): void {
+/**
+ * Creates the provider's tables; a Postgres store, or a SQLite build without FTS5, is a setup
+ * error that says so.
+ */
+export async function installFts(
+  db: StoreDriver,
+  ddl: string,
+  who: string,
+  instead: string,
+): Promise<void> {
+  if (db.dialect !== "sqlite")
+    throw new ConfigError(
+      "invalid_config",
+      `${who.replace("()", "")} keeps its index in a SQLite store; ${instead}`,
+    );
   try {
-    db.exec(ddl);
+    await db.transaction(async (tx) => {
+      for (const statement of ddl.split(";"))
+        if (statement.trim() !== "") await tx.run(statement);
+    });
   } catch (error) {
     const text = String(error);
     throw new ConfigError(

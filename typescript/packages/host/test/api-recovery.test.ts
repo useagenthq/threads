@@ -24,6 +24,7 @@ import { z } from "zod";
 import { type Host, host } from "../src";
 import { hostTicked } from "../src/host";
 import { alice, authenticate, eve, mailer, say, until, use } from "./kit";
+import { sqlRun } from "./sql";
 
 // A run started through the run API resumes when the host that ran it stalls or dies: the next
 // host's recovery pass runs its open turn from the log with no new input. The "crash" is a host
@@ -100,7 +101,7 @@ async function start(h: Host, as: Principal, key = "k-1"): Promise<Run> {
 
 async function read(store: Store, run: Run): Promise<VerifiedLog> {
   const { log } = await openStore(tenantStore(store, run.tenant));
-  const read = log.read(run.branch);
+  const read = await log.read(run.branch);
   if (!read.ok) throw new Error(read.error.message);
   return read.value;
 }
@@ -115,7 +116,7 @@ const has = async (store: Store, run: Run, type: string): Promise<boolean> =>
 /** The stalled host's lease runs out (its TTL is 30 s): the drills do the same. */
 async function expireLeases(store: Store): Promise<void> {
   const { db } = await storeConnection(store);
-  db.run("UPDATE leases SET expires_at = 0", []);
+  await sqlRun(db, "UPDATE leases SET expires_at = 0", []);
 }
 
 function texts(all: readonly KnownEvent[]): readonly string[] {

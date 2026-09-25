@@ -39,15 +39,15 @@ export async function reply(
   threadId: ThreadId,
 ): Promise<"done" | "busy"> {
   const { db } = await storeConnection(ctx.store);
-  const conversation = conversationOf(db, tenant, threadId);
+  const conversation = await conversationOf(db, tenant, threadId);
   const adapter =
     conversation === undefined
       ? undefined
       : ctx.channels.get(conversation.channel);
   if (conversation === undefined || adapter === undefined) return "done";
   const { log, artifacts } = await ctx.open(tenant);
-  const main = log.mainBranch(threadId);
-  const read = main.ok ? log.read(main.value) : undefined;
+  const main = await log.mainBranch(threadId);
+  const read = main.ok ? await log.read(main.value) : undefined;
   if (!main.ok || read?.ok !== true) return "done";
   const derived = calls(
     adapter,
@@ -64,7 +64,7 @@ export async function reply(
     due,
   );
   if (todo.length > 0 || left.length > 0) {
-    const writer = log.acquire(main.value, `send-${crypto.randomUUID()}`);
+    const writer = await log.acquire(main.value, `send-${crypto.randomUUID()}`);
     if (!writer.ok) return "busy";
     // Renewed while the sends are in flight: one past the fence may take longer than the TTL,
     // and a lapsed lease would let another host look it up as not sent and send it again.
@@ -77,7 +77,7 @@ export async function reply(
       for (const l of leftovers(main.value, w.chain.fold, events, due))
         await settleLeftover(adapter, w, artifacts, l, ctx.stopping);
     } finally {
-      release();
+      await release();
     }
   }
   return handOver(ctx, tenant, threadId, read.value);
@@ -99,21 +99,23 @@ async function handOver(
   const { db } = await storeConnection(ctx.store);
   // The route and the items queued behind it move together; 0 rows means another process
   // moved the route first, so it is re-read, never overwritten.
-  const routed = db.transaction(() => {
-    const rows = db.all(
+  // A CAS on the old route: moving it again after an unknown commit changes nothing.
+  const routed = await db.transaction(async (tx) => {
+    const rows = await tx.all(
       `UPDATE channel_threads SET thread_id = ? WHERE tenant_id = ? AND thread_id = ?
         RETURNING thread_id`,
       [to, tenant, threadId],
     );
     if (rows.length > 0)
-      db.run(
+      await tx.run(
         `UPDATE inbox SET thread_id = ? WHERE tenant_id = ? AND thread_id = ?
           AND consumed_seq IS NULL`,
         [to, tenant, threadId],
       );
     return rows.length > 0;
   });
-  if (!routed && conversationOf(db, tenant, to) === undefined) return "done";
+  if (!routed && (await conversationOf(db, tenant, to)) === undefined)
+    return "done";
   return reply(ctx, tenant, to);
 }
 

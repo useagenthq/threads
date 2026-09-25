@@ -97,7 +97,7 @@ async function afterModel(
     }
     const out = await run(ext, "after_model", [s.state(), response.data]);
     const [decided, reason] = decide(s, out);
-    const stopped = s.append(
+    const stopped = await s.append(
       decision(ext.name, "after_model", decided, key, reason),
     );
     if (stopped !== undefined) return stopped;
@@ -157,12 +157,12 @@ function standing(
  * The output is withheld: each call is recorded and closed without dispatch, so the pairs stay
  * whole, then either the guide instruction re-asks or, on a deny, the turn ends error.
  */
-function withheld(
+async function withheld(
   s: Session,
   response: Response,
   preview: string,
   guide: ReturnType<typeof instruction> | undefined,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const closed = response.data.content.flatMap((p) =>
     p.type === "tool_use"
       ? [
@@ -185,7 +185,7 @@ function withheld(
 }
 
 /** ask to continue, up to max_output_continuations per turn, then max_output. */
-function continuation(s: Session): Halt | undefined {
+async function continuation(s: Session): Promise<Halt | undefined> {
   const asked = turnEvents(s.events, s.fold).filter(
     (e) => e.type === "injected" && e.data.text === CONTINUE,
   ).length;

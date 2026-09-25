@@ -35,7 +35,7 @@ async function realPin(bot: Agent) {
     if (item.kind === "event") branch ??= item.event.branch_id;
   await expect(run.result).rejects.toBeInstanceOf(ModelBlockedError);
   const { log } = await openStore(store);
-  const read = log.read(BranchId.parse(branch));
+  const read = await log.read(BranchId.parse(branch));
   if (!read.ok) throw new Error(read.error.message);
   const first = read.value.events[0]?.event;
   if (first?.type !== "thread_started") throw new Error("no thread_started");

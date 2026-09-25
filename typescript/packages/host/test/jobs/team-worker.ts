@@ -10,14 +10,10 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import {
-  type EventDraft,
-  LogStore,
-  memoryArtifacts,
-  type SqliteDriver,
-} from "@threads/core";
-import { openBunSqlite } from "@threads/core/bun-sqlite";
+import { type EventDraft, LogStore, memoryArtifacts } from "@threads/core";
 import { BranchId, ThreadId } from "@threads/core/host";
+import { beforeRun } from "../sql";
+import { drillDriver } from "./stores";
 import { reached } from "./worker";
 
 export const TENANT = "acme";
@@ -74,24 +70,23 @@ const input = (text: string): EventDraft => ({
 });
 
 /** The drill store; with a stop point, a driver that blocks at the first feed row. */
-export function drillStore(where: string, stop?: string): LogStore {
-  const base = openBunSqlite(join(where, "threads.db"));
-  const db: SqliteDriver = {
-    ...base,
-    run: (sql, params) => {
-      if (stop !== undefined && sql.includes("INSERT INTO team_feed"))
-        reached(stop, where);
-      base.run(sql, params);
-    },
-  };
-  const store = LogStore.open(db, Date.now, memoryArtifacts(), TENANT);
+export async function drillStore(
+  where: string,
+  stop?: string,
+): Promise<LogStore> {
+  const base = (await drillDriver(where)).db;
+  const db = beforeRun(base, (sql) => {
+    if (stop !== undefined && sql.includes("INSERT INTO team_feed"))
+      reached(stop, where);
+  });
+  const store = await LogStore.open(db, Date.now, memoryArtifacts(), TENANT);
   if (!store.ok) throw new Error(store.error.message);
   return store.value;
 }
 
-function lead(where: string): string {
-  const store = drillStore(where, "lead_first_append");
-  const opened = store.openBranch({
+async function lead(where: string): Promise<string> {
+  const store = await drillStore(where, "lead_first_append");
+  const opened = await store.openBranch({
     threadId: ThreadId.parse("0192a000-0000-7000-8000-0000000000b1"),
     branchId: LEAD_BRANCH,
     lease: { holderId: "lead", ttlMs: 0 },
@@ -108,11 +103,11 @@ function lead(where: string): string {
   return "opened";
 }
 
-function open(role: string, where: string): string {
+async function open(role: string, where: string): Promise<string> {
   const thread = RACER_THREAD[role];
   if (thread === undefined) throw new Error(`no racer ${role}`);
   while (!existsSync(join(where, "go"))) Bun.sleepSync(1);
-  const opened = drillStore(where).openBranch({
+  const opened = await (await drillStore(where)).openBranch({
     threadId: thread,
     branchId: RACED,
     lease: { holderId: role, ttlMs: 60_000 },
@@ -127,7 +122,7 @@ if (import.meta.main) {
   if (where === undefined)
     throw new Error("usage: team-worker.ts <role> <dir>");
   process.stdout.write(
-    `${role === "lead" ? lead(where) : open(role, where)}\n`,
+    `${role === "lead" ? await lead(where) : await open(role, where)}\n`,
   );
   process.exit(0);
 }

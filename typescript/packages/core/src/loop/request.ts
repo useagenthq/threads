@@ -39,10 +39,10 @@ const CRASH: ReadonlySet<Rejection> = new Set([
 ]);
 
 /** Ends the turn with `reason`. */
-export function endTurn(
+export async function endTurn(
   s: Session,
   reason: EventOf<"turn_completed">["data"]["reason"],
-): Halt | undefined {
+): Promise<Halt | undefined> {
   return s.append(draft.turnCompleted(reason));
 }
 
@@ -80,8 +80,8 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
               cause_event_id: request.event_id,
             }),
           ];
-    const stopped = s.append(draft.budgetExceeded(refused), ...answered);
-    return stopped ?? endTurn(s, "budget_exhausted");
+    const stopped = await s.append(draft.budgetExceeded(refused), ...answered);
+    return stopped ?? (await endTurn(s, "budget_exhausted"));
   }
   const gated = await gates(s);
   if (gated !== undefined) return gated === "ended" ? undefined : gated;
@@ -122,8 +122,8 @@ export async function requestTurn(s: Session): Promise<Halt | undefined> {
 async function gates(s: Session): Promise<Gated> {
   return (
     (await inputGate(s)) ??
-    todoReminder(s) ??
-    deliverMessages(s) ??
+    (await todoReminder(s)) ??
+    (await deliverMessages(s)) ??
     (await resultsGate(s)) ??
     (await batchGate(s)) ??
     (await ladder(s)) ??
@@ -176,8 +176,8 @@ async function fallBack(
   const next = fallbackSettings(s);
   if (next === undefined) return "retry";
   const gate = await switchGate(s, next);
-  if (!gate.allowed) return s.append(...gate.decisions) ?? "retry";
-  const switched = s.appendWork(
+  if (!gate.allowed) return (await s.append(...gate.decisions)) ?? "retry";
+  const switched = await s.appendWork(
     ...gate.decisions,
     draft.settingsChanged({
       reason: "fallback",
@@ -232,7 +232,7 @@ async function schedule(
   if (waited + delay > retry.max_total_wait_ms)
     return endTurn(s, "model_unavailable");
   const notBefore = s.now() + delay;
-  const stopped = s.appendWork(
+  const stopped = await s.appendWork(
     draft.retryScheduled({
       request_event_id: last.data.request_event_id,
       delay_ms: delay,

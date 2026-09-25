@@ -68,12 +68,20 @@ export {
   keepLease,
   LEASE_TTL_MS,
   type LogStore,
-  type SqliteDriver,
   type SqlValue,
+  type StoreDriver,
+  type Tx,
   type Writer,
 } from "./store";
 export { deleteTenant, deleteThread } from "./store/deletion";
-export { StoreError } from "./store/driver";
+export {
+  CommitUnknown,
+  READ_ONLY,
+  reading,
+  type Sql,
+  StoreError,
+  writing,
+} from "./store/driver";
 export { uuidv7 } from "./store/encode";
 export { dueQuestionBranches } from "./store/questions";
 export { sweepArtifacts } from "./store/retention";

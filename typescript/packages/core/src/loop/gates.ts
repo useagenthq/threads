@@ -34,14 +34,14 @@ export async function inputGate(s: Session): Promise<Gated> {
     if (refused !== undefined) {
       const { decided, reason } = refused;
       return (
-        s.append(
+        (await s.append(
           decision(ext.name, "before_input", decided, key, reason),
           draft.turnCompleted("input_denied"),
-        ) ?? "ended"
+        )) ?? "ended"
       );
     }
     if (out.kind === "failed" || out.value.decision === "deny") continue;
-    const stopped = s.append(
+    const stopped = await s.append(
       decision(ext.name, "before_input", "allow", key),
       ...(out.value.injections ?? []).map((t) => injection(ext.name, t)),
     );
@@ -75,7 +75,7 @@ export async function resultsGate(s: Session): Promise<Halt | undefined> {
         [call.data, result.data],
         key.call_id,
       );
-      const stopped = s.append(...guarded(ext.name, result, out));
+      const stopped = await s.append(...guarded(ext.name, result, out));
       if (stopped !== undefined) return stopped;
     }
   }
@@ -162,7 +162,7 @@ export async function batchGate(s: Session): Promise<Gated> {
   if (!step.some((e) => e.type === "tool_result")) return undefined;
   const got = await context(s, "after_tool_batch", [s.state()], step);
   if (got === "failed")
-    return s.append(draft.turnCompleted("error")) ?? "ended";
+    return (await s.append(draft.turnCompleted("error"))) ?? "ended";
   return got;
 }
 
@@ -176,14 +176,14 @@ export async function modelGate(s: Session): Promise<Gated> {
     if (refused !== undefined) {
       const { decided, reason } = refused;
       return (
-        s.append(
+        (await s.append(
           decision(ext.name, "before_model", decided, {}, reason),
           draft.turnCompleted("error"),
-        ) ?? "ended"
+        )) ?? "ended"
       );
     }
     if (out.kind === "failed" || out.value.decision === "deny") continue;
-    const stopped = s.append(
+    const stopped = await s.append(
       decision(ext.name, "before_model", "proceed"),
       ...(out.value.injections ?? []).map((t) => injection(ext.name, t)),
     );

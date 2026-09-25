@@ -2,7 +2,6 @@
 looked up first, then operator_request opens it, and it is decided by the same ops as a model call.
 Reference: spec/tools/fixtures/ops_request.py (open_request, keyed, recorded)."""
 
-import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Literal
@@ -26,6 +25,7 @@ from threads.log.jcs import canonicalize
 from threads.log.keys import principal_key
 from threads.reduce.handlers import to_json
 from threads.result import Ok
+from threads.store.conn import Conn
 from threads.store.lines import Draft
 from threads.store.sql import text_of
 from threads.team.batch import Batch
@@ -52,7 +52,7 @@ class OperatorInput:
 class OperatorContext:
     """What an operator request reads, inside the team log's append."""
 
-    conn: sqlite3.Connection
+    conn: Conn
     events: Sequence[Event]
     """The team log's committed events."""
     batch: Batch
@@ -88,7 +88,7 @@ def open_operator(ctx: OperatorContext, inp: OperatorInput) -> Opened | Replayed
     key = inp.idempotency_key
     if key is None:
         return Opened(_opened(ctx, inp))
-    row: tuple[object, object, object] | None = ctx.conn.execute(
+    row = ctx.conn.execute(
         "SELECT principal_key, body_hash, request_id FROM operator_receipts"
         " WHERE tenant_id = ? AND team_id = ? AND op = ? AND idempotency_key = ?",
         (ctx.team.tenant_id, ctx.team.team_id, inp.op, key),
@@ -161,10 +161,10 @@ def _opened(ctx: OperatorContext, inp: OperatorInput) -> Request:
     )
 
 
-def _lead_parent(conn: sqlite3.Connection, team: TeamRow) -> JsonValue:
+def _lead_parent(conn: Conn, team: TeamRow) -> JsonValue:
     """An operator start's parent is the lead's thread_started, which carries the team."""
     lead = next((r for r in member_rows(conn, team.team_id) if r.role == "lead"), None)
-    first: tuple[object] | None = (
+    first = (
         None
         if lead is None
         else conn.execute(
@@ -181,7 +181,7 @@ def _lead_parent(conn: sqlite3.Connection, team: TeamRow) -> JsonValue:
     }
 
 
-def ref_target(conn: sqlite3.Connection, team: TeamRow, ref: MemberRef) -> Target:
+def ref_target(conn: Conn, team: TeamRow, ref: MemberRef) -> Target:
     """An operator's target: the member a ref names, known in this team at its generation."""
 
     def row() -> MemberRow | Refusal:

@@ -19,35 +19,44 @@ const claim = (budgetId: string, max: number, amount: number): Claim => ({
 });
 
 describe("budget ledger", () => {
-  test("all claims or none; the refusal names the first that doesn't fit", () => {
-    const ledger = fixture().store.budgets;
-    expect(ledger.reserve("b:1", [claim("thread:t", 10, 6)])).toBeUndefined();
+  test("all claims or none; the refusal names the first that doesn't fit", async () => {
+    const ledger = (await fixture()).store.budgets;
     expect(
-      ledger.reserve("b:2", [
+      await ledger.reserve("b:1", [claim("thread:t", 10, 6)]),
+    ).toBeUndefined();
+    expect(
+      await ledger.reserve("b:2", [
         claim("run:t:i", 100, 6),
         claim("thread:t", 10, 6),
       ]),
     ).toEqual({ claim: claim("thread:t", 10, 6), observed: 12 });
     // Nothing of b:2 was reserved, so the run budget still has room.
-    expect(ledger.reserve("b:3", [claim("run:t:i", 6, 6)])).toBeUndefined();
-    expect(ledger.reserved("b:")).toEqual(["b:1", "b:3"]);
+    expect(
+      await ledger.reserve("b:3", [claim("run:t:i", 6, 6)]),
+    ).toBeUndefined();
+    expect(await ledger.reserved("b:")).toEqual(["b:1", "b:3"]);
   });
 
-  test("settling replaces the bound with the disposition; releasing frees it", () => {
-    const ledger = fixture().store.budgets;
-    ledger.reserve("b:1", [claim("thread:t", 10, 8)]);
-    ledger.settle("b:1", [["max_cost_nanos", 3]]);
-    expect(ledger.reserved("b:")).toEqual([]);
-    expect(ledger.reserve("b:2", [claim("thread:t", 10, 7)])).toBeUndefined();
-    ledger.release("b:2");
-    expect(ledger.reserve("b:3", [claim("thread:t", 10, 7)])).toBeUndefined();
+  test("settling replaces the bound with the disposition; releasing frees it", async () => {
+    const ledger = (await fixture()).store.budgets;
+    await ledger.reserve("b:1", [claim("thread:t", 10, 8)]);
+    await ledger.settle("b:1", [["max_cost_nanos", 3]]);
+    expect(await ledger.reserved("b:")).toEqual([]);
+    expect(
+      await ledger.reserve("b:2", [claim("thread:t", 10, 7)]),
+    ).toBeUndefined();
+    await ledger.release("b:2");
+    expect(
+      await ledger.reserve("b:3", [claim("thread:t", 10, 7)]),
+    ).toBeUndefined();
   });
 
-  test("reservers on two connections never exceed a shared limit", () => {
+  test("reservers on two connections never exceed a shared limit", async () => {
     const path = join(mkdtempSync(join(tmpdir(), "ledger-")), "log.db");
-    const open = () =>
-      unwrap(LogStore.open(openBunSqlite(path), Date.now, memoryArtifacts()))
-        .budgets;
+    const open = async () =>
+      unwrap(
+        await LogStore.open(openBunSqlite(path), Date.now, memoryArtifacts()),
+      ).budgets;
     const ledgers = [open(), open()];
     let seed = 7;
     const random = (n: number): number => {
@@ -57,8 +66,8 @@ describe("budget ledger", () => {
     let granted = 0;
     for (let i = 0; i < 200; i++) {
       const amount = 1 + random(9);
-      const ledger = ledgers[random(2)];
-      const refused = ledger?.reserve(`b${i % 7}:${i}`, [
+      const ledger = await ledgers[random(2)];
+      const refused = await ledger?.reserve(`b${i % 7}:${i}`, [
         claim("thread:root", 250, amount),
         claim(`thread:child${i % 3}`, 120, amount),
       ]);

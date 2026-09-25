@@ -34,8 +34,8 @@ const POINTS = [
   ["effect_commit", "final"],
 ] as const;
 
-const replyOf = (where: string): string | undefined =>
-  [...(log(where)?.fold.calls.keys() ?? [])].find((id) =>
+const replyOf = async (where: string): Promise<string | undefined> =>
+  [...((await log(where))?.fold.calls.keys() ?? [])].find((id) =>
     id.startsWith("send_"),
   );
 
@@ -48,12 +48,12 @@ describe("kill-restart-acked-events", () => {
       const first = spawn("serve", dir, { ...env, DRILL_STOP_AT: point });
       await waitAt(first, point);
       await kill(first);
-      expireLeases(dir);
-      const acked = events(dir).map((e) => e.event_id);
+      await expireLeases(dir);
+      const acked = (await events(dir)).map((e) => e.event_id);
       const sentBefore = sends(dir);
 
       expect(await finish(spawn("serve", dir, env))).toBe(0);
-      const after = events(dir);
+      const after = await events(dir);
       expect(after.map((e) => e.event_id).slice(0, acked.length)).toEqual(
         acked,
       );
@@ -67,8 +67,8 @@ describe("kill-restart-acked-events", () => {
       const keys = sends(dir);
       expect(new Set(keys).size).toBe(keys.length);
 
-      const fold = log(dir)?.fold;
-      const reply = replyOf(dir) ?? "";
+      const fold = (await log(dir))?.fold;
+      const reply = (await replyOf(dir)) ?? "";
       if (
         lookup !== "final" &&
         (point === "effect_begin" || point === "sent")
@@ -91,7 +91,7 @@ describe("kill-restart-acked-events", () => {
       // A second restart and redelivery finds nothing to do: nothing appended, nothing sent.
       const settled = after.map((e) => e.event_id);
       expect(await finish(spawn("serve", dir, env))).toBe(0);
-      expect(events(dir).map((e) => e.event_id)).toEqual(settled);
+      expect((await events(dir)).map((e) => e.event_id)).toEqual(settled);
       expect(sends(dir)).toEqual(keys);
       expect(logged(dir)).toBe("");
     },

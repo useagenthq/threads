@@ -2,7 +2,6 @@
 runs in its transaction (`threads.store.indexing`), with the same insert_rows/change_rows a
 rebuild folds, so the replay rule holds by construction."""
 
-import sqlite3
 from typing import TYPE_CHECKING, Final
 
 from pydantic.experimental.missing_sentinel import MISSING
@@ -13,14 +12,16 @@ from threads.log import ParseError, TeamOpenedEvent, ThreadStartedEvent
 # Modules, not their names: opening runs these hooks for the branch it opens (a cycle).
 from threads.store import lease, opening
 from threads.store.appended import Appended
+from threads.store.conn import Conn
 from threads.store.lines import Draft
+from threads.store.sql import text_of
 from threads.team.index import TeamLog, change_rows, insert_rows
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
 
-def team_rows(conn: sqlite3.Connection, a: Appended) -> ParseError | None:
+def team_rows(conn: Conn, a: Appended) -> ParseError | None:
     """The team rows the append's events insert, then the rows they change, on a team's own
     branch only: one that opens with this append, a member's or lead's (its
     `team_members.branch_id`), or a team log. A fork of a lead or member shares its thread but
@@ -35,7 +36,7 @@ def team_rows(conn: sqlite3.Connection, a: Appended) -> ParseError | None:
     return None
 
 
-def open_team_log(conn: sqlite3.Connection, a: Appended) -> ParseError | None:
+def open_team_log(conn: Conn, a: Appended) -> ParseError | None:
     """A lead's first append (its thread_started names a team) opens the team log with
     team_opened, in the same transaction: the teams row comes from it, the lead's row from the
     thread_started. Nothing but this append opens that branch, so finding it open is refused."""
@@ -71,7 +72,7 @@ _FEED: Final = (
 )
 
 
-def feed_rows(conn: sqlite3.Connection, a: Appended) -> ParseError | None:
+def feed_rows(conn: Conn, a: Appended) -> ParseError | None:
     """One team_feed row per appended event, under every team the branch belongs to: a
     member's or lead's (a nested lead has two), or the team whose log it is. Offsets continue
     the team's current epoch."""
@@ -81,11 +82,11 @@ def feed_rows(conn: sqlite3.Connection, a: Appended) -> ParseError | None:
     return None
 
 
-def _teams_of(conn: sqlite3.Connection, a: Appended) -> list[str]:
+def _teams_of(conn: Conn, a: Appended) -> list[str]:
     """The teams whose own branch this is: a member's or lead's, or the team log."""
-    rows: list[tuple[str]] = conn.execute(
+    rows = conn.execute(
         "SELECT team_id FROM team_members WHERE thread_id = ? AND branch_id = ?"
         " UNION SELECT team_id FROM teams WHERE team_log_branch_id = ?",
         (a.thread_id, a.branch_id, a.branch_id),
     ).fetchall()
-    return [team for (team,) in rows]
+    return [text_of(team) for (team,) in rows]

@@ -12,22 +12,22 @@ import type { WorkerEnv } from "./worker";
 // once and hands the lease back; a lease held elsewhere means its holder does it.
 
 /** A member whose definition can't be rebound here ends failed, under its own writer. */
-export function endUnbound(
+export async function endUnbound(
   env: WorkerEnv,
   branch: string,
   holder: string,
   code: RebindCode,
-): void {
-  const writer = env.log.acquire(BranchId.parse(branch), holder);
+): Promise<void> {
+  const writer = await env.log.acquire(BranchId.parse(branch), holder);
   if (!writer.ok) return;
   const w = writer.value;
   const header = w.chain.segments[0]?.header;
   if (header === undefined) throw new Error("a writer's chain has a header");
-  const ended = w.appendDecided((tx) => {
+  const ended = await w.appendDecided(async (tx) => {
     const batch = new Batch(tx.chain.fold.seq, tx.now, env.mint);
-    rebindFailed(
+    await rebindFailed(
       {
-        db: tx.db,
+        tx: tx.tx,
         chain: tx.chain,
         batch,
         threadId: header.thread_id,
@@ -38,14 +38,17 @@ export function endUnbound(
     );
     return ok(batch.drafts);
   });
-  w.release();
+  await w.release();
   if (isRefusal(ended)) throw new Error("a failed rebind never refuses");
   if (!ended.ok) throw new Error(`member end: ${ended.error.message}`);
 }
 
 /** An ended member's writer refuses the mail that still reaches it. */
-export function refuseEnded(env: WorkerEnv, branch: string): void {
-  const writer = env.log.acquire(
+export async function refuseEnded(
+  env: WorkerEnv,
+  branch: string,
+): Promise<void> {
+  const writer = await env.log.acquire(
     BranchId.parse(branch),
     `team-${crypto.randomUUID()}`,
   );
@@ -53,10 +56,10 @@ export function refuseEnded(env: WorkerEnv, branch: string): void {
   const w = writer.value;
   const header = w.chain.segments[0]?.header;
   if (header === undefined) throw new Error("a writer's chain has a header");
-  w.appendDecided((tx) => {
+  await w.appendDecided(async (tx) => {
     const batch = new Batch(tx.chain.fold.seq, tx.now, env.mint);
-    consume({
-      db: tx.db,
+    await consume({
+      tx: tx.tx,
       chain: tx.chain,
       batch,
       threadId: header.thread_id,
@@ -65,5 +68,5 @@ export function refuseEnded(env: WorkerEnv, branch: string): void {
     });
     return ok(batch.drafts);
   });
-  w.release();
+  await w.release();
 }

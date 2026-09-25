@@ -2,7 +2,6 @@
 own rows (cursors, losses) read back."""
 
 import json
-import sqlite3
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
@@ -13,6 +12,7 @@ from threads.agents.store import open_store
 from threads.log import BranchId, Permissions
 from threads.log.digest import sha256_hex
 from threads.result import Ok
+from threads.store.conn import Conn
 from threads.store.lines import head_line
 from threads.store.verify import verify_export
 
@@ -72,7 +72,7 @@ def looping(
 async def query(store: Store, sql: str, *args: str | int) -> list[tuple[object, ...]]:
     """Rows of a test query on the store's own connection."""
 
-    def run(conn: sqlite3.Connection) -> list[tuple[object, ...]]:
+    def run(conn: Conn) -> list[tuple[object, ...]]:
         rows: list[tuple[object, ...]] = conn.execute(sql, args).fetchall()
         return rows
 

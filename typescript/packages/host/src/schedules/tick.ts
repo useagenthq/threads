@@ -1,4 +1,4 @@
-import { storeConnection } from "@threads/core/host";
+import { READ_ONLY, storeConnection } from "@threads/core/host";
 import type { HostContext } from "../context";
 import { occurrences } from "../cron";
 import { isolated } from "../isolated";
@@ -42,7 +42,11 @@ export async function tick(
   // Reserved first, so a thread's backlog and its newly due occurrences are decided in one
   // writer hold, in occurrence order.
   await isolated("the pending sweep", async () => {
-    const threads = new Set(pendingRows(db, tenant).map((r) => r.thread_id));
+    const rows = await db.transaction(
+      (tx) => pendingRows(tx, tenant),
+      READ_ONLY,
+    );
+    const threads = new Set(rows.map((r) => r.thread_id));
     for (const thread of threads)
       await isolated(`schedule thread ${thread}`, () =>
         decideThread(pass, thread),
@@ -52,15 +56,22 @@ export async function tick(
   // when it fired) runs on from the log (found by the F10.5 drill).
   // ponytail: reads every schedule thread's log each tick, old ones included; index threads
   // with an open turn if schedules pile up threads.
-  for (const id of scheduleThreads(db, tenant)) {
-    const main = log.mainBranch(id);
-    // ponytail: a run in flight here gets a no-op resume queued behind it each tick; track
-    // in-flight branches if ticks ever outpace runs.
-    if (main.ok)
-      void isolated(`recovering ${id}`, async () => {
-        await recovery.look(tenant, id, main.value);
-      });
-  }
+  const threads = await db.transaction(
+    (tx) => scheduleThreads(tx, tenant),
+    READ_ONLY,
+  );
+  // Each look reads the log, then queues the run and returns without waiting for it: awaited,
+  // so the run is queued (and counted by idle()) before the tick ends.
+  // ponytail: a run in flight here gets a no-op resume queued behind it each tick; track
+  // in-flight branches if ticks ever outpace runs.
+  await Promise.all(
+    threads.map((id) =>
+      isolated(`recovering ${id}`, async () => {
+        const main = await log.mainBranch(id);
+        if (main.ok) await recovery.look(tenant, id, main.value);
+      }),
+    ),
+  );
 }
 
 /** Reserves the schedule's occurrences due since its last one (or since ready). */
@@ -72,7 +83,11 @@ async function reserve(
 ): Promise<void> {
   const { db, log, tenant } = pass;
   const id = b.schedule.id;
-  const after = lastOccurrence(db, tenant, id) ?? startedAt;
+  const last = await db.transaction(
+    (tx) => lastOccurrence(tx, tenant, id),
+    READ_ONLY,
+  );
+  const after = last ?? startedAt;
   const due = occurrences(b.cron, b.timezone, after - LOOKBACK_MS, now).filter(
     (at) => at > after,
   );
@@ -80,7 +95,7 @@ async function reserve(
   // A due occurrence may open a new thread: its spec artifacts are durable before it is appended.
   const pin = await pass.started(b.hosted);
   await pin.put(pass.ctx.storeFor(tenant));
-  reserveDue(
+  await reserveDue(
     db,
     log,
     pin.event,

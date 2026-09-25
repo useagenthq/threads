@@ -4,6 +4,7 @@ import { knownEvents, storeConnection } from "@threads/core/host";
 import { hostTicked } from "../src/host";
 import { cleanup, expireLeases, fold, serveAgent, stall } from "./api-kit";
 import { alice, say, until } from "./kit";
+import { sqlAll } from "./sql";
 
 // A background child a crash stopped still reports (Gate 1 §2.7.3): its pending_wakes row
 // survives the crash, and the next host runs the branch on, relaunches the child and records
@@ -36,7 +37,7 @@ async function rows(
   store: ReturnType<typeof sqlite>,
 ): Promise<readonly unknown[]> {
   const { db } = await storeConnection(store);
-  return db.all("SELECT child_thread_id FROM pending_wakes", []);
+  return await sqlAll(db, "SELECT child_thread_id FROM pending_wakes", []);
 }
 
 describe("a pending wake after a crash", () => {

@@ -61,7 +61,7 @@ async function startedOf(bot: ReturnType<typeof plain>): Promise<Started> {
   const store = sqlite(":memory:");
   const run = await bot.run("Hi", { store });
   const { log } = await openStore(store);
-  const first = knownEvents(unwrap(log.read(run.thread.branch)))[0];
+  const first = knownEvents(unwrap(await log.read(run.thread.branch)))[0];
   if (first?.type !== "thread_started") throw new Error("no thread_started");
   return first.data;
 }
@@ -87,11 +87,11 @@ describe("tool origin", () => {
 
   test("continuing a thread started before origins says why it can't", async () => {
     const started = await startedOf(extended());
-    const f = fixture();
-    unwrap(f.store.createBranch(THREAD, ROOT));
-    const writer = unwrap(f.store.acquire(ROOT, "earlier-release", 1));
+    const f = await fixture();
+    unwrap(await f.store.createBranch(THREAD, ROOT));
+    const writer = unwrap(await f.store.acquire(ROOT, "earlier-release", 1));
     unwrap(
-      writer.append([
+      await writer.append([
         {
           type: "thread_started",
           type_version: 1,

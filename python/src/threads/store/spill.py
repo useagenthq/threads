@@ -22,14 +22,14 @@ class Spill:
         """The bytes as a durable artifact; returns their sha256. Bytes already written can't be
         revisited, so a value registered while they streamed drops them: None."""
         await self._store(self._redactor.end())
-        sha = await self._worker.call(lambda _: unchanged_since(self._since, self._sink.commit))
+        sha = await self._worker.free(lambda _: unchanged_since(self._since, self._sink.commit))
         if sha is None:
             await self.discard()
         return sha
 
     async def _store(self, data: bytes) -> None:
         self.written += len(data)
-        await self._worker.call(lambda _: self._sink.write(data))
+        await self._worker.free(lambda _: self._sink.write(data))
 
     async def discard(self) -> None:
-        await self._worker.call(lambda _: self._sink.discard())
+        await self._worker.free(lambda _: self._sink.discard())

@@ -71,13 +71,13 @@ const done = {
 
 async function logOf<T>(result: RunResult<T>) {
   const { log } = await openStore(result.thread.store);
-  const chain = unwrap(log.read(result.thread.branch));
+  const chain = unwrap(await log.read(result.thread.branch));
   return {
     snapshots: knownEvents(chain).flatMap((e) =>
       e.type === "snapshot" ? [e.data.knowledge_revision] : [],
     ),
     forkPoints: reduce(chain, Date.now()).fork_points.length,
-    rows: unwrap(log.ledger.rows()).length,
+    rows: unwrap(await log.ledger.rows()).length,
   };
 }
 

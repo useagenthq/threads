@@ -1,6 +1,6 @@
 import type { EventOf } from "../fold/state";
 import type { KnownEvent, Provenance } from "../log";
-import type { SqliteDriver } from "../store/driver";
+import type { Tx } from "../store/driver";
 import type { Chain } from "../verify";
 import { turnOpeners } from "./index";
 import { mailEnvelope } from "./rows";
@@ -10,10 +10,10 @@ import { mailEnvelope } from "./rows";
 // and one budget root.
 
 /** The provenance of the open turn, or of the last one; undefined before any turn. */
-export function turnProvenance(
-  db: SqliteDriver,
+export async function turnProvenance(
+  tx: Tx,
   chain: Chain,
-): Provenance | undefined {
+): Promise<Provenance | undefined> {
   const opened = turnOpeners(chain.events);
   const events = chain.events.flatMap((l) =>
     l.kind === "event" ? [l.event] : [],
@@ -21,34 +21,34 @@ export function turnProvenance(
   const opener = events.findLast((e) => opened.has(e.event_id));
   return opener === undefined
     ? undefined
-    : openerProvenance(db, events, opened, opener);
+    : await openerProvenance(tx, events, opened, opener);
 }
 
-function openerProvenance(
-  db: SqliteDriver,
+async function openerProvenance(
+  tx: Tx,
   events: readonly KnownEvent[],
   opened: ReadonlySet<string>,
   e: KnownEvent,
-): Provenance | undefined {
+): Promise<Provenance | undefined> {
   switch (e.type) {
     case "message_received":
       return e.data.envelope.provenance;
     case "user_input":
-      return inputProvenance(db, e);
+      return await inputProvenance(tx, e);
     case "woken":
-      return wokenProvenance(db, events, opened, e);
+      return await wokenProvenance(tx, events, opened, e);
     default:
       return undefined;
   }
 }
 
 /** A task's user_input belongs to its task mail's request; any other input is a request. */
-function inputProvenance(
-  db: SqliteDriver,
+async function inputProvenance(
+  tx: Tx,
   e: EventOf<"user_input">,
-): Provenance | undefined {
+): Promise<Provenance | undefined> {
   if (e.data.mail_id !== undefined)
-    return mailEnvelope(db, e.data.mail_id)?.provenance;
+    return (await mailEnvelope(tx, e.data.mail_id))?.provenance;
   const principal = e.actor.principal;
   return {
     principal,
@@ -58,12 +58,12 @@ function inputProvenance(
 }
 
 /** A woken turn belongs to the run that spawned its first cause's child. */
-function wokenProvenance(
-  db: SqliteDriver,
+async function wokenProvenance(
+  tx: Tx,
   events: readonly KnownEvent[],
   opened: ReadonlySet<string>,
   e: EventOf<"woken">,
-): Provenance | undefined {
+): Promise<Provenance | undefined> {
   const late = events.find((x) => x.event_id === e.data.causes[0]);
   if (late?.type !== "tool_result_late") return undefined;
   const spawn = events.findIndex(
@@ -72,5 +72,5 @@ function wokenProvenance(
   const opener = events.slice(0, spawn).findLast((x) => opened.has(x.event_id));
   return opener === undefined
     ? undefined
-    : openerProvenance(db, events, opened, opener);
+    : await openerProvenance(tx, events, opened, opener);
 }

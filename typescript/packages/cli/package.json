@@ -9,7 +9,8 @@
   "dependencies": {
     "@threads/core": "workspace:*",
     "zod": "^4.6.5",
-    "@threads/host": "workspace:*"
+    "@threads/host": "workspace:*",
+    "@threads/postgres": "workspace:*"
   },
   "bin": {
     "threads": "./src/main.ts"

@@ -1,88 +1,100 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { err, ok, type Result } from "../../src/result";
-import type { SqliteDriver, Writer } from "../../src/store";
+import type { StoreDriver, Writer } from "../../src/store";
 import { LEASE_TTL_MS } from "../../src/store";
 import { isRefusal } from "../../src/store/writer";
 import type { ChainEvent } from "../../src/verify";
 import type { LogError } from "../../src/verify/error";
-import { fixture, ROOT, started, THREAD, unwrap, userInput } from "./helpers";
+import {
+  fixture,
+  ROOT,
+  rows,
+  started,
+  THREAD,
+  unwrap,
+  userInput,
+} from "./helpers";
 
 // appendDecided: one transaction that checks the lease and head, lets the decision read the store
 // and build the drafts, admits them and commits. A refusal rolls back and the writer goes on.
 
-function rootWithWriter() {
-  const f = fixture();
-  unwrap(f.store.createBranch(THREAD, ROOT));
-  const writer = unwrap(f.store.acquire(ROOT, "holder-a"));
-  unwrap(writer.append([started]));
+async function rootWithWriter() {
+  const f = await fixture();
+  unwrap(await f.store.createBranch(THREAD, ROOT));
+  const writer = unwrap(await f.store.acquire(ROOT, "holder-a"));
+  unwrap(await writer.append([started]));
   return { ...f, writer };
 }
 
 const Rows = z.array(z.strictObject({ n: z.int() }));
-const wakes = (db: SqliteDriver): number =>
-  Rows.parse(db.all("SELECT COUNT(*) AS n FROM pending_wakes", []))[0]?.n ?? 0;
+const wakes = async (db: StoreDriver): Promise<number> =>
+  Rows.parse(await rows(db, "SELECT COUNT(*) AS n FROM pending_wakes"))[0]?.n ??
+  0;
 
 /** A decided append that did not refuse: appended, or failed. */
-function decided(
+async function decided(
   writer: Writer,
   decide: Parameters<Writer["appendDecided"]>[0],
-): Result<readonly ChainEvent[], LogError> {
-  const outcome = writer.appendDecided(decide);
+): Promise<Result<readonly ChainEvent[], LogError>> {
+  const outcome = await writer.appendDecided(decide);
   if (isRefusal(outcome)) throw new Error("refused");
   return outcome;
 }
 
 describe("appendDecided", () => {
-  test("the decision reads the store in the append's transaction and its drafts are appended", () => {
-    const { store, writer } = rootWithWriter();
+  test("the decision reads the store in the append's transaction and its drafts are appended", async () => {
+    const { store, writer } = await rootWithWriter();
     const appended = unwrap(
-      decided(writer, (tx) => {
+      await decided(writer, async (tx) => {
         const [row] = Rows.parse(
-          tx.db.all("SELECT head_seq AS n FROM branches WHERE branch_id = ?", [
-            ROOT,
-          ]),
+          await tx.tx.all(
+            "SELECT head_seq AS n FROM branches WHERE branch_id = ?",
+            [ROOT],
+          ),
         );
         expect(row?.n).toBe(tx.chain.fold.seq);
         return ok([userInput(`after ${row?.n}`)]);
       }),
     );
     expect(appended.map((e) => e.event.seq)).toEqual([2]);
-    expect(unwrap(store.read(ROOT)).fold.seq).toBe(2);
+    expect(unwrap(await store.read(ROOT)).fold.seq).toBe(2);
   });
 
-  test("a refusal rolls back what the decision wrote, appends nothing, and leaves the writer usable", () => {
-    const { store, writer, db } = rootWithWriter();
-    const refused = writer.appendDecided((tx) => {
-      tx.db.run(
+  test("a refusal rolls back what the decision wrote, appends nothing, and leaves the writer usable", async () => {
+    const { store, writer, db } = await rootWithWriter();
+    const refused = await writer.appendDecided(async (tx) => {
+      await tx.tx.run(
         "INSERT INTO pending_wakes (branch_id, child_thread_id) VALUES (?, 'c')",
         [ROOT],
       );
       return err("mailbox_full" as const);
     });
     expect(refused).toEqual({ kind: "refused", refusal: "mailbox_full" });
-    expect(wakes(db)).toBe(0);
-    expect(unwrap(store.read(ROOT)).fold.seq).toBe(1);
-    unwrap(writer.append([userInput("hi")]));
-    expect(unwrap(store.read(ROOT)).fold.seq).toBe(2);
+    expect(await wakes(db)).toBe(0);
+    expect(unwrap(await store.read(ROOT)).fold.seq).toBe(1);
+    unwrap(await writer.append([userInput("hi")]));
+    expect(unwrap(await store.read(ROOT)).fold.seq).toBe(2);
   });
 
-  test("drafts that fail admission roll back and don't poison", () => {
-    const { store, writer } = rootWithWriter();
-    const bad = decided(writer, () => ok([userInput("a"), userInput("b")]));
+  test("drafts that fail admission roll back and don't poison", async () => {
+    const { store, writer } = await rootWithWriter();
+    const bad = await decided(writer, async () =>
+      ok([userInput("a"), userInput("b")]),
+    );
     expect(bad.ok ? "ok" : bad.error).toMatchObject({
       code: "invalid_transition",
     });
-    expect(unwrap(store.read(ROOT)).fold.seq).toBe(1);
-    unwrap(decided(writer, () => ok([userInput("hi")])));
+    expect(unwrap(await store.read(ROOT)).fold.seq).toBe(1);
+    unwrap(await decided(writer, async () => ok([userInput("hi")])));
   });
 
-  test("a lost lease is stale_epoch before the decision runs, and poisons the writer", () => {
-    const { store, writer, clock } = rootWithWriter();
+  test("a lost lease is stale_epoch before the decision runs, and poisons the writer", async () => {
+    const { store, writer, clock } = await rootWithWriter();
     clock.now += LEASE_TTL_MS + 1;
-    unwrap(store.acquire(ROOT, "holder-b"));
+    unwrap(await store.acquire(ROOT, "holder-b"));
     let ran = false;
-    const stale = decided(writer, () => {
+    const stale = await decided(writer, async () => {
       ran = true;
       return ok([userInput("late")]);
     });
@@ -90,7 +102,7 @@ describe("appendDecided", () => {
       code: "stale_epoch",
     });
     expect(ran).toBe(false);
-    const after = decided(writer, () => ok([userInput("again")]));
+    const after = await decided(writer, async () => ok([userInput("again")]));
     expect(after.ok ? "ok" : after.error).toMatchObject({
       code: "writer_poisoned",
     });
@@ -99,17 +111,17 @@ describe("appendDecided", () => {
 
 describe("an empty decided batch", () => {
   test("commits nothing and moves nothing", async () => {
-    const { store, writer } = rootWithWriter();
+    const { store, writer } = await rootWithWriter();
     const before = writer.chain;
     let moved = false;
     void (async () => {
       await writer.moved();
       moved = true;
     })();
-    expect(unwrap(decided(writer, () => ok([])))).toEqual([]);
+    expect(unwrap(await decided(writer, async () => ok([])))).toEqual([]);
     await Promise.resolve();
     expect(moved).toBe(false);
     expect(writer.chain).toBe(before);
-    expect(unwrap(store.read(ROOT)).fold.seq).toBe(1);
+    expect(unwrap(await store.read(ROOT)).fold.seq).toBe(1);
   });
 });

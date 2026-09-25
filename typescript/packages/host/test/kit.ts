@@ -150,7 +150,7 @@ export async function knownEventsOf(
   branch: string,
 ): Promise<readonly KnownEvent[]> {
   const { log } = await openStore(tenantStore(store, tenant));
-  const read = log.read(z.string().brand<"BranchId">().parse(branch));
+  const read = await log.read(z.string().brand<"BranchId">().parse(branch));
   if (!read.ok) throw new Error(read.error.message);
   return knownEvents(read.value);
 }

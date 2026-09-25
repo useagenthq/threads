@@ -179,7 +179,7 @@ const decided = (events: readonly KnownEvent[], hook: HookName): boolean =>
 async function probe(hook: HookName): Promise<HookKind | "unreached"> {
   const calls = { n: 0 };
   if (hook === "before_compact" || hook === "after_compact") {
-    const h = asked([reply(SUMMARY_TEXT), reply("Answer.")]);
+    const h = await asked([reply(SUMMARY_TEXT), reply("Answer.")]);
     const wire = {
       name: "probe",
       timeoutMs: 5000,
@@ -200,7 +200,7 @@ async function probe(hook: HookName): Promise<HookKind | "unreached"> {
   const { store, bot } = runFor(hook, only(hook, calls));
   const run = await bot.run("Go.", { store });
   const { log } = await openStore(store);
-  const read = log.read(run.thread.branch);
+  const read = await log.read(run.thread.branch);
   const events = read.ok ? knownEvents(read.value) : [];
   if (calls.n === 0) return "unreached";
   return decided(events, hook) ? "recorded" : "observation";

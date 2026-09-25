@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Final
 
+from threads.agents.config import ConfigError
 from threads.log import EffectClass
 from threads.memory.sqlite_fts import install, match_query, transaction
 from threads.memory.types import (
@@ -63,8 +64,15 @@ class LocalMemory:
         return FOREVER_MS
 
     async def bind(self, store: SqliteStore) -> "LocalMemory":
-        """This provider on `store`, its tables created. No FTS5: ConfigError."""
-        await store.run(install(_DDL))
+        """This provider on `store`, its tables created. No FTS5, or a Postgres store:
+        ConfigError."""
+        if store.dialect != "sqlite":
+            raise ConfigError(
+                "invalid_config",
+                "localMemory keeps its index in a SQLite store; use supermemory() or zep(),"
+                " or run this agent on sqlite()",
+            )
+        await store.run_sqlite(install(_DDL))
         return replace(self, store=store)
 
     async def remember(self, scope: Scope, record: MemoryRecord, key: str) -> Outcome[RecordRef]:
@@ -74,9 +82,7 @@ class LocalMemory:
         ref = RecordRef(id="mem_" + hashlib.sha256(key.encode()).hexdigest()[:24], version="1")
 
         def write(conn: sqlite3.Connection) -> Outcome[RecordRef]:
-            row: tuple[str] | None = conn.execute(
-                "SELECT digest FROM local_memory WHERE key = ?", (key,)
-            ).fetchone()
+            row = conn.execute("SELECT digest FROM local_memory WHERE key = ?", (key,)).fetchone()
             if row is not None:
                 same = row[0] == digest
                 return Ok(ref) if same else Err(ProviderError("invalid", f"key {key} reused"))
@@ -102,7 +108,7 @@ class LocalMemory:
             )
             return Ok(ref)
 
-        return await self.store.run(transaction(write))
+        return await self.store.run_sqlite(transaction(write))
 
     async def recall(self, scope: Scope, query: str, *, k: int = 5) -> Outcome[Sequence[MemoryHit]]:
         if self.store is None:
@@ -114,7 +120,7 @@ class LocalMemory:
         def read(conn: sqlite3.Connection) -> list[tuple[str, str, str, str, str, float]]:
             return conn.execute(_RECALL, (match, *_where(scope), k)).fetchall()
 
-        rows = await self.store.run(read)
+        rows = await self.store.run_sqlite(read)
         return Ok(tuple(_hit(row) for row in rows))
 
     async def forget(self, scope: Scope, id: str, key: str) -> Outcome[None]:
@@ -122,7 +128,7 @@ class LocalMemory:
             return _UNBOUND
 
         def write(conn: sqlite3.Connection) -> Outcome[None]:
-            row: tuple[int, int] | None = conn.execute(
+            row = conn.execute(
                 "SELECT rowid, forgotten FROM local_memory"
                 " WHERE id = ? AND tenant_id = ? AND agent = ? AND scope = ?",
                 (id, *_where(scope)),
@@ -134,7 +140,7 @@ class LocalMemory:
                 conn.execute("DELETE FROM local_memory_fts WHERE rowid = ?", (row[0],))
             return Ok(None)
 
-        return await self.store.run(transaction(write))
+        return await self.store.run_sqlite(transaction(write))
 
 
 def _hit(row: tuple[str, str, str, str, str, float]) -> MemoryHit:

@@ -174,11 +174,11 @@ describe("Thread.compact", () => {
   });
 
   test("nothing to compact yet is invalid_transition; another tenant is forbidden", async () => {
-    const f = fixture();
-    unwrap(f.store.createBranch(THREAD, ROOT));
-    const writer = unwrap(f.store.acquire(ROOT, "setup"));
-    unwrap(writer.append([started]));
-    writer.release();
+    const f = await fixture();
+    unwrap(await f.store.createBranch(THREAD, ROOT));
+    const writer = unwrap(await f.store.acquire(ROOT, "setup"));
+    unwrap(await writer.append([started]));
+    await writer.release();
     const store = storeOf({ log: f.store, artifacts: f.artifacts });
     const thread = unwrap(await openThread(store, THREAD));
     expect(await thread.compact(operator)).toMatchObject({
@@ -193,8 +193,8 @@ describe("Thread.compact", () => {
 
   test("an inspection-only branch is branch_not_runnable for both idle controls", async () => {
     const c = loadCase("repair-child-inspection-only");
-    const f = caseStore(c);
-    unwrap(f.store.importLog(c.log ?? new Uint8Array()));
+    const f = await caseStore(c);
+    unwrap(await f.store.importLog(c.log ?? new Uint8Array()));
     const store = storeOf({ log: f.store, artifacts: f.artifacts });
     const thread = unwrap(await openThread(store, THREAD, { branchId: CHILD }));
     for (const done of [
@@ -268,11 +268,11 @@ describe("idle only", () => {
       busy,
     );
     const { log } = await openStore(store);
-    const other = unwrap(log.acquire(thread.branch, "another-process"));
+    const other = unwrap(await log.acquire(thread.branch, "another-process"));
     try {
       expect(await thread.compact(operator)).toMatchObject(busy);
     } finally {
-      other.release();
+      await other.release();
     }
     expect((await events(result.thread)).length).toBe(before);
   });

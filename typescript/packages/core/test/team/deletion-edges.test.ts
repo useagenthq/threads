@@ -8,6 +8,8 @@ import { code, T0, unwrap } from "../store/helpers";
 import {
   CASES,
   caseLogs,
+  exec,
+  query,
   relinked,
   storeLogs,
   type Team,
@@ -22,11 +24,19 @@ import {
 const REBIND = "team-failed-rebind-bounces";
 const ALL = ["lead", "researcher", "team", "writer"];
 const OTHER_TEAM = "0192c000-0000-7000-8000-0000000000ee";
+/** `{}`: a blob that is no event line. */
+const BRACES = new TextEncoder().encode("{}");
 const Count = z.array(z.strictObject({ n: z.int() }));
 
-function count(t: Team, sql: string, params: readonly string[] = []): number {
+async function count(
+  t: Team,
+  sql: string,
+  params: readonly string[] = [],
+): Promise<number> {
   return (
-    Count.parse(t.db.all(`SELECT COUNT(*) AS n FROM ${sql}`, params))[0]?.n ?? 0
+    Count.parse(
+      await query(t.db, `SELECT COUNT(*) AS n FROM ${sql}`, params),
+    )[0]?.n ?? 0
   );
 }
 
@@ -49,76 +59,88 @@ function spare(
 const SPARE = ThreadIdSchema.parse("0192a000-0000-7000-8000-000000000001");
 
 /** A second team's rows, led by `lead` in `tenant`: nothing in the logs names it. */
-function rowsOnly(t: Team, lead: string, tenant: string): void {
-  t.db.run(
+async function rowsOnly(t: Team, lead: string, tenant: string): Promise<void> {
+  await exec(
+    t.db,
     "INSERT INTO teams (team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at) VALUES (?, ?, ?, ?, NULL)",
     [OTHER_TEAM, tenant, lead, "0192b000-0000-7000-8000-0000000000ee"],
   );
-  t.db.run(
+  await exec(
+    t.db,
     `INSERT INTO mail (mail_id, team_id, kind, to_name, to_generation, principal_key, root_request,
-       envelope, created_at, state) VALUES ('m1', ?, 'message', 'x-1', 1, 'k', 'r', X'7B7D', 0, 'pending')`,
-    [OTHER_TEAM],
+       envelope, created_at, state) VALUES ('m1', ?, 'message', 'x-1', 1, 'k', 'r', ?, 0, 'pending')`,
+    [OTHER_TEAM, BRACES],
   );
 }
 
 describe("every deletion check fails closed", () => {
-  test("a branch whose log doesn't verify is busy, pointing at threads repair", () => {
-    const t = teamStore(caseLogs(REBIND, ALL));
-    t.db.run(
-      "UPDATE events SET line = X'7B7D' WHERE branch_id = ? AND seq = 3",
-      [header(t, "writer").branch_id],
+  test("a branch whose log doesn't verify is busy, pointing at threads repair", async () => {
+    const t = await teamStore(caseLogs(REBIND, ALL));
+    await exec(
+      t.db,
+      "UPDATE events SET line = ? WHERE branch_id = ? AND seq = 3",
+      [BRACES, header(t, "writer").branch_id],
     );
-    const refused = deleteThread(t.db, t.store.tenant, thread(t, "lead"), T0);
+    const refused = await deleteThread(
+      t.db,
+      t.store.tenant,
+      thread(t, "lead"),
+      T0,
+    );
     expect(code(refused)).toBe("busy");
     expect(refused.ok ? "" : refused.error.message).toContain("threads repair");
-    expect(count(t, "tombstones")).toBe(0);
+    expect(await count(t, "tombstones")).toBe(0);
   });
 
-  test("a stored row that fails its schema refuses, never skips a delete", () => {
-    const t = teamStore(caseLogs(REBIND, ALL));
-    t.db.run("INSERT INTO threads (thread_id, tenant_id) VALUES ('junk', ?)", [
-      t.store.tenant,
-    ]);
-    expect(code(deleteTenant(t.db, t.store.tenant, T0))).toBe("log_corrupt");
-    expect(count(t, "threads")).toBe(5);
-    expect(count(t, "tombstones")).toBe(0);
+  test("a stored row that fails its schema refuses, never skips a delete", async () => {
+    const t = await teamStore(caseLogs(REBIND, ALL));
+    await exec(
+      t.db,
+      "INSERT INTO threads (thread_id, tenant_id) VALUES ('junk', ?)",
+      [t.store.tenant],
+    );
+    expect(code(await deleteTenant(t.db, t.store.tenant, T0))).toBe(
+      "log_corrupt",
+    );
+    expect(await count(t, "threads")).toBe(5);
+    expect(await count(t, "tombstones")).toBe(0);
   });
 });
 
 describe("a doomed lead's teams are found through their rows, in this tenant", () => {
-  test("a team whose teams row names a doomed lead goes, though no log names it", () => {
-    const t = teamStore(caseLogs(REBIND, ALL));
-    rowsOnly(t, thread(t, "writer"), t.store.tenant);
-    unwrap(deleteThread(t.db, t.store.tenant, thread(t, "lead"), T0));
-    expect(count(t, "teams")).toBe(0);
-    expect(count(t, "mail")).toBe(0);
+  test("a team whose teams row names a doomed lead goes, though no log names it", async () => {
+    const t = await teamStore(caseLogs(REBIND, ALL));
+    await rowsOnly(t, thread(t, "writer"), t.store.tenant);
+    unwrap(await deleteThread(t.db, t.store.tenant, thread(t, "lead"), T0));
+    expect(await count(t, "teams")).toBe(0);
+    expect(await count(t, "mail")).toBe(0);
   });
 
-  test("another tenant's team is never touched", () => {
-    const t = teamStore(caseLogs(REBIND, ALL));
-    rowsOnly(t, thread(t, "lead"), "other");
-    unwrap(deleteThread(t.db, t.store.tenant, thread(t, "lead"), T0));
-    expect(count(t, "teams")).toBe(1);
-    expect(count(t, "mail")).toBe(1);
+  test("another tenant's team is never touched", async () => {
+    const t = await teamStore(caseLogs(REBIND, ALL));
+    await rowsOnly(t, thread(t, "lead"), "other");
+    unwrap(await deleteThread(t.db, t.store.tenant, thread(t, "lead"), T0));
+    expect(await count(t, "teams")).toBe(1);
+    expect(await count(t, "mail")).toBe(1);
   });
 
-  test("a team log that names another tenant's team never touches that team", () => {
+  test("a team log that names another tenant's team never touches that team", async () => {
     const forged = caseLogs(REBIND, ALL, (label, line) =>
       label === "team" && line["type"] === "team_opened"
         ? { ...line, data: { ...Object(line["data"]), team: OTHER_TEAM } }
         : line,
     );
-    const t = teamStore(forged);
-    rowsOnly(t, "0192a000-0000-7000-8000-0000000000ef", "other");
-    unwrap(deleteThread(t.db, t.store.tenant, thread(t, "lead"), T0));
-    expect(count(t, "teams WHERE team_id = ?", [OTHER_TEAM])).toBe(1);
-    expect(count(t, "mail WHERE team_id = ?", [OTHER_TEAM])).toBe(1);
+    const t = await teamStore(forged);
+    await rowsOnly(t, "0192a000-0000-7000-8000-0000000000ef", "other");
+    unwrap(await deleteThread(t.db, t.store.tenant, thread(t, "lead"), T0));
+    expect(await count(t, "teams WHERE team_id = ?", [OTHER_TEAM])).toBe(1);
+    expect(await count(t, "mail WHERE team_id = ?", [OTHER_TEAM])).toBe(1);
   });
 });
 
 describe("what goes with a thread, and what doesn't", () => {
-  test("a nested team goes whole with the outer lead", () => {
-    const t = teamStore(
+  test("a nested team goes whole with the outer lead", async () => {
+    const t = await teamStore(
       caseLogs("team-nested-lead-feeds", [
         "inner",
         "lead",
@@ -126,17 +148,19 @@ describe("what goes with a thread, and what doesn't", () => {
         "team",
       ]),
     );
-    expect(count(t, "teams")).toBe(2);
+    expect(await count(t, "teams")).toBe(2);
     expect(
-      unwrap(deleteThread(t.db, t.store.tenant, thread(t, "lead"), T0)),
+      unwrap(await deleteThread(t.db, t.store.tenant, thread(t, "lead"), T0)),
     ).toBe(4);
-    expect(count(t, "teams") + count(t, "team_members")).toBe(0);
+    expect((await count(t, "teams")) + (await count(t, "team_members"))).toBe(
+      0,
+    );
   });
 
-  test("a member's own subagent goes with the team", () => {
-    const t = teamStore(caseLogs(REBIND, ALL));
+  test("a member's own subagent goes with the team", async () => {
+    const t = await teamStore(caseLogs(REBIND, ALL));
     const writer = header(t, "writer");
-    storeLogs(t.store, [
+    await storeLogs(t.store, [
       spare((line) =>
         line["type"] === "thread_started"
           ? {
@@ -155,11 +179,11 @@ describe("what goes with a thread, and what doesn't", () => {
       ),
     ]);
     expect(
-      unwrap(deleteThread(t.db, t.store.tenant, thread(t, "lead"), T0)),
+      unwrap(await deleteThread(t.db, t.store.tenant, thread(t, "lead"), T0)),
     ).toBe(5);
   });
 
-  test("a lead that is a handoff target stays with its team", () => {
+  test("a lead that is a handoff target stays with its team", async () => {
     const logs = caseLogs(REBIND, ALL, (label, line) =>
       label === "lead" && line["type"] === "thread_started"
         ? {
@@ -176,32 +200,41 @@ describe("what goes with a thread, and what doesn't", () => {
           }
         : line,
     );
-    const t = teamStore(logs);
-    storeLogs(t.store, [spare((line) => line)]);
-    expect(unwrap(deleteThread(t.db, t.store.tenant, SPARE, T0))).toBe(1);
-    expect(count(t, "threads")).toBe(4);
-    expect(count(t, "teams")).toBe(1);
+    const t = await teamStore(logs);
+    await storeLogs(t.store, [spare((line) => line)]);
+    expect(unwrap(await deleteThread(t.db, t.store.tenant, SPARE, T0))).toBe(1);
+    expect(await count(t, "threads")).toBe(4);
+    expect(await count(t, "teams")).toBe(1);
   });
 
-  test("deleting a background child alone drops its parent's wake row for it", () => {
-    const t = teamStore(caseLogs(REBIND, ALL));
-    storeLogs(t.store, [spare((line) => line)]);
-    t.db.run(
+  test("deleting a background child alone drops its parent's wake row for it", async () => {
+    const t = await teamStore(caseLogs(REBIND, ALL));
+    await storeLogs(t.store, [spare((line) => line)]);
+    await exec(
+      t.db,
       "INSERT INTO pending_wakes (branch_id, child_thread_id) VALUES (?, ?)",
       [header(t, "lead").branch_id, SPARE],
     );
-    unwrap(deleteThread(t.db, t.store.tenant, SPARE, T0));
-    expect(count(t, "pending_wakes")).toBe(0);
+    unwrap(await deleteThread(t.db, t.store.tenant, SPARE, T0));
+    expect(await count(t, "pending_wakes")).toBe(0);
   });
 
-  test("a member whose lead is already gone can be deleted alone", () => {
-    const t = teamStore(caseLogs(REBIND, ALL));
+  test("a member whose lead is already gone can be deleted alone", async () => {
+    const t = await teamStore(caseLogs(REBIND, ALL));
     const lead = header(t, "lead");
-    t.db.run("DELETE FROM events WHERE branch_id = ?", [lead.branch_id]);
-    t.db.run("DELETE FROM branches WHERE branch_id = ?", [lead.branch_id]);
-    t.db.run("DELETE FROM threads WHERE thread_id = ?", [lead.thread_id]);
+    await exec(t.db, "DELETE FROM events WHERE branch_id = ?", [
+      lead.branch_id,
+    ]);
+    await exec(t.db, "DELETE FROM branches WHERE branch_id = ?", [
+      lead.branch_id,
+    ]);
+    await exec(t.db, "DELETE FROM threads WHERE thread_id = ?", [
+      lead.thread_id,
+    ]);
     expect(
-      unwrap(deleteThread(t.db, t.store.tenant, thread(t, "researcher"), T0)),
+      unwrap(
+        await deleteThread(t.db, t.store.tenant, thread(t, "researcher"), T0),
+      ),
     ).toBe(1);
   });
 });

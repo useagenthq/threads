@@ -11,6 +11,7 @@ import {
 } from "@threads/core/host";
 import { type Host, host, type RunAccepted } from "../src";
 import { authenticate, say } from "./kit";
+import { sqlRun } from "./sql";
 
 // The API run recovery tests' kit: hosts on one store, a host whose model never answers (as
 // good as dead), and reads of a run's branch.
@@ -82,7 +83,7 @@ export async function fold(
   branch: BranchId,
 ): Promise<VerifiedLog> {
   const { log } = await openStore(tenantStore(store, tenant));
-  const read = log.read(branch);
+  const read = await log.read(branch);
   if (!read.ok) throw new Error(read.error.message);
   return read.value;
 }
@@ -101,5 +102,5 @@ export async function has(
 /** A dead host's lease runs out (its TTL is 30 s): the drills do the same. */
 export async function expireLeases(store: Store): Promise<void> {
   const { db } = await storeConnection(store);
-  db.run("UPDATE leases SET expires_at = 0", []);
+  await sqlRun(db, "UPDATE leases SET expires_at = 0", []);
 }

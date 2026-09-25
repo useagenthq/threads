@@ -6,7 +6,6 @@ A due occurrence is reserved as a `pending` row with what firing it needs frozen
 timezone), then decided under its thread's writer by a conditional update in the transaction of
 the append that logs it, so a scheduler holding a stale copy of the row appends nothing."""
 
-import sqlite3
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -20,6 +19,7 @@ from threads.log.jcs import canonicalize
 from threads.reduce.handlers import to_json
 from threads.result import Ok
 from threads.store.companion import Companion
+from threads.store.conn import Conn, one
 from threads.store.sql import int_of, text_of
 from threads.store.verify import StoredEvent
 from threads.store.worker import Worker
@@ -71,7 +71,7 @@ class ScheduleRows:
         """Pending rows in occurrence order: the tenant's, whatever schedules are configured
         now, or one thread's."""
         tenant = self._tenant
-        return await self._worker.call(lambda c: pending_rows(c, tenant, thread_id))
+        return await self._worker.read(lambda c: pending_rows(c, tenant, thread_id))
 
     async def mark_overlaps(self, thread_id: ThreadId) -> None:
         """The thread's log shows a turn still open: its undecided pending rows are overlaps."""
@@ -88,20 +88,22 @@ class ScheduleRows:
         """The schedule's latest reserved occurrence, in any state."""
         tenant = self._tenant
 
-        def latest(conn: sqlite3.Connection) -> int | None:
-            (found,) = conn.execute(
-                "SELECT max(occurrence_at) FROM schedule_occurrences"
-                " WHERE tenant_id = ? AND schedule_id = ?",
-                (tenant, schedule_id),
-            ).fetchone()
+        def latest(conn: Conn) -> int | None:
+            (found,) = one(
+                conn.execute(
+                    "SELECT MAX(occurrence_at) FROM schedule_occurrences"
+                    " WHERE tenant_id = ? AND schedule_id = ?",
+                    (tenant, schedule_id),
+                ).fetchone()
+            )
             return None if found is None else int_of(found)
 
-        return await self._worker.call(latest)
+        return await self._worker.read(latest)
 
     async def threads(self) -> tuple[ThreadId, ...]:
         """Every thread the tenant's schedules have had: what recovery walks."""
         tenant = self._tenant
-        rows: list[tuple[object]] = await self._worker.call(
+        rows = await self._worker.read(
             lambda c: c.execute(
                 "SELECT DISTINCT thread_id FROM schedule_threads WHERE tenant_id = ?", (tenant,)
             ).fetchall()
@@ -113,7 +115,7 @@ def decided(tenant_id: str, row: Pending, reason: Reason | None) -> Companion:
     """Decides the row in the transaction of the append that logs it; a row that is no longer
     pending (another scheduler decided it) refuses, and the append rolls back."""
 
-    def run(conn: sqlite3.Connection, events: Sequence[StoredEvent]) -> ParseError | None:
+    def run(conn: Conn, events: Sequence[StoredEvent]) -> ParseError | None:
         done = conn.execute(
             "UPDATE schedule_occurrences SET state = ?, reason = ?, logged_seq = ?"
             " WHERE tenant_id = ? AND schedule_id = ? AND occurrence_at = ? AND state = 'pending'",
@@ -132,11 +134,11 @@ def decided(tenant_id: str, row: Pending, reason: Reason | None) -> Companion:
 
 
 def pending_rows(
-    conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId | None = None
+    conn: Conn, tenant_id: str, thread_id: ThreadId | None = None
 ) -> tuple[Pending, ...]:
     """Pending rows in occurrence order: the tenant's, or one thread's."""
     if thread_id is None:
-        rows: list[tuple[object, ...]] = conn.execute(_PENDING + _ORDER, (tenant_id,)).fetchall()
+        rows = conn.execute(_PENDING + _ORDER, (tenant_id,)).fetchall()
     else:
         where = _PENDING + " AND thread_id = ?" + _ORDER
         rows = conn.execute(where, (tenant_id, thread_id)).fetchall()
@@ -184,9 +186,9 @@ def _reason(value: object) -> Reason | None:
     raise TypeError(f"a stored skip reason {value!r} is not one of {_REASONS}")
 
 
-def current_thread(conn: sqlite3.Connection, tenant_id: str, schedule_id: str) -> ThreadId | None:
+def current_thread(conn: Conn, tenant_id: str, schedule_id: str) -> ThreadId | None:
     """The schedule's current thread."""
-    found: tuple[object] | None = conn.execute(
+    found = conn.execute(
         "SELECT thread_id FROM schedule_threads"
         " WHERE tenant_id = ? AND schedule_id = ? AND current = 1",
         (tenant_id, schedule_id),
@@ -194,7 +196,7 @@ def current_thread(conn: sqlite3.Connection, tenant_id: str, schedule_id: str) -
     return None if found is None else _thread_id(found[0])
 
 
-def reserved(conn: sqlite3.Connection, tenant_id: str, due: Due) -> bool:
+def reserved(conn: Conn, tenant_id: str, due: Due) -> bool:
     """Whether the occurrence's key is already reserved, in any state."""
     found = conn.execute(
         "SELECT 1 FROM schedule_occurrences"
@@ -204,9 +206,7 @@ def reserved(conn: sqlite3.Connection, tenant_id: str, due: Due) -> bool:
     return found is not None
 
 
-def insert_pending(
-    conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId, due: Due, now: int
-) -> None:
+def insert_pending(conn: Conn, tenant_id: str, thread_id: ThreadId, due: Due, now: int) -> None:
     """Inserts a pending row; a key another scheduler reserved first wins silently."""
     conn.execute(
         "INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state,"
@@ -227,7 +227,7 @@ def insert_pending(
 
 
 def make_current(
-    conn: sqlite3.Connection, tenant_id: str, schedule_id: str, thread_id: ThreadId, now: int
+    conn: Conn, tenant_id: str, schedule_id: str, thread_id: ThreadId, now: int
 ) -> None:
     """Makes `thread_id` the schedule's current thread; the old one stays listed for recovery."""
     conn.execute(

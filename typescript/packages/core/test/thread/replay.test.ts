@@ -65,11 +65,11 @@ describe("Thread.replay", () => {
   });
 
   test("a branch with no model request replays trivially", async () => {
-    const f = fixture();
-    unwrap(f.store.createBranch(THREAD, ROOT));
-    const writer = unwrap(f.store.acquire(ROOT, "setup"));
-    unwrap(writer.append([started]));
-    writer.release();
+    const f = await fixture();
+    unwrap(await f.store.createBranch(THREAD, ROOT));
+    const writer = unwrap(await f.store.acquire(ROOT, "setup"));
+    unwrap(await writer.append([started]));
+    await writer.release();
     const store = storeOf({ log: f.store, artifacts: f.artifacts });
     expect(await unwrap(await openThread(store, THREAD)).replay()).toEqual(ok);
   });
@@ -84,7 +84,7 @@ describe("Thread.replay", () => {
       data: {
         ...request.data,
         request_ref: {
-          sha256: artifacts.put(other),
+          sha256: await artifacts.put(other),
           bytes: other.length,
           media_type: "application/x-ndjson",
         },
@@ -142,10 +142,10 @@ describe("Thread.replay", () => {
 
   test("a fork covers its parent's prefix: a parent request gone fails the child at the parent's seq", async () => {
     const c = loadCase("repair-child-inspection-only");
-    const f = caseStore(c);
-    unwrap(f.store.importLog(c.log ?? new Uint8Array()));
+    const f = await caseStore(c);
+    unwrap(await f.store.importLog(c.log ?? new Uint8Array()));
     const first = f.store.read(CHILD);
-    const request = unwrap(first).events.find(
+    const request = unwrap(await first).events.find(
       (e) => e.kind === "event" && e.event.type === "model_request",
     );
     if (request?.kind !== "event" || request.event.type !== "model_request")
@@ -153,7 +153,7 @@ describe("Thread.replay", () => {
     const gone = request.event.data.request_ref.sha256;
     const artifacts = {
       ...f.artifacts,
-      get: (sha: string) =>
+      get: async (sha: string) =>
         sha === gone
           ? err(logError("artifact_missing", `artifact ${sha} is missing`))
           : f.artifacts.get(sha),

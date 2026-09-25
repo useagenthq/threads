@@ -12,6 +12,7 @@ import {
 import { z } from "zod";
 import { hostTicked } from "../src/host";
 import { fakeChannel, type Harness, harness, say, until, webhook } from "./kit";
+import { sqlAll } from "./sql";
 
 // A thread is continued only with the config it was started with (config_hash), and that is
 // decided under the branch lease, in the transaction that appends the input and consumes it.
@@ -58,12 +59,12 @@ describe("the pinned config", () => {
     const { db } = await storeConnection(at.store);
     const [queued] = z
       .array(z.object({ thread_id: ThreadId }))
-      .parse(db.all("SELECT thread_id FROM inbox", []));
+      .parse(await sqlAll(db, "SELECT thread_id FROM inbox", []));
     const threadId = ThreadId.parse(queued?.thread_id);
     // An empty root: this host's check sees no pinned config yet.
     const { log } = await openStore(tenantStore(at.store, TENANT));
     const branch = BranchId.parse(crypto.randomUUID());
-    const made = log.createBranch(threadId, branch);
+    const made = await log.createBranch(threadId, branch);
     if (!made.ok) throw new Error(made.error.message);
     // Right before this host takes the lease, another host pins another config.
     const other = hostRunner(support("Be verbose."));
@@ -71,23 +72,23 @@ describe("the pinned config", () => {
     const pinned = (await other.started()).event;
     const acquire = log.acquire.bind(log);
     let raced = false;
-    log.acquire = (b, holder, ttl) => {
+    log.acquire = async (b, holder, ttl) => {
       if (!raced && holder.startsWith("host-")) {
         raced = true;
-        const w = acquire(b, "other-host", ttl);
+        const w = await acquire(b, "other-host", ttl);
         if (!w.ok) throw new Error(w.error.message);
-        w.value.append([pinned]);
-        w.value.release();
+        await w.value.append([pinned]);
+        await w.value.release();
       }
       return acquire(b, holder, ttl);
     };
     await at.host.ready();
     await until(async () => raced);
     await hostTicked(at.host);
-    expect(db.all("SELECT consumed_seq FROM inbox", [])).toEqual([
+    expect(await sqlAll(db, "SELECT consumed_seq FROM inbox", [])).toEqual([
       { consumed_seq: null },
     ]);
-    const read = log.read(branch);
+    const read = await log.read(branch);
     if (!read.ok) throw new Error(read.error.message);
     expect(knownEvents(read.value).map((e) => e.type)).toEqual([
       "thread_started",

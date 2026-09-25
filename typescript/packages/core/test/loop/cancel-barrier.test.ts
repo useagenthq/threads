@@ -61,10 +61,10 @@ async function secondTurn(
     | Partial<LoopConfig>
     | ((writer: () => Writer) => Partial<LoopConfig>) = {},
 ): Promise<readonly KnownEvent[]> {
-  const first = unwrap(h.store.acquire(ROOT, "first"));
+  const first = unwrap(await h.store.acquire(ROOT, "first"));
   await resume(first, h.artifacts, h.config(), { input: userInput("first") });
-  first.release();
-  const writer = unwrap(h.store.acquire(ROOT, "second"));
+  await first.release();
+  const writer = unwrap(await h.store.acquire(ROOT, "second"));
   // One model for the whole run: it counts its sends.
   const second = model(() => writer);
   const extra = typeof config === "function" ? config(() => writer) : config;
@@ -84,7 +84,13 @@ function endsCancelled(log: readonly KnownEvent[]): void {
 
 describe("no side request is sent after the barrier", () => {
   test("an automatic compaction's fallback: failed, and the turn ends cancelled", async () => {
-    const h = harness([], [], [say("one", 5_000)], undefined, policy(1_000));
+    const h = await harness(
+      [],
+      [],
+      [say("one", 5_000)],
+      undefined,
+      policy(1_000),
+    );
     const log = await secondTurn(h, (w) =>
       cancelAt([fail("prompt_too_long", 400), say("summary", 10)], 1, w),
     );
@@ -92,9 +98,9 @@ describe("no side request is sent after the barrier", () => {
   });
 
   test("a requested compaction's fallback: answered failed, and the turn ends cancelled", async () => {
-    const h = asked([fail("prompt_too_long", 400), reply(SUMMARY_TEXT)]);
+    const h = await asked([fail("prompt_too_long", 400), reply(SUMMARY_TEXT)]);
     h.clock.now += 60_000;
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     const model = cancelAt(
       [fail("prompt_too_long", 400), reply(SUMMARY_TEXT)],
       1,
@@ -119,7 +125,13 @@ describe("no side request is sent after the barrier", () => {
 describe("a reactive compaction after prompt_too_long (L5)", () => {
   test("its leaked summary with a cancel pending ends the turn cancelled, not context_exhausted", async () => {
     const key = credential("fake", "apiKey", "sk-l09-l5-1a2b", "U")();
-    const h = harness([], [], [say("one", 10)], undefined, policy(10_000_000));
+    const h = await harness(
+      [],
+      [],
+      [say("one", 10)],
+      undefined,
+      policy(10_000_000),
+    );
     const log = await secondTurn(h, (w) =>
       cancelAt(
         [fail("prompt_too_long", 400), say("never recorded", 10)],
@@ -134,12 +146,12 @@ describe("a reactive compaction after prompt_too_long (L5)", () => {
 
 describe("a lease lost right after the cancellation is recorded", () => {
   test("the turn is already closed cancelled: nothing is torn", async () => {
-    const h = harness([], [], [say("one", 10)]);
+    const h = await harness([], [], [say("one", 10)]);
     const log = await secondTurn(h, (w) => cancelAt([say("two", 10)], 1, w), {
-      onEvent: (e: KnownEvent) => {
+      onEvent: async (e: KnownEvent) => {
         if (e.type !== "cancelled") return;
         h.clock.now += 60_000;
-        unwrap(h.store.acquire(ROOT, "usurper")).release();
+        await unwrap(await h.store.acquire(ROOT, "usurper")).release();
       },
     });
     expect(log.slice(-2).map((e) => e.type)).toEqual([
@@ -151,22 +163,22 @@ describe("a lease lost right after the cancellation is recorded", () => {
 
   test("a log torn after cancelled (an older writer) is recovered as cancelled, not interrupted", async () => {
     const key = credential("fake", "apiKey", "sk-l09-torn-3c4d", "U")();
-    const h = harness([], [], [say("one", 10)]);
+    const h = await harness([], [], [say("one", 10)]);
     await secondTurn(h, (w) => cancelAt([say("x", 10)], 1, w, key), {
-      onEvent: (e: KnownEvent) => {
+      onEvent: async (e: KnownEvent) => {
         if (e.type !== "model_attempt_abandoned") return;
         h.clock.now += 60_000;
-        unwrap(h.store.acquire(ROOT, "usurper")).release();
+        await unwrap(await h.store.acquire(ROOT, "usurper")).release();
       },
     });
     h.clock.now += 60_000;
-    const older = unwrap(h.store.acquire(ROOT, "older"));
+    const older = unwrap(await h.store.acquire(ROOT, "older"));
     const barrier = events(older).findLast(
       (e) => e.type === "cancel_requested",
     );
     if (barrier === undefined) throw new Error("the cancel is recorded");
     unwrap(
-      older.append([
+      await older.append([
         {
           type: "cancelled",
           type_version: 1,
@@ -176,9 +188,9 @@ describe("a lease lost right after the cancellation is recorded", () => {
         },
       ]),
     );
-    older.release();
+    await older.release();
     h.clock.now += 60_000;
-    const next = unwrap(h.store.acquire(ROOT, "next"));
+    const next = unwrap(await h.store.acquire(ROOT, "next"));
     await resume(next, h.artifacts, h.config());
     const log = events(next);
     expect(log.slice(-2).map((e) => e.type)).toEqual([
@@ -196,7 +208,7 @@ function cancelsThenProceeds(writer: () => Writer): LoopExtension {
     timeoutMs: 1_000,
     hooks: {
       before_compact: async () => {
-        unwrap(writer().append([cancel]));
+        unwrap(await writer().append([cancel]));
         return { decision: "proceed" };
       },
     },
@@ -206,12 +218,12 @@ function cancelsThenProceeds(writer: () => Writer): LoopExtension {
 /** Appends the cancel as the side request's prompt_too_long is recorded: the fallback is next. */
 function cancelAtFallback(writer: () => Writer): Partial<LoopConfig> {
   return {
-    onEvent: (e: KnownEvent) => {
+    onEvent: async (e: KnownEvent) => {
       if (
         e.type === "model_attempt_abandoned" &&
         e.data.reason === "prompt_too_long"
       )
-        unwrap(writer().append([cancel]));
+        unwrap(await writer().append([cancel]));
     },
   };
 }
@@ -227,7 +239,13 @@ function nothingSentAfterTheBarrier(log: readonly KnownEvent[]): void {
 
 describe("the barrier holds at the send, whatever came before it", () => {
   test("before_compact cancels then proceeds: an automatic compaction sends nothing", async () => {
-    const h = harness([], [], [say("one", 5_000)], undefined, policy(1_000));
+    const h = await harness(
+      [],
+      [],
+      [say("one", 5_000)],
+      undefined,
+      policy(1_000),
+    );
     const log = await secondTurn(
       h,
       () => scriptedModel({ responses: [say("summary", 10), say("two", 10)] }),
@@ -237,9 +255,9 @@ describe("the barrier holds at the send, whatever came before it", () => {
   });
 
   test("before_compact cancels then proceeds: a requested compaction sends nothing", async () => {
-    const h = asked([reply(SUMMARY_TEXT)]);
+    const h = await asked([reply(SUMMARY_TEXT)]);
     h.clock.now += 60_000;
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     await resume(
       writer,
       h.artifacts,
@@ -249,7 +267,13 @@ describe("the barrier holds at the send, whatever came before it", () => {
   });
 
   test("a cancel as the fallback's results are cleared: an automatic compaction sends nothing more", async () => {
-    const h = harness([], [], [say("one", 5_000)], undefined, policy(1_000));
+    const h = await harness(
+      [],
+      [],
+      [say("one", 5_000)],
+      undefined,
+      policy(1_000),
+    );
     const log = await secondTurn(
       h,
       () =>
@@ -262,9 +286,9 @@ describe("the barrier holds at the send, whatever came before it", () => {
   });
 
   test("a cancel as the fallback's results are cleared: a requested compaction sends nothing more", async () => {
-    const h = asked([fail("prompt_too_long", 400), reply(SUMMARY_TEXT)]);
+    const h = await asked([fail("prompt_too_long", 400), reply(SUMMARY_TEXT)]);
     h.clock.now += 60_000;
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     await resume(writer, h.artifacts, h.config(cancelAtFallback(() => writer)));
     nothingSentAfterTheBarrier(events(writer));
   });
@@ -272,7 +296,13 @@ describe("the barrier holds at the send, whatever came before it", () => {
 
 describe("L5 with its compaction already spent (TS)", () => {
   test("a cancel during the rejected turn request ends the turn cancelled, not context_exhausted", async () => {
-    const h = harness([], [], [say("one", 5_000)], undefined, policy(1_000));
+    const h = await harness(
+      [],
+      [],
+      [say("one", 5_000)],
+      undefined,
+      policy(1_000),
+    );
     // The threshold compaction fails (empty summary), then the turn request is rejected.
     const log = await secondTurn(h, (w) =>
       cancelAt(
@@ -301,7 +331,7 @@ const retries = (max_retries: number): Policy => ({
 
 describe("a rejected turn request with a cancel pending (the end-of-turn barrier)", () => {
   test("rate_limited past max_retries: the turn ends cancelled, not model_unavailable", async () => {
-    const h = harness([], [], [say("one", 10)], undefined, retries(0));
+    const h = await harness([], [], [say("one", 10)], undefined, retries(0));
     const log = await secondTurn(h, (w) =>
       cancelAt([fail("rate_limited", 429), say("never", 10)], 1, w),
     );
@@ -316,7 +346,7 @@ describe("a rejected turn request with a cancel pending (the end-of-turn barrier
   });
 
   test("rate_limited with retries left: no retry is scheduled after the barrier", async () => {
-    const h = harness([], [], [say("one", 10)], undefined, retries(3));
+    const h = await harness([], [], [say("one", 10)], undefined, retries(3));
     const log = await secondTurn(h, (w) =>
       cancelAt([fail("rate_limited", 429), say("never", 10)], 1, w),
     );
@@ -330,9 +360,9 @@ describe("a rejected turn request with a cancel pending (the end-of-turn barrier
 
 describe("recovery of a requested compaction with a cancel pending", () => {
   test("a crashed side request is answered failed, never re-sent later", async () => {
-    const h = asked([reply(SUMMARY_TEXT), reply("A.")]);
-    crashed(h, (log) => [side(h, log, 1)]);
-    crashed(h, () => [cancel]);
+    const h = await asked([reply(SUMMARY_TEXT), reply("A.")]);
+    await crashed(h, async (log) => [await side(h, log, 1)]);
+    await crashed(h, () => [cancel]);
     const log = await resumeOnce(h);
     expect(sides(log)).toHaveLength(0);
     expect(outcome(log)).toMatchObject({ type: "compaction_failed" });

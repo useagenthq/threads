@@ -3,6 +3,7 @@ import { agent, extension, scriptedModel, sqlite } from "@threads/core";
 import {
   BranchId,
   openStore,
+  type StoreDriver,
   storeConnection,
   ThreadId,
   tenantStore,
@@ -22,6 +23,7 @@ import {
   use,
   webhook,
 } from "./kit";
+import { sqlAll, sqlRun } from "./sql";
 
 // The channel inbox never loses or blocks an item (spec/schema/README.md, "Channel replies"): a
 // decision is consumed with the append that applies it, a busy branch keeps it queued, it never
@@ -50,6 +52,9 @@ function hook(delivery: string, item: Record<string, unknown>) {
 
 const say_ = (text: string) => ({ kind: "message", content: text });
 
+const e2Consumed = (db: StoreDriver) =>
+  sqlAll(db, "SELECT consumed_seq FROM inbox WHERE item_key = 'E2#0'");
+
 /** A webhook to a host with no harness around it (several hosts on one store). */
 const post = (target: ReturnType<typeof host>, d: ReturnType<typeof hook>) =>
   target.fetch(
@@ -65,7 +70,8 @@ async function rows(harnessed: Harness) {
   return z
     .array(z.object({ thread_id: z.string(), branch_id: z.string() }))
     .parse(
-      db.all(
+      await sqlAll(
+        db,
         "SELECT thread_id, branch_id FROM branches ORDER BY rowid LIMIT 1",
         [],
       ),
@@ -131,7 +137,10 @@ describe("channel queue", () => {
     const { harnessed, challenge } = await parkedOnApproval(sent, []);
     const at = await rows(harnessed);
     const { log } = await openStore(tenantStore(harnessed.store, TENANT));
-    const other = log.acquire(BranchId.parse(at?.branch_id), "other-process");
+    const other = await log.acquire(
+      BranchId.parse(at?.branch_id),
+      "other-process",
+    );
     if (!other.ok) throw new Error(other.error.message);
     await harnessed.call(
       "POST",
@@ -140,17 +149,15 @@ describe("channel queue", () => {
     );
     await Bun.sleep(200);
     const { db } = await storeConnection(harnessed.store);
-    expect(
-      db.all("SELECT consumed_seq FROM inbox WHERE item_key = 'E2#0'", []),
-    ).toEqual([{ consumed_seq: null }]);
-    other.value.release();
+    expect(await e2Consumed(db)).toEqual([{ consumed_seq: null }]);
+    await other.value.release();
     await until(async () => sent.length === 1, 5_000);
     const granted = (
       await eventsOf(harnessed.store, TENANT, at?.branch_id ?? "")
     ).find((e) => e.type === "approval_granted");
-    expect(
-      db.all("SELECT consumed_seq FROM inbox WHERE item_key = 'E2#0'", []),
-    ).toEqual([{ consumed_seq: granted?.["seq"] ?? -1 }]);
+    expect(await e2Consumed(db)).toEqual([
+      { consumed_seq: granted?.["seq"] ?? -1 },
+    ]);
   });
 
   test("a message whose thread another host has just created, still empty, is not dropped", async () => {
@@ -164,19 +171,19 @@ describe("channel queue", () => {
     const { db } = await storeConnection(h.store);
     const [queued] = z
       .array(z.object({ thread_id: ThreadId }))
-      .parse(db.all("SELECT thread_id FROM inbox", []));
+      .parse(await sqlAll(db, "SELECT thread_id FROM inbox", []));
     // Another host made the thread's root and has not yet appended its thread_started.
     const { log } = await openStore(tenantStore(h.store, TENANT));
-    const made = log.createBranch(
+    const made = await log.createBranch(
       ThreadId.parse(queued?.thread_id),
       BranchId.parse(crypto.randomUUID()),
     );
     if (!made.ok) throw new Error(made.error.message);
     await h.host.ready();
     await until(async () => slack.performed.length === 1);
-    expect(db.all("SELECT consumed_seq > 0 AS applied FROM inbox", [])).toEqual(
-      [{ applied: 1 }],
-    );
+    expect(
+      await sqlAll(db, "SELECT consumed_seq > 0 AS applied FROM inbox", []),
+    ).toEqual([{ applied: 1 }]);
   });
 
   test("an item a host can't route stays queued for a host that can", async () => {
@@ -199,7 +206,7 @@ describe("channel queue", () => {
     // Past the other host's first tick, which sweeps every pending row.
     await hostTicked(other);
     const { db } = await storeConnection(store);
-    expect(db.all("SELECT consumed_seq FROM inbox", [])).toEqual([
+    expect(await sqlAll(db, "SELECT consumed_seq FROM inbox", [])).toEqual([
       { consumed_seq: null },
     ]);
     await serving.ready();
@@ -240,9 +247,7 @@ describe("channel queue", () => {
     await hostTicked(changed);
     await hostTicked(changed);
     const { db } = await storeConnection(store);
-    expect(
-      db.all("SELECT consumed_seq FROM inbox WHERE item_key = 'E2#0'", []),
-    ).toEqual([{ consumed_seq: null }]);
+    expect(await e2Consumed(db)).toEqual([{ consumed_seq: null }]);
     expect(other.performed).toHaveLength(0);
     await changed.stop();
   });
@@ -282,32 +287,34 @@ describe("channel queue", () => {
     await at.host.ready();
     await at.call("POST", "/channels/slack/events", hook("E1", say_("go")));
     const { db } = await storeConnection(at.store);
-    const branches = () =>
+    const branches = async () =>
       z
         .array(z.object({ branch_id: z.string() }))
-        .parse(db.all("SELECT branch_id FROM branches ORDER BY rowid", []))
+        .parse(
+          await sqlAll(db, "SELECT branch_id FROM branches ORDER BY rowid", []),
+        )
         .map((r) => r.branch_id);
     const logOf = (branch: string | undefined) =>
       eventsOf(at.store, TENANT, branch ?? "");
     await until(
       async () =>
-        branches().length === 2 &&
-        (await logOf(branches()[1])).some((e) => e.type === "user_input"),
+        (await branches()).length === 2 &&
+        (await logOf((await branches())[1])).some(
+          (e) => e.type === "user_input",
+        ),
     );
     const stop = { kind: "control", command: "stop_when_idle" };
     await at.call("POST", "/channels/slack/events", hook("E2", stop));
-    const consumedAt = () =>
+    const consumedAt = async () =>
       z
         .array(z.object({ consumed_seq: z.number().nullable() }))
-        .parse(
-          db.all("SELECT consumed_seq FROM inbox WHERE item_key = 'E2#0'", []),
-        )[0]?.consumed_seq;
-    await until(async () => typeof consumedAt() === "number");
-    const [root, child] = branches();
+        .parse(await e2Consumed(db))[0]?.consumed_seq;
+    await until(async () => typeof (await consumedAt()) === "number");
+    const [root, child] = await branches();
     const stopped = (await logOf(root)).find(
       (e) => e.type === "stop_when_idle",
     );
-    expect(stopped?.["seq"]).toBe(consumedAt());
+    expect(stopped?.["seq"]).toBe(await consumedAt());
     expect((await logOf(child)).map((e) => e.type)).not.toContain(
       "cancel_requested",
     );
@@ -356,16 +363,20 @@ describe("channel queue", () => {
     await h1.ready();
     await post(h1, hook("E1", say_("hi")));
     const { db } = await storeConnection(store);
-    await until(async () => db.all("SELECT 1 FROM branches", []).length > 0);
+    await until(
+      async () => (await sqlAll(db, "SELECT 1 FROM branches", [])).length > 0,
+    );
     const branch = z
       .array(z.object({ branch_id: z.string() }))
-      .parse(db.all("SELECT branch_id FROM branches", []))[0]?.branch_id;
+      .parse(
+        await sqlAll(db, "SELECT branch_id FROM branches", []),
+      )[0]?.branch_id;
     await until(async () =>
       (await eventsOf(store, TENANT, branch ?? "")).some(
         (e) => e.type === "effect_begin",
       ),
     );
-    db.run("DELETE FROM leases", []);
+    await sqlRun(db, "DELETE FROM leases", []);
     const second = fakeChannel("support", { lookup: "final" });
     second.lookups.push("found");
     const h2 = host({

@@ -37,13 +37,16 @@ function logs(dir: string): ReadonlyMap<string, Uint8Array> {
 }
 
 /** The log verified, or imported with the case's artifacts when it ships them. */
-function read(dir: string, log: Uint8Array): Result<VerifiedLog, LogError> {
+async function read(
+  dir: string,
+  log: Uint8Array,
+): Promise<Result<VerifiedLog, LogError>> {
   const root = join(dir, "artifacts");
   if (!existsSync(root)) return verifyExport(log);
-  const { db, store, artifacts } = fixture();
-  for (const f of readdirSync(root)) artifacts.put(bytes(join(root, f)));
+  const { db, store, artifacts } = await fixture();
+  for (const f of readdirSync(root)) await artifacts.put(bytes(join(root, f)));
   const imported = store.importLog(log);
-  db.close();
+  await db.close();
   return imported;
 }
 
@@ -53,8 +56,8 @@ describe("staged cases read", () => {
     const expected = Expected.parse(json(join(dir, "expected.json")));
     const { now } = Meta.parse(json(join(dir, "case.json"))).clock;
     for (const [label, log] of logs(dir))
-      test(`${name}: the ${label} log reads`, () => {
-        const verified = read(dir, log);
+      test(`${name}: the ${label} log reads`, async () => {
+        const verified = await read(dir, log);
         if (!verified.ok) throw new Error(JSON.stringify(verified.error));
         const want =
           expected.outcome === "ok"

@@ -1,6 +1,6 @@
 import type { EventOf } from "../fold/state";
 import type { KnownEvent } from "../log";
-import { refReader, render } from "../render";
+import { renderFrom } from "../render";
 import { clear, compact, reactiveSpent, windowTokens } from "./compact";
 import { draft } from "./drafts";
 import type { Gated } from "./gates";
@@ -28,9 +28,9 @@ const RESHAPES: ReadonlySet<KnownEvent["type"]> = new Set([
  * response with known usage, plus bytes/4 of what the render added since its request. With no
  * such response, or when the context was reshaped since, bytes/4 of the whole next request.
  */
-export function estimate(s: Session): number {
+export async function estimate(s: Session): Promise<number> {
   const events = s.events;
-  const next = render(events, refReader(s.artifacts));
+  const next = await renderFrom(events, s.artifacts);
   // An unrenderable request fails in the attempt, with its own error; it isn't estimated.
   if (!next.ok) return 0;
   const bytes = next.value.bytes.length;
@@ -74,12 +74,12 @@ export async function ladder(s: Session): Promise<Gated> {
   // A model with no declared window can't be measured against one.
   if (window <= 0) return undefined;
   const ctx = contextPolicy(s.fold.policy);
-  if (estimate(s) >= tokens(ctx.clear_results.trigger, window)) {
-    const stopped = clear(s, ctx.clear_results.keep_recent, "threshold");
+  if ((await estimate(s)) >= tokens(ctx.clear_results.trigger, window)) {
+    const stopped = await clear(s, ctx.clear_results.keep_recent, "threshold");
     if (stopped !== undefined) return stopped;
   }
   if (
-    estimate(s) >= tokens(ctx.compact.trigger, window) &&
+    (await estimate(s)) >= tokens(ctx.compact.trigger, window) &&
     !breakerOpen(s) &&
     !compactedThisStep(s)
   ) {
@@ -88,7 +88,9 @@ export async function ladder(s: Session): Promise<Gated> {
     if (got.kind === "ended") return "ended";
   }
   const estimated = estimate(s);
-  return estimated >= window ? preflight(s, estimated, window) : undefined;
+  return (await estimated) >= window
+    ? preflight(s, await estimated, window)
+    : undefined;
 }
 
 /**
@@ -103,7 +105,7 @@ async function preflight(
   // A cancel pending ends the turn cancelled, never context_exhausted.
   if (cancelled(s)) return "ended";
   const action = reactiveSpent(s) || breakerOpen(s) ? "fail" : "compact";
-  const stopped = s.append(
+  const stopped = await s.append(
     draft.preflightBlocked({
       estimated_tokens: estimated,
       window_tokens: window,
@@ -112,12 +114,14 @@ async function preflight(
   );
   if (stopped !== undefined) return stopped;
   if (action === "fail")
-    return s.append(draft.turnCompleted("context_exhausted")) ?? "ended";
+    return (
+      (await s.append(draft.turnCompleted("context_exhausted"))) ?? "ended"
+    );
   const got = await compact(s, "reactive");
   if (got.kind === "halt") return got.halt;
   return got.kind === "compacted" || got.kind === "ended"
     ? "ended"
-    : (s.append(draft.turnCompleted("context_exhausted")) ?? "ended");
+    : ((await s.append(draft.turnCompleted("context_exhausted"))) ?? "ended");
 }
 
 /**

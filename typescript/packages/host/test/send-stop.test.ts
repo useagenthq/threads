@@ -13,6 +13,7 @@ import {
   until,
   webhook,
 } from "./kit";
+import { sqlAll } from "./sql";
 
 // stop() and a send in flight (invariant 3): a send whose request has passed the transport fence
 // keeps its lease until it settles, so no other host can look it up as not sent and send again
@@ -120,7 +121,7 @@ describe("stop() with a send in flight", () => {
     const { db } = await storeConnection(store);
     const [row] = z
       .array(z.object({ branch_id: z.string() }))
-      .parse(db.all("SELECT branch_id FROM branches", []));
+      .parse(await sqlAll(db, "SELECT branch_id FROM branches", []));
     const types = (await eventsOf(store, TENANT, row?.branch_id ?? "")).map(
       (e) => e.type,
     );

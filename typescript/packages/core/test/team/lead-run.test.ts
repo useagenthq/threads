@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { agent, scriptedModel, sqlite } from "../../src";
 import { teamRow } from "../../src/team/rows";
-import { assertTeamReplays } from "./kit";
+import { assertTeamReplays, reading } from "./kit";
 import {
   call,
   events,
@@ -58,7 +58,7 @@ describe("a team lead's run", () => {
       "member_idle",
       "message_sent",
     ]);
-    assertTeamReplays(log, r.team.ref.id);
+    await assertTeamReplays(log, r.team.ref.id);
   });
 
   test("a member's send to the lead opens a lead turn of the same run", async () => {
@@ -89,7 +89,7 @@ describe("a team lead's run", () => {
     const log = await events(store, r.thread);
     expect(receipts(log, "message")).toHaveLength(1);
     expect(receipts(log, "member_settled")).toHaveLength(1);
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("a wake turn that fails after the first answer fails the run and closes the team", async () => {
@@ -112,8 +112,11 @@ describe("a team lead's run", () => {
       "member_ended",
       "message_sent",
     ]);
-    expect(teamRow(log.driver, r.team.ref.id)?.closed_at).not.toBeNull();
-    assertTeamReplays(log, r.team.ref.id);
+    expect(
+      (await reading(log.driver, (tx) => teamRow(tx, r.team.ref.id)))
+        ?.closed_at,
+    ).not.toBeNull();
+    await assertTeamReplays(log, r.team.ref.id);
   });
 
   test("team: [] is a team no model can grow: start is refused unknown_agent", async () => {
@@ -133,7 +136,7 @@ describe("a team lead's run", () => {
       '{"code":"unknown_agent","status":"refused"}',
     );
     expect(types(log)).toContain("message_policy_decided");
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 
   test("teamLimits.concurrent caps the members starting and running at once", async () => {
@@ -170,6 +173,6 @@ describe("a team lead's run", () => {
       e.type === "tool_result" ? [e.data.preview] : [],
     );
     expect(previews[1]).toBe('{"code":"concurrency_cap","status":"refused"}');
-    assertTeamReplays(await logOf(store), r.team.ref.id);
+    await assertTeamReplays(await logOf(store), r.team.ref.id);
   });
 });

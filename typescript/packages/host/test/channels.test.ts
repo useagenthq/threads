@@ -14,6 +14,7 @@ import {
   use,
   webhook,
 } from "./kit";
+import { sqlAll } from "./sql";
 
 // Channel intake to reply: the inbox before the response, one run per item, replies
 // as channel_send effects with delivery certainty, approvals only from configured approvers.
@@ -87,7 +88,8 @@ async function inbox(harnessed: Harness) {
       }),
     )
     .parse(
-      db.all(
+      await sqlAll(
+        db,
         "SELECT item_key, thread_id, consumed_seq FROM inbox ORDER BY inbox_id",
         [],
       ),
@@ -99,7 +101,8 @@ async function branchOf(harnessed: Harness, threadId: string): Promise<string> {
   const rows = z
     .array(z.strictObject({ branch_id: z.string() }))
     .parse(
-      db.all(
+      await sqlAll(
+        db,
         "SELECT branch_id FROM branches WHERE thread_id = ? AND parent_branch_id IS NULL",
         [threadId],
       ),
@@ -234,7 +237,7 @@ describe("a message runs once and its reply is an effect", () => {
       .object({ result_ref: z.object({ sha256: z.string() }) })
       .parse(commit?.["data"]);
     const { artifacts } = await openStore(h.store);
-    const stored = artifacts.get(result_ref.sha256);
+    const stored = await artifacts.get(result_ref.sha256);
     if (!stored.ok) throw new Error(stored.error.message);
     expect(new TextDecoder().decode(stored.value)).toBe(
       "msg [secret fake.apiKey]",

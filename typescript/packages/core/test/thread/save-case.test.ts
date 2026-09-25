@@ -116,7 +116,7 @@ describe("saveCase", () => {
     const first = await bot.run("Deploy.", { store });
     await bot.run("Hi again.", { store, thread: first.thread });
     const { log } = await openStore(store);
-    const events = knownEvents(unwrap(log.read(first.thread.branch)));
+    const events = knownEvents(unwrap(await log.read(first.thread.branch)));
     const snapshot = events.find((e) => e.type === "snapshot");
     const inputs = events.filter((e) => e.type === "user_input");
     expect(snapshot).toBeDefined();
@@ -196,7 +196,7 @@ describe("saveCase", () => {
     const sha = new Bun.CryptoHasher("sha256").update(spilled).digest("hex");
     const artifacts = {
       ...opened.artifacts,
-      get: (h: string) =>
+      get: async (h: string) =>
         h === sha
           ? {
               ok: false as const,
@@ -269,7 +269,7 @@ describe("saveCase", () => {
     const run = await asking.run("Look it up.", { store: sqlite(":memory:") });
     expect(run.status).toBe("parked");
     const { log } = await openStore(run.thread.store);
-    const input = knownEvents(unwrap(log.read(run.thread.branch))).find(
+    const input = knownEvents(unwrap(await log.read(run.thread.branch))).find(
       (e) => e.type === "user_input",
     );
     const saved = await run.thread.saveCase("parked", {

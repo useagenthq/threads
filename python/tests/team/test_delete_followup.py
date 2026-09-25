@@ -20,6 +20,7 @@ from team.team_kit import (
 
 from threads.agents.store import open_store
 from threads.result import Err, Ok
+from threads.store.conn import Conn
 from threads.store.deletion import delete_tenant
 from threads.team.rebuild import rebuild_team_index
 
@@ -49,7 +50,7 @@ def _forged_team(events: list[Line]) -> list[Line]:
     return events
 
 
-def _other_tenants_team(c: sqlite3.Connection) -> None:
+def _other_tenants_team(c: Conn) -> None:
     c.execute(
         "INSERT INTO teams (team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at)"
         " VALUES (?, 'other', '0192a000-0000-7000-8000-0000000000ef',"
@@ -83,8 +84,10 @@ def test_a_large_tenant_stays_under_the_variable_limit() -> None:
     """Every doomed thread in one SQL list would pass the limit; none is."""
     many = 200
 
-    def seed(c: sqlite3.Connection) -> None:
+    def limit(c: sqlite3.Connection) -> None:
         c.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 50)
+
+    def seed(c: Conn) -> None:
         c.executemany(
             "INSERT INTO threads (thread_id, tenant_id) VALUES (?, ?)",
             [(f"0192a000-0000-7000-8000-{n:012x}", TENANT) for n in range(many)],
@@ -93,6 +96,7 @@ def test_a_large_tenant_stays_under_the_variable_limit() -> None:
     async def main() -> None:
         store = await holding({})
         sq = await open_store(store)
+        await sq.run_sqlite(limit)
         await sq.run(seed)
         assert await sq.run(lambda c: delete_tenant(c, TENANT, NOW)) == Ok(many)
 

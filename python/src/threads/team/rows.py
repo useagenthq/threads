@@ -2,7 +2,6 @@
 rows are a projection of logs the store already verified, so a row that fails its schema is a
 broken store invariant: it raises, never a value a caller branches on."""
 
-import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
@@ -10,6 +9,7 @@ from typing import Literal
 from pydantic import JsonValue, TypeAdapter
 
 from threads.log import MailEnvelope, StoredMemberResult
+from threads.store.conn import Conn
 from threads.store.sql import int_of, text_of
 
 type Role = Literal["lead", "member"]
@@ -58,19 +58,19 @@ _JSON: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 _MEMBER = "team_id, name, generation, role, agent, config_hash, thread_id, branch_id, state"
 
 
-def team_row(conn: sqlite3.Connection, team: str) -> TeamRow | None:
+def team_row(conn: Conn, team: str) -> TeamRow | None:
     return _team(conn, "team_id", team)
 
 
-def team_of_log(conn: sqlite3.Connection, branch: str) -> TeamRow | None:
+def team_of_log(conn: Conn, branch: str) -> TeamRow | None:
     """The team whose log is `branch`, if it is a team log."""
     return _team(conn, "team_log_branch_id", branch)
 
 
 def _team(
-    conn: sqlite3.Connection, column: Literal["team_id", "team_log_branch_id"], value: str
+    conn: Conn, column: Literal["team_id", "team_log_branch_id"], value: str
 ) -> TeamRow | None:
-    row: tuple[object, ...] | None = conn.execute(
+    row = conn.execute(
         "SELECT team_id, tenant_id, lead_thread_id, team_log_branch_id, closed_at FROM teams"  # noqa: S608
         f" WHERE {column} = ?",
         (value,),
@@ -97,24 +97,24 @@ def _member(row: tuple[object, ...]) -> MemberRow:
     )
 
 
-def member_rows(conn: sqlite3.Connection, team: str) -> list[MemberRow]:
+def member_rows(conn: Conn, team: str) -> list[MemberRow]:
     """Every member row of the team, the lead's included, in (name, generation) order."""
-    rows: list[tuple[object, ...]] = conn.execute(
+    rows = conn.execute(
         f"SELECT {_MEMBER} FROM team_members WHERE team_id = ? ORDER BY name, generation",  # noqa: S608
         (team,),
     ).fetchall()
     return [_member(r) for r in rows]
 
 
-def member_named(conn: sqlite3.Connection, team: str, name: str) -> MemberRow | None:
+def member_named(conn: Conn, team: str, name: str) -> MemberRow | None:
     """The member's current row: its highest generation."""
     rows = [r for r in member_rows(conn, team) if r.name == name]
     return rows[-1] if rows else None
 
 
-def own_rows(conn: sqlite3.Connection, thread: str) -> list[MemberRow]:
+def own_rows(conn: Conn, thread: str) -> list[MemberRow]:
     """The rows a thread's own events write: a member's, a lead's, both for a nested lead."""
-    rows: list[tuple[object, ...]] = conn.execute(
+    rows = conn.execute(
         f"SELECT {_MEMBER} FROM team_members WHERE thread_id = ? ORDER BY role, team_id",  # noqa: S608
         (thread,),
     ).fetchall()
@@ -141,17 +141,18 @@ def bytes_of(value: object) -> bytes:
     return value
 
 
-def pending_to(conn: sqlite3.Connection, team: str, name: str | None) -> list[MailEnvelope]:
+def pending_to(conn: Conn, team: str, name: str | None) -> list[MailEnvelope]:
     """Pending mail to a member's name (or to the team log), in (created_at, mail_id) order."""
-    rows: list[tuple[object, ...]] = conn.execute(
-        "SELECT envelope FROM mail WHERE team_id = ? AND to_name IS ? AND state = 'pending'"
+    rows = conn.execute(
+        "SELECT envelope FROM mail WHERE team_id = ? AND to_name IS NOT DISTINCT FROM ?"
+        " AND state = 'pending'"
         " ORDER BY created_at, mail_id",
         (team, name),
     ).fetchall()
     return _envelopes(rows)
 
 
-def pending_here(conn: sqlite3.Connection, thread: str, branch: str) -> list[MailEnvelope]:
+def pending_here(conn: Conn, thread: str, branch: str) -> list[MailEnvelope]:
     """Pending mail to a writer: its thread's own rows, or the team log when it is one."""
     rows = own_rows(conn, thread)
     if rows:
@@ -160,13 +161,13 @@ def pending_here(conn: sqlite3.Connection, thread: str, branch: str) -> list[Mai
     return [] if team is None else pending_to(conn, team.team_id, None)
 
 
-def pending_for(conn: sqlite3.Connection, rows: Sequence[MemberRow]) -> list[MailEnvelope]:
+def pending_for(conn: Conn, rows: Sequence[MemberRow]) -> list[MailEnvelope]:
     """Pending mail to any of a thread's own rows (a nested lead has two), in one order."""
     if not rows:
         return []
     pairs = ", ".join("(?, ?)" for _ in rows)
     params = [v for r in rows for v in (r.team_id, r.name)]
-    found: list[tuple[object, ...]] = conn.execute(
+    found = conn.execute(
         "SELECT envelope FROM mail WHERE state = 'pending' AND (team_id, to_name) IN"  # noqa: S608
         f" (VALUES {pairs}) ORDER BY created_at, mail_id",
         params,
@@ -174,11 +175,9 @@ def pending_for(conn: sqlite3.Connection, rows: Sequence[MemberRow]) -> list[Mai
     return _envelopes(found)
 
 
-def mail_envelope(conn: sqlite3.Connection, mail_id: str) -> MailEnvelope | None:
+def mail_envelope(conn: Conn, mail_id: str) -> MailEnvelope | None:
     """A mail row's envelope, whatever its state."""
-    rows: list[tuple[object, ...]] = conn.execute(
-        "SELECT envelope FROM mail WHERE mail_id = ?", (mail_id,)
-    ).fetchall()
+    rows = conn.execute("SELECT envelope FROM mail WHERE mail_id = ?", (mail_id,)).fetchall()
     found = _envelopes(rows)
     return found[0] if found else None
 
@@ -191,10 +190,10 @@ class Settled:
     seq: int
 
 
-def settled_of(conn: sqlite3.Connection, row: MemberRow) -> Settled:
+def settled_of(conn: Conn, row: MemberRow) -> Settled:
     """The member's committed result: the row's, written by its member_idle or member_ended
     (nothing else changes the row until its next turn opens)."""
-    found: tuple[object, object] | None = conn.execute(
+    found = conn.execute(
         "SELECT result, updated_seq FROM team_members WHERE team_id = ? AND name = ?"
         " AND generation = ?",
         (row.team_id, row.name, row.generation),
@@ -214,9 +213,9 @@ class AskRow:
     state: str
 
 
-def ask_row(conn: sqlite3.Connection, ask_id: str) -> AskRow | None:
+def ask_row(conn: Conn, ask_id: str) -> AskRow | None:
     """An ask's row, whatever its state."""
-    found: tuple[object, object, object] | None = conn.execute(
+    found = conn.execute(
         "SELECT asker_branch_id, deadline, state FROM asks WHERE ask_id = ?", (ask_id,)
     ).fetchone()
     if found is None:
@@ -224,18 +223,18 @@ def ask_row(conn: sqlite3.Connection, ask_id: str) -> AskRow | None:
     return AskRow(text_of(found[0]), int_of(found[1]), text_of(found[2]))
 
 
-def open_asks(conn: sqlite3.Connection, branch: str) -> list[str]:
+def open_asks(conn: Conn, branch: str) -> list[str]:
     """This branch's open asks, in ask_id order."""
-    rows: list[tuple[object]] = conn.execute(
+    rows = conn.execute(
         "SELECT ask_id FROM asks WHERE asker_branch_id = ? AND state = 'open' ORDER BY ask_id",
         (branch,),
     ).fetchall()
     return [text_of(a) for (a,) in rows]
 
 
-def due_asks(conn: sqlite3.Connection, branch: str, now: int) -> list[tuple[str, int]]:
+def due_asks(conn: Conn, branch: str, now: int) -> list[tuple[str, int]]:
     """This branch's open asks whose deadline is at or before `now`, oldest first, with it."""
-    rows: list[tuple[object, object]] = conn.execute(
+    rows = conn.execute(
         "SELECT ask_id, deadline FROM asks WHERE asker_branch_id = ? AND state = 'open'"
         " AND deadline <= ? ORDER BY deadline, ask_id",
         (branch, now),
@@ -243,9 +242,9 @@ def due_asks(conn: sqlite3.Connection, branch: str, now: int) -> list[tuple[str,
     return [(text_of(a), int_of(d)) for a, d in rows]
 
 
-def monitors_on(conn: sqlite3.Connection, team: str, row: MemberRow) -> list[MonitorRow]:
+def monitors_on(conn: Conn, team: str, row: MemberRow) -> list[MonitorRow]:
     """The live monitors on one member generation, in monitor_id order."""
-    rows: list[tuple[object, object, object]] = conn.execute(
+    rows = conn.execute(
         "SELECT monitor_id, watcher_branch_id, kind FROM monitors"
         " WHERE team_id = ? AND target_name = ? AND target_generation = ? ORDER BY monitor_id",
         (team, row.name, row.generation),

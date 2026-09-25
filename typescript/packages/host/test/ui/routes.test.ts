@@ -22,6 +22,7 @@ import {
   say,
   use,
 } from "../kit";
+import { sqlAll } from "../sql";
 import { inputs } from "./e2e-kit";
 
 // The UI routes' boundaries (spec/schema/ui/README.md): each rejected body of
@@ -74,7 +75,7 @@ async function threadExists(
   key: string,
 ): Promise<boolean> {
   const { log } = await openStore(tenantStore(on.store, as.tenant));
-  return log.mainBranch(uiThreadId(as, "support", key)).ok;
+  return (await log.mainBranch(uiThreadId(as, "support", key))).ok;
 }
 
 describe("vectors/ui-inputs.json", () => {
@@ -166,8 +167,7 @@ describe("chat keys", () => {
     h = harness({ store: sqlite(dir), agents: { support: talker("Hi.") } });
     await (await post(h, alice, chatBody(key, "m1", "Hello"))).text();
     await h.host.stop();
-    const { db } = await storeConnection(h.store);
-    db.run("PRAGMA wal_checkpoint(TRUNCATE)", []);
+    // Every file of the store, its write-ahead log included.
     const needle = Buffer.from(key);
     const files = readdirSync(dir, {
       recursive: true,
@@ -245,7 +245,8 @@ describe("UI route errors", () => {
     await (await post(h, alice, chatBody("chat-1", "m1", "Hello"))).text();
     const receipts = async (): Promise<readonly unknown[]> => {
       const { db } = await storeConnection(open(h).store);
-      return db.all(
+      return await sqlAll(
+        db,
         "SELECT idempotency_key FROM run_receipts WHERE operation = 'ui'",
         [],
       );

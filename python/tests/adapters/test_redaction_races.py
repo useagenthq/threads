@@ -20,6 +20,7 @@ from threads.redaction import SecretInStoredBytesError, register
 from threads.result import Err, Ok
 from threads.store import Draft, ForkRequest, SqliteStore, verify_export
 from threads.store import branches as store_branches
+from threads.store.conn import Conn
 from threads.store.forking import ChildStart, Forking
 from threads.store.worker import Worker
 
@@ -210,15 +211,15 @@ def test_a_rebuild_over_a_source_holding_a_value_keeps_the_old_index() -> None:
             )
             assert isinstance(await provider.ingest(A, source, name), Ok)
 
-        def count(c: sqlite3.Connection) -> tuple[int]:
+        def count(c: sqlite3.Connection) -> object:
             return c.execute("SELECT count(*) FROM local_knowledge_fts").fetchone()
 
-        before = await store.run(count)
+        before = await store.run_sqlite(count)
         register(RACED, "later")
         rebuilt = await provider.rebuild_index()
         assert isinstance(rebuilt, Err)
         assert rebuilt.error.code == "invalid"
-        assert await store.run(count) == before
+        assert await store.run_sqlite(count) == before
         await store.close()
 
     asyncio.run(main())
@@ -234,7 +235,7 @@ def test_a_cancelled_append_whose_value_was_registered_meanwhile_leaves_the_writ
         original = Worker.call
         appending: list[asyncio.Task[object]] = []
 
-        async def call[T](worker: Worker, statement: Callable[[sqlite3.Connection], T]) -> T:
+        async def call[T](worker: Worker, statement: Callable[[Conn], T]) -> T:
             if appending:
                 register(RACED, "raced")
                 appending.pop().cancel()
@@ -332,7 +333,7 @@ def test_registration_waits_until_the_rebuilt_index_is_committed(
         assert isinstance(await provider.ingest(A, source, "a"), Ok)
         monkeypatch.setattr(local_knowledge, "transaction", transaction)
         assert await provider.rebuild_index() == Ok(None)
-        await store.run(lambda c: c.set_trace_callback(None))
+        await store.run_sqlite(lambda c: c.set_trace_callback(None))
         await store.close()
 
     asyncio.run(main())

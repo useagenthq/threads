@@ -136,7 +136,8 @@ async function advance(
       return send(s, request, next.attempt);
     case "fallback":
       return (
-        clear(s, 0, "compaction_fallback") ?? send(s, request, next.attempt)
+        (await clear(s, 0, "compaction_fallback")) ??
+        (await send(s, request, next.attempt))
       );
     case "open":
       throw new Error(
@@ -173,13 +174,13 @@ async function send(
     case "leaked":
       return undefined;
     case "unsupported":
-      return halted(failed(s, "model_error", cause));
+      return halted(await failed(s, "model_error", cause));
     case "halt": {
       const code = got.halt.code;
       if (code === "artifact_missing" || code === "artifact_corrupt")
-        return halted(failed(s, "artifact_error", cause));
+        return halted(await failed(s, "artifact_error", cause));
       return code === "model_error"
-        ? halted(failed(s, "model_error", cause))
+        ? halted(await failed(s, "model_error", cause))
         : got.halt;
     }
     default:
@@ -198,7 +199,7 @@ async function answer(
     ...(actor === undefined ? {} : { actor }),
   };
   if (outcome.kind === "failed")
-    return halted(failed(s, outcome.reason, answering));
+    return halted(await failed(s, outcome.reason, answering));
   const from = s.fold.firstInput;
   const to = s.events.find((e) => e.seq === request.seq - 1);
   if (from === undefined || to === undefined)

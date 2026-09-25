@@ -119,7 +119,7 @@ describe("a custom sandbox", () => {
     }).run("go", { store: sqlite(":memory:") });
     expect(result.status).toBe("completed");
     const { log } = await openStore(result.thread.store);
-    const chain = unwrap(log.read(result.thread.branch));
+    const chain = unwrap(await log.read(result.thread.branch));
     expect(reduce(chain, Date.now()).fork_points.length).toBe(1);
   });
 

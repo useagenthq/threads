@@ -16,6 +16,7 @@ import {
   use,
   webhook,
 } from "./kit";
+import { sqlAll } from "./sql";
 
 // Channel replies are derived from the log (spec/schema/README.md, "Channel replies"): a crash
 // between a turn's end and its reply's channel_send loses nothing and sends nothing twice, and
@@ -62,7 +63,7 @@ async function threadEvents(store: ReturnType<typeof sqlite>) {
   const { db } = await storeConnection(store);
   const [row] = z
     .array(z.object({ branch_id: z.string() }))
-    .parse(db.all("SELECT branch_id FROM branches", []));
+    .parse(await sqlAll(db, "SELECT branch_id FROM branches", []));
   return row === undefined ? [] : eventsOf(store, TENANT, row.branch_id);
 }
 
@@ -172,7 +173,7 @@ describe("a run lost after its input is durable", () => {
     const { log } = await openStore(tenantStore(store, TENANT));
     const acquire = log.acquire.bind(log);
     let lost = false;
-    log.acquire = (branch, holder, ttl) => {
+    log.acquire = async (branch, holder, ttl) => {
       if (lost || !holder.startsWith("run-"))
         return acquire(branch, holder, ttl);
       lost = true;
@@ -209,7 +210,7 @@ describe("approvals go to the originating channel", () => {
     const { db } = await storeConnection(h.store);
     const [row] = z
       .array(z.object({ thread_id: z.string() }))
-      .parse(db.all("SELECT thread_id FROM channel_threads", []));
+      .parse(await sqlAll(db, "SELECT thread_id FROM channel_threads", []));
     const list = await (
       await h.call("GET", `/v1/threads/${row?.thread_id}/approvals`, {
         as: alice,

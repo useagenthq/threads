@@ -2,7 +2,6 @@
 the tree's integrity (each child names the spawn that started it; no thread twice)."""
 
 import json
-import sqlite3
 
 import pytest
 from pydantic import JsonValue, ValidationError
@@ -25,6 +24,7 @@ from threads import Store, agent
 from threads.agents.store import now_ms, open_store
 from threads.log import AgentSpawnedEvent, Cost, ThreadId
 from threads.result import Err, Ok
+from threads.store.conn import Conn
 from threads.store.lines import uuid7
 from threads.thread.handle import Thread, open_thread
 
@@ -231,7 +231,7 @@ def test_a_finished_child_whose_log_is_missing_is_log_corrupt_never_a_partial_su
         elsewhere = uuid7(now_ms())
 
         # The parent's agent_finished proves the child ran; its log is gone from this store.
-        def move(c: sqlite3.Connection) -> None:
+        def move(c: Conn) -> None:
             c.execute(
                 "INSERT INTO threads (thread_id, tenant_id)"
                 " SELECT ?, tenant_id FROM threads WHERE thread_id = ?",
@@ -337,7 +337,7 @@ def test_a_descendant_in_a_newer_format_is_unsupported_format() -> None:
         )
         versions = ('"format_version":1', '"format_version":2')
 
-        def newer(c: sqlite3.Connection) -> None:
+        def newer(c: Conn) -> None:
             c.execute(sql, (*versions, kid_id))
 
         await (await open_store(store)).run(newer)

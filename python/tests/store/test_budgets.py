@@ -78,3 +78,29 @@ def test_a_refusal_inserts_nothing_and_settle_replaces_the_bound() -> None:
         await store.close()
 
     asyncio.run(main())
+
+
+def test_reserving_the_same_key_again_rechecks_and_replaces_it_as_typescript_does() -> None:
+    """A commit whose outcome was unknown is retried under its key: the retry is checked against
+    everything but its own rows, then upserts its amount (TS BudgetLedger.reserve)."""
+
+    async def main() -> None:
+        store = await _store()
+        ledger = store.budgets
+        covers = [Cover("thread:t", {"max_cost_nanos": 100})]
+        larger = 90
+        assert await ledger.reserve("b:1", covers, {"max_cost_nanos": 60}) is None
+        # Again, larger: 90 fits once its own 60 is left out, and replaces it.
+        assert await ledger.reserve("b:1", covers, {"max_cost_nanos": larger}) is None
+        assert await ledger.spent("thread:t", "max_cost_nanos") == larger
+        # Again, past the limit: refused, and the earlier reservation stays.
+        refused = await ledger.reserve("b:1", covers, {"max_cost_nanos": 101})
+        assert refused == Refused("thread:t", "max_cost_nanos", 100, 101)
+        assert await ledger.spent("thread:t", "max_cost_nanos") == larger
+        # After settlement, reserving the key again makes it reserved once more.
+        await ledger.settle("b:1", {"max_cost_nanos": 10})
+        assert await ledger.reserve("b:1", covers, {"max_cost_nanos": 20}) is None
+        assert await ledger.attempts("b") == {"b:1": True}
+        await store.close()
+
+    asyncio.run(main())

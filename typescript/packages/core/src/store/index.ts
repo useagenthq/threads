@@ -11,7 +11,7 @@ export {
   type LimitName,
   type Refused,
 } from "./budget";
-export type { SqliteDriver, SqlValue } from "./driver";
+export type { SqlValue, StoreDriver, Tx } from "./driver";
 export {
   ResourceLedger,
   ResourceRow,

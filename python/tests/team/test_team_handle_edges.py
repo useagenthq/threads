@@ -51,6 +51,7 @@ from threads.log import (
 )
 from threads.log.digest import sha256_hex
 from threads.result import Err, Ok
+from threads.store.sql import blob_of
 from threads.team.dynamic import InvalidDefinition
 from threads.team.materialize import MaterializeOptions, Rebind, materialize
 from threads.team.rows import team_row
@@ -220,12 +221,12 @@ def test_a_broken_output_artifact_raises_store_corrupt_error(
         r = await lead.run("Get ready.", store=store)
         assert isinstance(r, Completed)
         sq = await sq_of(store)
-        raw: list[tuple[bytes]] = await sq.run(
+        raw = await sq.run(
             lambda c: c.execute(
                 "SELECT result FROM team_members WHERE name = 'writer-1'"
             ).fetchall()
         )
-        result = _RESULT.validate_json(raw[0][0])
+        result = _RESULT.validate_json(blob_of(raw[0][0]))
         assert isinstance(result, CompletedResult)
         ref = result.output.ref
         assert ref is not MISSING

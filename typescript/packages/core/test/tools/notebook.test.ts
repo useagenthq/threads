@@ -137,11 +137,12 @@ describe("notebook_edit in the sandbox", () => {
       permissions: { mode: "bypass", allow_bypass: true },
     }).run("edit", { store: sqlite(":memory:") });
     const { log } = await openStore(result.thread.store);
-    const shown = knownEvents(unwrap(log.read(result.thread.branch))).flatMap(
-      (e) =>
-        e.type === "tool_result"
-          ? [[e.data.is_error, e.data.preview] as const]
-          : [],
+    const shown = knownEvents(
+      unwrap(await log.read(result.thread.branch)),
+    ).flatMap((e) =>
+      e.type === "tool_result"
+        ? [[e.data.is_error, e.data.preview] as const]
+        : [],
     );
     expect(shown[1]).toEqual([false, "replaced cell a"]);
     expect(shown[2]).toEqual([true, "cell_id q not found; nothing written"]);

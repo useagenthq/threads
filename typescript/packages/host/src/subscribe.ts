@@ -44,22 +44,22 @@ export async function subscribe(
   afterSeq = 0,
 ): Promise<Result<AsyncIterable<SseMessage>, SubscribeError>> {
   const { log } = await ctx.open(principal.tenant);
-  const branch = runBranch(log, threadId, runId);
+  const branch = await runBranch(log, threadId, runId);
   if (branch === undefined)
     return err({ code: "not_found", message: `no run ${runId}` });
   return ok(follow(ctx, log, { id: threadId, branch }, runId, afterSeq));
 }
 
 /** The branch whose own segment holds the run's user_input. */
-export function runBranch(
+export async function runBranch(
   log: LogStore,
   threadId: ThreadId,
   runId: EventId,
-): BranchId | undefined {
-  const listed = log.branches(threadId);
+): Promise<BranchId | undefined> {
+  const listed = await log.branches(threadId);
   if (!listed.ok) return undefined;
   for (const { branch_id } of listed.value) {
-    const read = log.read(branch_id);
+    const read = await log.read(branch_id);
     if (!read.ok) continue;
     const found = knownEvents(read.value).some(
       (e) =>
@@ -83,7 +83,7 @@ async function* follow(
   const store = ctx.storeFor(log.tenant);
   const handle = threadHandle(await openStore(store), { ...thread, store });
   for (;;) {
-    const read = log.read(thread.branch);
+    const read = await log.read(thread.branch);
     if (!read.ok) return;
     const events = knownEvents(read.value);
     const start = events.findIndex((e) => e.event_id === runId);

@@ -14,6 +14,7 @@ import {
   use,
   webhook,
 } from "./kit";
+import { sqlAll } from "./sql";
 
 // ask_user over a channel (spec/schema/README.md, "Questions and remembered rules"): the question
 // is posted once, the asker's next message answers the oldest open question strictly, a reply
@@ -77,7 +78,7 @@ async function events(store: ReturnType<typeof sqlite>) {
   const { db } = await storeConnection(store);
   const [row] = z
     .array(z.strictObject({ branch_id: z.string() }))
-    .parse(db.all("SELECT branch_id FROM branches", []));
+    .parse(await sqlAll(db, "SELECT branch_id FROM branches", []));
   return row === undefined ? [] : knownEventsOf(store, TENANT, row.branch_id);
 }
 
@@ -145,6 +146,30 @@ describe("ask_user over a channel", () => {
     expect(texts(s.slack.performed)).toHaveLength(3);
   });
 
+  test("each consumed item's seq is its channel_delivery's: a new thread's message, a rejection, an answer", async () => {
+    const s = await asked([say("Red then.")]);
+    await s.post(hook("E2", [message("green", "E2#0")]));
+    await until(async () => s.slack.performed.length === 2);
+    await s.post(hook("E3", [message("red", "E3#0")]));
+    await until(async () => s.slack.performed.length === 3);
+    const { db } = await storeConnection(s.store);
+    const consumed = z
+      .array(z.object({ item_key: z.string(), consumed_seq: z.number() }))
+      .parse(
+        await sqlAll(
+          db,
+          "SELECT item_key, consumed_seq FROM inbox ORDER BY inbox_id",
+        ),
+      );
+    const delivered = (await events(s.store)).flatMap((e) =>
+      e.type === "channel_delivery"
+        ? [{ item_key: e.data.item_key, consumed_seq: e.seq }]
+        : [],
+    );
+    expect(consumed).toEqual(delivered);
+    expect(consumed.map((c) => c.item_key)).toEqual(["E1#0", "E2#0", "E3#0"]);
+  });
+
   test("two questions in one response are asked in turn, each answered by the next reply", async () => {
     const two = {
       content: [
@@ -206,7 +231,7 @@ describe("ask_user over a channel", () => {
       },
     ]);
     const { db } = await storeConnection(store);
-    expect(db.all("SELECT state FROM questions", [])).toEqual([
+    expect(await sqlAll(db, "SELECT state FROM questions", [])).toEqual([
       { state: "expired" },
     ]);
   });

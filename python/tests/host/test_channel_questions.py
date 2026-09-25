@@ -15,8 +15,16 @@ from threads.agents.store import Store, open_store, scoped
 from threads.host import expiry as expiry_module
 from threads.host import host
 from threads.host.app import recovered
-from threads.log import AnswerRejectedEvent, Event, Principal, ToolResultEvent, TurnCompletedEvent
+from threads.log import (
+    AnswerRejectedEvent,
+    ChannelDeliveryEvent,
+    Event,
+    Principal,
+    ToolResultEvent,
+    TurnCompletedEvent,
+)
 from threads.result import Ok
+from threads.store.sql import int_of, text_of
 
 ASKER = Principal(issuer="fake:T1", tenant=TEAM, subject="U1")
 OTHER = Principal(issuer="fake:T1", tenant=TEAM, subject="U2")
@@ -55,6 +63,15 @@ async def _events(store: Store) -> list[Event]:
     return list(read.value.fold.events)
 
 
+async def _consumed(store: Store) -> dict[str, int]:
+    sq = await open_store(scoped(store, TEAM))
+    rows = await sq.run(
+        lambda c: c.execute("SELECT item_key, consumed_seq FROM inbox").fetchall(),
+        read_only=True,
+    )
+    return {text_of(key): int_of(seq) for key, seq in rows}
+
+
 async def _sent(channel: ItemsChannel, count: int) -> bool | None:
     return True if len(channel.sent) >= count else None
 
@@ -88,6 +105,9 @@ def test_the_asker_answers_strictly_and_another_members_message_waits() -> None:
     # The other member's message became the next turn's input, after the answer.
     done = [e for e in events if isinstance(e, TurnCompletedEvent)]
     assert [d.data.reason for d in done] == ["end_turn", "end_turn"]
+    # Each item is consumed at its channel_delivery's seq, as TypeScript records it.
+    delivered = {e.data.item_key: e.seq for e in events if isinstance(e, ChannelDeliveryEvent)}
+    assert asyncio.run(_consumed(store)) == delivered
 
 
 def test_a_question_past_its_expiry_is_closed_by_the_host_after_a_restart(

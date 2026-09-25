@@ -88,7 +88,7 @@ async function session(s: Session, input?: EventDraft): Promise<LoopEnd> {
   if (denied !== undefined) return { kind: "halted", halt: denied };
   const unparked = await unparkChildren(s);
   if (unparked !== undefined) return { kind: "halted", halt: unparked };
-  const expired = expireQuestions(s);
+  const expired = await expireQuestions(s);
   if (expired !== undefined) return { kind: "halted", halt: expired };
   resumeBackground(s);
   if (s.config.team === undefined)
@@ -126,8 +126,12 @@ async function waitForChildren(s: Session, first: LoopEnd): Promise<LoopEnd> {
     const idleWithEnds = end.kind === "idle" && s.finished.size > 0;
     if (!idleWithEnds && s.background.size === 0) return end;
     // The lead's own log moving (a cancel) wakes the wait too, even while a child hangs.
-    if (!idleWithEnds)
+    if (!idleWithEnds) {
       await Promise.race([...s.background.values(), s.moved()]);
+      // ponytail: children ending in the same moment share one boundary (and one woken); one
+      // macrotask gathers them now that each end settles through async store calls.
+      await new Promise((resolve) => setImmediate(resolve));
+    }
     end = await runLoop(s);
   }
   return end;
@@ -136,7 +140,7 @@ async function waitForChildren(s: Session, first: LoopEnd): Promise<LoopEnd> {
 async function turns(s: Session, input?: EventDraft): Promise<LoopEnd> {
   const earlier = await runLoop(s);
   if (earlier.kind !== "idle" || input === undefined) return earlier;
-  const appended = s.append(input);
+  const appended = await s.append(input);
   return appended === undefined
     ? runLoop(s)
     : { kind: "halted", halt: appended };

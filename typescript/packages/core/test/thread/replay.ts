@@ -16,10 +16,10 @@ const CASES = join(import.meta.dir, "../../../../../spec/conformance/cases");
 const Header = z.object({ thread_id: ThreadId, branch_id: BranchId });
 
 /** Puts the case's artifacts in the fixture's store. */
-export function caseArtifacts(name: string, f: Fixture): void {
+export async function caseArtifacts(name: string, f: Fixture): Promise<void> {
   const dir = join(CASES, name, "artifacts");
   for (const art of readdirSync(dir))
-    f.artifacts.put(readFileSync(join(dir, art)));
+    await f.artifacts.put(readFileSync(join(dir, art)));
 }
 
 export type Replayed = {
@@ -27,7 +27,7 @@ export type Replayed = {
   readonly thread: Thread;
   readonly threadId: ThreadId;
   readonly branch: BranchId;
-  readonly events: () => readonly KnownEvent[];
+  readonly events: () => Promise<readonly KnownEvent[]>;
 };
 
 /** The first `events` events of the case's `file`, in a fresh store of tenant acme. */
@@ -35,16 +35,17 @@ export async function replayCase(
   name: string,
   events: number,
   file = "log.jsonl",
-  f: Fixture = fixture("acme"),
+  given?: Fixture,
 ): Promise<Replayed> {
+  const f = given ?? (await fixture("acme"));
   const dir = join(CASES, name);
-  caseArtifacts(name, f);
+  await caseArtifacts(name, f);
   const lines = readFileSync(join(dir, file), "utf8")
     .split("\n")
     .slice(0, events + 1);
   const header = Header.parse(JSON.parse(lines[0] ?? ""));
-  unwrap(f.store.createBranch(header.thread_id, header.branch_id));
-  const writer = unwrap(f.store.acquire(header.branch_id, "setup"));
+  unwrap(await f.store.createBranch(header.thread_id, header.branch_id));
+  const writer = unwrap(await f.store.acquire(header.branch_id, "setup"));
   const ids = new Map<string, string>();
   for (let line of lines.slice(1)) {
     for (const [from, to] of ids) line = line.replaceAll(from, to);
@@ -58,13 +59,14 @@ export async function replayCase(
       prev_hash: _prev,
       ...draft
     } = KnownEvent.parse(JSON.parse(line));
-    const [added] = unwrap(writer.append([draft]));
+    const [added] = unwrap(await writer.append([draft]));
     if (added?.kind === "event") ids.set(old, added.event.event_id);
   }
-  writer.release();
+  await writer.release();
   const store = storeOf({ log: f.store, artifacts: f.artifacts });
   const thread = unwrap(await openThread(store, header.thread_id));
-  const read = () => knownEvents(unwrap(f.store.read(header.branch_id)));
+  const read = async () =>
+    knownEvents(unwrap(await f.store.read(header.branch_id)));
   return {
     f,
     thread,

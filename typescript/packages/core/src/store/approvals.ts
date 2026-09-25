@@ -4,7 +4,7 @@ import type { Strict } from "../log/zod-types";
 import { err, ok, type Result } from "../result";
 import type { ChainEvent } from "../verify";
 import { type LogError, logError } from "../verify/error";
-import type { SqliteDriver } from "./driver";
+import type { Tx } from "./driver";
 import type { BranchRow } from "./tables";
 import { parseRows } from "./tables";
 
@@ -30,13 +30,13 @@ const ApprovalRow: Strict<{
 });
 export type ApprovalRow = z.infer<typeof ApprovalRow>;
 
-export function approvalRow(
-  db: SqliteDriver,
+export async function approvalRow(
+  tx: Tx,
   challengeId: string,
-): Result<ApprovalRow | undefined, LogError> {
+): Promise<Result<ApprovalRow | undefined, LogError>> {
   const rows = parseRows(
     ApprovalRow,
-    db.all(
+    await tx.all(
       "SELECT branch_id, call_id, args_hash, expires_at, state FROM approvals WHERE challenge_id = ?",
       [challengeId],
     ),
@@ -55,18 +55,18 @@ type Answer = Extract<
  * another branch or call, rolls the append back. A challenge with no row (one imported with
  * its log) is checked by the log's rules alone.
  */
-export function recordApprovals(
-  db: SqliteDriver,
+export async function recordApprovals(
+  tx: Tx,
   branch: BranchRow,
   added: readonly ChainEvent[],
   now: number,
-): Result<void, LogError> {
+): Promise<Result<void, LogError>> {
   for (const line of added) {
     if (line.kind !== "event") continue;
     const e = line.event;
-    if (e.type === "approval_requested") open(db, branch, e.data);
+    if (e.type === "approval_requested") await open(tx, branch, e.data);
     if (e.type !== "approval_granted" && e.type !== "approval_denied") continue;
-    const consumed = consume(db, branch, e, now);
+    const consumed = await consume(tx, branch, e, now);
     if (!consumed.ok) return consumed;
   }
   return ok(undefined);
@@ -77,26 +77,26 @@ export function recordApprovals(
  * (import): a challenge with a later answer is that answer's state, one without is open, and an
  * expired one is still refused when someone decides it.
  */
-export function projectApprovals(
-  db: SqliteDriver,
+export async function projectApprovals(
+  tx: Tx,
   branch: Owner,
   events: readonly KnownEvent[],
-): void {
+): Promise<void> {
   for (const e of events) {
-    if (e.type === "approval_requested") open(db, branch, e.data);
+    if (e.type === "approval_requested") await open(tx, branch, e.data);
     if (e.type === "approval_granted" || e.type === "approval_denied")
-      decide(db, e, e.time);
+      await decide(tx, e, e.time);
   }
 }
 
 type Owner = Pick<BranchRow, "tenant_id" | "thread_id" | "branch_id">;
 
-function open(
-  db: SqliteDriver,
+async function open(
+  tx: Tx,
   branch: Owner,
   data: Extract<KnownEvent, { type: "approval_requested" }>["data"],
-): void {
-  db.run(
+): Promise<void> {
+  await tx.run(
     `INSERT INTO approvals (challenge_id, tenant_id, installation_id, thread_id, branch_id,
       call_id, args_hash, file_hashes, expires_at, state, decided_by, decided_at)
       VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, 'open', NULL, NULL)`,
@@ -113,24 +113,24 @@ function open(
   );
 }
 
-function consume(
-  db: SqliteDriver,
+async function consume(
+  tx: Tx,
   branch: BranchRow,
   e: Answer,
   now: number,
-): Result<void, LogError> {
+): Promise<Result<void, LogError>> {
   const id = e.data.challenge_id;
-  const row = approvalRow(db, id);
+  const row = await approvalRow(tx, id);
   if (!row.ok) return row;
   if (row.value === undefined) return ok(undefined);
   const refused = refusal(row.value, branch, e, now);
   if (refused !== undefined) return err(refused);
-  decide(db, e, now);
+  await decide(tx, e, now);
   return ok(undefined);
 }
 
-function decide(db: SqliteDriver, e: Answer, at: number): void {
-  db.run(
+async function decide(tx: Tx, e: Answer, at: number): Promise<void> {
+  await tx.run(
     "UPDATE approvals SET state = ?, decided_by = ?, decided_at = ? WHERE challenge_id = ? AND state = 'open'",
     [
       e.type === "approval_granted" ? "granted" : "denied",

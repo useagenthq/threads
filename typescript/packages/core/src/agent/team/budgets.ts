@@ -11,6 +11,7 @@ import {
 import type { Covering, TeamRecipient } from "../../loop";
 import { knownEvents } from "../../reduce";
 import type { ArtifactStore, LogStore } from "../../store";
+import { READ_ONLY, type Tx } from "../../store/driver";
 import { type MemberRow, mailEnvelope, teamRow } from "../../team/rows";
 
 // A member's budgets (spec/schema/README.md, "Teams"; design §2.6): before every model request of
@@ -24,13 +25,13 @@ type Parent = Pick<
 >;
 
 /** Every ancestor thread's own budget, from the member's parent up to the root. */
-export function ancestorsOf(
+export async function ancestorsOf(
   log: LogStore,
   parent: Parent | undefined,
-): readonly Covering[] {
+): Promise<readonly Covering[]> {
   const out: Covering[] = [];
   for (let at = parent; at !== undefined; ) {
-    const read = log.read(at.branch_id);
+    const read = await log.read(at.branch_id);
     if (!read.ok) break;
     const started = knownEvents(read.value).find(
       (e) => e.type === "thread_started",
@@ -59,17 +60,18 @@ type Pinned = z.infer<typeof Pinned>;
 /**
  * An asked member's budgets (ask's headroom): its own thread budget and every ancestor's, with
  * what one request of its model reserves, from its thread_started; a member still starting has
- * no log yet, so from its pinned config, under its lead.
+ * no log yet, so from its pinned config, under its lead. Read in `tx`, the ask's append.
  */
 export function recipientOf(
-  log: LogStore,
+  store: LogStore,
   artifacts: ArtifactStore,
-): (row: MemberRow) => TeamRecipient | undefined {
-  return (row) => {
+): (tx: Tx, row: MemberRow) => Promise<TeamRecipient | undefined> {
+  return async (tx, row) => {
+    const log = store.within(tx);
     const got =
       row.branch_id === null
-        ? configured(log, artifacts, row)
-        : started(log, row.branch_id);
+        ? await configured(log, tx, artifacts, row)
+        : await started(log, row.branch_id);
     if (got === undefined) return undefined;
     const own = got.pinned.policy?.budget;
     return {
@@ -86,19 +88,22 @@ export function recipientOf(
                 scope: "thread" as const,
               },
             ]),
-        ...ancestorsOf(log, got.parent),
+        ...(await ancestorsOf(log, got.parent)),
       ],
     };
   };
 }
 
-function started(
+type Recipient = {
+  readonly pinned: Pinned;
+  readonly parent: Parent | undefined;
+};
+
+async function started(
   log: LogStore,
   branch: BranchId,
-):
-  | { readonly pinned: Pinned; readonly parent: Parent | undefined }
-  | undefined {
-  const read = log.read(branch);
+): Promise<Recipient | undefined> {
+  const read = await log.read(branch);
   const e = read.ok
     ? knownEvents(read.value).find((x) => x.type === "thread_started")
     : undefined;
@@ -106,17 +111,16 @@ function started(
   return { pinned: e.data, parent: e.data.parent };
 }
 
-function configured(
+async function configured(
   log: LogStore,
+  tx: Tx,
   artifacts: ArtifactStore,
   row: MemberRow,
-):
-  | { readonly pinned: Pinned; readonly parent: Parent | undefined }
-  | undefined {
-  const bytes = artifacts.get(row.config_hash);
-  const team = teamRow(log.driver, row.team_id);
+): Promise<Recipient | undefined> {
+  const bytes = await artifacts.get(row.config_hash);
+  const team = await teamRow(tx, row.team_id);
   const lead =
-    team === undefined ? undefined : log.mainBranch(team.lead_thread_id);
+    team === undefined ? undefined : await log.mainBranch(team.lead_thread_id);
   if (!bytes.ok || team === undefined || lead === undefined || !lead.ok)
     return undefined;
   const pinned = Pinned.parse(
@@ -135,35 +139,41 @@ function configured(
  */
 export function runCovering(
   log: LogStore,
-): (opener: KnownEvent) => Covering | undefined {
+): (opener: KnownEvent) => Promise<Covering | undefined> {
   const found = new Map<string, Covering | undefined>();
-  return (opener) => {
-    const root = rootOf(log, opener);
+  return async (opener) => {
+    const root = await rootOf(log, opener);
     if (root === undefined) return undefined;
     const key = `run:${root.thread_id}:${root.event_id}`;
-    if (!found.has(key)) found.set(key, budgetOf(log, root, key));
+    if (!found.has(key)) found.set(key, await budgetOf(log, root, key));
     return found.get(key);
   };
 }
 
-function rootOf(
+async function rootOf(
   log: LogStore,
   opener: KnownEvent,
-): { readonly thread_id: string; readonly event_id: string } | undefined {
+): Promise<
+  { readonly thread_id: string; readonly event_id: string } | undefined
+> {
   if (opener.type === "message_received")
     return opener.data.envelope.provenance.root_request;
   if (opener.type !== "user_input" || opener.data.mail_id === undefined)
     return undefined;
-  return mailEnvelope(log.driver, opener.data.mail_id)?.provenance.root_request;
+  const envelope = await log.driver.transaction(
+    (tx) => mailEnvelope(tx, opener.data.mail_id ?? ""),
+    READ_ONLY,
+  );
+  return envelope?.provenance.root_request;
 }
 
-function budgetOf(
+async function budgetOf(
   log: LogStore,
   root: { readonly thread_id: string; readonly event_id: string },
   budgetId: string,
-): Covering | undefined {
-  const branch = log.mainBranch(ThreadId.parse(root.thread_id));
-  const read = branch.ok ? log.read(branch.value) : undefined;
+): Promise<Covering | undefined> {
+  const branch = await log.mainBranch(ThreadId.parse(root.thread_id));
+  const read = branch.ok ? await log.read(branch.value) : undefined;
   if (read === undefined || !read.ok) return undefined;
   const input = knownEvents(read.value).find(
     (e) => e.event_id === root.event_id,

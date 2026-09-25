@@ -79,12 +79,12 @@ export async function run(
   responses: readonly unknown[],
   overrides: (h: Harness, writer: Writer) => Partial<LoopConfig> = () => ({}),
 ): Promise<Run> {
-  const h = harness(
+  const h = await harness(
     impls.map((i) => i.spec),
     [],
     responses,
   );
-  const writer = unwrap(h.store.acquire(ROOT, "owner", 30_000));
+  const writer = unwrap(await h.store.acquire(ROOT, "owner", 30_000));
   const config = h.config({
     tools: new Map(impls.map((i) => [i.spec.name, i])),
     ...overrides(h, writer),
@@ -96,9 +96,9 @@ export async function run(
 }
 
 /** Another owner takes the expired lease now. */
-export function takeOver(h: Harness): void {
+export async function takeOver(h: Harness): Promise<void> {
   h.clock.now += 60_000;
-  unwrap(h.store.acquire(ROOT, "usurper"));
+  unwrap(await h.store.acquire(ROOT, "usurper"));
 }
 
 export const results = (log: readonly KnownEvent[]): readonly string[] =>

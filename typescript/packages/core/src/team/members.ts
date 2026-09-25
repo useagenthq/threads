@@ -4,6 +4,7 @@ import { BranchId, type KnownEvent, PosInt, ThreadId } from "../log";
 import { knownEvents } from "../reduce";
 import { err, ok, type Result } from "../result";
 import type { LogStore } from "../store";
+import { READ_ONLY } from "../store/driver";
 import { parseRows } from "../store/tables";
 import { type ReadError, readError, readLog } from "../thread/read";
 import type { VerifiedLog } from "../verify";
@@ -21,7 +22,7 @@ export type TeamMember = {
    * The member's verified log, its backlink checked; `pending` in the starting window (no
    * branch, and its starter has no task notification for it); else log_corrupt.
    */
-  readonly open: () => Result<VerifiedLog | "pending", ReadError>;
+  readonly open: () => Promise<Result<VerifiedLog | "pending", ReadError>>;
 };
 
 const MemberRow = z.strictObject({
@@ -41,22 +42,26 @@ const NOTICES: ReadonlySet<string> = new Set([
 ]);
 
 /** The members of the team `lead` leads, in (name, generation) order; none if it leads none. */
-export function teamMembers(
+export async function teamMembers(
   store: LogStore,
   lead: VerifiedLog,
-): Result<readonly TeamMember[], ReadError> {
+): Promise<Result<readonly TeamMember[], ReadError>> {
   const events = knownEvents(lead);
   const started = events.find((e): e is Started => e.type === "thread_started");
   const team = started?.data.team;
   if (started === undefined || team === undefined) return ok([]);
   const rows = parseRows(
     MemberRow,
-    store.driver.all(
-      `SELECT m.name, m.generation, m.thread_id, m.branch_id FROM team_members m
-        JOIN teams t ON t.team_id = m.team_id
-        WHERE m.team_id = ? AND t.tenant_id = ? AND m.role = 'member'
-        ORDER BY m.name, m.generation`,
-      [team.id, store.tenant],
+    await store.driver.transaction(
+      (tx) =>
+        tx.all(
+          `SELECT m.name, m.generation, m.thread_id, m.branch_id FROM team_members m
+            JOIN teams t ON t.team_id = m.team_id
+            WHERE m.team_id = ? AND t.tenant_id = ? AND m.role = 'member'
+            ORDER BY m.name, m.generation`,
+          [team.id, store.tenant],
+        ),
+      READ_ONLY,
     ),
   );
   if (!rows.ok) return err(readError("log_corrupt", rows.error.message));
@@ -71,7 +76,7 @@ export function teamMembers(
           e.data.member.name === row.name &&
           e.data.member.generation === row.generation,
       );
-      const teamLog = (): Result<VerifiedLog, ReadError> =>
+      const teamLog = async (): Promise<Result<VerifiedLog, ReadError>> =>
         readLog(store, team.log_branch_id);
       return {
         name: row.name,
@@ -90,12 +95,12 @@ export function teamMembers(
  * A member with a branch counts once its thread_started names, as its team_member parent, the
  * lead's member_started for it, or the lead's thread_started for an operator start.
  */
-function backlinked(
+async function backlinked(
   store: LogStore,
   branch: BranchId,
   by: MemberStarted | Started,
-): Result<VerifiedLog, ReadError> {
-  const read = readLog(store, branch);
+): Promise<Result<VerifiedLog, ReadError>> {
+  const read = await readLog(store, branch);
   if (!read.ok) return read;
   const own = knownEvents(read.value).find(
     (e): e is Started => e.type === "thread_started",
@@ -118,16 +123,16 @@ function backlinked(
  * A member without a branch is in the starting window only while its starter (the lead, or the
  * team log for an operator start) has received no task notification for it.
  */
-function starting(
+async function starting(
   row: MemberRow,
   inLead: MemberStarted | undefined,
   leadEvents: readonly KnownEvent[],
-  teamLog: () => Result<VerifiedLog, ReadError>,
-): Result<"pending", ReadError> {
+  teamLog: () => Promise<Result<VerifiedLog, ReadError>>,
+): Promise<Result<"pending", ReadError>> {
   let start = inLead;
   let starter = leadEvents;
   if (start === undefined) {
-    const read = teamLog();
+    const read = await teamLog();
     if (!read.ok) return read;
     starter = knownEvents(read.value);
     start = starter.find(

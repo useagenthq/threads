@@ -34,7 +34,7 @@ const base = {
 
 async function configHash(thread: ThreadRef): Promise<string | undefined> {
   const { log } = await openStore(thread.store);
-  const started = knownEvents(unwrap(log.read(thread.branch)))[0];
+  const started = knownEvents(unwrap(await log.read(thread.branch)))[0];
   return started?.type === "thread_started"
     ? started.data.config_hash
     : undefined;

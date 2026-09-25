@@ -3,12 +3,13 @@ tool_call, call.py) or an operator request (its operator_request in the team log
 The ops decide the same way for both; what differs (who sends, the grant, how a member is named,
 how the outcome is recorded) is here. Reference: spec/tools/fixtures/ops_request.py."""
 
-import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import JsonValue
+
+from threads.store.conn import Conn
 
 if TYPE_CHECKING:
     from threads.team.batch import Batch
@@ -30,7 +31,7 @@ class Target:
 
 @dataclass(frozen=True, slots=True)
 class Request:
-    conn: sqlite3.Connection
+    conn: Conn
     batch: "Batch"
     put: "PutText"
     team: "TeamRow"

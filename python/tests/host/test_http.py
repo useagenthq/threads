@@ -4,7 +4,6 @@ stream bound to its run, and single-use approvals that resume the run."""
 
 import asyncio
 import json
-import sqlite3
 from collections.abc import AsyncGenerator, Callable, Coroutine, Sequence
 from contextlib import asynccontextmanager
 from http import HTTPStatus
@@ -18,6 +17,7 @@ from threads.agents.store import now_ms, open_store, scoped
 from threads.host import Host, host
 from threads.log import BranchId, Principal, UserInputEvent
 from threads.result import Ok
+from threads.store.conn import Conn
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALICE = Principal(issuer="api", tenant="acme", subject="alice")
@@ -324,7 +324,7 @@ def test_a_log_from_a_newer_writer_answers_unsupported_critical_event_not_not_fo
             )
             newer = ('"type":"turn_completed"', '"type":"approval_quorum"', receipt["branch_id"])
 
-            def tamper(c: sqlite3.Connection) -> None:
+            def tamper(c: Conn) -> None:
                 c.execute(sql, newer)
 
             await (await open_store(store)).run(tamper)

@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { sha256Hex } from "../hash";
 import { err, ok, type Result } from "../result";
 import { type LogError, logError } from "../verify/error";
+import { sweepFiles } from "./artifact-sweep";
 import {
   artifactSeams,
   codeOf,
@@ -27,20 +28,31 @@ import { StoreError } from "./driver";
  * artifact exists before any row or event names it. `get` verifies the hash on every read.
  */
 export type ArtifactStore = {
-  readonly put: (bytes: Uint8Array) => string;
-  readonly get: (sha256: string) => Result<Uint8Array, LogError>;
-  /** Streams one artifact in chunks, so large output is never held whole. */
+  readonly put: (bytes: Uint8Array) => Promise<string>;
+  readonly get: (sha256: string) => Promise<Result<Uint8Array, LogError>>;
+  /** Streams one artifact in chunks, so large output is never held whole where it can be. */
   readonly sink: () => ArtifactSink;
+  /**
+   * `threads gc`: removes every artifact older than `olderThan` (by its write time) that `keep`
+   * doesn't name, and returns the removed hashes.
+   */
+  readonly sweep: (
+    keep: ReadonlySet<string>,
+    olderThan: number,
+  ) => Promise<readonly string[]>;
 };
 
-/** One artifact being written. `finish` returns once it is durable; `abort` drops it. */
+/** One artifact being written. `finish` resolves once it is durable; `abort` drops it. */
 export type ArtifactSink = {
   readonly write: (chunk: Uint8Array) => void;
-  readonly finish: () => { readonly sha256: string; readonly bytes: number };
+  readonly finish: () => Promise<{
+    readonly sha256: string;
+    readonly bytes: number;
+  }>;
   readonly abort: () => void;
 };
 
-function verified(
+export function verified(
   sha256: string,
   bytes: Uint8Array | undefined,
 ): Result<Uint8Array, LogError> {
@@ -60,15 +72,20 @@ export function memoryArtifacts(): ArtifactStore {
     return sha256;
   };
   return {
-    put,
-    get: (sha256) => verified(sha256, saved.get(sha256)),
+    put: async (bytes) => put(bytes),
+    get: async (sha256) => verified(sha256, saved.get(sha256)),
+    sweep: async (keep) => {
+      const removed = [...saved.keys()].filter((sha256) => !keep.has(sha256));
+      for (const sha256 of removed) saved.delete(sha256);
+      return removed;
+    },
     sink: () => {
       const chunks: Uint8Array[] = [];
       return {
         write: (chunk) => {
           chunks.push(chunk.slice());
         },
-        finish: () => {
+        finish: async () => {
           const bytes = new Uint8Array(
             chunks.reduce((n, c) => n + c.length, 0),
           );
@@ -95,23 +112,25 @@ export function fileArtifacts(root: string): ArtifactStore {
     const s = disk(() => fileSink(root, path));
     return {
       write: (chunk) => disk(() => s.write(chunk)),
-      finish: () => disk(() => s.finish()),
+      finish: async () => disk(() => s.finish()),
       abort: () => disk(() => s.abort()),
     };
   };
   return {
-    put: (bytes) => {
+    put: async (bytes) => {
       const s = sink();
       s.write(bytes);
-      return s.finish().sha256;
+      return (await s.finish()).sha256;
     },
     // A missing or changed artifact stays a value; a disk that fails is the store's outage.
-    get: (sha256) =>
+    get: async (sha256) =>
       verified(
         sha256,
         disk(() => readArtifact(path(sha256))),
       ),
     sink,
+    sweep: async (keep, olderThan) =>
+      disk(() => sweepFiles(root, keep, olderThan)),
   };
 }
 
@@ -130,10 +149,14 @@ function disk<T>(run: () => T): T {
  * Writes a temp file chunk by chunk while hashing, then fsyncs it and links it to its
  * content address (EEXIST: keep the existing copy if it verifies), then fsyncs the directory.
  */
-function fileSink(
-  root: string,
-  path: (sha256: string) => string,
-): ArtifactSink {
+/** A file being written, synchronously: the file store's sink before it is wrapped. */
+type FileSink = {
+  readonly write: (chunk: Uint8Array) => void;
+  readonly finish: () => { readonly sha256: string; readonly bytes: number };
+  readonly abort: () => void;
+};
+
+function fileSink(root: string, path: (sha256: string) => string): FileSink {
   const tmp = join(root, "sha256");
   mkdirSync(tmp, { recursive: true, mode: 0o700 });
   const temp = join(tmp, `.${crypto.randomUUID()}.tmp`);

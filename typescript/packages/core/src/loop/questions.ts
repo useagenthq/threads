@@ -15,7 +15,7 @@ const DAY_MS = 86_400_000;
 export function askUser(
   s: Session,
   call: EventOf<"tool_call">,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const { call_id } = call.data;
   // Arguments already parsed before authorization; the question rules are rule 48.
   const problem = askProblem(AskUserInput.parse(call.data.input));
@@ -61,9 +61,9 @@ export function dueQuestions(
 }
 
 /** Closes each due question with the error result "no answer", then resumes it. */
-export function expireQuestions(s: Session): Halt | undefined {
+export async function expireQuestions(s: Session): Promise<Halt | undefined> {
   for (const address of dueQuestions(s.events, s.fold, s.now())) {
-    const closed = s.append(
+    const closed = await s.append(
       draft.toolResult(
         {
           call_id: address.id,
@@ -77,7 +77,7 @@ export function expireQuestions(s: Session): Halt | undefined {
     if (closed !== undefined) return closed;
     const result = s.events.at(-1);
     if (result === undefined) throw new Error("the result was just appended");
-    const stopped = s.append({
+    const stopped = await s.append({
       type: "resumed",
       type_version: 1,
       critical: true,

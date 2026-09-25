@@ -1,6 +1,7 @@
 import { ok } from "../../result";
 import type { LogStore } from "../../store";
 import type { ArtifactStore } from "../../store/artifacts";
+import { reading } from "../../store/driver";
 import { Batch, type Mint } from "../../team/batch";
 import { readerOf } from "../../team/close";
 import { consume } from "../../team/consume";
@@ -11,16 +12,19 @@ import { pendingTo, teamRow } from "../../team/rows";
 // receipt under the team log's writer. A held lease leaves it to its holder.
 
 /** Consumes the team log's pending mail when there is any and its lease is free. */
-export function takeTeamLogMail(
+export async function takeTeamLogMail(
   log: LogStore,
   artifacts: ArtifactStore,
   team: string,
   mint: Mint | undefined,
-): void {
-  const row = teamRow(log.driver, team);
-  if (row === undefined || pendingTo(log.driver, team, null).length === 0)
+): Promise<void> {
+  const row = await reading(log.driver, (tx) => teamRow(tx, team));
+  if (
+    row === undefined ||
+    (await reading(log.driver, (tx) => pendingTo(tx, team, null))).length === 0
+  )
     return;
-  const writer = log.acquire(
+  const writer = await log.acquire(
     row.team_log_branch_id,
     `team-${crypto.randomUUID()}`,
   );
@@ -29,10 +33,10 @@ export function takeTeamLogMail(
   const header = w.chain.segments[0]?.header;
   try {
     if (header === undefined) throw new Error("a team log has a header");
-    const appended = w.appendDecided((tx) => {
+    const appended = await w.appendDecided(async (tx) => {
       const batch = new Batch(tx.chain.fold.seq, tx.now, mint);
-      consume({
-        db: tx.db,
+      await consume({
+        tx: tx.tx,
         chain: tx.chain,
         batch,
         threadId: header.thread_id,
@@ -44,6 +48,6 @@ export function takeTeamLogMail(
     if ("ok" in appended && !appended.ok)
       throw new Error(`team log ${team}: ${appended.error.message}`);
   } finally {
-    w.release();
+    await w.release();
   }
 }

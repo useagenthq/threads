@@ -63,7 +63,7 @@ describe("agent({team})", () => {
     expect(result.status === "completed" && result.output).toBe("Done.");
     expect(seen).toContain("member_started");
     expect(result.team.ref.tenant).toBe((await logOf(store)).tenant);
-    assertTeamReplays(await logOf(store), result.team.ref.id);
+    await assertTeamReplays(await logOf(store), result.team.ref.id);
   });
 
   test("check(): a member that hands off is refused handoff_in_team", async () => {

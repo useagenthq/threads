@@ -6,7 +6,7 @@ import { markTestKit } from "../../src/model/guard";
 import { knownEvents } from "../../src/reduce";
 import { memberRows } from "../../src/team/rows";
 import { unwrap } from "../store/helpers";
-import { assertTeamReplays } from "./kit";
+import { assertTeamReplays, query, reading } from "./kit";
 import { logOf, receipts, say, start } from "./run-kit";
 
 // A nested lead (spec/schema/README.md, "Teams"): a member whose own definition has a team starts
@@ -76,14 +76,15 @@ describe("a nested lead", () => {
 
     const log = await logOf(store);
     const teams = Team.parse(
-      log.driver.all(
+      await query(
+        log.driver,
         "SELECT team_id, lead_thread_id FROM teams ORDER BY team_id",
         [],
       ),
     );
     expect(teams).toHaveLength(2);
     const outer = r.team.ref.id;
-    const row = memberRows(log.driver, outer).find(
+    const row = (await reading(log.driver, (tx) => memberRows(tx, outer))).find(
       (m) => m.name === "researcher-1",
     );
     const inner = teams.find(
@@ -91,13 +92,16 @@ describe("a nested lead", () => {
     )?.team_id;
     if (row?.branch_id === null || row === undefined || inner === undefined)
       throw new Error("the researcher leads its own team");
-    const nested = knownEvents(unwrap(log.read(BranchId.parse(row.branch_id))));
+    const nested = knownEvents(
+      unwrap(await log.read(BranchId.parse(row.branch_id))),
+    );
     expect(receipts(nested, "member_settled")).toHaveLength(1);
-    expect(memberRows(log.driver, inner).map((m): string => m.name)).toEqual([
-      "researcher",
-      "scanner-1",
-    ]);
-    assertTeamReplays(log, outer);
-    assertTeamReplays(log, inner);
+    expect(
+      (await reading(log.driver, (tx) => memberRows(tx, inner))).map(
+        (m): string => m.name,
+      ),
+    ).toEqual(["researcher", "scanner-1"]);
+    await assertTeamReplays(log, outer);
+    await assertTeamReplays(log, inner);
   });
 });

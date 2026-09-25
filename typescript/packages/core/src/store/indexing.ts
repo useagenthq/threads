@@ -3,13 +3,13 @@ import { ok, type Result } from "../result";
 import { feedRows, openTeamLog, teamRows } from "../team/write";
 import type { ChainEvent } from "../verify";
 import type { LogError } from "../verify/error";
-import type { SqliteDriver } from "./driver";
+import type { Tx } from "./driver";
 import { questionRows } from "./questions";
 import { wakeRows } from "./wakes";
 
 /** One append as the index hooks see it, inside its transaction, after its event rows. */
 export type Appended = {
-  readonly db: SqliteDriver;
+  readonly tx: Tx;
   readonly tenant: string;
   readonly threadId: ThreadId;
   readonly branchId: BranchId;
@@ -25,7 +25,7 @@ export type Appended = {
  * Writes index rows from an append's events (the replay rule). An error rolls the whole append
  * back, as a writer's `alongside` does.
  */
-export type IndexHook = (append: Appended) => Result<void, LogError>;
+export type IndexHook = (append: Appended) => Promise<Result<void, LogError>>;
 
 /**
  * Every index hook, in the order each append runs them: its wake rows, its question rows, the
@@ -46,9 +46,11 @@ export function knownOf(lines: readonly ChainEvent[]): readonly KnownEvent[] {
 }
 
 /** Runs every index hook over one append; the first error wins. */
-export function indexAppend(append: Appended): Result<void, LogError> {
+export async function indexAppend(
+  append: Appended,
+): Promise<Result<void, LogError>> {
   for (const hook of INDEX_HOOKS) {
-    const done = hook(append);
+    const done = await hook(append);
     if (!done.ok) return done;
   }
   return ok(undefined);

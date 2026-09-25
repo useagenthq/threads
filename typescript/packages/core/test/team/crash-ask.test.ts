@@ -7,7 +7,7 @@ import { knownEvents } from "../../src/reduce";
 import { memberRows } from "../../src/team/rows";
 import { unwrap } from "../store/helpers";
 import { Crash, crashing, drill, type Point } from "./crash-kit";
-import { assertTeamReplays } from "./kit";
+import { assertTeamReplays, reading } from "./kit";
 import {
   answering,
   askIds,
@@ -92,16 +92,18 @@ const count = (log: readonly KnownEvent[], type: string): number =>
   log.filter((e) => e.type === type).length;
 
 async function crashThenRestart(point: Point, first: readonly unknown[]) {
-  const d = drill();
+  const d = await drill();
   await expect(
-    lead(first).run("Work.", { store: d.open(crashing(d.db, point)) }),
+    lead(first).run("Work.", { store: await d.open(crashing(d.db, point)) }),
   ).rejects.toThrow(Crash);
   const { result, branch, team } = await d.restart(lead([]));
   expect(result.status).toBe("completed");
-  const leadLog = knownEvents(unwrap(d.log.read(branch)));
-  const row = memberRows(d.db, team).find((r) => r.name === "researcher-1");
+  const leadLog = knownEvents(unwrap(await d.log.read(branch)));
+  const row = (await reading(d.db, (tx) => memberRows(tx, team))).find(
+    (r) => r.name === "researcher-1",
+  );
   const member = knownEvents(
-    unwrap(d.log.read(BranchId.parse(z.string().parse(row?.branch_id)))),
+    unwrap(await d.log.read(BranchId.parse(z.string().parse(row?.branch_id)))),
   );
   return { d, team, leadLog, member };
 }
@@ -123,7 +125,7 @@ describe("ask crash drills", () => {
         (e) => e.type === "message_sent" && e.data.envelope.kind === "reply",
       );
       expect(replies).toHaveLength(1);
-      assertTeamReplays(d.log, team);
+      await assertTeamReplays(d.log, team);
     });
 });
 
@@ -141,6 +143,6 @@ describe("wait crash drills", () => {
         timed_out: false,
         finished: [{ member: { name: "researcher-1" } }],
       });
-      assertTeamReplays(d.log, team);
+      await assertTeamReplays(d.log, team);
     });
 });

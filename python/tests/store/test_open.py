@@ -1,19 +1,19 @@
 """branch.open: a new branch, its first events and its first lease at epoch 1, in one
 transaction; an existing branch is already_open, and a failure leaves nothing behind."""
 
-import sqlite3
 from collections.abc import Callable
 
 from store.test_writer import CHILD, DONE, ROOT, STARTED, T0, THREAD, TTL, Clock, run, user
 
 from threads.result import Ok
 from threads.store import SqliteStore, Writer
+from threads.store.conn import Conn
 from threads.store.lease import Lease
 from threads.store.opening import BranchOpening, OpenedBranch, open_branch
 from threads.store.sql import transaction
 
 
-def _rows(table: str) -> Callable[[sqlite3.Connection], list[tuple[object, ...]]]:
+def _rows(table: str) -> Callable[[Conn], list[tuple[object, ...]]]:
     return lambda conn: conn.execute(f"SELECT * FROM {table}").fetchall()  # noqa: S608
 
 
@@ -27,7 +27,12 @@ def test_it_stores_the_branch_its_events_and_first_lease_and_returns_a_writer() 
         writer = opened.value
         assert isinstance(writer, Writer)
         assert writer.epoch == 1
-        assert await store.run(_rows("leases")) == [(ROOT, "opener", 1, T0 + TTL)]
+        leases = await store.run(
+            lambda c: c.execute(
+                "SELECT branch_id, holder_id, epoch, expires_at FROM leases"
+            ).fetchall()
+        )
+        assert leases == [(ROOT, "opener", 1, T0 + TTL)]
         assert isinstance(await writer.append([DONE]), Ok)
         read = await store.read(ROOT, clock())
         assert isinstance(read, Ok)
@@ -69,7 +74,7 @@ class _OuterFailedError(Exception):
 
 
 def test_inside_another_transaction_it_is_rolled_back_with_it() -> None:
-    def outer(conn: sqlite3.Connection) -> None:
+    def outer(conn: Conn) -> None:
         o = BranchOpening("local", THREAD, CHILD, Lease("a", 1, T0 + TTL), (STARTED,))
         try:
             with transaction(conn):

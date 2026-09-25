@@ -87,12 +87,14 @@ export async function bindProviders(
     events: run.events,
   });
   const memory =
-    def.memory === undefined ? undefined : bindMemory(def.memory, log.driver);
+    def.memory === undefined
+      ? undefined
+      : await bindMemory(def.memory, log.driver);
   const kScope = knowledgeScope(def.name, principal);
   const local =
     def.knowledge === undefined
       ? undefined
-      : bindLocalKnowledge(def.knowledge, log.driver, run.artifacts);
+      : await bindLocalKnowledge(def.knowledge, log.driver, run.artifacts);
   if (local !== undefined)
     await admitPaths(local.local, local.paths, kScope, bindings);
   const knowledge = local?.local ?? def.knowledge;

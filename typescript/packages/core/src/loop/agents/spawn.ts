@@ -59,7 +59,7 @@ async function start(s: Session, call: Call): Promise<Halt | undefined> {
   const denied = await startGate(s, call);
   if (typeof denied !== "string") return denied;
   if (denied !== "allow") return closed(s, call_id, "denied", denied);
-  const stopped = s.appendWork(
+  const stopped = await s.appendWork(
     draft.agentSpawned({
       call_id,
       child_thread_id: ThreadId.parse(uuidv7(s.now())),
@@ -71,7 +71,7 @@ async function start(s: Session, call: Call): Promise<Halt | undefined> {
   );
   // A cancel landed during the hook: no child starts; the cancellation step closes the call.
   if (stopped === BARRED) return undefined;
-  return stopped ?? spawnAgent(s, call);
+  return stopped ?? (await spawnAgent(s, call));
 }
 
 /**
@@ -88,10 +88,13 @@ function active(s: Session, name: string): boolean {
 }
 
 /** A background child answers its call at once; its result arrives as tool_result_late. */
-function background(s: Session, spawned: Spawned): Halt | undefined {
+async function background(
+  s: Session,
+  spawned: Spawned,
+): Promise<Halt | undefined> {
   const { call_id } = spawned.data;
   const stopped = s.fold.pending.has(call_id)
-    ? s.append(
+    ? await s.append(
         draft.toolResult(
           {
             call_id,
@@ -152,7 +155,7 @@ async function rounds(s: Session, spawned: Spawned): Promise<ChildEnd | Halt> {
   for (;;) {
     const end = await runChild(s, spawned);
     if ("code" in end || end.status === "parked") return end;
-    const next = await stopGate(s, spawned, finished(s, spawned, end));
+    const next = await stopGate(s, spawned, await finished(s, spawned, end));
     if (next !== "continue") return next === "stop" ? end : next;
   }
 }
@@ -193,7 +196,7 @@ export async function runChild(
     ceiling: (call, spec) => s.config.authorize(call, asCeiling(s.fold), spec),
     tools: new Set(s.fold.tools.map((t) => t.name)),
     team: teamOf(s),
-    covering: inheritedBy(s),
+    covering: await inheritedBy(s),
     ...(s.fold.policy?.context === undefined
       ? {}
       : { deferTools: s.fold.policy.context.defer_tools }),
@@ -201,43 +204,43 @@ export async function runChild(
   });
 }
 
-export function finished(
+export async function finished(
   s: Session,
   spawned: Spawned,
   end: ChildDone,
-): EventOf<"agent_finished">["data"] {
+): Promise<EventOf<"agent_finished">["data"]> {
   return {
     child_thread_id: spawned.data.child_thread_id,
     status: end.status,
-    output_ref: s.store(end.output, "text/plain"),
+    output_ref: await s.store(end.output, "text/plain"),
     usage: end.usage,
   };
 }
 
 /** The child's one agent_finished and the call's result, in one append (F7.5). */
-export function finish(
+export async function finish(
   s: Session,
   spawned: Spawned,
   end: ChildDone,
   late: boolean,
-): Halt | undefined {
-  return s.append(...endDrafts(s, spawned, end, late));
+): Promise<Halt | undefined> {
+  return s.append(...(await endDrafts(s, spawned, end, late)));
 }
 
 /**
  * The child's agent_finished and the call's result. A late result brings its own event_id, so a
  * woken in the same append can name it.
  */
-export function endDrafts(
+export async function endDrafts(
   s: Session,
   spawned: Spawned,
   end: ChildDone,
   late: boolean,
-): readonly [EventDraft, EventDraft] {
+): Promise<readonly [EventDraft, EventDraft]> {
   const { call_id } = spawned.data;
   const text =
     end.status === "completed" ? end.output : `${end.status}: ${end.output}`;
-  const shown = recordOutput(s, call_id, text);
+  const shown = await recordOutput(s, call_id, text);
   const result = {
     call_id,
     is_error: end.status !== "completed",
@@ -245,19 +248,19 @@ export function endDrafts(
     ...(shown.ref === undefined ? {} : { ref: shown.ref }),
   };
   return [
-    draft.agentFinished(finished(s, spawned, end)),
+    draft.agentFinished(await finished(s, spawned, end)),
     late
       ? { ...draft.toolResultLate(result), event_id: uuidv7(s.now()) }
       : draft.toolResult({ ...result, origin: "executed" }, TOOL),
   ];
 }
 
-function closed(
+async function closed(
   s: Session,
   call_id: Call["data"]["call_id"],
   origin: "not_executed" | "denied",
   preview: string,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   return s.append(
     draft.toolResult({ call_id, is_error: true, origin, preview }, TOOL),
   );

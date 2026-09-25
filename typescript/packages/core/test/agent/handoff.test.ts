@@ -35,7 +35,7 @@ async function events(
   thread: ThreadRef,
 ): Promise<readonly KnownEvent[]> {
   const { log } = await openStore(store);
-  return knownEvents(unwrap(log.read(thread.branch)));
+  return knownEvents(unwrap(await log.read(thread.branch)));
 }
 
 describe("handoff", () => {

@@ -18,6 +18,9 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
+      "nursery": {
+        "noFloatingPromises": "error"
+      },
       "complexity": {
         "useLiteralKeys": "off",
         "noExcessiveCognitiveComplexity": {

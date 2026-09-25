@@ -27,7 +27,7 @@ from threads.log import (
 from threads.result import Ok
 from threads.store import Draft, SqliteStore, Writer
 from threads.store.deletion import delete_thread
-from threads.store.sql import text_of
+from threads.store.sql import int_of, text_of
 
 VECTOR = Path(__file__).resolve().parents[3] / "spec/conformance/vectors/schedule-threads.json"
 REPLY: JsonValue = {
@@ -220,7 +220,7 @@ class Replay:
 
     async def observe(self, tenant: str, want: Expected) -> Expected:
         sq = await open_store(self.store)
-        rows: list[tuple[int, str, str | None]] = await sq.run(
+        rows = await sq.run(
             lambda c: c.execute(
                 "SELECT occurrence_at, state, reason FROM schedule_occurrences"
                 " WHERE tenant_id = ? ORDER BY occurrence_at",
@@ -257,8 +257,11 @@ class Replay:
         ]
         return Expected(
             log=[line for line, _ in logged],
-            rows=[(_iso(at), state, reason) for at, state, reason in rows],
-            threads=None if want.threads is None else count,
+            rows=[
+                (_iso(int_of(at)), text_of(state), None if reason is None else text_of(reason))
+                for at, state, reason in rows
+            ],
+            threads=None if want.threads is None else int_of(count),
             inputs=None if want.inputs is None else inputs,
             open=None if want.open is None else await self.open(tenant),
             one_hold=None
@@ -280,7 +283,7 @@ class Replay:
     async def open(self, tenant: str) -> int:
         """How many of the tenant's threads have a turn open."""
         sq: SqliteStore = (await open_store(self.store)).scoped(tenant)
-        threads: list[tuple[object]] = await sq.run(
+        threads = await sq.run(
             lambda c: c.execute(
                 "SELECT thread_id FROM threads WHERE tenant_id = ?", (tenant,)
             ).fetchall()
@@ -297,7 +300,7 @@ class Replay:
     ) -> tuple[ThreadId, BranchId] | None:
         """The schedule's current thread, or the latest one it moved off."""
         sq: SqliteStore = (await open_store(self.store)).scoped(tenant)
-        rows: list[tuple[object]] = await sq.run(
+        rows = await sq.run(
             lambda c: c.execute(
                 "SELECT thread_id FROM schedule_threads WHERE tenant_id = ? AND schedule_id = ?"
                 " AND current = ? ORDER BY created_at DESC LIMIT 1",

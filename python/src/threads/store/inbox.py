@@ -5,12 +5,12 @@ webhook is answered. A run consumes an item by appending its event with `consume
 append, which sets `consumed_seq` in the same transaction.
 """
 
-import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from threads.log import ParseError, ThreadId
 from threads.store.companion import Companion
+from threads.store.conn import Conn, one
 from threads.store.sql import blob_of, int_of, text_of, transaction
 from threads.store.verify import StoredEvent
 
@@ -40,7 +40,7 @@ class Row:
 
 
 def insert_batch(
-    conn: sqlite3.Connection,
+    conn: Conn,
     tenant_id: str,
     items: Sequence[Item],
     now: int,
@@ -71,24 +71,24 @@ def insert_batch(
     return frozenset(threads)
 
 
-def _thread(
-    conn: sqlite3.Connection, tenant_id: str, item: Item, new_thread: Callable[[], ThreadId]
-) -> ThreadId:
+def _thread(conn: Conn, tenant_id: str, item: Item, new_thread: Callable[[], ThreadId]) -> ThreadId:
     where = (tenant_id, item.channel, item.installation_id, item.address)
     conn.execute(
         "INSERT INTO channel_threads (tenant_id, channel, installation_id, address, thread_id)"
         " VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
         (*where, new_thread()),
     )
-    (thread,) = conn.execute(
-        "SELECT thread_id FROM channel_threads WHERE tenant_id = ? AND channel = ?"
-        " AND installation_id = ? AND address = ?",
-        where,
-    ).fetchone()
+    (thread,) = one(
+        conn.execute(
+            "SELECT thread_id FROM channel_threads WHERE tenant_id = ? AND channel = ?"
+            " AND installation_id = ? AND address = ?",
+            where,
+        ).fetchone()
+    )
     return ThreadId(text_of(thread))
 
 
-def pending(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId) -> tuple[Row, ...]:
+def pending(conn: Conn, tenant_id: str, thread_id: ThreadId) -> tuple[Row, ...]:
     """The thread's unconsumed items, in arrival order."""
     return _rows(
         conn,
@@ -97,30 +97,28 @@ def pending(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId) -> tu
     )
 
 
-def all_rows(conn: sqlite3.Connection, tenant_id: str) -> tuple[Row, ...]:
+def all_rows(conn: Conn, tenant_id: str) -> tuple[Row, ...]:
     """Every row of the tenant, in insertion order."""
     return _rows(conn, "WHERE tenant_id = ? ORDER BY inbox_id", (tenant_id,))
 
 
-def unconsumed_threads(conn: sqlite3.Connection) -> tuple[tuple[str, ThreadId], ...]:
+def unconsumed_threads(conn: Conn) -> tuple[tuple[str, ThreadId], ...]:
     """(tenant, thread) of every thread with an unconsumed item: what a restarted host drains."""
-    rows: list[tuple[object, object]] = conn.execute(
+    rows = conn.execute(
         "SELECT DISTINCT tenant_id, thread_id FROM inbox WHERE consumed_seq IS NULL"
     ).fetchall()
     return tuple((text_of(t), ThreadId(text_of(th))) for t, th in rows)
 
 
-def channel_threads(conn: sqlite3.Connection) -> tuple[tuple[str, ThreadId], ...]:
+def channel_threads(conn: Conn) -> tuple[tuple[str, ThreadId], ...]:
     """(tenant, thread) of every conversation's thread: what a restarted host checks for
     replies it never sent."""
-    rows: list[tuple[object, object]] = conn.execute(
-        "SELECT tenant_id, thread_id FROM channel_threads"
-    ).fetchall()
+    rows = conn.execute("SELECT tenant_id, thread_id FROM channel_threads").fetchall()
     return tuple((text_of(t), ThreadId(text_of(th))) for t, th in rows)
 
 
-def _rows(conn: sqlite3.Connection, where: str, args: tuple[str, ...]) -> tuple[Row, ...]:
-    found: list[tuple[object, ...]] = conn.execute(
+def _rows(conn: Conn, where: str, args: tuple[str, ...]) -> tuple[Row, ...]:
+    found = conn.execute(
         # Fixed WHERE fragments from this module; every value is bound.
         "SELECT inbox_id, channel, installation_id, item_key, delivery_id, thread_id, item"  # noqa: S608
         " FROM inbox " + where,
@@ -147,11 +145,9 @@ class Conversation:
     address: str
 
 
-def conversation(
-    conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId
-) -> Conversation | None:
+def conversation(conn: Conn, tenant_id: str, thread_id: ThreadId) -> Conversation | None:
     """The conversation a channel thread answers to, or None for a thread no channel owns."""
-    row: tuple[object, object, object] | None = conn.execute(
+    row = conn.execute(
         "SELECT channel, installation_id, address FROM channel_threads"
         " WHERE tenant_id = ? AND thread_id = ?",
         (tenant_id, thread_id),
@@ -159,7 +155,7 @@ def conversation(
     return None if row is None else Conversation(*(text_of(v) for v in row))
 
 
-def move(conn: sqlite3.Connection, tenant_id: str, source: ThreadId, target: ThreadId) -> bool:
+def move(conn: Conn, tenant_id: str, source: ThreadId, target: ThreadId) -> bool:
     """A handoff moves the conversation (spec/schema/README.md, "Channel replies"): its route and
     its unconsumed items, keyed on (tenant, source thread). False when another process moved it
     first; the caller re-reads the route, never overwrites it."""
@@ -179,7 +175,7 @@ def move(conn: sqlite3.Connection, tenant_id: str, source: ThreadId, target: Thr
 def consume(inbox_id: int) -> Companion:
     """Marks the item consumed by the append's first event, once."""
 
-    def mark(conn: sqlite3.Connection, events: Sequence[StoredEvent]) -> ParseError | None:
+    def mark(conn: Conn, events: Sequence[StoredEvent]) -> ParseError | None:
         done = conn.execute(
             "UPDATE inbox SET consumed_seq = ? WHERE inbox_id = ? AND consumed_seq IS NULL",
             (events[0].seq, inbox_id),
@@ -191,7 +187,7 @@ def consume(inbox_id: int) -> Companion:
     return mark
 
 
-def discard(conn: sqlite3.Connection, inbox_id: int) -> None:
+def discard(conn: Conn, inbox_id: int) -> None:
     """Consumes an item that appends nothing (a refused approval, a control from a stranger):
     consumed_seq 0, the header's seq, which no event has."""
     conn.execute(

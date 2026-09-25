@@ -47,7 +47,7 @@ describe("teams and tenants", () => {
     expect(result?.type === "tool_result" && result.data.preview).toBe(
       '{"code":"unknown_member","status":"refused"}',
     );
-    assertTeamReplays(await logOf(acme), first.team.ref.id);
-    assertTeamReplays(await logOf(globex), other.team.ref.id);
+    await assertTeamReplays(await logOf(acme), first.team.ref.id);
+    await assertTeamReplays(await logOf(globex), other.team.ref.id);
   });
 });

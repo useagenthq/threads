@@ -14,10 +14,11 @@ import sys
 from pathlib import Path
 from typing import Final
 
+from jobs.stores import drill_store
 from jobs.worker import DONE, reached, record, started, until
 from pydantic import BaseModel, JsonValue
 
-from threads import RunContext, agent, scripted_model, sqlite, tool
+from threads import RunContext, agent, scripted_model, tool
 from threads._generated.host_api_v1 import StartRunRequest
 from threads.agents.store import open_store, scoped
 from threads.host import host
@@ -68,7 +69,7 @@ async def _settled(sq: SqliteStore) -> bool:
 async def serve(where: Path) -> None:
     if os.environ.get("DRILL_GO") == "1":
         await started(where)
-    store = sqlite(str(where))
+    store = drill_store(where)
     sq = await open_store(scoped(store, TENANT))
     before = await read(sq)
     # A restart answers only what the log has not: the script is the model's, not the process's.

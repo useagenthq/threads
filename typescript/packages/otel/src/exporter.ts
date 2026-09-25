@@ -20,7 +20,7 @@ import { lossSpans } from "./losses";
 import { batches, body, MAX_BATCH } from "./otlp";
 import { post } from "./send";
 import type { Span } from "./span";
-import { spans } from "./spans";
+import { type Branch, spans } from "./spans";
 
 // Exporter.sync() (spec/otel/README.md, "The cursor, sync and losses"): every changed branch's
 // newly closed spans, posted in batches; a branch's cursor moves only after the collector
@@ -72,8 +72,8 @@ export class OtelExporter implements Exporter {
         "otel(): no store to export: pass otel({store}), or pass the exporter to host({telemetry})",
       );
     const feed = await Feed.open(store, this.#observer);
-    feed.register();
-    const changed = feed.changed();
+    await feed.register();
+    const changed = await feed.changed();
     if (!changed.ok)
       throw new Error(
         `the store's branch rows are corrupt: ${changed.error.message}`,
@@ -81,7 +81,7 @@ export class OtelExporter implements Exporter {
     const skipped: SkippedBranch[] = [];
     const ready = await this.#read(feed, changed.value, skipped, signal);
     if (signal?.aborted) return err(stopped());
-    feed.checkpoint(
+    await feed.checkpoint(
       ready
         .filter((r) => r.spans.length === 0)
         .map((r) => ({ branch_id: r.branch.branch_id, seq: r.head })),
@@ -105,13 +105,6 @@ export class OtelExporter implements Exporter {
     signal: AbortSignal | undefined,
   ): Promise<Ready[]> {
     const chains = new Map<string, readonly ChainEvent[] | undefined>();
-    const lookup = (id: string): readonly ChainEvent[] | undefined => {
-      if (!chains.has(id)) {
-        const read = feed.chain(id);
-        chains.set(id, read.ok ? read.value.events : undefined);
-      }
-      return chains.get(id);
-    };
     const ready: Ready[] = [];
     const now = Date.now();
     for (const branch of changed) {
@@ -119,7 +112,7 @@ export class OtelExporter implements Exporter {
       if (signal?.aborted) break;
       if (this.#backoff.waiting(branch.branch_id, branch.head_seq, now))
         continue;
-      const read = feed.chain(branch.branch_id);
+      const read = await feed.chain(branch.branch_id);
       if (!read.ok) {
         this.#backoff.failed(branch.branch_id, branch.head_seq, now);
         const { branch_id, thread_id, head_seq } = branch;
@@ -129,14 +122,15 @@ export class OtelExporter implements Exporter {
       this.#backoff.cleared(branch.branch_id);
       const chain = read.value.events;
       const head = chain.at(-1)?.event.seq ?? branch.head_seq;
-      const all = spans(
+      const all = await spansOf(
+        feed,
         {
           tenant: branch.tenant_id,
           branchId: branch.branch_id,
           chain,
           content: this.#content,
         },
-        lookup,
+        chains,
       );
       const fresh = all.filter(
         (s) => s.closeSeq > branch.cursor && s.closeSeq <= head,
@@ -177,7 +171,7 @@ export class OtelExporter implements Exporter {
           Math.max(through.get(s.branchId) ?? 0, s.closeSeq),
         );
       }
-      feed.checkpoint(
+      await feed.checkpoint(
         [...through].flatMap(([id, seq]) => {
           const r = byId.get(id);
           if (r === undefined) return [];
@@ -198,7 +192,7 @@ export class OtelExporter implements Exporter {
     feed: Feed,
     signal: AbortSignal | undefined,
   ): Promise<Result<number, SyncError>> {
-    const rows = feed.unreportedLosses();
+    const rows = await feed.unreportedLosses();
     if (!rows.ok)
       throw new Error(
         `the store's loss rows are corrupt: ${rows.error.message}`,
@@ -213,10 +207,34 @@ export class OtelExporter implements Exporter {
       );
       if (!posted.ok) return err(posted.error);
       if (signal?.aborted) return err(stopped());
-      feed.markReported(chunk);
+      await feed.markReported(chunk);
       lost += chunk.reduce((n, r) => n + r.unchecked_events, 0);
     }
     return ok(lost);
+  }
+}
+
+/**
+ * `spans` over chains read from the feed: `spans` is synchronous and the store is not, so it
+ * runs until it asks for no chain it doesn't have (each parent it walks names the next one).
+ * `chains` caches across branches; an unreadable chain is cached as undefined.
+ */
+async function spansOf(
+  feed: Feed,
+  branch: Branch,
+  chains: Map<string, readonly ChainEvent[] | undefined>,
+): Promise<readonly Span[]> {
+  for (;;) {
+    const missing = new Set<string>();
+    const found = spans(branch, (id) => {
+      if (!chains.has(id)) missing.add(id);
+      return chains.get(id);
+    });
+    if (missing.size === 0) return found;
+    for (const id of missing) {
+      const read = await feed.chain(id);
+      chains.set(id, read.ok ? read.value.events : undefined);
+    }
   }
 }
 

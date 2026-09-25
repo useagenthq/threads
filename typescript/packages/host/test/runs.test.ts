@@ -12,6 +12,7 @@ import {
   sseMessages,
   use,
 } from "./kit";
+import { sqlRun } from "./sql";
 
 // POST /v1/runs and its events stream (openapi.json startRun, subscribeRun; F12.11, F12.12).
 
@@ -184,7 +185,8 @@ describe("POST /v1/runs", () => {
       ),
     );
     const { db } = await storeConnection(store);
-    db.run(
+    await sqlRun(
+      db,
       `UPDATE events SET line = CAST(replace(CAST(line AS TEXT), '"type":"turn_completed"', '"type":"approval_quorum"') AS BLOB) WHERE branch_id = ?`,
       [accepted.branch_id],
     );

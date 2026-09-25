@@ -14,6 +14,7 @@ from threads.agents.store import Store, open_store
 from threads.log import ParseError, TeamOpenedEvent, ThreadStartedEvent
 from threads.result import Err
 from threads.store import LOCAL_TENANT, VerifiedLog
+from threads.store.sql import int_of, text_of
 from threads.team.cross import TeamLogEvents, check_team_logs
 from threads.team.members import PENDING, open_member, team_members
 from threads.team.rebuild import rebuild_team_index
@@ -103,7 +104,7 @@ async def run(case: Path) -> Found:
 async def _tree(store: Store, leads: dict[str, tuple[str, VerifiedLog]]) -> Found:
     """Step 4: every team_members row in key order, each thread once, a lead row counted, a
     member row counted or pending as its own lead's walk finds it."""
-    rows: list[tuple[str, str, int, str, str]] = await (await open_store(store)).run(
+    rows = await (await open_store(store)).run(
         lambda c: c.execute(
             "SELECT team_id, name, generation, role, thread_id FROM team_members"
             " ORDER BY team_id, name, generation"
@@ -112,7 +113,9 @@ async def _tree(store: Store, leads: dict[str, tuple[str, VerifiedLog]]) -> Foun
     counted: list[JsonValue] = []
     pending: list[JsonValue] = []
     seen: set[str] = set()
-    for team, name, generation, role, thread in rows:
+    for columns in rows:
+        team, name, role, thread = (text_of(columns[i]) for i in (0, 1, 3, 4))
+        generation = int_of(columns[2])
         if thread in seen:  # a nested lead has two rows and one thread: counted once
             continue
         seen.add(thread)

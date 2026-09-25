@@ -1,7 +1,6 @@
 import { z } from "zod";
-import type { Principal, TeamId } from "../../log";
-import { ThreadId } from "../../log";
-import type { SqliteDriver } from "../../store/driver";
+import { type Principal, type TeamId, ThreadId } from "../../log";
+import { reading, type StoreDriver } from "../../store/driver";
 import { consumable } from "../../team/consume";
 import { turnProvenance } from "../../team/provenance";
 import {
@@ -14,8 +13,8 @@ import {
 import type { VerifiedLog } from "../../verify";
 import { ConfigError } from "../errors";
 
-// What the team worker reads to decide its next pass: the teams it drives, which are closed, and
-// the principal a member run acts under.
+// What the team worker reads to decide its next pass, each in a read-only transaction of its
+// own: the teams it drives, which are closed, and the principal a member run acts under.
 
 const Row = z.object({ lead_thread_id: ThreadId, team_id: z.string() });
 
@@ -25,13 +24,15 @@ const Row = z.object({ lead_thread_id: ThreadId, team_id: z.string() });
  * next run.
  */
 export function principalOf(
-  db: SqliteDriver,
+  db: StoreDriver,
   log: VerifiedLog,
   row: MemberRow,
-): Principal | undefined {
-  if (log.fold.turnOpen) return turnProvenance(db, log)?.principal;
-  return pendingFor(db, ownRows(db, row.thread_id)).find(consumable)?.provenance
-    .principal;
+): Promise<Principal | undefined> {
+  return reading(db, async (tx) => {
+    if (log.fold.turnOpen) return (await turnProvenance(tx, log))?.principal;
+    const pending = await pendingFor(tx, await ownRows(tx, row.thread_id));
+    return pending.find(consumable)?.provenance.principal;
+  });
 }
 
 /** A definition that can't be set up or pinned here is unavailable: a value, not a throw. */
@@ -46,18 +47,26 @@ export async function pinnedOrUnavailable<T>(
   }
 }
 
-export function closed(db: SqliteDriver, team: string): boolean {
-  return (teamRow(db, team)?.closed_at ?? null) !== null;
+export async function closed(db: StoreDriver, team: string): Promise<boolean> {
+  const row = await reading(db, (tx) => teamRow(tx, team));
+  return (row?.closed_at ?? null) !== null;
 }
 
 /** The team and every team led by one of its members, recursively. */
-export function teamsUnder(db: SqliteDriver, root: TeamId): readonly string[] {
+export async function teamsUnder(
+  db: StoreDriver,
+  root: TeamId,
+): Promise<readonly string[]> {
   const teams: string[] = [root];
   for (let i = 0; i < teams.length; i += 1) {
-    const members = memberRows(db, teams[i] ?? "").map((r) => r.thread_id);
+    const [rows, all] = await reading(db, async (tx) => [
+      await memberRows(tx, teams[i] ?? ""),
+      await tx.all("SELECT lead_thread_id, team_id FROM teams"),
+    ]);
+    const members = rows.map((r) => r.thread_id);
     const led = z
       .array(Row)
-      .parse(db.all("SELECT lead_thread_id, team_id FROM teams", []))
+      .parse(all)
       .filter(
         (t) => members.includes(t.lead_thread_id) && !teams.includes(t.team_id),
       );

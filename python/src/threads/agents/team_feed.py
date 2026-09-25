@@ -2,7 +2,6 @@
 rows of the current epoch in offset order, each event as stored with its cursor and source. It
 never writes and never drives the team."""
 
-import sqlite3
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
@@ -38,6 +37,7 @@ from threads.log import (
 )
 from threads.result import Err
 from threads.store import SqliteStore
+from threads.store.conn import Conn
 from threads.store.sql import int_of, text_of
 from threads.team.rows import TeamRow, member_rows, team_row
 
@@ -45,20 +45,20 @@ _PAGE = 256
 """Feed rows read per query: the epoch is paged, never loaded whole."""
 
 
-def _extent(conn: sqlite3.Connection, team: str) -> tuple[int, int] | None:
+def _extent(conn: Conn, team: str) -> tuple[int, int] | None:
     """The current epoch and its last offset, as the call finds them."""
-    row: tuple[object, object] = conn.execute(
+    row = conn.execute(
         "SELECT epoch, MAX(feed_offset) FROM team_feed WHERE team_id = ?"
         " AND epoch = (SELECT MAX(epoch) FROM team_feed WHERE team_id = ?)",
         (team, team),
     ).fetchone()
-    return None if row[0] is None or row[1] is None else (int_of(row[0]), int_of(row[1]))
+    if row is None or row[0] is None or row[1] is None:
+        return None
+    return int_of(row[0]), int_of(row[1])
 
 
-def _page(
-    conn: sqlite3.Connection, team: str, epoch: int, span: tuple[int, int]
-) -> list[tuple[int, str, int]]:
-    rows: list[tuple[object, ...]] = conn.execute(
+def _page(conn: Conn, team: str, epoch: int, span: tuple[int, int]) -> list[tuple[int, str, int]]:
+    rows = conn.execute(
         "SELECT feed_offset, branch_id, seq FROM team_feed WHERE team_id = ? AND epoch = ?"
         " AND feed_offset > ? AND feed_offset <= ? ORDER BY feed_offset LIMIT ?",
         (team, epoch, *span, _PAGE),

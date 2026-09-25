@@ -49,14 +49,14 @@ async function stored(result: RunResult<string>): Promise<string> {
 }
 
 describe("secret redaction on every recorded path (C5)", () => {
-  test("a key split across chunks is redacted as the stream is recorded", () => {
+  test("a key split across chunks is redacted as the stream is recorded", async () => {
     const key = credential("fake", "apiKey", "sk-lane09-split-7d2e", "U")();
     const artifacts = memoryArtifacts();
     const sink = redactingSink(artifacts.sink());
     const raw = new TextEncoder().encode(`before ${key} after`);
     for (let i = 0; i < raw.length; i += 3) sink.write(raw.subarray(i, i + 3));
-    const { sha256, bytes } = sink.finish() ?? { sha256: "", bytes: 0 };
-    const got = artifacts.get(sha256);
+    const { sha256, bytes } = (await sink.finish()) ?? { sha256: "", bytes: 0 };
+    const got = await artifacts.get(sha256);
     if (!got.ok) throw new Error(got.error.message);
     expect(new TextDecoder().decode(got.value)).toBe(`before ${LABEL} after`);
     expect(bytes).toBe(got.value.length);

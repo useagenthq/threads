@@ -62,7 +62,7 @@ export async function readLog(
   thread: Thread,
 ): Promise<Log | undefined> {
   const { log } = await ctx.open(tenant);
-  const read = log.read(thread.branch);
+  const read = await log.read(thread.branch);
   if (!read.ok) return undefined;
   return {
     thread,
@@ -87,6 +87,6 @@ export async function receiptsOf(
   threadId: ThreadId,
 ): Promise<ReadonlyMap<string, string>> {
   const { db } = await storeConnection(ctx.store);
-  const found = uiReceipts(db, tenant, threadId);
+  const found = await uiReceipts(db, tenant, threadId);
   return found.ok ? found.value : new Map();
 }

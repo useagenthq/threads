@@ -9,6 +9,7 @@ from team.team_kit import assert_team_replays
 
 from threads import BudgetExhausted, Completed, Principal, Store, agent, scripted_model, sqlite
 from threads.log import Budget, MemberEndedEvent, ToolResultEvent, UserInputEvent
+from threads.store.sql import text_of
 
 BOB = Principal(issuer="api", tenant="local", subject="bob")
 
@@ -16,13 +17,13 @@ BOB = Principal(issuer="api", tenant="local", subject="bob")
 async def _reserved_for(store: Store, branch: str) -> list[str]:
     """Which budgets each member attempt was reserved against."""
     sq = await sq_of(store)
-    rows: list[tuple[str, str]] = await sq.run(
+    rows = await sq.run(
         lambda c: c.execute(
             "SELECT budget_id, attempt_key FROM budget_ledger"
             " WHERE limit_name = 'max_model_requests' ORDER BY attempt_key, budget_id"
         ).fetchall()
     )
-    return [budget for budget, key in rows if key.startswith(f"{branch}:")]
+    return [text_of(budget) for budget, key in rows if text_of(key).startswith(f"{branch}:")]
 
 
 def test_a_member_exhausts_its_requests_run_budget_it_and_the_run_end_budget_exhausted() -> None:

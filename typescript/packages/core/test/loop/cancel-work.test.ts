@@ -84,7 +84,7 @@ describe("a cancel during subagent_start", () => {
     const second = await lead.run("review", { store, thread: first.thread });
     expect(second.status).toBe("cancelled");
     const { log } = await openStore(store);
-    const all = knownEvents(unwrap(log.read(first.thread.branch)));
+    const all = knownEvents(unwrap(await log.read(first.thread.branch)));
     const rest = afterBarrier(all);
     expect(rest).not.toContain("agent_spawned");
     expect(rest).toContain("hook_decision");
@@ -129,7 +129,7 @@ function cancelsThen(
     timeoutMs: 1_000,
     hooks: {
       before_model_switch: async () => {
-        unwrap(writer().append([cancel]));
+        unwrap(await writer().append([cancel]));
         return decision === "allow"
           ? { decision }
           : { decision, reason: "stay" };
@@ -144,8 +144,8 @@ describe("a cancel during before_model_switch", () => {
     ["deny", "retry_scheduled"],
   ] as const) {
     test(`${decision}: no ${work}, the decision recorded, and the turn ends cancelled`, async () => {
-      const h = harness([], [], [], undefined, POLICY);
-      const writer = unwrap(h.store.acquire(ROOT, "owner"));
+      const h = await harness([], [], [], undefined, POLICY);
+      const writer = unwrap(await h.store.acquire(ROOT, "owner"));
       const primary = scriptedModel({ responses: [overloaded, say("never")] });
       const small = scriptedSmall([say("never")]);
       await resume(

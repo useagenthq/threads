@@ -2,7 +2,7 @@ import { z } from "zod";
 import { sha256Hex } from "../hash";
 import { err, ok, type Result } from "../result";
 import type { Failure } from "../sandbox/protocol";
-import type { SqliteDriver } from "../store/driver";
+import { READ_ONLY, type StoreDriver, type Tx } from "../store/driver";
 import { installFts, matchQuery } from "./fts";
 import {
   type MemoryHit,
@@ -62,7 +62,7 @@ const unbound = async (): Promise<{
 
 const locals = new WeakMap<
   MemoryProvider,
-  (db: SqliteDriver) => MemoryProvider
+  (db: StoreDriver) => Promise<MemoryProvider>
 >();
 
 export function localMemory(): MemoryProvider {
@@ -78,18 +78,18 @@ export function localMemory(): MemoryProvider {
 }
 
 /** A run's memory: the built-in bound to its store (FTS5 checked here), or the provider as is. */
-export function bindMemory(
+export async function bindMemory(
   provider: MemoryProvider,
-  db: SqliteDriver,
-): MemoryProvider {
-  return locals.get(provider)?.(db) ?? provider;
+  db: StoreDriver,
+): Promise<MemoryProvider> {
+  return (await locals.get(provider)?.(db)) ?? provider;
 }
 
-function guard<T>(
-  fn: () => Result<T, ProviderError>,
-): Result<T, ProviderError> {
+async function guard<T>(
+  fn: () => Promise<Result<T, ProviderError>>,
+): Promise<Result<T, ProviderError>> {
   try {
-    return fn();
+    return await fn();
   } catch (error) {
     return err({ code: "unavailable", message: String(error) });
   }
@@ -115,16 +115,22 @@ function digestOf(r: MemoryRecord): string {
   );
 }
 
-function bound(db: SqliteDriver): MemoryProvider {
-  installFts(db, DDL, "localMemory()");
-  const insert = (
+async function bound(db: StoreDriver): Promise<MemoryProvider> {
+  await installFts(
+    db,
+    DDL,
+    "localMemory()",
+    "use supermemory() or zep(), or run this agent on sqlite()",
+  );
+  const insert = async (
+    tx: Tx,
     scope: Scope,
     record: MemoryRecord,
     key: string,
     id: string,
     digest: string,
-  ): void => {
-    db.run(
+  ): Promise<void> => {
+    await tx.run(
       `INSERT INTO local_memory (id, key, digest, text, origin, provenance, namespace,
        record_id, tenant_id, agent, scope) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -140,9 +146,9 @@ function bound(db: SqliteDriver): MemoryProvider {
       ],
     );
     const [row] = RowId.array().parse(
-      db.all("SELECT rowid FROM local_memory WHERE key = ?", [key]),
+      await tx.all("SELECT rowid FROM local_memory WHERE key = ?", [key]),
     );
-    db.run("INSERT INTO local_memory_fts (rowid, text) VALUES (?, ?)", [
+    await tx.run("INSERT INTO local_memory_fts (rowid, text) VALUES (?, ?)", [
       row?.rowid ?? null,
       record.text,
     ]);
@@ -154,22 +160,28 @@ function bound(db: SqliteDriver): MemoryProvider {
       guard(() => {
         const digest = digestOf(record);
         const ref = { id: `mem_${sha256Hex(key).slice(0, 24)}`, version: "1" };
-        return db.transaction(() => {
+        return db.transaction(async (tx) => {
           const [done] = DigestRow.array().parse(
-            db.all("SELECT digest FROM local_memory WHERE key = ?", [key]),
+            await tx.all("SELECT digest FROM local_memory WHERE key = ?", [
+              key,
+            ]),
           );
-          if (done === undefined) insert(scope, record, key, ref.id, digest);
+          if (done === undefined)
+            await insert(tx, scope, record, key, ref.id, digest);
           else if (done.digest !== digest)
             return err({ code: "invalid", message: `key ${key} reused` });
           return ok(ref);
         });
       }),
     recall: async (scope, query, options = {}) =>
-      guard(() => {
+      guard(async () => {
         const match = matchQuery(query);
         if (match === undefined) return ok([]);
         const rows = HitRow.array().parse(
-          db.all(RECALL, [match, ...where(scope), options.k ?? 5]),
+          await db.transaction(
+            (tx) => tx.all(RECALL, [match, ...where(scope), options.k ?? 5]),
+            READ_ONLY,
+          ),
         );
         return ok(
           rows.map(
@@ -186,9 +198,9 @@ function bound(db: SqliteDriver): MemoryProvider {
       }),
     forget: async (scope, id) =>
       guard(() =>
-        db.transaction(() => {
+        db.transaction(async (tx) => {
           const [row] = ForgetRow.array().parse(
-            db.all(
+            await tx.all(
               `SELECT rowid, forgotten FROM local_memory
                WHERE id = ? AND tenant_id = ? AND agent = ? AND scope = ?`,
               [id, ...where(scope)],
@@ -201,10 +213,13 @@ function bound(db: SqliteDriver): MemoryProvider {
             });
           // Forgetting twice is a no-op.
           if (row.forgotten === 0) {
-            db.run("UPDATE local_memory SET forgotten = 1 WHERE rowid = ?", [
+            await tx.run(
+              "UPDATE local_memory SET forgotten = 1 WHERE rowid = ?",
+              [row.rowid],
+            );
+            await tx.run("DELETE FROM local_memory_fts WHERE rowid = ?", [
               row.rowid,
             ]);
-            db.run("DELETE FROM local_memory_fts WHERE rowid = ?", [row.rowid]);
           }
           return ok(undefined);
         }),

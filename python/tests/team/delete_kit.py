@@ -16,6 +16,7 @@ from team.team_kit import (
 from threads.agents.store import Store, open_store
 from threads.log import ThreadId
 from threads.result import Err, Ok
+from threads.store.conn import one
 from threads.store.deletion import TEAM_TABLES, DeleteError, delete_thread
 from threads.team.rebuild import rebuild_team_index
 
@@ -60,7 +61,7 @@ async def delete(store: Store, thread: ThreadId) -> Ok[int] | Err[DeleteError]:
 
 
 async def count(store: Store, sql: str) -> int:
-    (n,) = await (await open_store(store)).run(lambda c: c.execute(sql).fetchone())
+    (n,) = one(await (await open_store(store)).run(lambda c: c.execute(sql).fetchone()))
     assert isinstance(n, int)
     return n
 

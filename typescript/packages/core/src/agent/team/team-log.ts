@@ -32,13 +32,13 @@ export type TeamLogOptions = {
 export async function onTeamLog<T>(
   log: LogStore,
   branch: BranchId,
-  decide: (tx: DecideTx, batch: Batch) => T,
+  decide: (tx: DecideTx, batch: Batch) => Promise<T>,
   options: TeamLogOptions = {},
 ): Promise<T | typeof BUSY> {
   const bound = options.busyBoundMs ?? TEAM_CONSTANTS.busyBoundMs;
   const deadline = Date.now() + bound;
   for (let pause = FIRST_PAUSE_MS; ; pause *= 2) {
-    const done = once(log, branch, decide, options.mint);
+    const done = await once(log, branch, decide, options.mint);
     if (done !== undefined) return done.value;
     const left = deadline - Date.now();
     if (left <= 0) return BUSY;
@@ -48,18 +48,18 @@ export async function onTeamLog<T>(
 }
 
 /** One attempt: its outcome, or undefined when the lease was held or lost. */
-function once<T>(
+async function once<T>(
   log: LogStore,
   branch: BranchId,
-  decide: (tx: DecideTx, batch: Batch) => T,
+  decide: (tx: DecideTx, batch: Batch) => Promise<T>,
   mint: Mint | undefined,
-): { readonly value: T } | undefined {
+): Promise<{ readonly value: T } | undefined> {
   // Nothing registers a live team-log writer yet (every step acquires and releases). One that
   // lost its lease would keep failing here until the bound, so it must leave LIVE when poisoned.
   const live = liveWriter(branch);
   const taken =
     live === undefined
-      ? log.acquire(branch, `operator-${crypto.randomUUID()}`)
+      ? await log.acquire(branch, `operator-${crypto.randomUUID()}`)
       : ok(live);
   if (!taken.ok) {
     if (taken.error.code === "branch_busy") return undefined;
@@ -68,9 +68,9 @@ function once<T>(
   const writer = taken.value;
   try {
     const out: { value?: { readonly value: T } } = {};
-    const appended = writer.appendDecided((tx) => {
+    const appended = await writer.appendDecided(async (tx) => {
       const batch = new Batch(tx.chain.fold.seq, tx.now, mint);
-      out.value = { value: decide(tx, batch) };
+      out.value = { value: await decide(tx, batch) };
       return ok(batch.drafts);
     });
     if (isRefusal(appended))
@@ -82,6 +82,6 @@ function once<T>(
     if (out.value === undefined) throw new Error("the append decided nothing");
     return out.value;
   } finally {
-    if (live === undefined) writer.release();
+    if (live === undefined) await writer.release();
   }
 }

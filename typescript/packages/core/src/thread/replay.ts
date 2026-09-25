@@ -1,6 +1,6 @@
 import type { BranchId } from "../log";
 import { knownEvents } from "../reduce";
-import { refReader, verifyRequests } from "../render";
+import { verifyRequests } from "../render";
 import { err, type Result } from "../result";
 import type { LogStore } from "../store";
 import type { ArtifactStore } from "../store/artifacts";
@@ -20,14 +20,14 @@ export type ReplayError = LogError & {
     | "artifact_corrupt";
 };
 
-export function replay(
+export async function replay(
   log: LogStore,
   artifacts: Pick<ArtifactStore, "get">,
   branchId: BranchId,
-): Result<void, ReplayError> {
-  const read = readLog(log, branchId);
+): Promise<Result<void, ReplayError>> {
+  const read = await readLog(log, branchId);
   if (!read.ok) return read;
-  const checked = verifyRequests(knownEvents(read.value), refReader(artifacts));
+  const checked = await verifyRequests(knownEvents(read.value), artifacts);
   if (checked.ok) return checked;
   const { code, message, seq } = checked.error;
   const at = seq === undefined ? {} : { seq };

@@ -308,8 +308,8 @@ export function plain(value: unknown): unknown {
 }
 
 /** A fresh store that already holds the case's artifacts, as an import expects. */
-export function caseStore(c: Case): Fixture {
-  const f = fixture();
-  for (const artifact of c.artifacts) f.artifacts.put(artifact);
+export async function caseStore(c: Case): Promise<Fixture> {
+  const f = await fixture();
+  for (const artifact of c.artifacts) await f.artifacts.put(artifact);
   return f;
 }

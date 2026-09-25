@@ -3,13 +3,13 @@ approval's consumption, an inbox item's consumption. They run in the append's tr
 its rows, and a refusal rolls the whole append back, so the log and the host tables never
 disagree."""
 
-import sqlite3
 from collections.abc import Callable, Sequence
 
 from threads.log import ParseError
+from threads.store.conn import Conn
 from threads.store.verify import StoredEvent
 
-type Companion = Callable[[sqlite3.Connection, Sequence[StoredEvent]], ParseError | None]
+type Companion = Callable[[Conn, Sequence[StoredEvent]], ParseError | None]
 
 
 def both(first: Companion, then: Companion | None) -> Companion:
@@ -17,7 +17,7 @@ def both(first: Companion, then: Companion | None) -> Companion:
     if then is None:
         return first
 
-    def run(conn: sqlite3.Connection, events: Sequence[StoredEvent]) -> ParseError | None:
+    def run(conn: Conn, events: Sequence[StoredEvent]) -> ParseError | None:
         return first(conn, events) or then(conn, events)
 
     return run

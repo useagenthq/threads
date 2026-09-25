@@ -33,7 +33,7 @@ export function subagent<Deps, Output>(
       const { log } = await openStore(env.store);
       // A cancelled parent never starts a child; a started one gets its barrier and no input.
       if (child.cancel !== undefined) {
-        if (!log.mainBranch(child.threadId).ok) return CANCELLED;
+        if (!(await log.mainBranch(child.threadId)).ok) return CANCELLED;
         await cancelTree(log, child.threadId, child.cancel);
       }
       const inputs =
@@ -45,9 +45,9 @@ export function subagent<Deps, Output>(
     },
     held: async (child) => {
       const { log } = await openStore(env.store);
-      const branch = log.mainBranch(child);
+      const branch = await log.mainBranch(child);
       const writer = branch.ok ? liveWriter(branch.value) : undefined;
-      return writer?.fence().ok === true;
+      return writer === undefined ? false : (await writer.fence()).ok;
     },
     stop: async (child, principal, reason) => {
       const { log } = await openStore(env.store);
@@ -89,7 +89,7 @@ async function usage(
   result: RunResult<string>,
 ): Promise<ChildDone["usage"]> {
   const { log } = await openStore(env.store);
-  const read = log.read(result.thread.branch);
+  const read = await log.read(result.thread.branch);
   if (!read.ok) return { input_tokens: null, output_tokens: null };
   const { usage: u } = reduce(read.value, log.now());
   const known = u.unknown_responses === 0;

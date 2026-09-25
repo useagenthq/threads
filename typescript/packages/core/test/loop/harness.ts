@@ -57,7 +57,7 @@ export type Harness = Fixture & {
 };
 
 /** A root branch holding `drafts`, released so the next acquire takes a new epoch. */
-export function harness(
+export async function harness(
   tools: readonly ToolSpec[],
   drafts: readonly EventDraft[],
   responses: readonly unknown[],
@@ -67,11 +67,11 @@ export function harness(
     isError: false,
   }),
   policy?: Policy,
-): Harness {
-  const f = fixture();
-  unwrap(f.store.createBranch(THREAD, ROOT));
-  const writer = unwrap(f.store.acquire(ROOT, "setup", 1));
-  unwrap(writer.append([startedWith(tools, policy), ...drafts]));
+): Promise<Harness> {
+  const f = await fixture();
+  unwrap(await f.store.createBranch(THREAD, ROOT));
+  const writer = unwrap(await f.store.acquire(ROOT, "setup", 1));
+  unwrap(await writer.append([startedWith(tools, policy), ...drafts]));
   f.clock.now += 10;
   const model = scriptedModel({ responses });
   const runs = new Map<string, number>();

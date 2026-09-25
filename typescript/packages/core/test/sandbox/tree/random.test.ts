@@ -22,10 +22,10 @@ function pick<T>(random: () => number, items: readonly T[]): T {
 }
 
 /** A random valid tree whose file bytes are in `artifacts`. */
-function randomTree(
+async function randomTree(
   random: () => number,
   artifacts: ReturnType<typeof memoryArtifacts>,
-): Tree {
+): Promise<Tree> {
   const entries = new Map<string, TreeEntry>();
   const dirs = [""];
   for (let i = 0; i < 1 + random() * 12; i++) {
@@ -47,7 +47,7 @@ function randomTree(
       const bytes = new Uint8Array(Math.floor(random() * 1500)).map(
         () => random() * 256,
       );
-      const sha256 = artifacts.put(bytes);
+      const sha256 = await artifacts.put(bytes);
       const mode = Math.floor(random() * 0o10000);
       entries.set(path, {
         path,
@@ -66,12 +66,12 @@ function randomTree(
   };
 }
 
-function archive(
+async function archive(
   tree: Tree,
   artifacts: ReturnType<typeof memoryArtifacts>,
-): Uint8Array {
+): Promise<Uint8Array> {
   const parts: number[] = [];
-  const built = buildTar(tree, artifacts, { uid: 1000, gid: 1000 }, (b) =>
+  const built = await buildTar(tree, artifacts, { uid: 1000, gid: 1000 }, (b) =>
     parts.push(...b),
   );
   if (!built.ok) throw new Error(built.error.message);
@@ -82,10 +82,10 @@ test("a random tree survives build, then read from any chunking", async () => {
   for (let seed = 1; seed <= 200; seed++) {
     const random = seeded(seed);
     const artifacts = memoryArtifacts();
-    const tree = randomTree(random, artifacts);
+    const tree = await randomTree(random, artifacts);
     expect(parseTree(encodeTree(tree))).toEqual({ ok: true, value: tree });
     const read = await readTar(
-      chunked(archive(tree, artifacts), random, 900),
+      chunked(await archive(tree, artifacts), random, 900),
       artifacts.sink,
     );
     expect(read).toEqual({ ok: true, value: tree });
@@ -96,7 +96,7 @@ test("a corrupted archive reads the same from every chunking, and never throws",
   for (let seed = 1; seed <= 300; seed++) {
     const random = seeded(seed);
     const artifacts = memoryArtifacts();
-    const bytes = archive(randomTree(random, artifacts), artifacts);
+    const bytes = await archive(await randomTree(random, artifacts), artifacts);
     for (let n = 0; n < 1 + random() * 4; n++)
       bytes[Math.floor(random() * bytes.length)] = Math.floor(random() * 256);
     const cut =

@@ -2,7 +2,8 @@ import type { z } from "zod";
 import type { EventOf } from "../fold/state";
 import type { KnownEvent, PermissionRule, Principal } from "../log";
 import { err, ok, type Result } from "../result";
-import type { EventDraft, Writer } from "../store";
+import type { EventDraft } from "../store";
+import type { Chain } from "../verify";
 import { type ControlError, type Plan, resumeIf } from "./control";
 import { suggestedRules } from "./pending";
 
@@ -22,12 +23,12 @@ function requested(
 /** The challenge's request, if it is open and unexpired. */
 function openChallenge(
   events: readonly KnownEvent[],
-  writer: Writer,
+  chain: Chain,
   challengeId: string,
   now: number,
 ): Result<EventOf<"approval_requested">, ControlError> {
   const asked = requested(events, challengeId);
-  const state = writer.chain.fold.approvals.get(challengeId);
+  const state = chain.fold.approvals.get(challengeId);
   if (asked === undefined || state === undefined)
     return err({ code: "not_found", message: `no challenge ${challengeId}` });
   if (state.consumed)
@@ -54,12 +55,9 @@ export function decide(
         readonly rememberRule?: z.infer<typeof PermissionRule>;
       }
     | { readonly grant: false; readonly reason?: string },
-): (
-  events: readonly KnownEvent[],
-  writer: Writer,
-) => Result<Plan, ControlError> {
-  return (events, writer) => {
-    const open = openChallenge(events, writer, challengeId, now);
+): (events: readonly KnownEvent[], chain: Chain) => Result<Plan, ControlError> {
+  return (events, chain) => {
+    const open = openChallenge(events, chain, challengeId, now);
     if (!open.ok) return open;
     const asked = open.value;
     const rule = answer.grant ? answer.rememberRule : undefined;
@@ -74,7 +72,7 @@ export function decide(
       args_hash: asked.data.args_hash,
     };
     const record = decision(answer, binding, principal);
-    const resume = resumeIf(writer, { kind: "approval", id: challengeId });
+    const resume = resumeIf(chain, { kind: "approval", id: challengeId });
     if (rule === undefined)
       return ok(resume === undefined ? { record } : { record, after: resume });
     const added = ruleAdded(rule, challengeId, principal);

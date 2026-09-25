@@ -194,7 +194,7 @@ export async function putSpecs(
   pinned: Pick<ReturnType<typeof pin>, "artifacts">,
 ): Promise<void> {
   const { artifacts } = await openStore(store);
-  storeSpecs(artifacts, pinned.artifacts);
+  await storeSpecs(artifacts, pinned.artifacts);
 }
 
 /** Budgets covering this thread as an ancestor's: a child's parent's, a target's source's. */

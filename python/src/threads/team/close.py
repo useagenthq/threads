@@ -232,7 +232,7 @@ def finish_wait(ctx: CloseContext, wait_id: str, *, cause: str | None, deadline:
 
 def _park_reason(ctx: CloseContext, branch: str) -> str:
     """Why a parked member is parked: its log's last park."""
-    row: tuple[object] | None = ctx.conn.execute(
+    row = ctx.conn.execute(
         "SELECT line FROM events WHERE branch_id = ? AND type = 'parked' ORDER BY seq DESC LIMIT 1",
         (branch,),
     ).fetchone()

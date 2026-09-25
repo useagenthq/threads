@@ -4,7 +4,7 @@ import type { KnownEvent } from "../../src/log";
 import { type ScriptedModel, scriptedModel } from "../../src/model";
 import { markTestKit } from "../../src/model/guard";
 import { knownEvents } from "../../src/reduce";
-import { refReader, verifyRequests } from "../../src/render";
+import { verifyRequests } from "../../src/render";
 import { unwrap } from "../store/helpers";
 
 // Shared by the agent tests: a thread's verified log, and a second scripted model.
@@ -12,8 +12,8 @@ import { unwrap } from "../store/helpers";
 /** The branch's events, with every recorded request re-verified (C7 and request_ref). */
 export async function logOf(thread: ThreadRef): Promise<readonly KnownEvent[]> {
   const { log, artifacts } = await openStore(thread.store);
-  const events = knownEvents(unwrap(log.read(thread.branch)));
-  unwrap(verifyRequests(events, refReader(artifacts)));
+  const events = knownEvents(unwrap(await log.read(thread.branch)));
+  unwrap(await verifyRequests(events, artifacts));
   return events;
 }
 

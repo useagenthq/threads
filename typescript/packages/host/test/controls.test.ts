@@ -166,7 +166,7 @@ describe("controls and run authority", () => {
       })
     ).json();
     const { log } = await openStore(tenantStore(h.store, alice.tenant));
-    const held = log.acquire(accepted.branch_id, "another-process");
+    const held = await log.acquire(accepted.branch_id, "another-process");
     if (!held.ok) throw new Error(held.error.message);
     try {
       const at = `/v1/threads/${accepted.thread_id}`;
@@ -185,7 +185,7 @@ describe("controls and run authority", () => {
         expect((await response.json()).error.code).toBe("branch_busy");
       }
     } finally {
-      held.value.release();
+      await held.value.release();
     }
   });
 });

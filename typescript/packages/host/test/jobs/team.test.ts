@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { openBunSqlite } from "@threads/core/bun-sqlite";
 import { z } from "zod";
+import { sqlAll } from "../sql";
 import {
   expireLeases,
   finish,
@@ -12,6 +12,7 @@ import {
   spawn,
   waitAt,
 } from "./drill";
+import { drillDriver } from "./stores";
 import { RACED, RACER_THREAD, TEAM, TEAM_LOG } from "./team-worker";
 
 // Team store drills on real processes: a lead killed with SIGKILL inside its first append leaves
@@ -24,16 +25,16 @@ const WORKER = join(import.meta.dir, "team-worker.ts");
 const TEAM_RUN = join(import.meta.dir, "team-run.ts");
 const Rows = z.array(z.record(z.string(), z.unknown()));
 
-function query(
+async function query(
   where: string,
   sql: string,
   params: readonly string[] = [],
-): unknown {
-  const db = openBunSqlite(join(where, "threads.db"));
+): Promise<unknown> {
+  const db = (await drillDriver(where)).db;
   try {
-    return Rows.parse(db.all(sql, params));
+    return Rows.parse(await sqlAll(db, sql, params));
   } finally {
-    db.close();
+    await db.close();
   }
 }
 
@@ -63,17 +64,19 @@ describe("team store drills", () => {
       "team_members",
       "team_feed",
     ])
-      expect(query(dir, `SELECT * FROM ${table}`)).toEqual([]);
+      expect(await query(dir, `SELECT * FROM ${table}`)).toEqual([]);
 
     expect(await output(dir, "lead")).toBe("opened");
-    expect(query(dir, "SELECT team_id, team_log_branch_id FROM teams")).toEqual(
-      [{ team_id: TEAM, team_log_branch_id: TEAM_LOG }],
-    );
-    expect(query(dir, "SELECT name, role FROM team_members")).toEqual([
+    expect(
+      await query(dir, "SELECT team_id, team_log_branch_id FROM teams"),
+    ).toEqual([{ team_id: TEAM, team_log_branch_id: TEAM_LOG }]);
+    expect(await query(dir, "SELECT name, role FROM team_members")).toEqual([
       { name: "lead", role: "lead" },
     ]);
     expect(
-      query(dir, "SELECT type FROM events WHERE branch_id = ?", [TEAM_LOG]),
+      await query(dir, "SELECT type FROM events WHERE branch_id = ?", [
+        TEAM_LOG,
+      ]),
     ).toEqual([{ type: "team_opened" }]);
   });
 
@@ -89,13 +92,15 @@ describe("team store drills", () => {
     expect(await finish(b)).toBe(0);
     expect(said.toSorted()).toEqual(["already_open", "opened"]);
     const winner = said[0] === "opened" ? "open-a" : "open-b";
-    expect(query(dir, "SELECT thread_id FROM threads")).toEqual([
+    expect(await query(dir, "SELECT thread_id FROM threads")).toEqual([
       { thread_id: RACER_THREAD[winner] },
     ]);
     expect(
-      query(dir, "SELECT branch_id, holder_id, epoch FROM leases"),
+      await query(dir, "SELECT branch_id, holder_id, epoch FROM leases"),
     ).toEqual([{ branch_id: RACED, holder_id: winner, epoch: 1 }]);
-    expect(query(dir, "SELECT seq, type FROM events ORDER BY seq")).toEqual([
+    expect(
+      await query(dir, "SELECT seq, type FROM events ORDER BY seq"),
+    ).toEqual([
       { seq: 1, type: "thread_started" },
       { seq: 2, type: "user_input" },
     ]);
@@ -113,27 +118,30 @@ describe("team store drills", () => {
     await kill(first);
     // Nothing of the settling append was stored: the member's turn is still open.
     expect(
-      query(dir, "SELECT name, state FROM team_members WHERE role = 'member'"),
+      await query(
+        dir,
+        "SELECT name, state FROM team_members WHERE role = 'member'",
+      ),
     ).toEqual([{ name: "researcher-1", state: "running" }]);
-    expireLeases(dir);
+    await expireLeases(dir);
     const again = spawn("resume", dir, {}, TEAM_RUN);
     const said = await again.lines.next();
     expect(await finish(again)).toBe(0);
     expect(String(said.value)).toBe("completed");
     expect(
-      query(
+      await query(
         dir,
         "SELECT COUNT(*) AS n FROM events WHERE type = 'member_started'",
       ),
     ).toEqual([{ n: 1 }]);
     expect(
-      query(
+      await query(
         dir,
         "SELECT COUNT(*) AS n FROM events WHERE type = 'member_idle' OR type = 'member_ended'",
       ),
     ).toEqual([{ n: 3 }]);
     expect(
-      query(
+      await query(
         dir,
         "SELECT COUNT(*) AS n FROM mail WHERE kind IN ('member_settled', 'member_ended') AND state = 'consumed'",
       ),

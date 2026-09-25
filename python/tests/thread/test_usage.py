@@ -148,7 +148,7 @@ def test_a_line_from_a_newer_writer_is_unsupported_not_corrupt() -> None:
         def edit(c: sqlite3.Connection) -> None:
             c.execute(sql, (thread.branch,))
 
-        await (await open_store(store)).run(edit)
+        await (await open_store(store)).run_sqlite(edit)
         for result in (
             await thread.usage(),
             await thread.cost(tree=True),
@@ -204,7 +204,7 @@ def test_a_branch_gone_after_open_is_log_corrupt_the_declared_error() -> None:
                 "UPDATE branches SET tenant_id = 'elsewhere' WHERE branch_id = ?", (thread.branch,)
             )
 
-        await (await open_store(store)).run(move)
+        await (await open_store(store)).run_sqlite(move)
         for result in (await thread.usage(), await thread.cost(), await thread.cache_breaks()):
             assert isinstance(result, Err)
             assert result.error.code == "log_corrupt"

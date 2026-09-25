@@ -2,12 +2,12 @@
 threads, idempotency receipts, schedule rows, and the branch listing. Each call is one
 statement (or one transaction) on the store's own thread."""
 
-import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from threads.log import BranchId, ThreadId
 from threads.store import approvals, inbox, receipts, schedules, wakes
+from threads.store.conn import Conn
 from threads.store.sql import int_of, text_of
 from threads.store.worker import Worker
 
@@ -28,7 +28,7 @@ class Tables:
         self.tenant_id = tenant_id
 
     async def receipt(self, key: receipts.Key) -> receipts.Receipt | None:
-        return await self._worker.call(lambda c: receipts.find(c, key))
+        return await self._worker.read(lambda c: receipts.find(c, key))
 
     async def ui_messages(self, thread_id: ThreadId) -> dict[str, str]:
         """The thread's `ui` receipts: each run's client message id by run id."""
@@ -36,7 +36,7 @@ class Tables:
         return await self._worker.call(lambda c: receipts.ui_messages(c, tenant, thread_id))
 
     async def challenge(self, challenge_id: str) -> approvals.Challenge | None:
-        return await self._worker.call(lambda c: approvals.find(c, self.tenant_id, challenge_id))
+        return await self._worker.read(lambda c: approvals.find(c, self.tenant_id, challenge_id))
 
     async def expire(self, challenge_id: str, now: int) -> None:
         await self._worker.call(lambda c: approvals.expire(c, challenge_id, now))
@@ -51,16 +51,16 @@ class Tables:
         )
 
     async def pending(self, thread_id: ThreadId) -> tuple[inbox.Row, ...]:
-        return await self._worker.call(lambda c: inbox.pending(c, self.tenant_id, thread_id))
+        return await self._worker.read(lambda c: inbox.pending(c, self.tenant_id, thread_id))
 
     async def discard(self, inbox_id: int) -> None:
         await self._worker.call(lambda c: inbox.discard(c, inbox_id))
 
     async def inbox_rows(self) -> tuple[inbox.Row, ...]:
-        return await self._worker.call(lambda c: inbox.all_rows(c, self.tenant_id))
+        return await self._worker.read(lambda c: inbox.all_rows(c, self.tenant_id))
 
     async def conversation(self, thread_id: ThreadId) -> inbox.Conversation | None:
-        return await self._worker.call(lambda c: inbox.conversation(c, self.tenant_id, thread_id))
+        return await self._worker.read(lambda c: inbox.conversation(c, self.tenant_id, thread_id))
 
     async def move(self, source: ThreadId, target: ThreadId) -> bool:
         return await self._worker.call(lambda c: inbox.move(c, self.tenant_id, source, target))
@@ -72,30 +72,28 @@ class Tables:
 
     async def unconsumed_threads(self) -> tuple[tuple[str, ThreadId], ...]:
         """(tenant, thread) across every tenant: what a restarted host drains."""
-        return await self._worker.call(inbox.unconsumed_threads)
+        return await self._worker.read(inbox.unconsumed_threads)
 
     async def channel_threads(self) -> tuple[tuple[str, ThreadId], ...]:
         """(tenant, thread) of every channel conversation, across every tenant."""
-        return await self._worker.call(inbox.channel_threads)
+        return await self._worker.read(inbox.channel_threads)
 
     async def unfinished_runs(self) -> tuple[tuple[str, ThreadId, BranchId], ...]:
         """(tenant, thread, branch) of API runs a crash may have left open, across every
         tenant."""
-        return await self._worker.call(receipts.unfinished)
+        return await self._worker.read(receipts.unfinished)
 
     async def wake_branches(self) -> tuple[tuple[str, ThreadId, BranchId], ...]:
         """(tenant, thread, branch) of branches with a background child still to report, across
         every tenant."""
-        return await self._worker.call(wakes.branches)
+        return await self._worker.read(wakes.branches)
 
     async def branches(self, thread_id: ThreadId) -> tuple[BranchRow, ...]:
-        return await self._worker.call(lambda c: _branches(c, self.tenant_id, thread_id))
+        return await self._worker.read(lambda c: _branches(c, self.tenant_id, thread_id))
 
 
-def _branches(
-    conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId
-) -> tuple[BranchRow, ...]:
-    rows: list[tuple[object, ...]] = conn.execute(
+def _branches(conn: Conn, tenant_id: str, thread_id: ThreadId) -> tuple[BranchRow, ...]:
+    rows = conn.execute(
         "SELECT branch_id, parent_branch_id, fork_at_seq, state FROM branches"
         " WHERE thread_id = ? AND tenant_id = ? AND state NOT IN ('forking', 'fork_failed')"
         " ORDER BY rowid",

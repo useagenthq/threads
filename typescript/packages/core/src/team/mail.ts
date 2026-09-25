@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { MailEnvelope } from "../log";
 import type { EventDraft } from "../store/admit";
-import type { SqliteDriver } from "../store/driver";
+import type { Tx } from "../store/driver";
 import { TEAM_CONSTANTS } from "./constants";
 import { memberRows } from "./rows";
 
@@ -13,28 +13,29 @@ type Body = NonNullable<Envelope["body"]>;
 type Address = Envelope["to"];
 
 /** Stores text in the content-addressed store before the append that names it. */
-export type PutText = (text: string) => NonNullable<Body["ref"]>;
+/** Stores text as an artifact (content-addressed, so a retried attempt stores it again harmlessly). */
+export type PutText = (text: string) => Promise<NonNullable<Body["ref"]>>;
 
 /** The mail's `to`: the member whose branch it is, at its generation, or the team log. */
-export function addressOf(
-  db: SqliteDriver,
+export async function addressOf(
+  tx: Tx,
   team: string,
   branch: string,
-): Address {
-  const row = memberRows(db, team).find((r) => r.branch_id === branch);
+): Promise<Address> {
+  const row = (await memberRows(tx, team)).find((r) => r.branch_id === branch);
   return row === undefined
     ? "team_log"
     : { name: row.name, generation: row.generation };
 }
 
 /** A text body: inline up to the inline cap, else an artifact ref written before the append. */
-export function bodyOf(
+export async function bodyOf(
   text: string,
   put: PutText,
   cap: number = TEAM_CONSTANTS.inlineCapBytes,
-): Body {
+): Promise<Body> {
   return new TextEncoder().encode(text).length > cap
-    ? { ref: put(text) }
+    ? { ref: await put(text) }
     : { text };
 }
 

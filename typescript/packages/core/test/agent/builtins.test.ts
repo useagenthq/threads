@@ -12,7 +12,7 @@ import {
 import { openStore } from "../../src/agent/sqlite";
 import type { KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
-import { refReader, verifyRequests } from "../../src/render";
+import { verifyRequests } from "../../src/render";
 import { unwrap } from "../store/helpers";
 
 const usage = { input_tokens: 10, output_tokens: 2 };
@@ -30,8 +30,8 @@ const text = (b: Uint8Array): string => new TextDecoder().decode(b);
 
 async function logOf<T>(result: RunResult<T>): Promise<readonly KnownEvent[]> {
   const { log, artifacts } = await openStore(result.thread.store);
-  const events = knownEvents(unwrap(log.read(result.thread.branch)));
-  unwrap(verifyRequests(events, refReader(artifacts)));
+  const events = knownEvents(unwrap(await log.read(result.thread.branch)));
+  unwrap(await verifyRequests(events, artifacts));
   return events;
 }
 

@@ -144,19 +144,26 @@ describe("what API run recovery retries", () => {
 
     const second = serve(store, scriptedModel({ responses: [say("done")] }));
     await second.ready();
-    // The first pass loses to the live lease; from then on every run's acquire fails.
-    await hostTicked(second);
-    await hostTicked(second);
+    // The first passes lose to the live lease; from then on every run's acquire fails.
     const { log } = await openStore(tenantStore(store, alice.tenant));
     const acquire = log.acquire.bind(log);
-    let failing = true;
+    let failing = false;
+    let lost = 0;
     let attempts = 0;
-    log.acquire = (branch, holder, ttl) => {
-      if (!failing || !holder.startsWith("run-"))
-        return acquire(branch, holder, ttl);
+    log.acquire = async (branch, holder, ttl) => {
+      if (!failing || !holder.startsWith("run-")) {
+        const taken = await acquire(branch, holder, ttl);
+        if (holder.startsWith("run-")) lost += 1;
+        return taken;
+      }
       attempts += 1;
       throw new StoreError("disk I/O error");
     };
+    await hostTicked(second);
+    await hostTicked(second);
+    // A tick's run goes on after the tick: both lose before the lease is let go.
+    await until(async () => lost >= 2);
+    failing = true;
     await expireLeases(store);
     const logged = spyOn(console, "error");
     try {

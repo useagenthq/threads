@@ -6,9 +6,9 @@ import {
   LOCAL_TENANT,
   LogStore,
   memoryArtifacts,
-  type SqliteDriver,
+  type StoreDriver,
 } from "../../src/store";
-import { openBunSqlite } from "../../src/store/bun-sqlite";
+import { freshDriver } from "./engine";
 
 export const THREAD: ThreadId = ThreadId.parse(
   "0192a000-0000-7000-8000-000000000001",
@@ -23,20 +23,26 @@ export const T0 = 1_790_000_000_000;
 
 export type Fixture = {
   readonly artifacts: ArtifactStore;
-  readonly db: SqliteDriver;
+  readonly db: StoreDriver;
   readonly store: LogStore;
   readonly clock: { now: number };
 };
 
-/** An in-memory store on bun:sqlite with an injected clock, bound to one tenant. */
-export function fixture(
+/**
+ * A fresh store of the engine under test (engine.ts: in-memory bun:sqlite by default) with an
+ * injected clock, bound to one tenant. A given `db` is used as it is, with in-memory artifacts.
+ */
+export async function fixture(
   tenantId: string = LOCAL_TENANT,
-  db: SqliteDriver = openBunSqlite(":memory:"),
-): Fixture {
+  given?: StoreDriver,
+): Promise<Fixture> {
   const clock = { now: T0 };
   const now = (): number => clock.now;
-  const artifacts = memoryArtifacts();
-  const store = unwrap(LogStore.open(db, now, artifacts, tenantId));
+  const { db, artifacts } =
+    given === undefined
+      ? await freshDriver()
+      : { db: given, artifacts: memoryArtifacts() };
+  const store = unwrap(await LogStore.open(db, now, artifacts, tenantId));
   return { db, store, clock, artifacts };
 }
 
@@ -108,8 +114,28 @@ export function snapshot(expiresAt: number | null): EventDraft {
   };
 }
 
-export function count(db: SqliteDriver, branch: string): unknown {
-  return db.all("SELECT count(*) AS n FROM events WHERE branch_id = ?", [
-    branch,
-  ])[0];
+type Param = string | number | Uint8Array | null;
+
+/** Test-only raw SQL: each call is a transaction of its own. */
+export function rows(
+  db: StoreDriver,
+  sql: string,
+  params: readonly Param[] = [],
+): Promise<readonly unknown[]> {
+  return db.transaction((tx) => tx.all(sql, params));
+}
+
+export function run(
+  db: StoreDriver,
+  sql: string,
+  params: readonly Param[] = [],
+): Promise<number> {
+  return db.transaction((tx) => tx.run(sql, params));
+}
+
+export async function count(db: StoreDriver, branch: string): Promise<unknown> {
+  const rows = await db.transaction((tx) =>
+    tx.all("SELECT count(*) AS n FROM events WHERE branch_id = ?", [branch]),
+  );
+  return rows[0];
 }

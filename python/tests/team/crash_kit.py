@@ -16,6 +16,7 @@ from threads.agents.store import open_store
 from threads.log import BranchId, ThreadId
 from threads.result import Ok
 from threads.store import SqliteStore
+from threads.store.sql import text_of
 from threads.thread.handle import Thread
 
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")
@@ -82,10 +83,11 @@ async def restart(where: Path, lead: Agent[None, str]) -> Restarted:
     """The host's recovery of the lead's open run with no new input, on a fresh connection."""
     store = sqlite(str(where))
     sq = await open_store(store)
-    teams: list[tuple[str, str]] = await sq.run(
+    teams = await sq.run(
         lambda c: c.execute("SELECT lead_thread_id, team_id FROM teams").fetchall()
     )
-    ((lead_thread, team),) = teams
+    ((lead_column, team_column),) = teams
+    lead_thread, team = text_of(lead_column), text_of(team_column)
     branch = await sq.root(ThreadId(lead_thread))
     assert isinstance(branch, Ok)
     thread = Thread(ThreadId(lead_thread), branch.value, store)

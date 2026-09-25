@@ -4,7 +4,6 @@ instead of running the live append hooks, which judge against today's clock: a g
 valid when recorded stays granted, and an undecided challenge or question is open (the
 decision-time check or the expiry driver closes it later)."""
 
-import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -16,6 +15,7 @@ from threads.log import (
     ToolResultEvent,
 )
 from threads.log.keys import principal_key
+from threads.store.conn import Conn
 from threads.store.verify import StoredEvent
 
 
@@ -68,7 +68,7 @@ def project_rows(events: Sequence[StoredEvent]) -> Rows:
     return Rows(tuple(approvals.values()), tuple(questions.values()))
 
 
-def write_rows(conn: sqlite3.Connection, tenant_id: str, rows: Rows) -> None:
+def write_rows(conn: Conn, tenant_id: str, rows: Rows) -> None:
     """The projected rows, in the caller's transaction; a row already there is kept."""
     for a in rows.approvals:
         e = a.request

@@ -5,7 +5,6 @@ appends the run's user_input, so a lost response replays it and a crash leaves n
 """
 
 import logging
-import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
@@ -28,6 +27,7 @@ from threads.log.digest import canonical_sha256
 from threads.log.keys import principal_key
 from threads.result import Ok
 from threads.store.companion import Companion
+from threads.store.conn import Conn
 from threads.store.sql import text_of
 from threads.store.verify import StoredEvent
 
@@ -57,8 +57,8 @@ class Receipt:
     run_id: EventId
 
 
-def find(conn: sqlite3.Connection, key: Key) -> Receipt | None:
-    row: tuple[object, ...] | None = conn.execute(
+def find(conn: Conn, key: Key) -> Receipt | None:
+    row = conn.execute(
         "SELECT principal_key, body_hash, thread_id, branch_id, run_id FROM run_receipts"
         " WHERE tenant_id = ? AND operation = ? AND idempotency_key = ?",
         (key.tenant_id, key.operation, key.idempotency_key),
@@ -69,12 +69,12 @@ def find(conn: sqlite3.Connection, key: Key) -> Receipt | None:
     return Receipt(principal, body, ThreadId(thread), BranchId(branch), EventId(run))
 
 
-def unfinished(conn: sqlite3.Connection) -> tuple[tuple[str, ThreadId, BranchId], ...]:
+def unfinished(conn: Conn) -> tuple[tuple[str, ThreadId, BranchId], ...]:
     """(tenant, thread, branch) of every tenant's API run branches, except those whose last event
     is a turn_completed: where a crash may have left a run's turn open. The fold decides; this
     only skips branches that are certainly closed, so a restart doesn't read every API thread's
     log."""
-    rows: list[tuple[object, object, object]] = conn.execute(
+    rows = conn.execute(
         "SELECT DISTINCT r.tenant_id, r.thread_id, r.branch_id FROM run_receipts r"
         " JOIN branches b ON b.branch_id = r.branch_id AND b.tenant_id = r.tenant_id"
         " JOIN events e ON e.branch_id = b.branch_id AND e.seq = b.head_seq"
@@ -101,7 +101,7 @@ def insert(key: Key, now: int) -> Companion:
     """The receipt of the append's user_input. A key another request took first refuses the
     append: the caller reads that receipt and answers from it."""
 
-    def put(conn: sqlite3.Connection, events: Sequence[StoredEvent]) -> ParseError | None:
+    def put(conn: Conn, events: Sequence[StoredEvent]) -> ParseError | None:
         run = next(e for e in events if isinstance(e, UserInputEvent))
         done = conn.execute(
             "INSERT INTO run_receipts (tenant_id, operation, idempotency_key, principal_key,"
@@ -144,10 +144,10 @@ def ui_body_hash(agent: str, text: str) -> str:
     return body.value
 
 
-def ui_messages(conn: sqlite3.Connection, tenant_id: str, thread_id: str) -> dict[str, str]:
+def ui_messages(conn: Conn, tenant_id: str, thread_id: str) -> dict[str, str]:
     """A thread's `ui` receipts: each run's client message id by run id. Read by the byte range
     of `<thread_id>:` keys (`;` is the byte after `:`), never LIKE, so the index serves it."""
-    rows: list[tuple[object, object]] = conn.execute(
+    rows = conn.execute(
         "SELECT idempotency_key, run_id FROM run_receipts WHERE tenant_id = ? AND operation = ?"
         " AND idempotency_key >= ? AND idempotency_key < ?",
         (tenant_id, UI, f"{thread_id}:", f"{thread_id};"),
@@ -156,7 +156,7 @@ def ui_messages(conn: sqlite3.Connection, tenant_id: str, thread_id: str) -> dic
     return {text_of(run): text_of(key)[prefix:] for key, run in rows}
 
 
-def rebuild_ui(conn: sqlite3.Connection, tenant_id: str, events: Sequence[Event], now: int) -> None:
+def rebuild_ui(conn: Conn, tenant_id: str, events: Sequence[Event], now: int) -> None:
     """An import's `ui` receipts: one per user_input that carries client_message_id, keyed and
     hashed as a UI route writes it, so a retry after an import finds its run."""
     started = next((e for e in events if isinstance(e, ThreadStartedEvent)), None)

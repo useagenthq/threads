@@ -2,9 +2,9 @@
 for. A claim only deduplicates wakes: the lease holder consumes, so correctness never depends
 on it, and it writes no log."""
 
-import sqlite3
 from typing import Literal
 
+from threads.store.conn import Conn
 from threads.store.sql import transaction
 from threads.team.constants import TEAM_CONSTANTS
 
@@ -16,7 +16,7 @@ the pending row is still live. `not_pending`: the row was consumed, refused or r
 
 
 def claim_mail(
-    conn: sqlite3.Connection,
+    conn: Conn,
     mail_id: str,
     token: str,
     now: int,
@@ -33,9 +33,7 @@ def claim_mail(
         )
         if cursor.rowcount == 1:
             return "claimed"
-        row: tuple[str] | None = conn.execute(
-            "SELECT state FROM mail WHERE mail_id = ?", (mail_id,)
-        ).fetchone()
+        row = conn.execute("SELECT state FROM mail WHERE mail_id = ?", (mail_id,)).fetchone()
     if row is None:
         return "not_found"
     return "taken" if row[0] == "pending" else "not_pending"

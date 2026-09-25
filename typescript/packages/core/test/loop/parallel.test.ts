@@ -96,7 +96,7 @@ describe("tool-parallel-safe-reads (F1.1)", () => {
     const result = await bot.run("go", { store: sqlite(":memory:") });
     expect(result.status).toBe("completed");
     const { log } = await openStore(result.thread.store);
-    const all = knownEvents(unwrap(log.read(result.thread.branch)));
+    const all = knownEvents(unwrap(await log.read(result.thread.branch)));
     const shown = all.flatMap((e) =>
       e.type === "tool_result" ? [[e.data.call_id, e.data.preview]] : [],
     );

@@ -2,7 +2,6 @@
 its thread while its agent pins the same config; a config change moves it to a new thread once
 the old one is quiet."""
 
-import sqlite3
 from collections.abc import Sequence
 from dataclasses import replace
 
@@ -14,6 +13,7 @@ from threads.log import BranchId, ParseError, ThreadId
 from threads.redaction import published
 from threads.result import Err, Ok
 from threads.store import Draft
+from threads.store.conn import Conn
 from threads.store.lines import uuid7
 from threads.store.opening import insert_root, new_root
 from threads.store.schedules import (
@@ -56,7 +56,7 @@ async def reserve_due(
         raise ValueError(f"a pinned thread_started fails its own checks: {made.error.message}")
     fresh, tenant_id = made.value, p.tenant
 
-    def reserve(conn: sqlite3.Connection) -> None:
+    def reserve(conn: Conn) -> None:
         with transaction(conn):
             todo = [d for d in due if not reserved(conn, tenant_id, d)]
             if not todo:
@@ -81,9 +81,7 @@ async def reserve_due(
     return None
 
 
-def _keeps(
-    conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId, started: Draft, now: int
-) -> bool:
+def _keeps(conn: Conn, tenant_id: str, thread_id: ThreadId, started: Draft, now: int) -> bool:
     """Whether the schedule stays on its thread: it pins the same config, or it doesn't but the
     thread is still busy. A config change moves to a new thread only once the old one is quiet (no
     open turn, no undecided reservation), so no new run starts while the old one goes on."""

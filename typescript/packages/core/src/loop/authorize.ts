@@ -69,7 +69,9 @@ async function decideNow(
     out.kind === "failed"
       ? { decided: "failed" as const, reason: out.reason }
       : recordedFor(out.value);
-  const stopped = s.append(decision(ext.name, hook, d.decided, key, d.reason));
+  const stopped = await s.append(
+    decision(ext.name, hook, d.decided, key, d.reason),
+  );
   if (stopped !== undefined) return stopped;
   return verdictOf({
     extension: ext.name,
@@ -128,7 +130,7 @@ export async function authorize(
     if (answered !== undefined && answered.decision !== "ask")
       final = { ...answered, source: "hook" };
   }
-  const stopped = s.append(
+  const stopped = await s.append(
     draft.permission({
       call_id: call.data.call_id,
       decision: final.decision,

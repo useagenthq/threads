@@ -2,7 +2,7 @@ import { assertNever } from "../assert-never";
 import type { EventOf } from "../fold/state";
 import type { Outcome } from "../hooks/invoke";
 import type { EventId, KnownEvent } from "../log";
-import { refReader, render } from "../render";
+import { prefetch, render } from "../render";
 import type { EventDraft } from "../store";
 import { type Attempted, attempt } from "./attempt";
 import { draft, HOST, type RECOVERY } from "./drafts";
@@ -49,9 +49,9 @@ export async function compact(
   trigger: "reactive" | "threshold",
 ): Promise<Compaction> {
   const ctx = contextPolicy(s.fold.policy);
-  const cleared = clear(s, ctx.clear_results.keep_recent, "threshold");
+  const cleared = await clear(s, ctx.clear_results.keep_recent, "threshold");
   if (cleared !== undefined) return { kind: "halt", halt: cleared };
-  const range = compactRange(s);
+  const range = await compactRange(s);
   if (range === undefined) return failed(s, "still_over_threshold");
   const gated = await beforeCompact(s);
   if (gated !== undefined) return gated;
@@ -62,7 +62,7 @@ export async function compact(
     case "response":
       return got.text === ""
         ? failed(s, "empty_summary")
-        : summarized(s, range, got.text, trigger);
+        : summarized(s, await range, got.text, trigger);
     case "rejected":
       return failed(
         s,
@@ -94,17 +94,17 @@ async function sideRequest(s: Session): Promise<Attempted> {
   const got = await attempt(s, "compaction", 1);
   if (got.kind !== "rejected" || got.rejection.reason !== "prompt_too_long")
     return got;
-  const fallback = clear(s, 0, "compaction_fallback");
+  const fallback = await clear(s, 0, "compaction_fallback");
   if (fallback !== undefined) return { kind: "halt", halt: fallback };
   return attempt(s, "compaction", 2);
 }
 
 /** compaction_failed{summary}, naming the latest side request unless none was made for it. */
-export function failed(
+export async function failed(
   s: Session,
   reason: FailReason,
   answering: Answering = {},
-): Compaction {
+): Promise<Compaction> {
   const { cause, actor = HOST } = answering;
   const side = s.events.findLast(
     (e) =>
@@ -116,7 +116,7 @@ export function failed(
     side === undefined ||
     reason === "still_over_threshold" ||
     reason === "artifact_error";
-  const stopped = s.append(
+  const stopped = await s.append(
     draft.compactionFailed(
       {
         stage: "summary",
@@ -150,14 +150,14 @@ export async function summarized(
   );
   if (side === undefined) throw new Error("a summary answers a side request");
   const restored = await restoreDrafts(s, from.seq, to.seq);
-  const stopped = s.append(
+  const stopped = await s.append(
     draft.compacted(
       {
         from_seq: from.seq,
         to_seq: to.seq,
         from_event_id: from.event_id,
         to_event_id: to.event_id,
-        summary_ref: s.store(text, "text/plain"),
+        summary_ref: await s.store(text, "text/plain"),
         summary_request_event_id: side.event_id,
         trigger,
         ...(cause === undefined ? {} : { cause_event_id: cause }),
@@ -194,7 +194,7 @@ export async function beforeCompact(
     const made = compactDecision(ext.name, out);
     const denied =
       made.data.decision !== "proceed" && made.data.decision !== "guide";
-    const stopped = denied
+    const stopped = await (denied
       ? s.append(
           made,
           draft.compactionFailed({
@@ -203,7 +203,7 @@ export async function beforeCompact(
             ...cause,
           }),
         )
-      : s.append(made);
+      : s.append(made));
     if (stopped !== undefined) return { kind: "halt", halt: stopped };
     if (denied) return { kind: "failed" };
   }
@@ -234,11 +234,11 @@ function compactDecision(
  * L1: every result rendered in an earlier turn request, except the `keep` newest and those
  * already cleared, is replaced by the fixed placeholder.
  */
-export function clear(
+export async function clear(
   s: Session,
   keep: number,
   reason: Reason,
-): Halt | undefined {
+): Promise<Halt | undefined> {
   const events = s.events;
   const ctx = contextPolicy(s.fold.policy);
   const lastRequest = events.findLast(
@@ -278,9 +278,9 @@ export function clear(
  * L2 range: from the first input after thread_started to the event before the shortest
  * step-boundary tail whose rendered estimate reaches keep_tail.
  */
-function compactRange(
+async function compactRange(
   s: Session,
-): readonly [KnownEvent, KnownEvent] | undefined {
+): Promise<readonly [KnownEvent, KnownEvent] | undefined> {
   const events = s.events;
   const from = events.find((e) => e.type === "user_input");
   if (from === undefined) return undefined;
@@ -288,7 +288,8 @@ function compactRange(
     contextPolicy(s.fold.policy).compact.keep_tail,
     windowTokens(s),
   );
-  const read = refReader(s.artifacts);
+  // Every head below renders a prefix of `events`, so it reads a subset of the whole's refs.
+  const read = await prefetch(s.artifacts, (r) => render(events, r));
   const whole = render(events, read);
   if (!whole.ok) return undefined;
   for (const to of events.toReversed()) {

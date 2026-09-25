@@ -19,26 +19,32 @@ import {
 // A crash at every boundary of a requested compaction: the resumed run reads the stage from the
 // log and makes the same decision each time, never sending again what the log already settled.
 
-const lastLine = (h: ReturnType<typeof asked>, log: readonly KnownEvent[]) => {
+const lastLine = async (
+  h: Awaited<ReturnType<typeof asked>>,
+  log: readonly KnownEvent[],
+) => {
   const request = sides(log).at(-1);
   if (request?.type !== "model_request") throw new Error("a side request");
-  const bytes = unwrap(h.artifacts.get(request.data.request_ref.sha256));
+  const bytes = unwrap(await h.artifacts.get(request.data.request_ref.sha256));
   return new TextDecoder().decode(bytes).trimEnd().split("\n").at(-1) ?? "";
 };
 
 /** `count` side attempts, each abandoned by recovery as a crash. */
-function crashes(h: ReturnType<typeof asked>, count: number): void {
+async function crashes(
+  h: Awaited<ReturnType<typeof asked>>,
+  count: number,
+): Promise<void> {
   for (let n = 1; n <= count; n++) {
-    crashed(h, (log) => [side(h, log, n)]);
-    crashed(h, (log) => [abandon(log, "crash")]);
+    await crashed(h, async (log) => [await side(h, log, n)]);
+    await crashed(h, (log) => [abandon(log, "crash")]);
   }
 }
 
 describe("resuming a requested compaction", () => {
   test("after the first of two guides: the first hook isn't called again, both guides once", async () => {
     const calls = new Map<string, number>();
-    const h = asked([reply(SUMMARY_TEXT), reply("A.")]);
-    crashed(h, () => [
+    const h = await asked([reply(SUMMARY_TEXT), reply("A.")]);
+    await crashed(h, () => [
       {
         type: "hook_decision",
         type_version: 1,
@@ -56,15 +62,15 @@ describe("resuming a requested compaction", () => {
       extensions: [guide("alpha", calls), guide("beta", calls)],
     });
     expect(calls).toEqual(new Map([["beta", 1]]));
-    const line = lastLine(h, log);
+    const line = await lastLine(h, log);
     expect(line.match(/guide from alpha/g)).toHaveLength(1);
     expect(line.match(/guide from beta/g)).toHaveLength(1);
     expect(outcome(log)).toMatchObject({ type: "compacted" });
   });
 
   test("after the side request was sent: recovery abandons it, then one resend", async () => {
-    const h = asked([reply(SUMMARY_TEXT), reply("A.")]);
-    crashed(h, (log) => [side(h, log, 1)]);
+    const h = await asked([reply(SUMMARY_TEXT), reply("A.")]);
+    await crashed(h, async (log) => [await side(h, log, 1)]);
     const log = await resumeOnce(h);
     expect(log[0]).toMatchObject({
       type: "model_attempt_abandoned",
@@ -78,8 +84,8 @@ describe("resuming a requested compaction", () => {
 
   for (const count of [1, 2]) {
     test(`${count} recovery-written crash abandonment(s): one resend, and resuming again sends nothing`, async () => {
-      const h = asked([reply(SUMMARY_TEXT), reply("A.")]);
-      crashes(h, count);
+      const h = await asked([reply(SUMMARY_TEXT), reply("A.")]);
+      await crashes(h, count);
       const first = await resumeOnce(h);
       expect(sides(first)).toHaveLength(1);
       expect(outcome(first)).toMatchObject({ type: "compacted" });
@@ -90,8 +96,8 @@ describe("resuming a requested compaction", () => {
   }
 
   test("3 crash abandonments exceed crash_resends: model_error with no side request, twice the same", async () => {
-    const h = asked([reply("A.")]);
-    crashes(h, 3);
+    const h = await asked([reply("A.")]);
+    await crashes(h, 3);
     const first = await resumeOnce(h);
     expect(sides(first)).toHaveLength(0);
     expect(outcome(first)).toMatchObject({
@@ -111,9 +117,9 @@ describe("resuming a requested compaction", () => {
 
   for (const reason of ["provider_error", "rate_limited"] as const) {
     test(`a recorded ${reason} is answered from the log: model_error, no new side request`, async () => {
-      const h = asked([reply("A.")]);
-      crashed(h, (log) => [side(h, log, 1)]);
-      crashed(h, (log) => [abandon(log, reason)]);
+      const h = await asked([reply("A.")]);
+      await crashed(h, async (log) => [await side(h, log, 1)]);
+      await crashed(h, (log) => [abandon(log, reason)]);
       const log = await resumeOnce(h);
       expect(sides(log)).toHaveLength(0);
       expect(outcome(log)).toMatchObject({ data: { reason: "model_error" } });
@@ -121,19 +127,19 @@ describe("resuming a requested compaction", () => {
   }
 
   test("prompt_too_long before the fallback: the fallback attempt runs once", async () => {
-    const h = asked([reply(SUMMARY_TEXT), reply("A.")]);
-    crashed(h, (log) => [side(h, log, 1)]);
-    crashed(h, (log) => [abandon(log, "prompt_too_long")]);
+    const h = await asked([reply(SUMMARY_TEXT), reply("A.")]);
+    await crashed(h, async (log) => [await side(h, log, 1)]);
+    await crashed(h, (log) => [abandon(log, "prompt_too_long")]);
     const log = await resumeOnce(h);
     expect(sides(log)).toHaveLength(1);
     expect(outcome(log)).toMatchObject({ type: "compacted" });
   });
 
   test("prompt_too_long after the fallback: the outcome, and no request", async () => {
-    const h = asked([reply("A.")]);
+    const h = await asked([reply("A.")]);
     for (let n = 1; n <= 2; n++) {
-      crashed(h, (log) => [side(h, log, n)]);
-      crashed(h, (log) => [abandon(log, "prompt_too_long")]);
+      await crashed(h, async (log) => [await side(h, log, n)]);
+      await crashed(h, (log) => [abandon(log, "prompt_too_long")]);
     }
     const log = await resumeOnce(h);
     expect(sides(log)).toHaveLength(0);
@@ -141,11 +147,11 @@ describe("resuming a requested compaction", () => {
   });
 
   test("a crash on attempt 1, then prompt_too_long on attempt 2: the fallback still runs", async () => {
-    const h = asked([reply(SUMMARY_TEXT), reply("A.")]);
-    crashed(h, (log) => [side(h, log, 1)]);
-    crashed(h, (log) => [abandon(log, "crash")]);
-    crashed(h, (log) => [side(h, log, 2)]);
-    crashed(h, (log) => [abandon(log, "prompt_too_long")]);
+    const h = await asked([reply(SUMMARY_TEXT), reply("A.")]);
+    await crashed(h, async (log) => [await side(h, log, 1)]);
+    await crashed(h, (log) => [abandon(log, "crash")]);
+    await crashed(h, async (log) => [await side(h, log, 2)]);
+    await crashed(h, (log) => [abandon(log, "prompt_too_long")]);
     const log = await resumeOnce(h);
     expect(
       sides(log).map((e) => e.type === "model_request" && e.data.attempt),
@@ -154,9 +160,9 @@ describe("resuming a requested compaction", () => {
   });
 
   test("after the summary was recorded: compacted from it, with no side request", async () => {
-    const h = asked([reply("A.")]);
-    crashed(h, (log) => [side(h, log, 1)]);
-    crashed(h, (log) => {
+    const h = await asked([reply("A.")]);
+    await crashed(h, async (log) => [await side(h, log, 1)]);
+    await crashed(h, (log) => {
       const request = sides(log).at(-1);
       if (request === undefined) throw new Error("a side request");
       return [
@@ -200,13 +206,13 @@ describe("resuming a requested compaction", () => {
         text: "Be brief.",
       },
     } as const;
-    const h = asked(
+    const h = await asked(
       [reply(SUMMARY_TEXT)],
       { output_styles: { concise: "Be brief." } },
       [],
       [style],
     );
-    const writer = unwrap(h.store.acquire(ROOT, "crashing"));
+    const writer = unwrap(await h.store.acquire(ROOT, "crashing"));
     await resume(
       writer,
       h.artifacts,

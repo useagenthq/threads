@@ -10,7 +10,7 @@ import {
 import { openStore } from "../../src/agent/sqlite";
 import type { KnownEvent } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
-import { refReader, verifyRequests } from "../../src/render";
+import { verifyRequests } from "../../src/render";
 import type { WebTransport } from "../../src/tools/web-transport";
 import { unwrap } from "../store/helpers";
 
@@ -58,8 +58,8 @@ async function run(
     permissions,
   }).run("read it", { store: sqlite(":memory:") });
   const { log, artifacts } = await openStore(result.thread.store);
-  const events = knownEvents(unwrap(log.read(result.thread.branch)));
-  unwrap(verifyRequests(events, refReader(artifacts)));
+  const events = knownEvents(unwrap(await log.read(result.thread.branch)));
+  unwrap(await verifyRequests(events, artifacts));
   return events;
 }
 
@@ -75,9 +75,9 @@ describe("gated built-ins in an agent", () => {
         store: sqlite(":memory:"),
       });
       const { log } = await openStore(result.thread.store);
-      const started = knownEvents(unwrap(log.read(result.thread.branch))).find(
-        (e) => e.type === "thread_started",
-      );
+      const started = knownEvents(
+        unwrap(await log.read(result.thread.branch)),
+      ).find((e) => e.type === "thread_started");
       return started?.type === "thread_started"
         ? started.data.tools.map((t) => `${t.name}:${t.effect_class}`)
         : [];

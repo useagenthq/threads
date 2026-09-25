@@ -72,9 +72,12 @@ export async function cursors(
   const rows = z
     .array(z.object({ branch_id: z.string(), seq: z.int() }))
     .parse(
-      db.all("SELECT branch_id, seq FROM observer_cursors WHERE observer = ?", [
-        observer,
-      ]),
+      await db.transaction((tx) =>
+        tx.all(
+          "SELECT branch_id, seq FROM observer_cursors WHERE observer = ?",
+          [observer],
+        ),
+      ),
     );
   return Object.fromEntries(rows.map((r) => [r.branch_id, r.seq]));
 }
@@ -82,5 +85,5 @@ export async function cursors(
 /** A crash between the collector's 2xx and the cursor write: the cursor rows are gone. */
 export async function forgetCursors(store: Store): Promise<void> {
   const { db } = await storeConnection(store);
-  db.run("DELETE FROM observer_cursors", []);
+  await db.transaction((tx) => tx.run("DELETE FROM observer_cursors", []));
 }

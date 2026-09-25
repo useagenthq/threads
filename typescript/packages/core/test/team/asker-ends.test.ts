@@ -4,9 +4,9 @@ import { agent, scriptedModel } from "../../src";
 import { BranchId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import { memberRows } from "../../src/team/rows";
-import { unwrap } from "../store/helpers";
+import { rows as sqlAll, unwrap } from "../store/helpers";
 import { Crash, crashing, drill } from "./crash-kit";
-import { assertTeamReplays } from "./kit";
+import { assertTeamReplays, reading } from "./kit";
 import { answering, askIds, call, replyTo, say, start, types } from "./run-kit";
 
 // An asker that ends (spec/schema/README.md, "Teams", "An asker that ends"): the writer parks on
@@ -51,23 +51,26 @@ const lead = (instructions: string) =>
   });
 
 test("an asker whose rebind fails closes its open ask cancelled before its end", async () => {
-  const d = drill();
+  const d = await drill();
   const reply = {
     name: "the researcher's reply",
     at: (sql: string, params: readonly unknown[]) =>
       sql.includes("INSERT INTO mail") && params[2] === "reply",
   };
   await expect(
-    lead("Write.").run("Work.", { store: d.open(crashing(d.db, reply)) }),
+    lead("Write.").run("Work.", { store: await d.open(crashing(d.db, reply)) }),
   ).rejects.toThrow(Crash);
-  const open = () =>
-    d.db.all("SELECT ask_id FROM asks WHERE state = 'open'", []).length;
-  expect(open()).toBe(1);
+  const open = async () =>
+    (await sqlAll(d.db, "SELECT ask_id FROM asks WHERE state = 'open'", []))
+      .length;
+  expect(await open()).toBe(1);
 
   const { team } = await d.restart(lead("Write differently."));
-  const row = memberRows(d.db, team).find((r) => r.name === "writer-1");
+  const row = (await reading(d.db, (tx) => memberRows(tx, team))).find(
+    (r) => r.name === "writer-1",
+  );
   const branch = BranchId.parse(z.string().parse(row?.branch_id));
-  const log = knownEvents(unwrap(d.log.read(branch)));
+  const log = knownEvents(unwrap(await d.log.read(branch)));
   const closed = log.find((e) => e.type === "ask_closed");
   expect(closed?.type === "ask_closed" && closed.data.outcome).toEqual({
     status: "cancelled",
@@ -75,6 +78,6 @@ test("an asker whose rebind fails closes its open ask cancelled before its end",
   const at = types(log).indexOf("ask_closed");
   expect(types(log)[at + 1]).toBe("member_ended");
   expect(row?.state).toBe("ended");
-  expect(open()).toBe(0);
-  assertTeamReplays(d.log, team);
+  expect(await open()).toBe(0);
+  await assertTeamReplays(d.log, team);
 });

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from jobs.drill import finish, spawn
+from jobs.stores import drill_open
 from jobs.worker import rows
 
 from threads.log import (
@@ -18,8 +19,7 @@ from threads.log import (
     UserInputEvent,
 )
 from threads.result import Ok
-from threads.store import SqliteStore
-from threads.store.sql import text_of
+from threads.store.sql import int_of, text_of
 
 pytestmark = pytest.mark.jobs
 
@@ -54,16 +54,16 @@ def test_two_schedulers_run_each_occurrence_once(tmp_path: Path) -> None:
 
 async def _read(where: Path) -> tuple[list[tuple[int, str]], list[Event]]:
     """The decided occurrences, and the schedule's one thread read back from the log."""
-    opened = await SqliteStore.open(where / "threads.db")
+    opened = await drill_open(where, "local")
     assert isinstance(opened, Ok)
     sq = opened.value
     try:
-        decided: list[tuple[int, str]] = await sq.run(
+        decided = await sq.run(
             lambda c: c.execute(
                 "SELECT occurrence_at, state FROM schedule_occurrences ORDER BY occurrence_at"
             ).fetchall()
         )
-        found: list[tuple[object]] = await sq.run(
+        found = await sq.run(
             lambda c: c.execute("SELECT thread_id FROM schedule_threads").fetchall()
         )
         ((thread,),) = found
@@ -71,6 +71,6 @@ async def _read(where: Path) -> tuple[list[tuple[int, str]], list[Event]]:
         assert isinstance(root, Ok)
         log = await sq.read(root.value, 0)
         assert isinstance(log, Ok)
-        return decided, list(log.value.fold.events)
+        return [(int_of(at), text_of(state)) for at, state in decided], list(log.value.fold.events)
     finally:
         await sq.close()

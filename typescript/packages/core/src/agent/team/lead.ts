@@ -46,7 +46,7 @@ async function withTeam<Output>(
   result: RunResult<Output>,
 ): Promise<TeamRunResult<Output>> {
   const { log, artifacts } = await openStore(result.thread.store);
-  const read = log.read(result.thread.branch);
+  const read = await log.read(result.thread.branch);
   const events = read.ok ? knownEvents(read.value) : [];
   const started = events.find((e) => e.type === "thread_started");
   const input = events.findLast((e) => e.type === "user_input");
@@ -55,7 +55,7 @@ async function withTeam<Output>(
   const entry = memberEntry(lead);
   if (id === undefined || input?.type !== "user_input" || entry === undefined)
     throw new Error(`thread ${result.thread.id} leads no team`);
-  const team: Team = teamHandle({
+  const team: Team = await teamHandle({
     log,
     artifacts,
     ref: { tenant: log.tenant, id },

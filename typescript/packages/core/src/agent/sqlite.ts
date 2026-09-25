@@ -5,19 +5,20 @@ import {
   fileArtifacts,
   LogStore,
   memoryArtifacts,
-  type SqliteDriver,
+  type StoreDriver,
 } from "../store";
 
-// sqlite() (spec/api.json): the one log and artifact store. Opening is lazy, so
-// sqlite() itself does no I/O; the bun:sqlite driver is loaded on first use, which keeps core's
-// import graph free of runtime-specific modules.
+// sqlite() (spec/api.json): the SQLite log and artifact store. Opening is lazy, so sqlite()
+// itself does no I/O; the bun:sqlite driver is loaded on first use, which keeps core's import
+// graph free of runtime-specific modules. postgres() (@threads/postgres) builds the same opaque
+// Store over its own driver with `storeOver`.
 
 export type OpenStore = {
   readonly log: LogStore;
   readonly artifacts: ArtifactStore;
 };
 
-/** The SQLite log and artifact store. Sealed in v0.1: no public methods. */
+/** The log and artifact store. Opaque: no public methods. */
 export class Store {
   readonly path: string;
 
@@ -27,10 +28,18 @@ export class Store {
 }
 
 /** The connection under a root store, and the clock its logs read. */
-type Connection = { readonly db: SqliteDriver; readonly now: () => number };
+type Connection = { readonly db: StoreDriver; readonly now: () => number };
+
+/** How a root store opens on first use: its connection and artifacts. */
+export type Opener = () => Promise<{
+  readonly db: StoreDriver;
+  readonly artifacts: ArtifactStore;
+}>;
 
 const opened = new WeakMap<Store, Promise<OpenStore>>();
 const connections = new WeakMap<Store, Connection>();
+const openers = new WeakMap<Store, Opener>();
+const clocks = new WeakMap<Store, () => number>();
 /** Tenant views: the root's connection, a log bound to one tenant. */
 const views = new WeakMap<
   Store,
@@ -40,6 +49,21 @@ const byTenant = new WeakMap<Store, Map<string, Store>>();
 
 export function sqlite(path: string): Store {
   return new Store(path);
+}
+
+/**
+ * A Store that opens with `open` on first use (the Postgres package's). `label` names it in
+ * errors; `now` is its clock.
+ */
+export function storeOver(
+  label: string,
+  open: Opener,
+  now: () => number = Date.now,
+): Store {
+  const store = new Store(label);
+  openers.set(store, open);
+  clocks.set(store, now);
+  return store;
 }
 
 /** Opens the store once; every run on it shares the same connection. */
@@ -84,26 +108,43 @@ export async function storeConnection(store: Store): Promise<Connection> {
 }
 
 async function scoped(root: Store, tenant: string): Promise<OpenStore> {
-  const { artifacts } = await openStore(root);
-  const { db, now } = await storeConnection(root);
-  const log = LogStore.open(db, now, artifacts, tenant);
-  if (!log.ok) throw new Error(`store ${root.path}: ${log.error.message}`);
-  return { log: log.value, artifacts };
+  const { log, artifacts } = await openStore(root);
+  return { log: log.scoped(tenant), artifacts };
 }
 
 async function connect(store: Store): Promise<OpenStore> {
-  const { path } = store;
-  const { openBunSqlite } = await import("../store/bun-sqlite");
-  const memory = path === ":memory:";
-  if (!memory) mkdirSync(path, { recursive: true, mode: 0o700 });
-  const artifacts = memory
-    ? memoryArtifacts()
-    : fileArtifacts(join(path, "artifacts"));
-  const db = openBunSqlite(memory ? path : join(path, "threads.db"));
-  connections.set(store, { db, now: Date.now });
-  const log = LogStore.open(db, Date.now, artifacts);
-  if (!log.ok) throw new Error(`store ${path}: ${log.error.message}`);
+  const { db, artifacts } = await (openers.get(store) ?? sqliteOpener(store))();
+  const now = clocks.get(store) ?? Date.now;
+  connections.set(store, { db, now });
+  const log = await LogStore.open(db, now, artifacts);
+  if (!log.ok) {
+    await db.close();
+    throw new Error(`store ${store.path}: ${log.error.message}`);
+  }
   return { log: log.value, artifacts };
+}
+
+function sqliteOpener(store: Store): Opener {
+  return async () => {
+    const { path } = store;
+    const { openBunSqlite } = await import("../store/bun-sqlite");
+    const memory = path === ":memory:";
+    if (!memory) mkdirSync(path, { recursive: true, mode: 0o700 });
+    const artifacts = memory
+      ? memoryArtifacts()
+      : fileArtifacts(join(path, "artifacts"));
+    return {
+      db: openBunSqlite(memory ? path : join(path, "threads.db")),
+      artifacts,
+    };
+  };
+}
+
+/** The driver dialect under a store, once open: memory and knowledge refuse Postgres. */
+export async function storeDialect(
+  store: Store,
+): Promise<StoreDriver["dialect"]> {
+  return (await storeConnection(store)).db.dialect;
 }
 
 /**
@@ -112,11 +153,11 @@ async function connect(store: Store): Promise<OpenStore> {
  */
 export async function memoryStore(
   now: () => number,
-): Promise<OpenStore & { readonly close: () => void }> {
+): Promise<OpenStore & { readonly close: () => Promise<void> }> {
   const { openBunSqlite } = await import("../store/bun-sqlite");
   const db = openBunSqlite(":memory:");
   const artifacts = memoryArtifacts();
-  const log = LogStore.open(db, now, artifacts);
+  const log = await LogStore.open(db, now, artifacts);
   if (!log.ok) throw new Error(`memory store: ${log.error.message}`);
   return { log: log.value, artifacts, close: () => db.close() };
 }

@@ -12,6 +12,7 @@ from threads.log import BranchId, MailEnvelope, MemberStartedEvent, ThreadId
 from threads.result import Err, Ok
 from threads.store import SqliteStore
 from threads.store.deletion import delete_thread
+from threads.store.sql import int_of
 from threads.team.materialize import MaterializeOptions, Rebind, materialize
 
 VECTOR = next(v for v in vectors() if v["name"] == "materialize-opens-branch")
@@ -36,10 +37,10 @@ def _lead() -> ThreadId:
 
 
 async def _count(store: SqliteStore, table: str) -> int:
-    rows: list[tuple[int]] = await store.run(
+    rows = await store.run(
         lambda c: c.execute(f"SELECT COUNT(*) FROM {table}").fetchall()  # noqa: S608 - fixed names
     )
-    return rows[0][0]
+    return int_of(rows[0][0])
 
 
 def test_delete_first_the_row_check_finds_the_member_gone_and_nothing_is_opened() -> None:

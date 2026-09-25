@@ -1,11 +1,11 @@
 """Loss accounting for telemetry exporters (store.sql `observers` and `observer_losses`): what a
 deletion may have dropped before an exporter sent it. Bookkeeping only; the log never reads it."""
 
-import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 from threads.log import ThreadId
+from threads.store.conn import Conn
 from threads.store.sql import int_of, text_of
 
 
@@ -17,7 +17,7 @@ class LossRow:
     deleted_at: int
 
 
-def record_losses(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId, now: int) -> None:
+def record_losses(conn: Conn, tenant_id: str, thread_id: ThreadId, now: int) -> None:
     """In the delete transaction, before the thread's events go: one row per registered
     observer, counting the thread's events past that observer's cursor on each branch. With no
     observer registered it inserts nothing."""
@@ -37,7 +37,7 @@ def record_losses(conn: sqlite3.Connection, tenant_id: str, thread_id: ThreadId,
     )
 
 
-def register_observer(conn: sqlite3.Connection, observer: str, now: int) -> None:
+def register_observer(conn: Conn, observer: str, now: int) -> None:
     """Registers `observer` once, so deletions from now on record what it may not have sent."""
     conn.execute(
         "INSERT INTO observers (name, registered_at) VALUES (?, ?) ON CONFLICT DO NOTHING",
@@ -45,7 +45,7 @@ def register_observer(conn: sqlite3.Connection, observer: str, now: int) -> None
     )
 
 
-def unreported_losses(conn: sqlite3.Connection, observer: str) -> tuple[LossRow, ...]:
+def unreported_losses(conn: Conn, observer: str) -> tuple[LossRow, ...]:
     """The observer's loss rows not yet exported, oldest first."""
     rows: list[tuple[object, ...]] = conn.execute(
         "SELECT tenant_id, thread_id, unchecked_events, deleted_at FROM observer_losses"
@@ -57,9 +57,7 @@ def unreported_losses(conn: sqlite3.Connection, observer: str) -> tuple[LossRow,
     )
 
 
-def mark_reported(
-    conn: sqlite3.Connection, observer: str, rows: Sequence[LossRow], now: int
-) -> None:
+def mark_reported(conn: Conn, observer: str, rows: Sequence[LossRow], now: int) -> None:
     """After the collector accepted their spans."""
     for row in rows:
         conn.execute(

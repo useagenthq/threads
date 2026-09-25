@@ -26,8 +26,8 @@ const leakyAfterCancel = (key: string, writer: () => Writer) =>
 describe("a cancel during a leaked response", () => {
   test("a turn request: abandoned, then the turn ends cancelled", async () => {
     const key = credential("fake", "apiKey", "sk-l09-cancel-1a2b", "U")();
-    const h = harness([], [], []);
-    const writer = unwrap(h.store.acquire(ROOT, "owner", 30_000));
+    const h = await harness([], [], []);
+    const writer = unwrap(await h.store.acquire(ROOT, "owner", 30_000));
     await resume(
       writer,
       h.artifacts,
@@ -46,9 +46,9 @@ describe("a cancel during a leaked response", () => {
 
   test("a requested compaction: abandoned and failed, then the turn ends cancelled", async () => {
     const key = credential("fake", "apiKey", "sk-l09-cancel-3c4d", "U")();
-    const h = asked([]);
+    const h = await asked([]);
     h.clock.now += 60_000;
-    const writer = unwrap(h.store.acquire(ROOT, "owner"));
+    const writer = unwrap(await h.store.acquire(ROOT, "owner"));
     await resume(
       writer,
       h.artifacts,
@@ -85,10 +85,10 @@ async function secondTurn(
   key: string,
   config: Partial<LoopConfig> = {},
 ): Promise<{ readonly writer: Writer; readonly log: readonly KnownEvent[] }> {
-  const first = unwrap(h.store.acquire(ROOT, "first"));
+  const first = unwrap(await h.store.acquire(ROOT, "first"));
   await resume(first, h.artifacts, h.config(), { input: userInput("first") });
-  first.release();
-  const writer = unwrap(h.store.acquire(ROOT, "second"));
+  await first.release();
+  const writer = unwrap(await h.store.acquire(ROOT, "second"));
   await resume(
     writer,
     h.artifacts,
@@ -101,7 +101,13 @@ async function secondTurn(
 describe("a cancel during a leaked automatic compaction", () => {
   test("threshold: the compaction fails, nothing more is sent, and the turn ends cancelled", async () => {
     const key = credential("fake", "apiKey", "sk-l09-cancel-5e6f", "U")();
-    const h = harness([], [], [say("one", 5_000)], undefined, policy(1_000));
+    const h = await harness(
+      [],
+      [],
+      [say("one", 5_000)],
+      undefined,
+      policy(1_000),
+    );
     const { log } = await secondTurn(h, key);
     expect(after(log, "cancel_requested")).toEqual([
       "cancel_requested",
@@ -115,7 +121,7 @@ describe("a cancel during a leaked automatic compaction", () => {
 
   test("reactive preflight: the compaction fails, and the turn ends cancelled, not context_exhausted", async () => {
     const key = credential("fake", "apiKey", "sk-l09-cancel-7a8b", "U")();
-    const h = harness(
+    const h = await harness(
       [],
       [],
       [say("one", 185_000)],
@@ -140,16 +146,22 @@ describe("a crash right after the leak, with the cancel pending", () => {
     type: KnownEvent["type"],
   ): Promise<readonly KnownEvent[]> {
     const key = credential("fake", "apiKey", "sk-l09-crash-9c0d", "U")();
-    const h = harness([], [], [say("one", 5_000)], undefined, policy(1_000));
+    const h = await harness(
+      [],
+      [],
+      [say("one", 5_000)],
+      undefined,
+      policy(1_000),
+    );
     await secondTurn(h, key, {
-      onEvent: (e: KnownEvent) => {
+      onEvent: async (e: KnownEvent) => {
         if (e.type !== type) return;
         h.clock.now += 60_000;
-        unwrap(h.store.acquire(ROOT, "usurper")).release();
+        await unwrap(await h.store.acquire(ROOT, "usurper")).release();
       },
     });
     h.clock.now += 60_000;
-    const next = unwrap(h.store.acquire(ROOT, "next"));
+    const next = unwrap(await h.store.acquire(ROOT, "next"));
     await resume(next, h.artifacts, h.config());
     return events(next);
   }

@@ -21,9 +21,9 @@ const CANCEL: EventDraft = {
   data: { scope: "turn" },
 };
 
-function session(seen: KnownEvent[] = []): Session {
-  const h = harness([], [userInput("go")], []);
-  const writer = unwrap(h.store.acquire(ROOT, "run"));
+async function session(seen: KnownEvent[] = []): Promise<Session> {
+  const h = await harness([], [userInput("go")], []);
+  const writer = unwrap(await h.store.acquire(ROOT, "run"));
   return new Session(
     writer,
     h.artifacts,
@@ -32,26 +32,26 @@ function session(seen: KnownEvent[] = []): Session {
 }
 
 describe("Session.appendDecided", () => {
-  test("a decided batch is appended and its events reach onEvent", () => {
+  test("a decided batch is appended and its events reach onEvent", async () => {
     const seen: KnownEvent[] = [];
-    const s = session(seen);
-    expect(s.appendDecided(() => ok([CANCEL]))).toBeUndefined();
+    const s = await session(seen);
+    expect(await s.appendDecided(async () => ok([CANCEL]))).toBeUndefined();
     expect(seen.map((e) => e.type)).toEqual(["cancel_requested"]);
   });
 
-  test("a refusal comes back and nothing is appended", () => {
-    const s = session();
+  test("a refusal comes back and nothing is appended", async () => {
+    const s = await session();
     const before = s.fold.seq;
-    expect(s.appendDecided(() => err("mailbox_full"))).toEqual({
+    expect(await s.appendDecided(async () => err("mailbox_full"))).toEqual({
       kind: "refused",
       refusal: "mailbox_full",
     });
     expect(s.fold.seq).toBe(before);
   });
 
-  test("after a cancel the barrier keeps no other turn ending", () => {
-    const s = session();
-    expect(s.append(CANCEL)).toBeUndefined();
+  test("after a cancel the barrier keeps no other turn ending", async () => {
+    const s = await session();
+    expect(await s.append(CANCEL)).toBeUndefined();
     const before = s.fold.seq;
     const ended: EventDraft = {
       type: "turn_completed",
@@ -60,7 +60,7 @@ describe("Session.appendDecided", () => {
       actor: { kind: "host" },
       data: { reason: "end_turn" },
     };
-    expect(s.appendDecided(() => ok([ended]))).toBe(BARRED);
+    expect(await s.appendDecided(async () => ok([ended]))).toBe(BARRED);
     expect(s.fold.seq).toBe(before);
   });
 });

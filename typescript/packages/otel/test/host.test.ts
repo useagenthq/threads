@@ -34,7 +34,7 @@ async function steps(telemetry: boolean): Promise<readonly string[]> {
   await served.stop();
   expect(Date.now() - started).toBeLessThan(7_000);
   const { log } = await openStore(store);
-  const read = log.read(result.thread.branch);
+  const read = await log.read(result.thread.branch);
   return read.ok ? knownEvents(read.value).map((e) => e.type) : [];
 }
 

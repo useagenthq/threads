@@ -3,12 +3,13 @@ import { err, ok, type Result } from "../result";
 import { indexImported } from "../team/imported";
 import { type Chain, type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
+import { acquire } from "./acquire";
 import type { ArtifactStore } from "./artifacts";
 import { HostBindings } from "./bindings";
 import { newBranch } from "./branch";
 import { BudgetLedger } from "./budget";
 import { ObserverCursors } from "./cursors";
-import type { SqliteDriver } from "./driver";
+import { READ_ONLY, type StoreDriver, type Tx } from "./driver";
 import * as forking from "./fork-reads";
 import {
   beginFork,
@@ -17,40 +18,39 @@ import {
   reclaimFork,
 } from "./fork-writes";
 import { importSegments, verifiedImport } from "./import";
-import { LEASE_TTL_MS, type StoreAccess, takeLease } from "./lease";
+import { LEASE_TTL_MS, type StoreAccess } from "./lease";
 import { ResourceLedger } from "./ledger";
 import { exportBytes } from "./lines";
 import { ALREADY_OPEN, type BranchOpening, openBranch } from "./open";
-import { isTorn, markRepaired, recordRepair } from "./repair";
 import {
   atomically,
   type BranchRow,
-  installSchema,
   LOCAL_TENANT,
   ownedBranch,
   rootBranch,
   setBranchState,
 } from "./tables";
-import { Writer, writerMismatch } from "./writer";
+import { nestedDriver } from "./tx";
+import { Writer } from "./writer";
 
 export type { ForkRequest } from "./fork-writes";
 export { LEASE_TTL_MS } from "./lease";
 
 /**
- * The append-only log store on SQLite: exact line bytes, a head checkpoint per
- * branch updated with every append, one fenced writer per branch, and forks that reference
- * their parent's rows. Every read goes back through the import checks.
+ * The append-only log store: exact line bytes, a head checkpoint per branch updated with every
+ * append, one fenced writer per branch, and forks that reference their parent's rows. Every read
+ * goes back through the import checks. The same code runs on SQLite and on Postgres.
  *
  * A store is bound to one tenant: a branch of any other tenant is `branch_not_found`.
  */
 export class LogStore {
-  readonly #db: SqliteDriver;
+  readonly #db: StoreDriver;
   readonly #now: () => number;
   readonly #artifacts: ArtifactStore;
   readonly tenant: string;
 
   private constructor(
-    db: SqliteDriver,
+    db: StoreDriver,
     now: () => number,
     artifacts: ArtifactStore,
     tenantId: string,
@@ -62,26 +62,47 @@ export class LogStore {
   }
 
   /**
-   * Opens the store on `db` for one tenant, creating the store.sql tables. A database a newer
-   * schema wrote is `unsupported_format`. `now` is the injected clock for leases, event times
+   * Opens the store on `db` for one tenant, creating the store.sql tables. A database of another
+   * schema version is `unsupported_format`. `now` is the injected clock for leases, event times
    * and snapshot expiry; `artifacts` keeps the bytes a torn import dropped.
    */
-  static open(
-    db: SqliteDriver,
+  static async open(
+    db: StoreDriver,
     now: () => number,
     artifacts: ArtifactStore,
     tenantId: string = LOCAL_TENANT,
-  ): Result<LogStore, LogError> {
-    const installed = installSchema(db);
+  ): Promise<Result<LogStore, LogError>> {
+    const installed = await db.install();
     return installed.ok
       ? ok(new LogStore(db, now, artifacts, tenantId))
       : installed;
   }
 
+  /**
+   * This store inside `tx`, a transaction the caller holds: its reads and writes are savepoints
+   * of it, and commit with it. For host steps that run several store operations as one.
+   */
+  within(tx: Tx): LogStore {
+    return new LogStore(
+      nestedDriver(tx),
+      this.#now,
+      this.#artifacts,
+      this.tenant,
+    );
+  }
+
+  /** The same connection bound to another tenant (no install: it was opened already). */
+  scoped(tenantId: string): LogStore {
+    return new LogStore(this.#db, this.#now, this.#artifacts, tenantId);
+  }
+
   /** Writes a new root branch: its header line, head at seq 0. */
-  createBranch(threadId: ThreadId, branchId: BranchId): Result<void, LogError> {
-    return atomically(this.#db, () => {
-      const made = newBranch(this.#db, {
+  createBranch(
+    threadId: ThreadId,
+    branchId: BranchId,
+  ): Promise<Result<void, LogError>> {
+    return atomically(this.#db, async (tx) => {
+      const made = await newBranch(tx, {
         tenantId: this.tenant,
         threadId,
         branchId,
@@ -100,12 +121,12 @@ export class LogStore {
   rootOrCreate(
     threadId: ThreadId,
     branchId: BranchId,
-  ): Result<BranchId, LogError> {
-    return atomically(this.#db, () => {
-      const root = rootBranch(this.#db, threadId, this.tenant);
+  ): Promise<Result<BranchId, LogError>> {
+    return atomically(this.#db, async (tx) => {
+      const root = await rootBranch(tx, threadId, this.tenant);
       if (!root.ok) return root;
       if (root.value !== undefined) return ok(root.value);
-      const made = newBranch(this.#db, {
+      const made = await newBranch(tx, {
         tenantId: this.tenant,
         threadId,
         branchId,
@@ -121,10 +142,10 @@ export class LogStore {
    * `branch.open` in a transaction of its own: a new root branch of this tenant with its first
    * events, held by the returned writer at epoch 1. `already_open` when the branch exists.
    */
-  openBranch(
+  async openBranch(
     opening: Omit<BranchOpening, "tenantId">,
-  ): Result<Writer | typeof ALREADY_OPEN, LogError> {
-    const opened = this.openBranchChecked(() => ok(opening));
+  ): Promise<Result<Writer | typeof ALREADY_OPEN, LogError>> {
+    const opened = await this.openBranchChecked(async () => ok(opening));
     if (!opened.ok) return opened;
     if (opened.value === undefined) throw new Error("an opening always opens");
     return ok(opened.value);
@@ -132,27 +153,28 @@ export class LogStore {
 
   /**
    * `branch.open` after a check in the same transaction: `decide` reads the store and returns
-   * the opening, or undefined to commit nothing (materialize's row check).
+   * the opening, or undefined to commit nothing (materialize's row check). It may run again
+   * from the start (see `Tx`).
    */
-  openBranchChecked(
+  async openBranchChecked(
     decide: (
-      db: SqliteDriver,
+      tx: Tx,
       now: number,
-    ) => Result<Omit<BranchOpening, "tenantId"> | undefined, LogError>,
-  ): Result<Writer | typeof ALREADY_OPEN | undefined, LogError> {
+    ) => Promise<Result<Omit<BranchOpening, "tenantId"> | undefined, LogError>>,
+  ): Promise<Result<Writer | typeof ALREADY_OPEN | undefined, LogError>> {
     const now = this.#now();
-    const opened = atomically<
+    const opened = await atomically<
       | {
           opening: Omit<BranchOpening, "tenantId">;
           chain: Chain | typeof ALREADY_OPEN;
         }
       | undefined
-    >(this.#db, () => {
-      const opening = decide(this.#db, now);
+    >(this.#db, async (tx) => {
+      const opening = await decide(tx, now);
       if (!opening.ok) return opening;
       const { value } = opening;
       if (value === undefined) return ok(undefined);
-      const chain = openBranch(this.#db, now, {
+      const chain = await openBranch(tx, now, {
         ...value,
         tenantId: this.tenant,
       });
@@ -174,8 +196,12 @@ export class LogStore {
   }
 
   /** A branch's state, if this tenant owns it (a forking or failed branch is never listed). */
-  branchState(branchId: BranchId): Result<BranchRow["state"], LogError> {
-    const row = ownedBranch(this.#db, branchId, this.tenant);
+  async branchState(
+    branchId: BranchId,
+  ): Promise<Result<BranchRow["state"], LogError>> {
+    const row = await this.#reading((tx) =>
+      ownedBranch(tx, branchId, this.tenant),
+    );
     return row.ok ? ok(row.value.state) : row;
   }
 
@@ -188,14 +214,24 @@ export class LogStore {
    * The branch's verified resolved chain. Storage is a trust boundary, so this re-verifies. A
    * branch imported without a verified head reads back unverified, with its dropped bytes.
    */
-  read(branchId: BranchId): Result<VerifiedLog, LogError> {
-    const bytes = this.exportBranch(branchId);
+  read(branchId: BranchId): Promise<Result<VerifiedLog, LogError>> {
+    return this.#reading((tx) => this.readIn(tx, branchId));
+  }
+
+  /** `read` inside a transaction the caller holds. */
+  async readIn(
+    tx: Tx,
+    branchId: BranchId,
+  ): Promise<Result<VerifiedLog, LogError>> {
+    const bytes = await this.#export(tx, branchId);
     return bytes.ok ? verifyExport(bytes.value) : bytes;
   }
 
   /** A thread's main branch, or `branch_not_found`. */
-  mainBranch(threadId: ThreadId): Result<BranchId, LogError> {
-    const root = rootBranch(this.#db, threadId, this.tenant);
+  async mainBranch(threadId: ThreadId): Promise<Result<BranchId, LogError>> {
+    const root = await this.#reading((tx) =>
+      rootBranch(tx, threadId, this.tenant),
+    );
     if (!root.ok) return root;
     return root.value === undefined
       ? err(logError("branch_not_found", `no thread ${threadId}`))
@@ -203,10 +239,17 @@ export class LogStore {
   }
 
   /** `threads export`: ancestor segments, the branch's lines, then its head line. */
-  exportBranch(branchId: BranchId): Result<Uint8Array, LogError> {
-    const owned = ownedBranch(this.#db, branchId, this.tenant);
+  exportBranch(branchId: BranchId): Promise<Result<Uint8Array, LogError>> {
+    return this.#reading((tx) => this.#export(tx, branchId));
+  }
+
+  async #export(
+    tx: Tx,
+    branchId: BranchId,
+  ): Promise<Result<Uint8Array, LogError>> {
+    const owned = await ownedBranch(tx, branchId, this.tenant);
     if (!owned.ok) return owned;
-    return exportBytes(this.#db, this.#artifacts, branchId);
+    return exportBytes(tx, this.#artifacts, branchId);
   }
 
   /**
@@ -216,47 +259,32 @@ export class LogStore {
    * The index rows the log holds (wake rows, its teams) are folded again in the same
    * transaction.
    */
-  importLog(bytes: Uint8Array): Result<VerifiedLog, LogError> {
-    const log = verifiedImport(bytes, this.#artifacts);
+  async importLog(bytes: Uint8Array): Promise<Result<VerifiedLog, LogError>> {
+    const log = await verifiedImport(bytes, this.#artifacts);
     if (!log.ok) return log;
     const torn = log.value.torn;
     const target = {
       tenantId: this.tenant,
-      droppedRef: torn === undefined ? null : this.#artifacts.put(torn.bytes),
+      droppedRef:
+        torn === undefined ? null : await this.#artifacts.put(torn.bytes),
     };
-    const stored = atomically(this.#db, () => {
-      const imported = importSegments(this.#db, log.value, target);
-      return imported.ok ? indexImported(this, log.value) : imported;
+    const stored = await atomically(this.#db, async (tx) => {
+      const imported = await importSegments(tx, log.value, target);
+      return imported.ok ? indexImported(tx, this, log.value) : imported;
     });
     return stored.ok ? log : stored;
   }
 
   /**
-   * Takes the branch lease: free or expired, else `branch_busy`. The new epoch is one above
-   * both the old lease and every epoch on the resolved chain (wire rule 11). A branch imported
-   * with a torn tail records log_repaired under the new lease and becomes runnable.
+   * Takes the branch lease: free or expired, else `branch_busy` (acquire.ts). A torn import
+   * records log_repaired under the new lease and becomes runnable.
    */
   acquire(
     branchId: BranchId,
     holderId: string,
     ttlMs: number = LEASE_TTL_MS,
-  ): Result<Writer, LogError> {
-    return atomically(this.#db, () => {
-      const row = ownedBranch(this.#db, branchId, this.tenant);
-      const torn = row.ok && isTorn(row.value) ? row.value : undefined;
-      if (torn !== undefined) markRepaired(this.#db, branchId);
-      const log = this.#runnable(branchId);
-      if (!log.ok) return log;
-      const writer = takeLease(
-        this.#access,
-        branchId,
-        holderId,
-        ttlMs,
-        log.value,
-      );
-      if (!writer.ok || torn === undefined) return writer;
-      return recordRepair(writer.value, this.#artifacts, torn, log.value);
-    });
+  ): Promise<Result<Writer, LogError>> {
+    return acquire(this.#access, this.#artifacts, branchId, holderId, ttlMs);
   }
 
   /**
@@ -268,31 +296,8 @@ export class LogStore {
     branchId: BranchId,
     holderId: string,
     ttlMs: number = LEASE_TTL_MS,
-  ): Result<Writer, LogError> {
+  ): Promise<Result<Writer, LogError>> {
     return reclaimFork(this.#access, branchId, holderId, ttlMs);
-  }
-
-  /**
-   * The chain of a branch this implementation may write: this tenant's, `ready`, verified, and
-   * headed by this implementation at this major version.
-   */
-  #runnable(branchId: BranchId): Result<VerifiedLog, LogError> {
-    const branch = ownedBranch(this.#db, branchId, this.tenant);
-    if (!branch.ok) return branch;
-    const state: BranchRow["state"] = branch.value.state;
-    if (state !== "ready")
-      return err(
-        logError(
-          "branch_not_runnable",
-          `branch ${branchId} is ${state}`,
-          branch.value.head_seq,
-        ),
-      );
-    const log = this.read(branchId);
-    if (!log.ok)
-      return err(logError("log_corrupt", log.error.message, log.error.seq));
-    const mismatch = writerMismatch(log.value);
-    return mismatch === undefined ? log : err(mismatch);
   }
 
   /**
@@ -304,7 +309,7 @@ export class LogStore {
   beginFork(
     request: ForkRequest,
     ttlMs: number = LEASE_TTL_MS,
-  ): Result<Writer, LogError> {
+  ): Promise<Result<Writer, LogError>> {
     return beginFork(this.#access, request, ttlMs);
   }
 
@@ -315,25 +320,27 @@ export class LogStore {
       readonly sandboxId: SandboxId;
       readonly knowledgePolicy: "pinned" | "current";
     },
-  ): Result<void, LogError> {
+  ): Promise<Result<void, LogError>> {
     return finishFork(this.#access, writer, restored);
   }
 
   /** A fork that can't finish: the branch becomes `fork_failed`, never listed or runnable. */
-  failFork(writer: Writer): Result<void, LogError> {
-    return writer.fenced(() => {
-      setBranchState(this.#db, writer.lease.branchId, "fork_failed");
+  failFork(writer: Writer): Promise<Result<void, LogError>> {
+    return writer.fenced(async (tx) => {
+      await setBranchState(tx, writer.lease.branchId, "fork_failed");
       return ok(undefined);
     });
   }
 
-  branches(id: ThreadId): Result<readonly forking.ListedBranch[], LogError> {
-    return forking.listedBranches(this.#db, id, this.tenant);
+  branches(
+    id: ThreadId,
+  ): Promise<Result<readonly forking.ListedBranch[], LogError>> {
+    return this.#reading((tx) => forking.listedBranches(tx, id, this.tenant));
   }
 
   /** Branches a crash left mid-fork, for their creator's recovery. */
-  forkingBranches(): Result<readonly BranchId[], LogError> {
-    return forking.forkingBranches(this.#db, this.tenant);
+  forkingBranches(): Promise<Result<readonly BranchId[], LogError>> {
+    return this.#reading((tx) => forking.forkingBranches(tx, this.tenant));
   }
 
   /** The resource ledger, fenced by the owner's writer. */
@@ -356,9 +363,18 @@ export class LogStore {
     return new HostBindings(this.#db, this.#now);
   }
 
-  /** The connection, for core's built-in providers' private tables (localMemory, localKnowledge). */
-  get driver(): SqliteDriver {
+  /** The connection, for the host's tables and core's built-in providers' private tables. */
+  get driver(): StoreDriver {
     return this.#db;
+  }
+
+  /** The content-addressed artifacts beside the log. */
+  get artifacts(): ArtifactStore {
+    return this.#artifacts;
+  }
+
+  #reading<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+    return this.#db.transaction(fn, READ_ONLY);
   }
 
   /** What the lease and fork steps (lease.ts, fork-writes.ts) use of this store. */
@@ -367,7 +383,7 @@ export class LogStore {
       db: this.#db,
       now: this.#now,
       tenant: this.tenant,
-      read: (branchId) => this.read(branchId),
+      read: (tx, branchId) => this.readIn(tx, branchId),
     };
   }
 }

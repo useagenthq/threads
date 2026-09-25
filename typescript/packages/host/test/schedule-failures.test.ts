@@ -10,6 +10,7 @@ import { z } from "zod";
 import { HostContext } from "../src/context";
 import { bindSchedules, tick } from "../src/schedules";
 import { say } from "./kit";
+import { sqlAll, sqlRun } from "./sql";
 
 // A failing schedule, agent or thread is reported and never stops the others: every other
 // schedule is reserved and decided, and recovery always runs.
@@ -41,7 +42,8 @@ function healthy(name: string) {
 
 async function occurrences(store: ReturnType<typeof sqlite>) {
   const { db } = await storeConnection(store);
-  return db.all(
+  return await sqlAll(
+    db,
     "SELECT schedule_id, state FROM schedule_occurrences ORDER BY schedule_id, occurrence_at",
     [],
   );
@@ -80,13 +82,13 @@ describe("schedule failures", () => {
     const { db } = await storeConnection(store);
     const [row] = z
       .array(z.strictObject({ thread_id: ThreadId }))
-      .parse(db.all("SELECT thread_id FROM schedule_threads", []));
+      .parse(await sqlAll(db, "SELECT thread_id FROM schedule_threads", []));
     if (row === undefined) throw new Error("no schedule thread");
     const { log } = await openStore(tenantStore(store, "local"));
-    const main = log.mainBranch(row.thread_id);
+    const main = await log.mainBranch(row.thread_id);
     if (!main.ok) throw new Error(main.error.message);
     // A run cut short: an input durable, its turn open, no run going.
-    const writer = log.acquire(main.value, "crashed");
+    const writer = await log.acquire(main.value, "crashed");
     if (!writer.ok) throw new Error(writer.error.message);
     writer.value.append([
       {
@@ -100,8 +102,9 @@ describe("schedule failures", () => {
         data: { source: "api", text: "Busy." },
       },
     ]);
-    writer.value.release();
-    db.run(
+    await writer.value.release();
+    await sqlRun(
+      db,
       `INSERT INTO schedule_occurrences (tenant_id, schedule_id, occurrence_at, state, thread_id,
         claimed_at, agent, input_json, timezone)
         VALUES ('local', 'other', 1, 'pending', 'not-a-thread-id', 1, 'good', '"Hi."', 'UTC')`,
@@ -109,7 +112,7 @@ describe("schedule failures", () => {
     );
     await tick(ctx, bound, nine - 60_000, nine + DAY - 60_000);
     await ctx.idle();
-    const read = log.read(main.value);
+    const read = await log.read(main.value);
     expect(read.ok && read.value.fold.turnOpen).toBe(false);
     await ctx.stop();
   });

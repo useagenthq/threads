@@ -3,7 +3,6 @@ a branch that doesn't verify is busy, a team is found through its `teams` row, a
 background child takes its parent's wake row, and a member whose lead is gone is deletable."""
 
 import asyncio
-import sqlite3
 from typing import TYPE_CHECKING
 
 from team.delete_kit import PENDING, PLAIN, SETTLE, count, delete, plain_child, team, team_rows
@@ -11,6 +10,7 @@ from team.team_kit import LEAD, MEMBER, add, branch_of, case_logs, holding
 
 from threads.agents.store import open_store
 from threads.result import Err, Ok
+from threads.store.conn import Conn
 from threads.store.deletion import TEAM_TABLES
 
 if TYPE_CHECKING:
@@ -43,7 +43,7 @@ def test_a_leads_team_is_found_through_its_teams_row() -> None:
     """The rows go even when the lead's own log names another team id than its `teams` row."""
     renamed = "0192c000-0000-7000-8000-00000000000a"
 
-    def rename(c: sqlite3.Connection) -> None:
+    def rename(c: Conn) -> None:
         for table in TEAM_TABLES:
             c.execute(f"UPDATE {table} SET team_id = ?", (renamed,))  # noqa: S608
 

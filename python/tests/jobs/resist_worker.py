@@ -13,9 +13,10 @@ import asyncio
 import sys
 from pathlib import Path
 
+from jobs.stores import drill_store
 from pydantic import BaseModel, JsonValue
 
-from threads import Failed, RunContext, agent, open_thread, scripted_model, sqlite, tool
+from threads import Failed, RunContext, agent, open_thread, scripted_model, tool
 from threads.log import EffectBeginEvent, Permissions, ThreadId
 from threads.result import Ok
 
@@ -63,7 +64,7 @@ def _bot(where: Path):  # noqa: ANN202 - a test script
 
 
 def main(role: str, where: Path, thread: str = "") -> None:
-    store = sqlite(str(where))
+    store = drill_store(where)
     bot = _bot(where)
     if role == "first":
         bot.run_sync("go", store=store, deps=None)

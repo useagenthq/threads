@@ -27,7 +27,7 @@ import { askRow, type MemberRow } from "./rows";
 export type AskPlan = {
   readonly limits: TeamLimits;
   /** Every budget covering the recipient has room for one request of its model. */
-  readonly headroom: (row: MemberRow) => boolean;
+  readonly headroom: (row: MemberRow) => Promise<boolean>;
   /** The ask's deadline from now, capped by the default (the model's ask takes none). */
   readonly timeoutMs?: number;
 };
@@ -55,24 +55,25 @@ function sentAs(ctx: CallContext, mailId: string): MailEnvelope | undefined {
  * call stays pending and parks once its turn has nothing else to run. A re-dispatched ask only
  * parks. Returns the open ask, or the refusal it recorded.
  */
-export function ask(
+export async function ask(
   ctx: CallContext,
   args: { readonly to: string; readonly question: string },
   plan: AskPlan,
-): Opened | Refused {
-  const caller = callerOf(ctx);
+): Promise<Opened | Refused> {
+  const caller = await callerOf(ctx);
   if (caller === undefined) throw new Error("a team tool call outside a team");
   const askId = callMailId(ctx);
   const opened = sentAs(ctx, askId);
   if (opened !== undefined) return reopened(ctx, caller, opened);
-  const row = deliverable(
-    callRequest(ctx),
+  const row = await deliverable(
+    await callRequest(ctx),
     "ask",
     named(ctx, args.to),
     plan.limits,
   );
   if ("refused" in row) return recorded(ctx, row);
-  if (!plan.headroom(row)) return recorded(ctx, refusal("budget_exceeded"));
+  if (!(await plan.headroom(row)))
+    return recorded(ctx, refusal("budget_exceeded"));
   const cap = TEAM_CONSTANTS.askWaitDefaultMs;
   const deadline = ctx.batch.now + Math.min(plan.timeoutMs ?? cap, cap);
   ctx.batch.add(
@@ -86,21 +87,21 @@ export function ask(
       causal: causalOf(ctx),
       ask_id: askId,
       deadline,
-      body: bodyOf(args.question, ctx.put),
+      body: await bodyOf(args.question, ctx.put),
     }),
   );
-  parkCall(ctx, caller);
+  await parkCall(ctx, caller);
   return { status: "open", ask_id: askId, deadline } satisfies Opened;
 }
 
-function reopened(
+async function reopened(
   ctx: CallContext,
   caller: Caller,
   opened: MailEnvelope,
-): Opened {
+): Promise<Opened> {
   if (opened.deadline === undefined)
     throw new Error("an ask envelope always has a deadline");
-  parkCall(ctx, caller);
+  await parkCall(ctx, caller);
   return {
     status: "open",
     ask_id: callMailId(ctx),
@@ -112,11 +113,11 @@ function reopened(
  * reply: the ask was delivered here, not replied to yet, and its row is open before its deadline,
  * read in this transaction. No policy decision: only an asked member replies.
  */
-export function reply(
+export async function reply(
   ctx: CallContext,
   args: { readonly ask_id: string; readonly text: string },
-): Wire<ReplyResult> | Refused {
-  const caller = callerOf(ctx);
+): Promise<Wire<ReplyResult> | Refused> {
+  const caller = await callerOf(ctx);
   if (caller === undefined) throw new Error("a team tool call outside a team");
   const events = eventsOf(ctx);
   const asked = events.find(
@@ -125,7 +126,7 @@ export function reply(
       e.data.envelope.kind === "ask" &&
       e.data.envelope.ask_id === args.ask_id,
   )?.data.envelope;
-  const row = askRow(ctx.db, args.ask_id);
+  const row = await askRow(ctx.tx, args.ask_id);
   if (asked === undefined || row === undefined)
     return recorded(ctx, refusal("unknown_ask"));
   const replied = events.some(
@@ -151,7 +152,7 @@ export function reply(
       provenance: asked.provenance,
       causal: causalOf(ctx),
       ask_id: args.ask_id,
-      body: bodyOf(args.text, ctx.put),
+      body: await bodyOf(args.text, ctx.put),
     }),
   );
   return recorded(ctx, { id, status: "sent" } satisfies Wire<ReplyResult>);

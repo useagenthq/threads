@@ -60,7 +60,7 @@ async function runLead(
   const r = await lead.run("Go.", { store });
   expect(r.status).toBe("completed");
   const log = await events(store, r.thread);
-  assertTeamReplays(await logOf(store), r.team.ref.id);
+  await assertTeamReplays(await logOf(store), r.team.ref.id);
   return log;
 }
 

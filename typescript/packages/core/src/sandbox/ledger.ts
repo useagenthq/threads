@@ -40,24 +40,24 @@ export function sameProvider(
  * Settles a pending row by the adapter's lookup answer: found → live; not_found → released,
  * only when the operation's declared capability is final; anything else → unknown (parks).
  */
-export function settle<T>(
+export async function settle<T>(
   ledger: ResourceLedger,
   writer: Writer,
   row: ResourceRow,
   answer: LookupResult<T>,
   final: boolean,
   refOf: (value: T) => string,
-): Result<Settled<T>, LogError> {
+): Promise<Result<Settled<T>, LogError>> {
   const id = row.resource_id;
   switch (answer.status) {
     case "found": {
-      const live = ledger.live(writer, id, refOf(answer.value), null);
-      return live.ok ? ok({ state: "live", value: answer.value }) : live;
+      const live = await ledger.live(writer, id, refOf(answer.value), null);
+      return live.ok ? ok({ state: "live", value: answer.value }) : await live;
     }
     case "not_found":
       if (final) {
-        const gone = ledger.notCreated(writer, id);
-        return gone.ok ? ok({ state: "released" }) : gone;
+        const gone = await ledger.notCreated(writer, id);
+        return gone.ok ? ok({ state: "released" }) : await gone;
       }
       return unknown(ledger, writer, id);
     case "not_found_nonfinal":
@@ -68,13 +68,13 @@ export function settle<T>(
   }
 }
 
-function unknown<T>(
+async function unknown<T>(
   ledger: ResourceLedger,
   writer: Writer,
   id: string,
-): Result<Settled<T>, LogError> {
-  const parked = ledger.unknown(writer, id);
-  return parked.ok ? ok({ state: "unknown" }) : parked;
+): Promise<Result<Settled<T>, LogError>> {
+  const parked = await ledger.unknown(writer, id);
+  return parked.ok ? ok({ state: "unknown" }) : await parked;
 }
 
 /** A refused dispatch as a log failure: the caller lost its authority and must stop. */
@@ -131,7 +131,7 @@ export async function resolvePending(
   if (row.kind === "sandbox") {
     const answer = await lookupSandbox(sandbox, key, context);
     if (!answer.ok) return answer;
-    const settled = settle(
+    const settled = await settle(
       ledger,
       writer,
       row,
@@ -145,7 +145,7 @@ export async function resolvePending(
   }
   const answer = await lookupSnapshot(sandbox, key, context);
   if (!answer.ok) return answer;
-  const settled = settle(
+  const settled = await settle(
     ledger,
     writer,
     row,
@@ -209,7 +209,7 @@ export async function release(
 ): Promise<Result<ResourceState, LogError>> {
   const same = sameProvider(sandbox, row);
   if (!same.ok) return same;
-  const releasing = ledger.releasing(writer, row.resource_id);
+  const releasing = await ledger.releasing(writer, row.resource_id);
   if (!releasing.ok) return releasing;
   const answer = await provideRelease(
     sandbox,
@@ -218,12 +218,11 @@ export async function release(
     session,
   );
   const id = row.resource_id;
-  const done =
-    answer.to === "released"
-      ? ledger.released(writer, id, answer.outcome)
-      : answer.to === "release_failed"
-        ? ledger.releaseFailed(writer, id, answer.outcome)
-        : ledger.unknown(writer, id);
+  const done = await (answer.to === "released"
+    ? ledger.released(writer, id, answer.outcome)
+    : answer.to === "release_failed"
+      ? ledger.releaseFailed(writer, id, answer.outcome)
+      : ledger.unknown(writer, id));
   return done.ok ? ok(done.value.state) : done;
 }
 
@@ -236,17 +235,17 @@ export async function collect(
   ledger: ResourceLedger,
   sandbox: Sandbox,
 ): Promise<Result<readonly ResourceRow[], LogError>> {
-  const rows = ledger.collectable();
+  const rows = await ledger.collectable();
   if (!rows.ok) return rows;
   const done: ResourceRow[] = [];
   for (const row of rows.value) {
     if (!sameProvider(sandbox, row).ok) continue;
-    const claim = ledger.claim(row.resource_id);
+    const claim = await ledger.claim(row.resource_id);
     if (!claim.ok) continue;
     const context = cleanupContext(ledger, row.resource_id, claim.value);
     const answer = await provideRelease(sandbox, row, context, undefined);
     const to = answer.to === "released" ? "released" : "release_failed";
-    const moved = ledger.collected(
+    const moved = await ledger.collected(
       row.resource_id,
       claim.value,
       to,

@@ -103,14 +103,18 @@ describe("a spawned child with no log", () => {
     // The parent's agent_finished proves the child ran; its log is gone from this store.
     const { db } = await storeConnection(store);
     const elsewhere = "0192a000-0000-7000-8000-0000000000ef";
-    db.run(
-      "INSERT INTO threads (thread_id, tenant_id) SELECT ?, tenant_id FROM threads WHERE thread_id = ?",
-      [elsewhere, kidId ?? ""],
+    await db.transaction((tx) =>
+      tx.run(
+        "INSERT INTO threads (thread_id, tenant_id) SELECT ?, tenant_id FROM threads WHERE thread_id = ?",
+        [elsewhere, kidId ?? ""],
+      ),
     );
-    db.run("UPDATE branches SET thread_id = ? WHERE thread_id = ?", [
-      elsewhere,
-      kidId ?? "",
-    ]);
+    await db.transaction((tx) =>
+      tx.run("UPDATE branches SET thread_id = ? WHERE thread_id = ?", [
+        elsewhere,
+        kidId ?? "",
+      ]),
+    );
     const total = await tree(thread);
     expect(code(total)).toBe("log_corrupt");
     expect(total.ok ? "" : total.error.message).toContain(

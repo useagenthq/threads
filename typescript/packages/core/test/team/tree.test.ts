@@ -4,6 +4,7 @@ import type { VerifiedLog } from "../../src/verify";
 import { code, unwrap } from "../store/helpers";
 import {
   caseLogs,
+  exec,
   forkedAt,
   storeLogs,
   type Team,
@@ -56,15 +57,15 @@ function cost(t: Team) {
 const SETTLE = "team-settle-wakes-lead";
 
 describe("tree cost walks a lead's members", () => {
-  test("adds a member from its own log", () => {
-    const t = teamStore(
+  test("adds a member from its own log", async () => {
+    const t = await teamStore(
       caseLogs(
         SETTLE,
         ["lead", "researcher", "team"],
         pricing(["lead", "researcher"]),
       ),
     );
-    expect(unwrap(cost(t))).toEqual({
+    expect(unwrap(await cost(t))).toEqual({
       currency: "USD",
       known_nanos: 1_800_000,
       upper_bound_nanos: 1_800_000,
@@ -73,11 +74,11 @@ describe("tree cost walks a lead's members", () => {
     });
   });
 
-  test("an unpriced member that ran makes the total incomplete", () => {
-    const t = teamStore(
+  test("an unpriced member that ran makes the total incomplete", async () => {
+    const t = await teamStore(
       caseLogs(SETTLE, ["lead", "researcher", "team"], pricing(["lead"])),
     );
-    expect(unwrap(cost(t))).toEqual({
+    expect(unwrap(await cost(t))).toEqual({
       currency: "USD",
       known_nanos: 1_380_000,
       upper_bound_nanos: 1_380_000,
@@ -86,15 +87,15 @@ describe("tree cost walks a lead's members", () => {
     });
   });
 
-  test("a member in the starting window counts zero and leaves the total complete", () => {
-    const t = teamStore(
+  test("a member in the starting window counts zero and leaves the total complete", async () => {
+    const t = await teamStore(
       caseLogs(
         "team-tree-starting-member-pending",
         ["lead", "team"],
         pricing(["lead"]),
       ),
     );
-    expect(unwrap(cost(t))).toEqual({
+    expect(unwrap(await cost(t))).toEqual({
       currency: "USD",
       known_nanos: 960_000,
       upper_bound_nanos: 960_000,
@@ -103,23 +104,23 @@ describe("tree cost walks a lead's members", () => {
     });
   });
 
-  test("a missing branch after the task notification is log_corrupt", () => {
-    const t = teamStore(
+  test("a missing branch after the task notification is log_corrupt", async () => {
+    const t = await teamStore(
       caseLogs("team-tree-missing-branch-after-notice-rejected", [
         "lead",
         "team",
       ]),
     );
-    expect(code(cost(t))).toBe("log_corrupt");
+    expect(code(await cost(t))).toBe("log_corrupt");
   });
 
-  test("from a fork of the lead, a member started on the main branch still counts", () => {
+  test("from a fork of the lead, a member started on the main branch still counts", async () => {
     const logs = caseLogs(
       SETTLE,
       ["lead", "researcher", "team"],
       pricing(["lead", "researcher"]),
     );
-    const t = teamStore(logs);
+    const t = await teamStore(logs);
     // Seq 10 is the start call's result, after the lead's member_started (seq 8).
     const fork = verified(
       forkedAt(
@@ -128,10 +129,10 @@ describe("tree cost walks a lead's members", () => {
         "0192b000-0000-7000-8000-0000000000f1",
       ),
     );
-    storeLogs(t.store, [fork]);
+    await storeLogs(t.store, [fork]);
     const thread = fork.segments[0]?.header.thread_id;
     if (thread === undefined) throw new Error("no header");
-    const walked = unwrap(treeCost(t.store, thread, fork));
+    const walked = unwrap(await treeCost(t.store, thread, fork));
     // The fork's own lead requests (540,000) and the researcher's (420,000).
     expect(walked).toEqual({
       currency: "USD",
@@ -142,8 +143,8 @@ describe("tree cost walks a lead's members", () => {
     });
   });
 
-  test("a forged backlink is log_corrupt", () => {
-    const t = teamStore(caseLogs(SETTLE, ["lead", "researcher", "team"]));
+  test("a forged backlink is log_corrupt", async () => {
+    const t = await teamStore(caseLogs(SETTLE, ["lead", "researcher", "team"]));
     // Replace the researcher's stored log with one whose parent names another event.
     const forged = caseLogs(SETTLE, ["researcher"], (_, line) =>
       line["type"] === "thread_started"
@@ -161,11 +162,13 @@ describe("tree cost walks a lead's members", () => {
     );
     const branch = t.logs.get("researcher")?.segments[0]?.header.branch_id;
     for (const table of ["events", "branches"])
-      t.db.run(`DELETE FROM ${table} WHERE branch_id = ?`, [branch ?? ""]);
-    storeLogs(t.store, [
+      await exec(t.db, `DELETE FROM ${table} WHERE branch_id = ?`, [
+        branch ?? "",
+      ]);
+    await storeLogs(t.store, [
       verified(forged.get("researcher") ?? new Uint8Array()),
     ]);
-    const failed = cost(t);
+    const failed = await cost(t);
     expect(failed.ok ? "ok" : failed.error.message).toContain(
       "doesn't name the member_started",
     );

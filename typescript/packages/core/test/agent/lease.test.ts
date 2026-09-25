@@ -74,7 +74,11 @@ describe("run ownership of the branch lease", () => {
     jest.useFakeTimers();
     const artifacts = memoryArtifacts();
     const log = unwrap(
-      LogStore.open(openBunSqlite(":memory:"), () => Date.now(), artifacts),
+      await LogStore.open(
+        openBunSqlite(":memory:"),
+        () => Date.now(),
+        artifacts,
+      ),
     );
     const store = storeOf({ log, artifacts });
     const bot = agent({
@@ -100,7 +104,11 @@ describe("run ownership of the branch lease", () => {
     jest.useFakeTimers();
     const artifacts = memoryArtifacts();
     const log = unwrap(
-      LogStore.open(openBunSqlite(":memory:"), () => Date.now(), artifacts),
+      await LogStore.open(
+        openBunSqlite(":memory:"),
+        () => Date.now(),
+        artifacts,
+      ),
     );
     const slow = tool({
       name: "slow",
@@ -170,7 +178,11 @@ describe("run ownership of the branch lease", () => {
     jest.useFakeTimers();
     const artifacts = memoryArtifacts();
     const log = unwrap(
-      LogStore.open(openBunSqlite(":memory:"), () => Date.now(), artifacts),
+      await LogStore.open(
+        openBunSqlite(":memory:"),
+        () => Date.now(),
+        artifacts,
+      ),
     );
     const store = storeOf({ log, artifacts });
     const seed = await agent({ model: model() }).run("seed", { store });
@@ -179,12 +191,12 @@ describe("run ownership of the branch lease", () => {
         // A stalled process: the clock jumps past the TTL with no renewal, and another
         // executor takes the branch.
         jest.setSystemTime(Date.now() + LEASE_TTL_MS + 1);
-        unwrap(log.acquire(seed.thread.branch, "intruder"));
+        unwrap(await log.acquire(seed.thread.branch, "intruder"));
       }),
     });
     const lost = await bot.run("late", { thread: seed.thread });
     expect(lost.status).toBe("failed");
-    const events = knownEvents(unwrap(log.read(seed.thread.branch)));
+    const events = knownEvents(unwrap(await log.read(seed.thread.branch)));
     expect(events.filter((e) => e.type === "model_response")).toHaveLength(1);
   });
 });

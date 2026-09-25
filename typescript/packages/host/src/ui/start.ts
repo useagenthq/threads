@@ -82,7 +82,7 @@ export async function findUiRun(
   message: UserMessage,
 ): Promise<Started | undefined> {
   const { db } = await storeConnection(ctx.store);
-  const receipt = findReceipt(db, {
+  const receipt = await findReceipt(db, {
     tenant,
     operation: UI_RUN,
     key: uiKey(threadId, message.id),
@@ -116,9 +116,9 @@ async function runByEventId(
   const id = EventId.safeParse(message.id);
   if (!id.success) return undefined;
   const { log } = await ctx.open(tenant);
-  const branch = log.mainBranch(threadId);
+  const branch = await log.mainBranch(threadId);
   if (!branch.ok) return undefined;
-  const read = log.read(branch.value);
+  const read = await log.read(branch.value);
   if (!read.ok) return undefined;
   const run = knownEvents(read.value).find(
     (e) => e.type === "user_input" && e.event_id === id.data,
@@ -158,9 +158,12 @@ async function uiTarget(
   // The spec artifacts are durable before first, which names them, is appended.
   await pin.put(store);
   const first = [pin.event];
-  const main = log.rootOrCreate(threadId, BranchId.parse(uuidv7(log.now())));
+  const main = await log.rootOrCreate(
+    threadId,
+    BranchId.parse(uuidv7(log.now())),
+  );
   if (!main.ok) return fail("invalid_request", main.error.message);
-  const read = log.read(main.value);
+  const read = await log.read(main.value);
   if (!read.ok) return fail("branch_not_runnable", read.error.message);
   const events = knownEvents(read.value);
   if (events.length > 0 && !(await samePin(events, hosted)))
