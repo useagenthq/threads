@@ -212,6 +212,17 @@ def test_a_python_optional_method_may_have_both_its_gaps() -> None:
     assert parse_gaps(both, members(api()), "gaps")[1] == []
 
 
+def test_a_whole_type_gap_narrows_to_its_still_missing_members() -> None:
+    # The base listed Model missing whole; Model landed without lookup, so lookup is listed now.
+    whole = Gap("Model", "py", "missing", "01-gate")
+    narrowed = Gap("Model.lookup", "py", "missing", "01-gate")
+    assert check_surface.check_baseline([narrowed], [whole], members(api()), "py") == []
+    # Nothing narrows a gap the base didn't list whole, nor another language's.
+    other = Gap("Model", "ts", "missing", "01-gate")
+    errs = check_surface.check_baseline([narrowed], [other], members(api()), "py")
+    assert len(errs) == 1
+
+
 def test_later_pr_retargeting_a_placement_gap_fails() -> None:
     def placed(at: str) -> Gap:
         return Gap("Channel", "ts", "placement", "01-gate", at)

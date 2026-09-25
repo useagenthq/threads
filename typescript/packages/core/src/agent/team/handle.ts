@@ -6,7 +6,7 @@ import {
   type Principal,
   ThreadId,
 } from "../../log";
-import { startPin } from "../../loop/agents/start-pin";
+import { listedOf, startPin } from "../../loop/agents/start-pin";
 import { startRoom } from "../../loop/ledger";
 import { redactSecrets } from "../../redact/text";
 import { knownEvents } from "../../reduce";
@@ -86,9 +86,9 @@ async function startMember(
     "operator",
   );
   const plan: StartPlan = {
-    agents: listed(agent, pinned?.configHash),
+    agents: listedOf(agent, pinned),
     resolved,
-    limits: env.lead?.teamLimits ?? TEAM_LIMITS,
+    limits: limitsOf(env),
     // The lead is the new member's parent: its budgets and its ancestors' cover the member.
     headroom: () =>
       pinned !== undefined &&
@@ -195,13 +195,6 @@ function putText(env: HandleEnv): Request["put"] {
 }
 
 const limitsOf = (env: HandleEnv) => env.lead?.teamLimits ?? TEAM_LIMITS;
-
-function listed(
-  agent: string,
-  configHash: string | undefined,
-): StartPlan["agents"] {
-  return new Map(configHash === undefined ? [] : [[agent, { configHash }]]);
-}
 
 /** The lead as a member's parent, and the defer_tools its members inherit. */
 function leadOf(env: HandleEnv): {

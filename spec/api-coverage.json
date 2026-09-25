@@ -356,6 +356,38 @@
       "tests/web/test_web.py::test_search_backends_send_the_key_on_the_host_and_parse_hits"
     ]
   },
+  "Team.events": {
+    "ts": [
+      "packages/core/test/team/handle.test.ts > team.events > the feed: team_opened, the lead's events, then the operator's request"
+    ],
+    "py": [
+      "tests/team/test_team_handle.py::test_the_feed_team_opened_the_leads_events_then_the_operators_request"
+    ]
+  },
+  "Team.members": {
+    "ts": [
+      "packages/core/test/team/handle-edges.test.ts > hydration > members() reads a large output from the artifact store"
+    ],
+    "py": [
+      "tests/team/test_team_handle_edges.py::test_members_reads_a_large_output_from_the_artifact_store"
+    ]
+  },
+  "Team.send": {
+    "ts": [
+      "packages/core/test/team/handle.test.ts > team.start and team.send > team.send reaches a started member once; its key replays the outcome"
+    ],
+    "py": [
+      "tests/team/test_team_handle.py::test_team_send_reaches_a_started_member_once_its_key_replays_the_outcome"
+    ]
+  },
+  "Team.start": {
+    "ts": [
+      "packages/core/test/team/handle.test.ts > team.start and team.send > team.start is one operator request; the member starts with its label"
+    ],
+    "py": [
+      "tests/team/test_team_handle.py::test_team_start_is_one_operator_request_the_member_starts_with_its_label"
+    ]
+  },
   "TeamAgent.check": {
     "ts": [
       "packages/core/test/team/agent.test.ts > agent({team}) > check(): a member that hands off is refused handoff_in_team"
@@ -1058,6 +1090,22 @@
   "modal.token_secret=default": {
     "py": [
       "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[modal]"
+    ]
+  },
+  "openTeam": {
+    "ts": [
+      "packages/core/test/team/handle.test.ts > openTeam > another principal of the tenant acts through its own handle"
+    ],
+    "py": [
+      "tests/team/test_team_handle.py::test_another_principal_of_the_tenant_acts_through_its_own_handle"
+    ]
+  },
+  "openTeam.principal": {
+    "ts": [
+      "packages/core/test/team/handle.test.ts > openTeam > another tenant is forbidden and an unknown team is not_found"
+    ],
+    "py": [
+      "tests/team/test_team_handle.py::test_another_tenant_is_forbidden_and_an_unknown_team_is_not_found"
     ]
   },
   "openThread": {

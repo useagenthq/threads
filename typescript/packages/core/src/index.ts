@@ -11,7 +11,7 @@ export {
   VerifiedDelivery,
 } from "./channel/protocol";
 export * from "./evals";
-export { Principal } from "./log";
+export { Principal, type StoredMemberResult } from "./log";
 export * from "./memory";
 export {
   blockRealModels,

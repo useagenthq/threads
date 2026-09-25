@@ -1,0 +1,17 @@
+---
+title: "StoreCorruptError"
+description: "Thrown by the four result reads (Team.wait, members, ask and askStatus) when a result the verified log names is missing or corrupt in the artifact store: a broken store invariant, never an expected failure."
+icon: "Braces"
+---
+
+TS class StoreCorruptError extends Error, Python exception StoreCorruptError.
+
+## Fields
+
+<Field name="code" type={"\"artifact_missing\" | \"artifact_corrupt\""} required>
+  Whether the bytes are gone or differ from the ref.
+</Field>
+
+<Field name="ref" type={"ArtifactRef"} required>
+  The verified ref that failed.
+</Field>

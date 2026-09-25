@@ -1,0 +1,35 @@
+---
+title: "TeamItem"
+description: "One item of team.events()."
+icon: "Braces"
+---
+
+A union discriminated by `kind`.
+
+### event
+
+<Field name="kind" type={"\"event\""} required>
+  "event": one committed event.
+</Field>
+
+<Field name="cursor" type={"TeamCursor"} required>
+  Resume after it.
+</Field>
+
+<Field name="source" type={"TeamSource"} required>
+  Where the event was written.
+</Field>
+
+<Field name="event" type={"Event"} required>
+  The event exactly as stored.
+</Field>
+
+### epoch_restarted
+
+<Field name="kind" type={"\"epoch_restarted\""} required>
+  "epoch_restarted": the feed was rebuilt; items restart from the new epoch.
+</Field>
+
+<Field name="cursor" type={"TeamCursor"} required>
+  The new epoch's start.
+</Field>

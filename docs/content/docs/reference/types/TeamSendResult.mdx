@@ -1,0 +1,27 @@
+---
+title: "TeamSendResult"
+description: "team.send's result."
+icon: "Braces"
+---
+
+A union discriminated by `status`.
+
+### sent
+
+<Field name="status" type={"\"sent\""} required>
+  "sent": the mail is durable and pending for its recipient.
+</Field>
+
+<Field name="id" type={"MailId"} required>
+  The mail's id.
+</Field>
+
+### refused
+
+<Field name="status" type={"\"refused\""} required>
+  "refused": nothing was done; code says why.
+</Field>
+
+<Field name="code" type={"SendRefusal | OperatorRefusal"} required>
+  Why it was refused.
+</Field>

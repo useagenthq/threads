@@ -1,0 +1,31 @@
+---
+title: "TeamMember"
+description: "One row of team.members()."
+icon: "Braces"
+---
+
+## Fields
+
+<Field name="name" type={"MemberName"} required>
+  The member's name, such as researcher-1.
+</Field>
+
+<Field name="ref" type={"MemberRef"} required>
+  Its full reference.
+</Field>
+
+<Field name="agent" type={"Name"} required>
+  The agent it runs.
+</Field>
+
+<Field name="state" type={"MemberState"} required>
+  Where it is in its lifecycle.
+</Field>
+
+<Field name="result" type={"MemberResult"}>
+  Present once idle or ended. Absent while starting, running or parked.
+</Field>
+
+<Field name="label" type={"string"}>
+  The display label its start gave, if any. Never shown to a model.
+</Field>

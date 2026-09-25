@@ -1,0 +1,15 @@
+---
+title: "TeamCursor"
+description: "A position in the team feed, to resume team.events after."
+icon: "Braces"
+---
+
+## Fields
+
+<Field name="epoch" type={"Int"} required>
+  The feed's epoch; a rebuilt feed starts a new one.
+</Field>
+
+<Field name="offset" type={"Int"} required>
+  The position in that epoch.
+</Field>

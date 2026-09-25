@@ -61,9 +61,15 @@ AREAS: tuple[tuple[str, tuple[Row, ...]], ...] = (
             ),
             ("Handoffs", "/docs/multi-agent/handoffs", ("agent.handoffs",), ""),
             (
-                "Team handle: start, ask and wait on members from code",
+                "Team handle: start and message members, list them and read the feed",
                 "/docs/multi-agent/teams",
-                ("openTeam", "Team"),
+                ("openTeam", "Team.start", "Team.send", "Team.members", "Team.events"),
+                "",
+            ),
+            (
+                "Team handle: ask and wait on members from code",
+                "/docs/multi-agent/teams",
+                ("Team.ask", "Team.wait"),
                 "",
             ),
             (

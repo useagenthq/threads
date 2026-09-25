@@ -1,0 +1,24 @@
+---
+title: "MemberState"
+description: "starting: started, its log not opened yet."
+icon: "Braces"
+---
+
+idle: its latest task is done; mail wakes it. ended: failed, cancelled, out of budget or handed off.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+type MemberState = "starting" | "running" | "idle" | "parked" | "ended";
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+type MemberState = Literal["starting", "running", "idle", "parked", "ended"]
+```
+
+</Tab>
+</Tabs>

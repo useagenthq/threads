@@ -1,0 +1,53 @@
+---
+title: "openTeam / open_team"
+description: "A Team handle for a team another process ran, or to act as another principal."
+icon: "SquareFunction"
+---
+
+RunResult.team is the common path.
+
+Import from `@threads/core` (TypeScript) or `threads` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function openTeam(store: Store, ref: TeamRef, options: {
+  principal: Principal;
+}): Promise<Result<Team>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def open_team(
+    store: Store,
+    ref: TeamRef,
+    *,
+    principal: Principal,
+) -> Ok[Team] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="store" type={"Store"} required>
+  The store the team's logs live in, the one its lead ran with. See [Store](/docs/reference/types/Store).
+</Field>
+
+<Field name="ref" type={"TeamRef"} required>
+  Which team, as team.ref gives it. See [TeamRef](/docs/reference/types/TeamRef).
+</Field>
+
+<Field name="principal" type={"Principal"} required>
+  Who acts through this handle. Every request it makes is recorded with this principal; another tenant's is forbidden.
+</Field>
+
+## Returns
+
+[`Team`](/docs/reference/types/Team)
+
+**Returns an error value** with one of these codes: `not_found`, `forbidden`.

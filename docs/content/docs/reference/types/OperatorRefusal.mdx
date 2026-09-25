@@ -1,0 +1,24 @@
+---
+title: "OperatorRefusal"
+description: "Refusals only Team methods return."
+icon: "Braces"
+---
+
+busy: the team log stayed locked past the host's bound, so nothing was recorded; retrying with the same key is safe.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+type OperatorRefusal = "busy" | "idempotency_key_reused" | "idempotency_key_principal_mismatch";
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+type OperatorRefusal = Literal["busy", "idempotency_key_reused", "idempotency_key_principal_mismatch"]
+```
+
+</Tab>
+</Tabs>

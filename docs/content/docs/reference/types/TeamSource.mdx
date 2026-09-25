@@ -1,0 +1,37 @@
+---
+title: "TeamSource"
+description: "Which log a feed item came from."
+icon: "Braces"
+---
+
+A union discriminated by `kind`.
+
+### member
+
+<Field name="kind" type={"\"member\""} required>
+  "member": a member's (or the lead's) own log.
+</Field>
+
+<Field name="member" type={"MemberRef"} required>
+  Which member.
+</Field>
+
+### operator
+
+<Field name="kind" type={"\"operator\""} required>
+  "operator": the team log's events of one operator request.
+</Field>
+
+<Field name="principal" type={"Principal"} required>
+  Who made the request.
+</Field>
+
+<Field name="request" type={"RequestId"} required>
+  The request.
+</Field>
+
+### team
+
+<Field name="kind" type={"\"team\""} required>
+  "team": the team log's own team_opened.
+</Field>

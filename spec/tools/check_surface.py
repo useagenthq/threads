@@ -72,13 +72,24 @@ def check_bootstrap(base: str) -> list[str]:
 def check_baseline(
     gaps: list[Gap], base_gaps: list[Gap], base_contract: dict[str, Member], lang: str
 ) -> list[str]:
-    """A gap added since the base is allowed only for a member the base contract lacks."""
+    """A gap added since the base is allowed only for a member the base contract lacks, or for a
+    member of an owner the base listed missing whole: the owner landed without all of it, so the
+    gap narrows to what is still missing."""
     before = {g.key for g in base_gaps}
+    whole = {g.name for g in base_gaps if g.lang == lang and g.kind == "missing"}
+
+    def narrowed(name: str) -> bool:
+        parts = name.split(".")
+        return any(".".join(parts[:i]) in whole for i in range(1, len(parts)))
+
     return [
         f"surface gate: new gap {_label(g)} for a member that exists at the base; "
         "restore the member instead of listing it"
         for g in gaps
-        if g.lang == lang and g.key not in before and g.name in base_contract
+        if g.lang == lang
+        and g.key not in before
+        and g.name in base_contract
+        and not narrowed(g.name)
     ]
 
 

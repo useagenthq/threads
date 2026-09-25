@@ -1,0 +1,31 @@
+---
+title: "TeamStartResult"
+description: "team.start's result."
+icon: "Braces"
+---
+
+A union discriminated by `status`.
+
+### started
+
+<Field name="status" type={"\"started\""} required>
+  "started": the member exists in state starting; its task is queued.
+</Field>
+
+<Field name="member" type={"MemberRef"} required>
+  The new member: its name is &lt;agent>-&lt;k>.
+</Field>
+
+### refused
+
+<Field name="status" type={"\"refused\""} required>
+  "refused": nothing was done; code says why.
+</Field>
+
+<Field name="code" type={"StartRefusal | OperatorRefusal"} required>
+  Why it was refused.
+</Field>
+
+<Field name="detail" type={"InvalidDefinition"}>
+  Present exactly when code is invalid_definition: which field, why, and what is allowed.
+</Field>

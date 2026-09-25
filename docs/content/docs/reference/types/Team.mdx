@@ -1,0 +1,174 @@
+---
+title: "Team"
+description: "Your code's handle on a team: RunResult.team, or openTeam."
+icon: "Box"
+---
+
+Every request is recorded in the team log as the principal it acts for; only busy, returned before the log could be written, is not.
+
+<Callout>A handle returned by the library.</Callout>
+
+## Properties
+
+<Field name="ref" type={"TeamRef"} required>
+  This team's tenant and id.
+</Field>
+
+## Methods
+
+### start
+
+Starts a member from an agent the team lists, with task as its first input. Recorded in the team log as an operator request.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+start(agent: Name, task: string, options?: {
+  label?: string;
+  instructions?: string;
+  tools?: readonly string[];
+  model?: string;
+  idempotencyKey?: string;
+}): Promise<TeamStartResult>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def start(
+    agent: Name,
+    task: str,
+    *,
+    label: str | None = None,
+    instructions: str | None = None,
+    tools: Sequence[str] | None = None,
+    model: str | None = None,
+    idempotency_key: str | None = None,
+) -> TeamStartResult
+```
+
+</Tab>
+</Tabs>
+
+<Field name="agent" type={"Name"} required>
+  The agent to start, by name.
+</Field>
+
+<Field name="task" type={"string"} required>
+  The member's first input; it sees nothing else.
+</Field>
+
+<Field name="label" type={"string"}>
+  A display name for the member, 1-64 characters with no control or format character, not operator. Never hashed and never shown to a model. Omitted: none.
+</Field>
+
+<Field name="instructions" type={"string"}>
+  A dynamic agent only: instructions added after the template's own, in a block marked as written by operator. At most 16 KiB. Omitted: the template's alone.
+</Field>
+
+<Field name="tools" type={"readonly string[]"}>
+  A dynamic agent only: the member's tools, a subset of the template's (the framework tools are always kept). Omitted: all of the template's.
+</Field>
+
+<Field name="model" type={"string"}>
+  A dynamic agent only: a key of the template's models. Omitted: the first key.
+</Field>
+
+<Field name="idempotencyKey / idempotency_key" type={"string"}>
+  Makes a retry safe: the same key, principal and body return (or re-attach to) the first request's outcome. Scoped to this team and operation. Omitted: every call is a new request.
+</Field>
+
+### send
+
+Sends a message to a member. It arrives as the member's next input and wakes it if idle.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+send(to: MemberRef, text: string, options?: {
+  idempotencyKey?: string;
+}): Promise<TeamSendResult>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def send(
+    to: MemberRef,
+    text: str,
+    *,
+    idempotency_key: str | None = None,
+) -> TeamSendResult
+```
+
+</Tab>
+</Tabs>
+
+<Field name="to" type={"MemberRef"} required>
+  The member, at the generation you know. See [MemberRef](/docs/reference/types/MemberRef).
+</Field>
+
+<Field name="text" type={"string"} required>
+  The message.
+</Field>
+
+<Field name="idempotencyKey / idempotency_key" type={"string"}>
+  Makes a retry safe: the same key, principal and body return (or re-attach to) the first request's outcome. Scoped to this team and operation. Omitted: every call is a new request.
+</Field>
+
+### members
+
+Every member of the team, the lead included, with its state and, once idle or ended, its result. A pure read.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+members(): Promise<readonly TeamMember[]>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def members() -> Sequence[TeamMember]
+```
+
+</Tab>
+</Tabs>
+
+**Throws** `StoreCorruptError` for a definition that can't run.
+
+### events
+
+The team's audit feed: every committed event of every team log, as stored (results keep their artifact refs, so this never raises StoreCorruptError). A pure read that drives nothing.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+events(options?: {
+  after?: TeamCursor;
+}): Promise<AsyncIterable<TeamItem>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def events(
+    *,
+    after: TeamCursor | None = None,
+) -> AsyncIterator[TeamItem]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="after" type={"TeamCursor"}>
+  Resume after this cursor. Omitted: from the start. See [TeamCursor](/docs/reference/types/TeamCursor).
+</Field>
