@@ -102,8 +102,11 @@ export function treeManifestHash(tree: Tree): string {
   );
 }
 
-/** The first rule the entries break, in order; undefined when they keep every rule. */
-function broken(entries: readonly TreeEntry[]): string | undefined {
+/**
+ * The first semantic rule (2 to 5) the entries break, in order; undefined when they keep every
+ * rule. The schema can't hold these, so every tree is checked before it is trusted or built.
+ */
+export function broken(entries: readonly TreeEntry[]): string | undefined {
   const paths = pathSet();
   let last: string | undefined;
   for (const e of entries) {

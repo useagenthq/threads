@@ -17,9 +17,16 @@ export function decodeUtf8(bytes: Uint8Array): string | undefined {
   }
 }
 
-/** Every component is a real name: no empty, `.` or `..` component, and no NUL. */
+/** The longest path, in UTF-8 bytes (Linux PATH_MAX): it keeps every path check bounded. */
+export const MAX_PATH = 4096;
+const encoder = new TextEncoder();
+
+/** At most MAX_PATH bytes, and every component a real name: no empty, `.` or `..`, no NUL. */
 export function isNormal(path: string): boolean {
   return (
+    // A UTF-8 byte is at least a quarter of a UTF-16 unit; skip encoding a huge path.
+    path.length <= MAX_PATH &&
+    encoder.encode(path).length <= MAX_PATH &&
     !path.includes("\0") &&
     path.split("/").every((c) => c !== "" && c !== "." && c !== "..")
   );
@@ -50,33 +57,56 @@ export function inRoot(path: string, target: string): boolean {
   return true;
 }
 
+/** A path component's node: its own kind once added (undefined: only an implied directory). */
+type Node = { kind: Kind | undefined; readonly children: Map<string, Node> };
+
+const isLink = (node: Node): boolean => (node.kind ?? "dir") !== "dir";
+
 /**
- * The paths of one tree, added in order. A path already present is a duplicate. A path with a
- * file or symlink above it, or a file or symlink with anything below it, is a conflict: its
- * extraction would write through a link or into a file.
+ * The parent directory's node, creating implied directories; undefined when a file or symlink
+ * is on the way. A file or symlink never has children, so a refusal has created nothing.
+ */
+function parent(root: Node, parts: readonly string[]): Node | undefined {
+  let node = root;
+  for (const part of parts) {
+    if (isLink(node)) return undefined;
+    const next = node.children.get(part) ?? {
+      kind: undefined,
+      children: new Map(),
+    };
+    node.children.set(part, next);
+    node = next;
+  }
+  return isLink(node) ? undefined : node;
+}
+
+/**
+ * The paths of one tree, added in order, as a tree of components so each add is linear in its
+ * path. A path already present is a duplicate. A path with a file or symlink above it, or a
+ * file or symlink with anything below it, is a conflict: its extraction would write through a
+ * link or into a file.
  */
 export function pathSet(): {
   readonly add: (
     path: string,
     kind: Kind,
   ) => "duplicate" | "path_conflict" | undefined;
-  readonly kind: (path: string) => Kind | undefined;
 } {
-  const kinds = new Map<string, Kind>();
-  const parents = new Set<string>();
+  const root: Node = { kind: "dir", children: new Map() };
   return {
-    kind: (path) => kinds.get(path),
     add: (path, kind) => {
-      if (kinds.has(path)) return "duplicate";
-      if (kind !== "dir" && parents.has(path)) return "path_conflict";
-      const above = path
-        .split("/")
-        .slice(0, -1)
-        .map((_, i, parts) => parts.slice(0, i + 1).join("/"));
-      if (above.some((p) => (kinds.get(p) ?? "dir") !== "dir"))
-        return "path_conflict";
-      for (const p of above) parents.add(p);
-      kinds.set(path, kind);
+      const parts = path.split("/");
+      const last = parts.pop() ?? "";
+      const dir = parent(root, parts);
+      if (dir === undefined) return "path_conflict";
+      const found = dir.children.get(last);
+      if (found === undefined) {
+        dir.children.set(last, { kind, children: new Map() });
+        return undefined;
+      }
+      if (found.kind !== undefined) return "duplicate";
+      if (kind !== "dir") return "path_conflict";
+      found.kind = kind;
       return undefined;
     },
   };

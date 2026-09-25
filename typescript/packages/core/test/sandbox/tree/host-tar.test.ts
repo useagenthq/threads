@@ -48,6 +48,8 @@ function tree(): string {
 async function stored(root: string) {
   const tar = Bun.spawn(["tar", "-cf", "-", "-C", root, "."], {
     stdout: "pipe",
+    // macOS tar would add AppleDouble `._` entries for extended metadata.
+    env: { ...process.env, COPYFILE_DISABLE: "1" },
   });
   const result = await storeTar(tar.stdout, memoryArtifacts());
   expect(await tar.exited).toBe(0);

@@ -2,7 +2,7 @@ import { err, ok, type Result } from "../../result";
 import type { ArtifactStore } from "../../store/artifacts";
 import { type LogError, logError } from "../../verify/error";
 import { BLOCK } from "./header";
-import type { Tree, TreeEntry } from "./tree";
+import { broken, type Tree, type TreeEntry } from "./tree";
 
 // The canonical archive of a tree (spec/schema/README.md, "Snapshot manifest"): ustar headers
 // in tree order, a pax header only for a name or link over 100 bytes, mtime 0, the caller's
@@ -98,7 +98,8 @@ function headers(e: TreeEntry, owner: Owner): readonly Uint8Array[] {
 }
 
 /**
- * Writes the tree's canonical archive to `out`, one file's bytes at a time from `artifacts`.
+ * Writes the tree's canonical archive to `out`, one file's bytes at a time from `artifacts`. A
+ * tree that breaks a tree rule is artifact_corrupt before any byte is written.
  * A missing or corrupt file artifact, or one whose size isn't the tree's, stops it.
  */
 export function buildTar(
@@ -113,6 +114,9 @@ export function buildTar(
     )
   )
     throw new Error(`uid/gid outside 0..${MAX_ID}`);
+  const why = broken(tree.entries);
+  if (why !== undefined)
+    return err(logError("artifact_corrupt", `the tree can't be built: ${why}`));
   for (const e of tree.entries) {
     for (const block of headers(e, owner)) out(block);
     if (e.kind !== "file") continue;

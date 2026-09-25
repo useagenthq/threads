@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { z } from "zod";
 import { canonicalize } from "../src/log";
 import { ModelCatalog } from "../src/model/catalog";
-import { evalSchema } from "./eval-schema";
 import { Tree } from "../src/sandbox/tree/tree";
+import { evalSchema } from "./eval-schema";
 import { specSchema } from "./spec-schema";
 import { toolCatalog, toolSchema } from "./tool-catalog";
 
