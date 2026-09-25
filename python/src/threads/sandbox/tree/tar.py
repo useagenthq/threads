@@ -244,9 +244,9 @@ async def _trailer(s: _State) -> Err[ArchiveInvalid] | None:
         if piece is None:
             return None
         inside = piece[: max(0, s.caps.total - start)]
-        stray = next((i for i, b in enumerate(inside) if b), None)
-        if stray is not None:
-            return _invalid("bad_header", None, start + stray)
+        rest = inside.lstrip(b"\0")
+        if rest:
+            return _invalid("bad_header", None, start + len(inside) - len(rest))
         if len(inside) < len(piece):
             return _invalid("archive_too_large", None, s.caps.total)
 

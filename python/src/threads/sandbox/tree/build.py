@@ -11,7 +11,7 @@ from threads.log import ParseError
 from threads.render.artifacts import ReadArtifact
 from threads.result import Err, Ok
 from threads.sandbox.tree.header import BLOCK
-from threads.sandbox.tree.tree import Tree, TreeDir, TreeEntry, TreeFile, TreeSymlink
+from threads.sandbox.tree.tree import Tree, TreeDir, TreeEntry, TreeFile, TreeSymlink, broken
 
 _FIELD = 100
 _MAX_ID = 0o7777777
@@ -98,9 +98,12 @@ def build_tar(
 ) -> Ok[None] | Err[ParseError]:
     """Writes the tree's canonical archive to `out`, one file's bytes at a time from
     `read`. A missing or corrupt file artifact, or one whose size isn't the tree's, stops
-    it."""
+    it. A tree that breaks a tree rule is artifact_corrupt before any byte is written."""
     if not all(0 <= i <= _MAX_ID for i in (owner.uid, owner.gid)):
         raise ValueError(f"uid/gid outside 0..{_MAX_ID}")
+    why = broken(tree.entries)
+    if why is not None:
+        return Err(ParseError("artifact_corrupt", f"the tree can't be built: {why}"))
     for e in tree.entries:
         for block in _headers(e, owner):
             out(block)

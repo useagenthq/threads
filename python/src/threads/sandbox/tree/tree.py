@@ -20,6 +20,7 @@ __all__ = [
     "TreeEntry",
     "TreeFile",
     "TreeSymlink",
+    "broken",
     "encode_tree",
     "parse_tree",
     "sorted_tree",
@@ -54,8 +55,9 @@ def tree_manifest_hash(tree: Tree) -> str:
     )
 
 
-def _broken(entries: Sequence[TreeEntry]) -> str | None:
-    """The first rule the entries break, in order; None when they keep every rule."""
+def broken(entries: Sequence[TreeEntry]) -> str | None:
+    """The first semantic rule (2 to 5) the entries break, in order; None when they keep every
+    rule. The schema can't hold these, so every tree is checked before it is trusted or built."""
     paths = PathSet()
     last: bytes | None = None
     for e in entries:
@@ -95,5 +97,5 @@ def parse_tree(data: bytes) -> Ok[Tree] | Err[ParseError]:
         return corrupt(str(error))
     if encode_tree(tree) != data:
         return corrupt("not in canonical form")
-    why = _broken(tree.entries)
+    why = broken(tree.entries)
     return Ok(tree) if why is None else corrupt(why)

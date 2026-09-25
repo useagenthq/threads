@@ -42,7 +42,11 @@ def _tree(root: Path) -> Path:
 
 def _stored(root: Path) -> StoredTree:
     tar = subprocess.run(  # noqa: S603 - fixed argv
-        [str(TAR), "-cf", "-", "-C", str(root), "."], capture_output=True, check=True
+        [str(TAR), "-cf", "-", "-C", str(root), "."],
+        capture_output=True,
+        check=True,
+        # macOS tar would add AppleDouble `._` entries for extended metadata.
+        env={**os.environ, "COPYFILE_DISABLE": "1"},
     )
     stored = asyncio.run(store_tar(chunked(tar.stdout, lambda: 4096), MemoryArtifacts()))
     assert isinstance(stored, Ok), stored
@@ -57,6 +61,7 @@ def _file(path: str, body: bytes, mode: int) -> TreeFile:
 @pytest.mark.skipif(TAR is None, reason="no tar on this host")
 def test_the_host_tar_reads_as_the_tree_on_disk(tmp_path: Path) -> None:
     entries = _stored(_tree(tmp_path)).tree.entries
+    assert len(entries) == len(FILES) + 4, entries
     dirs = [e for e in entries if isinstance(e, TreeDir)]
     assert [d.path for d in dirs] == ["sub", "sub/déjà vu"]
     assert [e for e in entries if not isinstance(e, TreeDir)] == sorted(
