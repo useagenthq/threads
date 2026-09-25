@@ -1,6 +1,7 @@
 """Why a continued thread's pin differs from the agent's, in words that say how to continue it.
-Two pin changes came with prompt caching (lane 10), and one with tool origins (lane 22): every
-thread started before them meets them on upgrade. A Python thread pinned before configs recorded
+Two pin changes came with prompt caching (lane 10), one with tool origins (lane 22), and one with
+the sandbox effect-class rule (lane 16 A1): every thread started before them meets them on
+upgrade. A Python thread pinned before configs recorded
 their resolved settings can't continue; any other change starts a new thread."""
 
 from typing import Final
@@ -8,6 +9,12 @@ from typing import Final
 from pydantic import JsonValue
 
 _DEFAULT_TTL_MS: Final = 300_000
+_OPEN_EGRESS: Final = (
+    'this thread was started with open egress (egress="unenforced") by an older release, which '
+    "pinned write, edit and notebook_edit as sandbox_local; under open egress they are now "
+    "unguarded, so an in-doubt call parks instead of being settled by the sandbox. Its config "
+    "can't be matched now, so start a new thread"
+)
 
 
 def pin_change(stored: JsonValue, new: JsonValue) -> str:
@@ -19,6 +26,9 @@ def pin_change(stored: JsonValue, new: JsonValue) -> str:
             "permissions, retry and context settings; its config can't be matched now, so start "
             "a new thread"
         )
+    # Checked before the caching advice, as origins are: no setting continues such a thread.
+    if _opened_egress(stored, new):
+        return _OPEN_EGRESS
     # Checked before the caching advice: an agent with extension tools can't continue such a
     # thread whatever its caching settings.
     if _has_origins(new) and not _has_origins(stored):
@@ -60,6 +70,25 @@ def _ttl(started: JsonValue) -> JsonValue:
     context = policy.get("context") if isinstance(policy, dict) else None
     ttl = context.get("cache_ttl_ms") if isinstance(context, dict) else None
     return _DEFAULT_TTL_MS if ttl is None else ttl
+
+
+def _effects(started: JsonValue) -> dict[str, JsonValue]:
+    tools = started.get("tools") if isinstance(started, dict) else None
+    if not isinstance(tools, list):
+        return {}
+    return {
+        str(t["name"]): t.get("effect_class") for t in tools if isinstance(t, dict) and "name" in t
+    }
+
+
+def _opened_egress(stored: JsonValue, new: JsonValue) -> bool:
+    """A tool the stored pin declared sandbox_local that the agent now pins unguarded (lane 16
+    A1)."""
+    now = _effects(new)
+    return any(
+        effect == "sandbox_local" and now.get(name) == "unguarded"
+        for name, effect in _effects(stored).items()
+    )
 
 
 def _has_origins(started: JsonValue) -> bool:

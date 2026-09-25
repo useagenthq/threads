@@ -62,6 +62,7 @@ const Plain = z.strictObject({
   output_styles: z.record(z.string(), z.string()).optional(),
   extensions: z.array(ExtensionDef).optional(),
   sandbox: z.literal("fake").optional(),
+  egress: z.literal("unenforced").optional(),
   /** A dynamic agent: its models by key, in order. */
   models: z.array(ModelDef).optional(),
   memory_write: z.enum(["deny", "ask", "allow_principal", "allow"]).optional(),
@@ -168,6 +169,15 @@ function template(d: Def): DynamicAgent<never, unknown> {
 /** The agents built for a lead's team, by name: a member case pins one of them. */
 const members = new Map<string, object>();
 
+/** The fake sandbox, with the vector's egress when given. */
+const sandboxed = (d: Def) =>
+  d.sandbox === undefined
+    ? {}
+    : {
+        sandbox: fakeSandbox(),
+        ...(d.egress === undefined ? {} : { egress: d.egress }),
+      };
+
 /** The vector's agent. */
 function build(d: Def): Agent<never, unknown> {
   const common = {
@@ -187,7 +197,7 @@ function build(d: Def): Agent<never, unknown> {
     ...(d.extensions === undefined
       ? {}
       : { extensions: d.extensions.map(ext) }),
-    ...(d.sandbox === undefined ? {} : { sandbox: fakeSandbox() }),
+    ...sandboxed(d),
     ...(d.memory_write === undefined
       ? {}
       : { memory: localMemory(), memoryWrite: d.memory_write }),

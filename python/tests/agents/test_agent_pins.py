@@ -136,6 +136,9 @@ def _parts(d: Obj, options: "AgentOptions") -> None:
         options["extensions"] = [_extension(e) for e in _OBJS.validate_python(d["extensions"])]
     if "sandbox" in d:
         options["sandbox"] = fake_sandbox()
+    if "egress" in d:
+        assert d["egress"] == "unenforced", d["egress"]
+        options["egress"] = "unenforced"
     if "memory_write" in d:
         options["memory"] = local_memory()
         options["memory_write"] = _WRITE.validate_python(d["memory_write"])

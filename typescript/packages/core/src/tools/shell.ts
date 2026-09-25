@@ -8,37 +8,32 @@ import { BashInput } from "./catalog";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
-/**
- * sandbox_local only under enforced deny-all egress; otherwise a command may
- * reach the outside world, so it is unguarded and uncertainty parks.
- */
-export function bash(denyAll: boolean): Builtin {
-  return builtin({
-    name: "bash",
-    input: BashInput,
-    effect: denyAll ? "sandbox_local" : "unguarded",
-    run: async ({ command, timeout_ms }, ctx, env) => {
-      const session = await sessionOf(env);
-      if (!session.ok) return session.error;
-      const result = await execute(
-        session.value,
-        ["bash", "-c", command],
-        env.context,
-        {
-          // Exactly empty: nothing of the host's env, and never a secret (invariant 4).
-          env: {},
-          timeoutMs: timeout_ms ?? DEFAULT_TIMEOUT_MS,
-          processKey: ctx.effectKey,
-        },
-        env.artifacts,
-      );
-      return toolRunOf(result);
-    },
-    terminate: (env) => async (effectKey) => {
-      const session = await env.session();
-      if (!session.ok) return "unknown";
-      const gone = await session.value.terminate(effectKey, env.context);
-      return gone.ok ? gone.value : "unknown";
-    },
-  });
-}
+/** sandbox_local; `builtins` pins it unguarded under open egress. */
+export const bash: Builtin = builtin({
+  name: "bash",
+  input: BashInput,
+  effect: "sandbox_local",
+  run: async ({ command, timeout_ms }, ctx, env) => {
+    const session = await sessionOf(env);
+    if (!session.ok) return session.error;
+    const result = await execute(
+      session.value,
+      ["bash", "-c", command],
+      env.context,
+      {
+        // Exactly empty: nothing of the host's env, and never a secret (invariant 4).
+        env: {},
+        timeoutMs: timeout_ms ?? DEFAULT_TIMEOUT_MS,
+        processKey: ctx.effectKey,
+      },
+      env.artifacts,
+    );
+    return toolRunOf(result);
+  },
+  terminate: (env) => async (effectKey) => {
+    const session = await env.session();
+    if (!session.ok) return "unknown";
+    const gone = await session.value.terminate(effectKey, env.context);
+    return gone.ok ? gone.value : "unknown";
+  },
+});

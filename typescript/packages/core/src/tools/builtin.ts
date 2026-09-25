@@ -73,6 +73,16 @@ export function builtin<S extends z.ZodType>(def: Def<S>): Builtin {
   };
 }
 
+/**
+ * A sandbox_local built-in under open egress: what it changes may reach outside the sandbox, so
+ * it is unguarded and an in-doubt call parks. Any other built-in is returned as it is.
+ */
+export function unguarded(b: Builtin): Builtin {
+  if (b.spec.effect_class !== "sandbox_local") return b;
+  const spec = ToolSpec.parse({ ...b.spec, effect_class: "unguarded" });
+  return { spec, bind: (env) => ({ ...b.bind(env), spec }) };
+}
+
 export const done = (output: string, isError = false): ToolRun => ({
   kind: "done",
   output,

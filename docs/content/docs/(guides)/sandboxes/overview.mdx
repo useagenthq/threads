@@ -64,6 +64,8 @@ A sandbox also enables the git, code intelligence (`lsp`) and computer-use tools
 
 Every sandbox starts with its network blocked. To open it, set the provider's option **and** tell the agent you accept that threads can no longer limit where the sandbox connects (`egress: "unenforced"`). Leaving out the second part is a setup error, so internet access is never turned on by accident.
 
+With the network open, a command or file change may reach outside the sandbox, so `bash`, `write`, `edit` and `notebook_edit` are `unguarded`: a call whose outcome is in doubt (a crash or a timeout mid-call) parks for a person instead of being settled by the sandbox. A thread started with open egress by a release before this rule can't be continued; start a new one.
+
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
 

@@ -7,7 +7,7 @@ import type { Sandbox } from "../sandbox/protocol";
 import type { ArtifactStore } from "../store/artifacts";
 import type { ResourceLedger } from "../store/ledger";
 import type { Writer } from "../store/writer";
-import type { Builtin, BuiltinEnv } from "./builtin";
+import { type Builtin, type BuiltinEnv, unguarded } from "./builtin";
 import { edit, read, write } from "./files";
 import { type Capabilities, gated } from "./gated";
 import { notebookEdit } from "./notebook";
@@ -67,7 +67,7 @@ export function builtins(
       `sandbox ${sandbox.info.provider} can't enforce egress; opt in with egress: "unenforced"`,
     );
   const all = [
-    bash(enforced && egress !== "unenforced"),
+    bash,
     edit,
     glob,
     grep,
@@ -78,7 +78,8 @@ export function builtins(
     write,
     ...extra,
   ];
-  return all.toSorted(byName);
+  const denyAll = enforced && egress !== "unenforced";
+  return (denyAll ? all : all.map(unguarded)).toSorted(byName);
 }
 
 /** The built-ins bound to one run: its writer's lease, the branch's ledger and artifacts. */

@@ -156,8 +156,9 @@ def specs(  # noqa: PLR0913 - one flag per configured capability
     gated: frozenset[str] = frozenset(),
     skills: bool = False,
 ) -> tuple[ToolSpec, ...]:
-    """The pinned built-ins, sorted by name. bash is sandbox_local only under deny-all egress;
-    with any outbound path a command may change state elsewhere. todo_write
+    """The pinned built-ins, sorted by name. A sandbox_local built-in (bash, edit, notebook_edit,
+    write) keeps its class only under deny-all egress; with any outbound path what it changes may
+    reach elsewhere, so it is unguarded and an in-doubt call parks. todo_write
     is always offered; `framework` names the other framework tools this agent is offered, and
     `gated` the GATED tools whose capability is configured.
     load_skill needs `skills`."""
@@ -199,4 +200,5 @@ def _effect(
         return memory.effect if name in _WRITES else "read_only"
     if name not in NAMES or (name not in HOST | WEB and not sandbox):
         return None
-    return "unguarded" if name == "bash" and not egress_denied else _EFFECTS[name]
+    effect = _EFFECTS[name]
+    return "unguarded" if effect == "sandbox_local" and not egress_denied else effect

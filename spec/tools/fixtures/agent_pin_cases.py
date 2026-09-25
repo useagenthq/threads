@@ -88,6 +88,12 @@ def cases() -> list[tuple[str, Obj, str | None, Obj | None]]:
         ),
         ("sandbox", {"name": "coder", **brief, "sandbox": "fake"}, None, None),
         (
+            "sandbox-open-egress",
+            {"name": "coder", **brief, "sandbox": "fake", "egress": "unenforced"},
+            None,
+            None,
+        ),
+        (
             "priced-fallback-and-budget",
             {
                 "name": "priced",

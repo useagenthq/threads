@@ -4,8 +4,10 @@ pinned config"): agent definitions and the thread_started and config_hash each p
 pin comes from the rules below, never from an implementation: permissions, retry and context are
 always pinned complete, the defaults filled in under the fields the agent sets; an extension pins
 its hooks in wire-enum order and a 5000 ms timeout by default; a sandbox pins its provider,
-egress, capture classes and the egress policy, deny-all ([]) by default. Both runtimes build each
-agent with scripted models and must pin these bytes."""
+egress, capture classes and the egress policy, deny-all ([]) by default. Under open egress
+(`egress: "unenforced"`) every sandbox_local built-in pins unguarded: a change may reach outside
+the sandbox, so an in-doubt call parks. Both runtimes build each agent with scripted models and
+must pin these bytes."""
 
 from __future__ import annotations
 
@@ -93,7 +95,13 @@ def _tools(agent: Obj, member: bool) -> list[JsonValue]:
     names += ["search_memory", "save_memory", "forget_memory"] if "memory_write" in agent else []
     names += ["load_skill"] if "skills" in agent else []
     specs = [obj(s) for s in catalog_specs(tuple(names))]
-    return [{**s, **obj(EFFECTS.get(text(s["name"]), {}))} for s in specs]
+    pinned = [{**s, **obj(EFFECTS.get(text(s["name"]), {}))} for s in specs]
+    if agent.get("egress") == "unenforced":  # a sandbox_local change may reach outside
+        pinned = [
+            {**s, "effect_class": "unguarded"} if s["effect_class"] == "sandbox_local" else s
+            for s in pinned
+        ]
+    return list[JsonValue](pinned)
 
 
 def _instructions(agent: Obj) -> str:
@@ -209,7 +217,7 @@ def _hashed(agent: Obj) -> Obj:
     if "memory_write" in agent:
         out["memory_write"] = agent["memory_write"]
     if "sandbox" in agent:
-        out["sandbox"] = {**FAKE_SANDBOX, "policy": []}
+        out["sandbox"] = {**FAKE_SANDBOX, "policy": agent.get("egress", [])}
     return out
 
 
@@ -277,13 +285,13 @@ def _vector() -> str:
             "scripted models under `name`, declaring `price` and a `cache_ttl_ms` lifetime when "
             "given ('none' otherwise; `model` absent: scripted-1); each given permissions, retry "
             "or context section is the default one with those fields replaced; `sandbox` is the "
-            "fake sandbox; `memory_write` gives local memory; extension hooks and observers are "
-            "no-ops; an agent with `models` is a dynamic agent (its keys in order, the first the "
-            "default), pinned as the member `dynamic` defines when given. A new thread's "
-            "thread_started data (with `member`, that agent of the lead's team pinned as a "
-            "member, which pins the lead's resolved defer_tools unless it sets its own) "
-            "must equal `thread_started`, config_hash included; a team lead's `team` ids are "
-            "fresh per thread and left out."
+            "fake sandbox, with the agent's `egress` when given; `memory_write` gives local "
+            "memory; extension hooks and observers are no-ops; an agent with `models` is a "
+            "dynamic agent (its keys in order, the first the default), pinned as the member "
+            "`dynamic` defines when given. A new thread's thread_started data (with `member`, "
+            "that agent of the lead's team pinned as a member, which pins the lead's resolved "
+            "defer_tools unless it sets its own) must equal `thread_started`, config_hash "
+            "included; a team lead's `team` ids are fresh per thread and left out."
         ),
         "cases": rows,
     }

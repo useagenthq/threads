@@ -33,6 +33,23 @@ describe("pinChange", () => {
     );
   });
 
+  test("an open-egress thread from before the effect-class rule starts a new thread", () => {
+    const pinned = (write: string) => ({
+      ...started({}),
+      tools: [
+        { name: "bash", effect_class: "unguarded" },
+        { name: "write", effect_class: write },
+      ],
+    });
+    expect(pinChange(pinned("sandbox_local"), pinned("unguarded"))).toBe(
+      'this thread was started with open egress (egress: "unenforced") by an older release, which pinned write, edit and notebook_edit as sandbox_local; under open egress they are now unguarded, so an in-doubt call parks instead of being settled by the sandbox. Its config can\'t be matched now, so start a new thread',
+    );
+    // Under deny-all nothing changed: any other change is refused as before.
+    expect(pinChange(pinned("sandbox_local"), pinned("sandbox_local"))).toBe(
+      "this thread was started with another config; a config change starts a new thread",
+    );
+  });
+
   test("any other change starts a new thread", () => {
     expect(pinChange(started({}), started({}))).toBe(
       "this thread was started with another config; a config change starts a new thread",

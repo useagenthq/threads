@@ -57,7 +57,7 @@ Declare how a tool's side effect behaves with `effect`. The class decides what h
 | `effect` | Use it for | After a crash mid-call |
 |---|---|---|
 | `read_only` | Lookups that change nothing | Runs again. There is nothing to protect |
-| `sandbox_local` | Changes that stay inside the sandbox (the built-in file tools, and `bash` when the sandbox has no internet) | Once the sandbox process is confirmed gone, the model is told the call was interrupted and may have partly run. Otherwise parks |
+| `sandbox_local` | Changes that stay inside the sandbox (the built-in `bash`, `write`, `edit` and `notebook_edit` when the sandbox has no internet; with `egress: "unenforced"` they are `unguarded`) | Once the sandbox process is confirmed gone, the model is told the call was interrupted and may have partly run. Otherwise parks |
 | `idempotent` | APIs that dedupe on a key you send, inside a known window | Safe to send again while still inside the window, otherwise parks |
 | `reconcilable` | APIs you can ask "did this happen?" | Your `lookup` decides: found, proven not found, or park |
 | `unguarded` (default) | Anything else | Always parks for a person |
