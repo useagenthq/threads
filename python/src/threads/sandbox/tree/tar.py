@@ -98,6 +98,12 @@ async def inline[T](job: Callable[[], T], /) -> T:
     return job()
 
 
+@dataclass(slots=True)
+class _Expanded:
+    size: int = 0
+    """The sizes of the hardlinks expanded so far: they count toward the total cap."""
+
+
 @dataclass(frozen=True, slots=True)
 class _State:
     src: Source
@@ -107,6 +113,12 @@ class _State:
     paths: PathSet
     entries: dict[str, TreeEntry]
     """By path, in archive order."""
+    expanded: _Expanded
+
+    @property
+    def room(self) -> int:
+        """What the total cap leaves for the stream once expanded hardlinks are counted."""
+        return self.caps.total - self.expanded.size
 
 
 type _Step = Ok[_Pending] | Err[ArchiveInvalid]
@@ -128,7 +140,7 @@ async def _meta(s: _State, h: Header, pending: _Pending, at: int) -> _Step:
     current = {"pax": pending.pax, "name": pending.name}.get(slot, pending.link)
     if current is not None or h.size > _META:
         return _invalid("bad_header", None, at)
-    if s.src.offset + h.size + _padding(h.size) > s.caps.total:
+    if s.src.offset + h.size + _padding(h.size) > s.room:
         return _invalid("archive_too_large", None, at)
     data = await s.src.exact(h.size)
     if data is None or not await s.src.take(_padding(h.size), _skip):
@@ -214,12 +226,18 @@ def _admitted(
     None: its entry comes from its data."""
     if n.size > s.caps.file:
         return _invalid("file_too_large", n.path, at)
-    if s.src.offset + n.size + _padding(n.size) > s.caps.total:
+    if s.src.offset + n.size + _padding(n.size) > s.room:
         return _invalid("archive_too_large", n.path, at)
     link = _first((pending.pax or Pax()).linkpath, pending.link, h.link)
     made = None if n.kind == "file" else _linked(s, n.kind, n.path, h, link)
     if isinstance(made, str):
         return _invalid(made, n.path, at)
+    # A hardlink costs one header but describes its target's bytes again: without this, a 1 GiB
+    # archive could describe hundreds of TiB for whoever rebuilds or places the tree.
+    if n.kind == "hardlink" and isinstance(made, TreeFile):
+        if s.src.offset + made.size > s.room:
+            return _invalid("archive_too_large", n.path, at)
+        s.expanded.size += made.size
     clash = s.paths.add(n.path, "file" if made is None else made.kind)
     return made if clash is None else _invalid(clash, n.path, at)
 
@@ -247,7 +265,7 @@ async def _end(s: _State, pending: _Pending) -> Ok[Tree] | Err[ArchiveInvalid]:
     at = s.src.offset
     if pending != _Pending():
         return _invalid("bad_header", None, at)
-    if at + BLOCK > s.caps.total:
+    if at + BLOCK > s.room:
         return _invalid("archive_too_large", None, at)
     second = await s.src.exact(BLOCK)
     if second is None:
@@ -265,7 +283,7 @@ async def _trailer(s: _State) -> Err[ArchiveInvalid] | None:
         piece = await s.src.next(BLOCK * 64)
         if piece is None:
             return None
-        inside = piece[: max(0, s.caps.total - start)]
+        inside = piece[: max(0, s.room - start)]
         rest = inside.lstrip(b"\0")
         if rest:
             return _invalid("bad_header", None, start + len(inside) - len(rest))
@@ -282,12 +300,12 @@ async def read_tar(
     """Reads an untrusted tar stream into a tree, each regular file streamed into an artifact
     from `open_sink`, every sink call made through `run`. A refused archive may leave the files
     it already stored, unreferenced."""
-    s = _State(Source(source), caps, open_sink, run, PathSet(), {})
+    s = _State(Source(source), caps, open_sink, run, PathSet(), {}, _Expanded())
     pending = _Pending()
     try:
         while True:
             at = s.src.offset
-            if at + BLOCK > caps.total:
+            if at + BLOCK > s.room:
                 return _invalid("archive_too_large", None, at)
             block = await s.src.exact(BLOCK)
             if block is None:

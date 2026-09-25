@@ -15,7 +15,7 @@ from threads.render.artifacts import ReadArtifact
 from threads.result import Err, Ok
 from threads.sandbox.protocol import ExecOutput, SandboxContext, SandboxError, Trees
 from threads.sandbox.tree.build import Owner, build_tar
-from threads.sandbox.tree.tar import ArchiveInvalid, read_tar
+from threads.sandbox.tree.tar import ArchiveInvalid, Offload, inline, read_tar
 from threads.sandbox.tree.tree import Tree, TreeSymlink, masked, tree_manifest_hash
 from threads.store.artifacts import ArtifactSink
 
@@ -72,19 +72,25 @@ async def _exit(code: Awaitable[int]) -> Ok[int] | Err[SandboxError]:
 
 
 async def read_tree(
-    session: Trees, context: SandboxContext, open_sink: Callable[[], ArtifactSink]
+    session: Trees,
+    context: SandboxContext,
+    open_sink: Callable[[], ArtifactSink],
+    run: Offload = inline,
 ) -> Ok[Tree] | Err[ReadFailure]:
     """Reads the session's export of /workspace into a tree, each file into a sink from
-    `open_sink` (`HashOnly` to measure, the store's `put_tree` to keep the files)."""
+    `open_sink`, every sink call made through `run`: `HashOnly` inline to measure, or a store's
+    artifact sinks on its worker thread (`SqliteStore.offload`) to keep the files."""
     exported = await session.export_tree(context)
     if isinstance(exported, Err):
         return exported
     output: ExecOutput = exported.value
     exit_code = asyncio.ensure_future(_exit(output.exit_code))
     stderr = asyncio.ensure_future(_head(output.stderr))
-    tree = await read_tar(output.stdout, open_sink)
+    tree = await read_tar(output.stdout, open_sink, run=run)
     if isinstance(tree, Err):
         # A refused archive is the answer: a hostile exporter may never exit.
+        exit_code.cancel()
+        stderr.cancel()
         return tree
     code = await exit_code
     if isinstance(code, Err):

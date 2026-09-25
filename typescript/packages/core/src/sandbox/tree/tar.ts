@@ -77,7 +77,12 @@ type State = {
   readonly paths: ReturnType<typeof pathSet>;
   /** By path, in archive order. */
   readonly entries: Map<string, TreeEntry>;
+  /** The sizes of the hardlinks expanded so far: they count toward the total cap. */
+  expanded: number;
 };
+
+/** What the total cap leaves for the stream once expanded hardlinks are counted. */
+const room = (s: State): number => s.caps.total - s.expanded;
 type Step = Result<Pending, ArchiveInvalid>;
 
 /** A pax ('x'), GNU long name ('L') or long link ('K') header: its data names the next entry. */
@@ -90,7 +95,7 @@ async function meta(
   const slot = h.type === "x" ? "pax" : h.type === "L" ? "name" : "link";
   if (pending[slot] !== undefined || h.size > META)
     return invalid("bad_header", null, at);
-  if (s.src.offset + h.size + padding(h.size) > s.caps.total)
+  if (s.src.offset + h.size + padding(h.size) > room(s))
     return invalid("archive_too_large", null, at);
   const data = await s.src.exact(h.size);
   if (data === undefined || !(await s.src.take(padding(h.size), skip)))
@@ -191,11 +196,18 @@ async function entry(
   const { path, kind, size } = names.value;
   if (path === "") return ok({});
   if (size > s.caps.file) return invalid("file_too_large", path, at);
-  if (s.src.offset + size + padding(size) > s.caps.total)
+  if (s.src.offset + size + padding(size) > room(s))
     return invalid("archive_too_large", path, at);
   const link = pending.pax?.linkpath ?? pending.link ?? h.link;
   const made = kind === "file" ? undefined : linked(s, kind, path, h, link);
   if (typeof made === "string") return invalid(made, path, at);
+  // A hardlink costs one header but describes its target's bytes again: without this, a 1 GiB
+  // archive could describe hundreds of TiB for whoever rebuilds or places the tree.
+  if (kind === "hardlink" && made?.kind === "file") {
+    if (s.src.offset + made.size > room(s))
+      return invalid("archive_too_large", path, at);
+    s.expanded += made.size;
+  }
   const clash = s.paths.add(path, made?.kind ?? "file");
   if (clash !== undefined) return invalid(clash, path, at);
   const stored =
@@ -212,7 +224,7 @@ async function end(
 ): Promise<Result<Tree, ArchiveInvalid>> {
   const at = s.src.offset;
   if (Object.keys(pending).length > 0) return invalid("bad_header", null, at);
-  if (at + BLOCK > s.caps.total) return invalid("archive_too_large", null, at);
+  if (at + BLOCK > room(s)) return invalid("archive_too_large", null, at);
   const second = await s.src.exact(BLOCK);
   if (second === undefined) return invalid("truncated", null, s.src.offset);
   if (!isZero(second)) return invalid("bad_header", null, at);
@@ -220,7 +232,7 @@ async function end(
     const start = s.src.offset;
     const piece = await s.src.next(BLOCK * 64);
     if (piece === undefined) break;
-    const inside = piece.subarray(0, Math.max(0, s.caps.total - start));
+    const inside = piece.subarray(0, Math.max(0, room(s) - start));
     const stray = inside.findIndex((b) => b !== 0);
     if (stray !== -1) return invalid("bad_header", null, start + stray);
     if (inside.length < piece.length)
@@ -249,13 +261,13 @@ export async function readTar(
     open,
     paths: pathSet(),
     entries: new Map(),
+    expanded: 0,
   };
   let pending: Pending = {};
   try {
     for (;;) {
       const at = s.src.offset;
-      if (at + BLOCK > caps.total)
-        return invalid("archive_too_large", null, at);
+      if (at + BLOCK > room(s)) return invalid("archive_too_large", null, at);
       const block = await s.src.exact(BLOCK);
       if (block === undefined) return invalid("truncated", null, s.src.offset);
       if (isZero(block)) return await end(s, pending);

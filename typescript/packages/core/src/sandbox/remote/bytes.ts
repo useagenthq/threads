@@ -5,6 +5,8 @@ export type ByteStream = {
   readonly push: (chunk: Uint8Array) => void;
   readonly end: () => void;
   readonly chunks: AsyncIterable<Uint8Array>;
+  /** Bytes queued and not yet read. */
+  readonly buffered: () => number;
 };
 
 export function byteStream(): ByteStream {
@@ -12,14 +14,21 @@ export function byteStream(): ByteStream {
   let ended = false;
   let wake = Promise.withResolvers<void>();
   async function* chunks(): AsyncIterable<Uint8Array> {
-    while (true) {
-      const next = queue.shift();
-      if (next !== undefined) yield next;
-      else if (ended) return;
-      else {
-        await wake.promise;
-        wake = Promise.withResolvers<void>();
+    try {
+      while (true) {
+        const next = queue.shift();
+        if (next !== undefined) yield next;
+        else if (ended) return;
+        else {
+          await wake.promise;
+          wake = Promise.withResolvers<void>();
+        }
       }
+    } finally {
+      // A reader that stopped early (a refused archive) wants nothing more: what the
+      // sandbox still sends is dropped, never queued without bound.
+      ended = true;
+      queue.length = 0;
     }
   }
   return {
@@ -33,6 +42,7 @@ export function byteStream(): ByteStream {
       wake.resolve();
     },
     chunks: chunks(),
+    buffered: () => queue.reduce((n, c) => n + c.length, 0),
   };
 }
 

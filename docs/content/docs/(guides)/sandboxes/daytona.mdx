@@ -72,6 +72,7 @@ opened = agent(
 ## Good to know
 
 - **Snapshots stop the sandbox.** Daytona can only snapshot a stopped container. threads stops it, captures it and starts it again, so background processes (a dev server, for example) end at each snapshot. Snapshots are taken at the end of turns that changed something.
+- **Snapshots have size and file-type limits.** Each capture and restore reads `/workspace` as a tar archive on the host. A workspace can't be snapshotted, and an older snapshot of it won't restore, if it has a file over 256 MiB, more than 1 GiB in total, a FIFO or device file, a file name that isn't UTF-8, or a path over 4096 bytes.
 - **Crashes park.** If the host crashes mid-command, threads can't prove the command's child processes are gone, so the run parks for you instead of re-running it.
 
 See [Sandboxes](/docs/sandboxes/overview) for the tools an agent gets and how internet access works.

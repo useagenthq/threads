@@ -124,6 +124,13 @@ def _cases() -> tuple[Case, ...]:
          "bad_hardlink", "h"),
         ("hardlink-dir", "a hardlink to a directory", archive((folder("d"), hardlink("h", "d"))),
          None, "bad_hardlink", "h"),
+        # 64 KiB file at bytes 0..66048, hardlink k's header ends at 66048 + 512(k + 1), and
+        # k + 1 expansions have counted 65536(k + 1): the sum first passes 1 MiB at k = 14.
+        ("hardlink-amplified", "one file and 2,000 hardlinks to it: the expanded sizes pass "
+         "the lowered total cap long before the stream does",
+         archive((file("f", bytes(65536)),
+                  *(hardlink(f"h{k:04}", "f") for k in range(2000)))),
+         (1 << 28, 1 << 20), "archive_too_large", "h0014"),
         ("below-file", "an entry below a file", archive((A, file("a/x", b"x"))), None,
          "path_conflict", "a/x"),
         ("below-symlink", "an entry below a symlink",

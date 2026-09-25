@@ -19,7 +19,7 @@ from threads.render.verify import verify_requests
 from threads.result import Err, Ok
 from threads.store import lease, sql, sqlite_driver
 from threads.store._feed import Feed
-from threads.store.artifacts import ArtifactStore, FileArtifacts, MemoryArtifacts
+from threads.store.artifacts import ArtifactSink, ArtifactStore, FileArtifacts, MemoryArtifacts
 from threads.store.bindings import Bindings, Kind
 from threads.store.branches import BranchStore, corrupt
 from threads.store.budgets import BudgetLedger
@@ -260,9 +260,16 @@ class SqliteStore(BranchStore):
         # threads.sandbox imports the store (its protocol names the store's contexts).
         from threads.sandbox.tree.tar import store_tar  # noqa: PLC0415 - an import cycle
 
-        return await store_tar(tar, self._artifacts, run=self._offload)
+        return await store_tar(tar, self._artifacts, run=self.offload)
 
-    async def _offload[T](self, job: Callable[[], T]) -> T:
+    def artifact_sink(self) -> ArtifactSink:
+        """A new synchronous artifact sink: open, write and commit it only through `offload`
+        (the tree reader's `run`), never on the event loop."""
+        return self._artifacts.sink()
+
+    async def offload[T](self, job: Callable[[], T]) -> T:
+        """`job` on the store's thread: how an async caller drives a synchronous artifact
+        sink without blocking the event loop."""
         return await self._worker.free(lambda _: job())
 
     async def sweep_artifacts(self, keep: frozenset[str], older_than: int) -> tuple[str, ...]:

@@ -102,10 +102,17 @@ async def _reset() -> int:
     raise ConnectionResetError("reset")
 
 
-def test_bytes_that_are_not_an_archive_are_archive_invalid() -> None:
-    read = asyncio.run(read_tree(_Exporting(_done(0), bytes([7]) * 512), OPEN, HashOnly))
+def test_bytes_that_are_not_an_archive_are_archive_invalid_and_leave_no_task() -> None:
+    async def main() -> tuple[Ok[Tree] | Err[object], int]:
+        never: asyncio.Future[int] = asyncio.get_running_loop().create_future()
+        read = await read_tree(_Exporting(never, bytes([7]) * 512), OPEN, HashOnly)
+        await asyncio.sleep(0)
+        return read, len(asyncio.all_tasks()) - 1
+
+    read, pending = asyncio.run(main())
     assert isinstance(read, Err)
-    assert read.error.code == "archive_invalid"
+    assert getattr(read.error, "code", None) == "archive_invalid"
+    assert pending == 0, "a refused archive leaves the exit and stderr readers running"
 
 
 def test_a_failed_export_is_unavailable_with_what_it_said() -> None:
@@ -172,4 +179,25 @@ def test_the_store_reads_a_tree_on_its_worker_thread_unredacted() -> None:
     artifacts = _Threaded()
     asyncio.run(main(artifacts))
     assert artifacts.threads, "the reader opened sinks"
+    assert all(name.startswith("threads-store") for name in artifacts.threads), artifacts.threads
+
+
+def test_read_tree_keeps_files_through_the_store_worker() -> None:
+    async def main(artifacts: _Threaded) -> None:
+        opened = await SqliteStore.open(artifacts=artifacts)
+        assert isinstance(opened, Ok)
+        store = opened.value
+        trees = await _fake_trees()
+        source = MemoryArtifacts()
+        assert await place_tree(trees, sample_tree(source), source.get, OPEN) == Ok(None)
+        read = await read_tree(trees, OPEN, store.artifact_sink, store.offload)
+        assert isinstance(read, Ok)
+        files = [e for e in read.value.entries if isinstance(e, TreeFile)]
+        for entry in files:
+            assert await store.get_artifact(entry.sha256) == Ok(BODY)
+        await store.close()
+
+    artifacts = _Threaded()
+    asyncio.run(main(artifacts))
+    assert artifacts.threads
     assert all(name.startswith("threads-store") for name in artifacts.threads), artifacts.threads
