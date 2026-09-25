@@ -11,7 +11,7 @@ class Source:
         self._it = aiter(source)
         # A view, so taking a piece never copies the rest of the chunk.
         self._head = memoryview(b"")
-        self.offset = 0
+        self.offset: int = 0
 
     async def next(self, most: int) -> bytes | None:
         """The next bytes, at most `most`; None at the end of the source."""
