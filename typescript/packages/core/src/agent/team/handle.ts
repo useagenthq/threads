@@ -15,7 +15,6 @@ import type { ArtifactStore } from "../../store/artifacts";
 import { uuidv7 } from "../../store/encode";
 import type { DecideTx } from "../../store/writer";
 import type { Batch, Mint } from "../../team/batch";
-import { TEAM_LIMITS } from "../../team/constants";
 import {
   type OperatorOp,
   openOperator,
@@ -49,8 +48,8 @@ export type HandleEnv = {
   readonly artifacts: ArtifactStore;
   readonly ref: TeamRef;
   readonly principal: Principal;
-  /** The lead's definition in this process: the agents start resolves. Undefined: none here. */
-  readonly lead: MemberEntry | undefined;
+  /** The lead that ran, as this process defines it: the agents start resolves. */
+  readonly lead: MemberEntry;
   readonly busyBoundMs?: number;
   readonly mint?: Mint;
 };
@@ -78,7 +77,7 @@ async function startMember(
   const { idempotencyKey, ...chosen } = options;
   const args = { agent, task, ...chosen };
   const lead = leadOf(env);
-  const pin = pins(env.lead?.team ?? [], lead.deferTools);
+  const pin = pins(env.lead.team ?? [], lead.deferTools);
   const { pinned, resolved } = await startPin(
     pin,
     env.artifacts,
@@ -194,7 +193,7 @@ function putText(env: HandleEnv): Request["put"] {
   };
 }
 
-const limitsOf = (env: HandleEnv) => env.lead?.teamLimits ?? TEAM_LIMITS;
+const limitsOf = (env: HandleEnv) => env.lead.teamLimits;
 
 /** The lead as a member's parent, and the defer_tools its members inherit. */
 function leadOf(env: HandleEnv): {

@@ -54,6 +54,8 @@ function once<T>(
   decide: (tx: DecideTx, batch: Batch) => T,
   mint: Mint | undefined,
 ): { readonly value: T } | undefined {
+  // Nothing registers a live team-log writer yet (every step acquires and releases). One that
+  // lost its lease would keep failing here until the bound, so it must leave LIVE when poisoned.
   const live = liveWriter(branch);
   const taken =
     live === undefined

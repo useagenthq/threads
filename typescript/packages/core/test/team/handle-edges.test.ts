@@ -4,6 +4,7 @@ import { agent, StoreCorruptError, scriptedModel } from "../../src";
 import { memberEntry } from "../../src/agent/registry";
 import { storeOf } from "../../src/agent/sqlite";
 import { teamHandle } from "../../src/agent/team/handle";
+import { hydrated } from "../../src/agent/team/hydrate";
 import { takeTeamLogMail } from "../../src/agent/team/log-mail";
 import { type Json, StoredMemberResult } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
@@ -30,6 +31,7 @@ import { say, start } from "./run-kit";
 
 class Crash extends Error {}
 
+const TEAM_ID = "0192c000-0000-7000-8000-000000000001";
 const OPERATOR = { issuer: "api", tenant: "local", subject: "operator" };
 
 /** The same database, through a driver that dies once at the first write `at` matches. */
@@ -91,6 +93,8 @@ async function world(writer: readonly string[], leadStarts = false) {
     ],
   });
   const r = await lead.run("Get ready.", { store });
+  const entry = memberEntry(lead);
+  if (entry === undefined) throw new Error("agent() registers the lead");
   /** A handle through another driver of the same database. */
   const through = (driver: SqliteDriver) =>
     teamHandle({
@@ -98,7 +102,7 @@ async function world(writer: readonly string[], leadStarts = false) {
       artifacts,
       ref: r.team.ref,
       principal: OPERATOR,
-      lead: memberEntry(lead),
+      lead: entry,
     });
   const teamLog = () => {
     const row = teamRow(db, r.team.ref.id);
@@ -230,6 +234,28 @@ describe("hydration", () => {
       expect(feed.length).toBeGreaterThan(0);
       assertTeamReplays(w.log, w.team.ref.id);
     });
+});
+
+test("an output artifact that isn't UTF-8 throws StoreCorruptError", () => {
+  const artifacts = memoryArtifacts();
+  const bytes = new Uint8Array([0xff, 0xfe]);
+  const ref = {
+    sha256: artifacts.put(bytes),
+    bytes: bytes.length,
+    media_type: "text/plain",
+  };
+  const member = {
+    tenant: "local",
+    team: TEAM_ID,
+    name: "writer-1",
+    generation: 1,
+  };
+  const stored = StoredMemberResult.parse({
+    member,
+    status: "completed",
+    output: { ref },
+  });
+  expect(() => hydrated(stored, artifacts)).toThrow(StoreCorruptError);
 });
 
 describe("an operator's dynamic member", () => {

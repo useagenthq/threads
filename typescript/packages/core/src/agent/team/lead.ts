@@ -52,14 +52,15 @@ async function withTeam<Output>(
   const input = events.findLast((e) => e.type === "user_input");
   const id =
     started?.type === "thread_started" ? started.data.team?.id : undefined;
-  if (id === undefined || input?.type !== "user_input")
+  const entry = memberEntry(lead);
+  if (id === undefined || input?.type !== "user_input" || entry === undefined)
     throw new Error(`thread ${result.thread.id} leads no team`);
   const team: Team = teamHandle({
     log,
     artifacts,
     ref: { tenant: log.tenant, id },
     principal: input.actor.principal,
-    lead: memberEntry(lead),
+    lead: entry,
   });
   return { ...result, team };
 }
@@ -73,6 +74,15 @@ export function memberOf<Deps, Output>(
     handsOff: def.handoffs.length > 0,
     toolNames: def.tools.map((t) => t.name),
     team: def.team === undefined ? undefined : def.members,
+    configHash: async (as) => {
+      const { config } = await pinnedAfterSetup(
+        def,
+        as.member,
+        as.deferTools,
+        as.answerer,
+      );
+      return sha256Hex(utf8.encode(config));
+    },
     teamLimits: def.teamLimits,
     ...(keys === undefined
       ? {}

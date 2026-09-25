@@ -3,13 +3,14 @@ import {
   BranchId,
   Int,
   type KnownEvent,
+  type MemberRef,
   type Principal,
   RequestId,
   type TeamId,
 } from "../../log";
 import { knownEvents } from "../../reduce";
 import type { LogStore } from "../../store";
-import { memberRows, refOf, teamRow } from "../../team/rows";
+import { memberRows, refOf, type TeamRow, teamRow } from "../../team/rows";
 import type { TeamCursor, TeamItem, TeamSource } from "./handle-types";
 
 // team.events() without follow (spec/schema/README.md, "The feed"): a pure read of the team_feed
@@ -24,50 +25,79 @@ const FeedRow = z.strictObject({
 });
 type FeedRow = z.infer<typeof FeedRow>;
 
+/** Feed rows read per query: the epoch is paged, never loaded whole. */
+const PAGE = 256;
+
 /** The committed feed after `after`, then the end. */
 export async function* teamEvents(
   log: LogStore,
   team: TeamId,
   after: TeamCursor | undefined,
 ): AsyncGenerator<TeamItem> {
-  const rows = z.array(FeedRow).parse(
-    log.driver.all(
-      `SELECT epoch, feed_offset, branch_id, seq FROM team_feed
-        WHERE team_id = ? AND epoch = (SELECT MAX(epoch) FROM team_feed WHERE team_id = ?)
-        ORDER BY feed_offset`,
-      [team, team],
-    ),
-  );
-  const epoch = rows[0]?.epoch;
-  if (epoch === undefined) return;
+  const [top] = z
+    .array(z.strictObject({ epoch: Int.nullable() }))
+    .parse(
+      log.driver.all(
+        "SELECT MAX(epoch) AS epoch FROM team_feed WHERE team_id = ?",
+        [team],
+      ),
+    );
+  const epoch = top?.epoch ?? null;
+  if (epoch === null) return;
   const restarted = after !== undefined && after.epoch !== epoch;
   if (restarted)
     yield { kind: "epoch_restarted", cursor: { epoch, offset: 0 } };
-  const from = after === undefined || restarted ? 0 : after.offset;
   const sources = new Sources(log, team);
-  for (const row of rows.filter((r) => r.feed_offset > from)) {
-    const { event, source } = sources.at(row);
-    yield {
-      kind: "event",
-      cursor: { epoch, offset: row.feed_offset },
-      source,
-      event,
-    };
+  let from = after === undefined || restarted ? 0 : after.offset;
+  for (;;) {
+    const rows = page(log, team, epoch, from);
+    for (const row of rows) {
+      const { event, source } = sources.at(row);
+      yield {
+        kind: "event",
+        cursor: { epoch, offset: row.feed_offset },
+        source,
+        event,
+      };
+    }
+    const last = rows.at(-1);
+    if (last === undefined || rows.length < PAGE) return;
+    from = last.feed_offset;
   }
+}
+
+function page(
+  log: LogStore,
+  team: TeamId,
+  epoch: number,
+  from: number,
+): readonly FeedRow[] {
+  return z.array(FeedRow).parse(
+    log.driver.all(
+      `SELECT epoch, feed_offset, branch_id, seq FROM team_feed
+        WHERE team_id = ? AND epoch = ? AND feed_offset > ?
+        ORDER BY feed_offset LIMIT ?`,
+      [team, epoch, from, PAGE],
+    ),
+  );
 }
 
 /** Each feed row's event and where it was written, reading every branch once. */
 class Sources {
   readonly #log: LogStore;
-  readonly #team: TeamId;
   readonly #branches = new Map<string, readonly KnownEvent[]>();
   /** The team log's events, by event id, attributed to their operator request. */
   readonly #requests = new Map<string, string>();
   readonly #principals = new Map<string, Principal>();
+  readonly #row: TeamRow;
+  #members: ReadonlyMap<string, MemberRef>;
 
   constructor(log: LogStore, team: TeamId) {
     this.#log = log;
-    this.#team = team;
+    const row = teamRow(log.driver, team);
+    if (row === undefined) throw new Error(`no team ${team}`);
+    this.#row = row;
+    this.#members = membersOf(log, row);
   }
 
   at(row: FeedRow): {
@@ -78,17 +108,20 @@ class Sources {
     const event = events.find((e) => e.seq === row.seq);
     if (event === undefined)
       throw new Error(`the feed names ${row.branch_id}@${row.seq}, not stored`);
-    const db = this.#log.driver;
-    const team = teamRow(db, this.#team);
-    if (team === undefined) throw new Error(`no team ${this.#team}`);
-    if (row.branch_id === team.team_log_branch_id)
+    if (row.branch_id === this.#row.team_log_branch_id)
       return { event, source: this.#operator(event) };
-    const member = memberRows(db, this.#team).find(
-      (r) => r.branch_id === row.branch_id,
-    );
+    return { event, source: { kind: "member", member: this.#member(row) } };
+  }
+
+  /** The member whose branch it is; members materialized since are read again, once. */
+  #member(row: FeedRow): MemberRef {
+    const known = this.#members.get(row.branch_id);
+    if (known !== undefined) return known;
+    this.#members = membersOf(this.#log, this.#row);
+    const member = this.#members.get(row.branch_id);
     if (member === undefined)
       throw new Error(`the feed names ${row.branch_id}, no member's`);
-    return { event, source: { kind: "member", member: refOf(team, member) } };
+    return member;
   }
 
   #events(branch: BranchId): readonly KnownEvent[] {
@@ -158,3 +191,15 @@ class Sources {
 
 /** An ask's or wait's request: its id is `<team log branch>:<request_id>`. */
 const keyed = (id: string): string | undefined => id.split(":")[1];
+
+/** Each member branch of the team, as the ref its feed items name. */
+function membersOf(
+  log: LogStore,
+  team: TeamRow,
+): ReadonlyMap<string, MemberRef> {
+  return new Map(
+    memberRows(log.driver, team.team_id).flatMap((r) =>
+      r.branch_id === null ? [] : [[r.branch_id, refOf(team, r)] as const],
+    ),
+  );
+}

@@ -74,6 +74,18 @@ export type MemberEntry = {
   readonly toolNames: readonly string[];
   /** The agents of its own team, when it leads one (a nested lead). */
   readonly team: readonly object[] | undefined;
+  /**
+   * Its config_hash as a thread of its own, pinned as that thread was: a nested lead's as a
+   * member, a hosted one's with ask_user, with the defer_tools the thread resolved. Throws
+   * ConfigError.
+   */
+  readonly configHash: (as: {
+    readonly member: boolean;
+    readonly answerer: boolean;
+    readonly deferTools:
+      | NonNullable<Policy["context"]>["defer_tools"]
+      | undefined;
+  }) => Promise<string>;
   /** agent({teamLimits}), defaults filled in: what its team's starts and sends are capped by. */
   readonly teamLimits: {
     readonly concurrent: number;
@@ -161,18 +173,27 @@ export function register(agent: object, entry: Entry): void {
 }
 
 /**
- * The team leads this process defined, by name: openTeam resolves a team's agents against the
- * lead of its name, as a rebind does. ponytail: the latest definition of a name wins; key it by
- * the lead's config_hash if one process ever defines two leads of one name.
+ * The team leads this process defined, by name, each held weakly: openTeam rebinds a team's lead
+ * by its name and config_hash among them, as materialize rebinds a member.
  */
-const LEADS = new Map<string, object>();
+const LEADS = new Map<string, Set<WeakRef<object>>>();
 
 export function registerLead(name: string, lead: object): void {
-  LEADS.set(name, lead);
+  const known = LEADS.get(name) ?? new Set<WeakRef<object>>();
+  known.add(new WeakRef(lead));
+  LEADS.set(name, known);
 }
 
-export function leadNamed(name: string): object | undefined {
-  return LEADS.get(name);
+/** Every live lead of that name, oldest first; a collected one is dropped. */
+export function leadsNamed(name: string): readonly object[] {
+  const known = LEADS.get(name) ?? new Set<WeakRef<object>>();
+  const live: object[] = [];
+  for (const ref of known) {
+    const lead = ref.deref();
+    if (lead === undefined) known.delete(ref);
+    else live.push(lead);
+  }
+  return live;
 }
 
 export function setupOf(

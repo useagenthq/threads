@@ -223,6 +223,19 @@ def test_a_whole_type_gap_narrows_to_its_still_missing_members() -> None:
     assert len(errs) == 1
 
 
+def test_a_narrowed_gap_keeps_its_owners_lane_or_the_other_languages() -> None:
+    whole = Gap("Model", "py", "missing", "01-gate")
+    ts_lane = Gap("Model.lookup", "ts", "missing", "02-later")
+    elsewhere = Gap("Model.lookup", "py", "missing", "03-other")
+    errs = check_surface.check_baseline([elsewhere], [whole, ts_lane], members(api()), "py")
+    assert errs == [
+        "surface gate: narrowed gap Model.lookup (py, missing, lane 03-other) takes lane "
+        "03-other; its owner's is 01-gate, 02-later"
+    ]
+    as_ts = Gap("Model.lookup", "py", "missing", "02-later")
+    assert check_surface.check_baseline([as_ts], [whole, ts_lane], members(api()), "py") == []
+
+
 def test_later_pr_retargeting_a_placement_gap_fails() -> None:
     def placed(at: str) -> Gap:
         return Gap("Channel", "ts", "placement", "01-gate", at)

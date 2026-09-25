@@ -39,35 +39,69 @@ from threads.log import (
 from threads.result import Err
 from threads.store import SqliteStore
 from threads.store.sql import int_of, text_of
-from threads.team.rows import member_rows, team_row
+from threads.team.rows import TeamRow, member_rows, team_row
+
+_PAGE = 256
+"""Feed rows read per query: the epoch is paged, never loaded whole."""
 
 
-def _feed(conn: sqlite3.Connection, team: str) -> list[tuple[int, int, str, int]]:
+def _epoch(conn: sqlite3.Connection, team: str) -> int | None:
+    row: tuple[object] = conn.execute(
+        "SELECT MAX(epoch) FROM team_feed WHERE team_id = ?", (team,)
+    ).fetchone()
+    return None if row[0] is None else int_of(row[0])
+
+
+def _page(
+    conn: sqlite3.Connection, team: str, epoch: int, after: int
+) -> list[tuple[int, str, int]]:
     rows: list[tuple[object, ...]] = conn.execute(
-        "SELECT epoch, feed_offset, branch_id, seq FROM team_feed WHERE team_id = ?"
-        " AND epoch = (SELECT MAX(epoch) FROM team_feed WHERE team_id = ?) ORDER BY feed_offset",
-        (team, team),
+        "SELECT feed_offset, branch_id, seq FROM team_feed WHERE team_id = ? AND epoch = ?"
+        " AND feed_offset > ? ORDER BY feed_offset LIMIT ?",
+        (team, epoch, after, _PAGE),
     ).fetchall()
-    return [(int_of(e), int_of(o), text_of(b), int_of(s)) for e, o, b, s in rows]
+    return [(int_of(o), text_of(b), int_of(s)) for o, b, s in rows]
 
 
 async def team_events(
     sq: SqliteStore, team: str, after: TeamCursor | None
 ) -> AsyncIterator[TeamItem]:
     """The committed feed after `after`, then the end."""
-    rows = await sq.run(lambda c: _feed(c, team))
-    if not rows:
+    epoch = await sq.run(lambda c: _epoch(c, team))
+    if epoch is None:
         return
-    epoch = rows[0][0]
     restarted = after is not None and after.epoch != epoch
     if restarted:
         yield EpochRestarted(TeamCursor(epoch, 0))
     start = 0 if after is None or restarted else after.offset
-    sources = _Sources(sq, team)
-    for _epoch, offset, branch, seq in rows:
-        if offset > start:
+    sources = await _sources(sq, team)
+    while True:
+        rows = await sq.run(lambda c, s=start: _page(c, team, epoch, s))
+        for offset, branch, seq in rows:
             event, source = await sources.at(branch, seq)
             yield TeamEvent(TeamCursor(epoch, offset), source, event)
+        if len(rows) < _PAGE:
+            return
+        start = rows[-1][0]
+
+
+async def _sources(sq: SqliteStore, team: str) -> "_Sources":
+    row = await sq.run(lambda c: team_row(c, team))
+    if row is None:
+        raise AssertionError(f"no team {team}")
+    return _Sources(sq, row, await _members(sq, row))
+
+
+async def _members(sq: SqliteStore, team: TeamRow) -> dict[str, MemberRef]:
+    """Each member branch of the team, as the ref its feed items name."""
+    rows = await sq.run(lambda c: member_rows(c, team.team_id))
+    return {
+        r.branch_id: MemberRef(
+            tenant=team.tenant_id, team=team.team_id, name=r.name, generation=r.generation
+        )
+        for r in rows
+        if r.branch_id is not None
+    }
 
 
 @dataclass(slots=True)
@@ -75,7 +109,8 @@ class _Sources:
     """Each feed row's event and where it was written, reading every branch once."""
 
     sq: SqliteStore
-    team: str
+    team: TeamRow
+    members: dict[str, MemberRef]
     branches: dict[str, Sequence[Event]] = field(default_factory=dict[str, Sequence[Event]])
     requests: dict[str, str] = field(default_factory=dict[str, str])
     """The team log's events, by event id, attributed to their operator request."""
@@ -86,18 +121,14 @@ class _Sources:
         event = next((e for e in events if e.seq == seq), None)
         if event is None:
             raise AssertionError(f"the feed names {branch}@{seq}, not stored")
-        team = await self.sq.run(lambda c: team_row(c, self.team))
-        if team is None:
-            raise AssertionError(f"no team {self.team}")
-        if branch == team.team_log_branch_id:
+        if branch == self.team.team_log_branch_id:
             return event, self._operator(event)
-        rows = await self.sq.run(lambda c: member_rows(c, self.team))
-        row = next((r for r in rows if r.branch_id == branch), None)
-        if row is None:
+        if branch not in self.members:
+            # A member materialized since the handle looked: read the rows again, once.
+            self.members = await _members(self.sq, self.team)
+        ref = self.members.get(branch)
+        if ref is None:
             raise AssertionError(f"the feed names {branch}, no member's")
-        ref = MemberRef(
-            tenant=team.tenant_id, team=self.team, name=row.name, generation=row.generation
-        )
         return event, MemberSource(ref)
 
     async def _events(self, branch: str) -> Sequence[Event]:

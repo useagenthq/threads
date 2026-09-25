@@ -1361,7 +1361,7 @@
       "ts": "openTeam",
       "py": "open_team",
       "package": "core",
-      "doc": "A Team handle for a team another process ran, or to act as another principal. RunResult.team is the common path.",
+      "doc": "A Team handle for a team another process ran, or to act as another principal. RunResult.team is the common path. It binds the lead that ran: this process must define an agent of its name whose pin has its config_hash, else unavailable (nothing is recorded).",
       "async": true,
       "params": [
         {
@@ -1398,7 +1398,8 @@
         },
         "errors": [
           "not_found",
-          "forbidden"
+          "forbidden",
+          "unavailable"
         ]
       }
     },

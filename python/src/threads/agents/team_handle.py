@@ -3,7 +3,7 @@ decided in one team-log append (design §4.4), by the same ops as the model's to
 events are pure reads. Lane 21E adds ask, wait, cancel and ask_status as further requests."""
 
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Final, Literal
 
 from pydantic import JsonValue
@@ -35,7 +35,7 @@ from threads.store.lines import uuid7
 from threads.store.writer import DecideTx
 from threads.team.batch import Batch, Mint
 from threads.team.constants import TEAM_CONSTANTS
-from threads.team.dynamic import InvalidDefinition, Resolved
+from threads.team.dynamic import InvalidDefinition
 from threads.team.operator import (
     OperatorContext,
     OperatorInput,
@@ -54,9 +54,9 @@ class HandleEnv:
     sq: SqliteStore
     ref: TeamRef
     principal: Principal
-    pin: Pin | None
-    """The lead's team as this process defines it: the agents start resolves. None: none here."""
-    limits: TeamLimits = field(default_factory=TeamLimits)
+    pin: Pin
+    """The team of the lead that ran, as this process defines it: the agents start resolves."""
+    limits: TeamLimits
     busy_bound_ms: int | None = None
     mint: Mint | None = None
 
@@ -107,18 +107,13 @@ async def _start(
     env: HandleEnv, agent: str, task: str, chosen: Chosen, key: str | None
 ) -> TeamStartResult:
     parent = await _lead_parent(env)
-    got = (
-        None
-        if env.pin is None
-        else await start_pin(env.pin, env.sq.put_artifact, agent, chosen, "operator")
-    )
-    pinned = None if got is None else got.pinned
+    got = await start_pin(env.pin, env.sq.put_artifact, agent, chosen, "operator")
+    pinned = got.pinned
     room = pinned is not None and await start_room(
         env.sq.budgets, await ancestors_of(env.sq, parent), pinned
     )
     listed = {} if pinned is None else {agent: pinned.config_hash}
-    resolved = Resolved() if got is None else got.resolved
-    plan = StartPlan(listed, env.limits, lambda _a: room, uuid7(now_ms()), resolved)
+    plan = StartPlan(listed, env.limits, lambda _a: room, uuid7(now_ms()), got.resolved)
     body = _present({"agent": agent, "task": task, **_fields(chosen)})
     done = await _operator(env, "start", body, key, lambda req, _t: start(req, agent, task, plan))
     if done == BUSY:

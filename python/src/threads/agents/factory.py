@@ -219,13 +219,21 @@ def agent[D](**options: Unpack[_Options[D]]) -> Agent[D, object] | Agent[None, o
     extensions = tuple(options.get("extensions", ()))
     given = ((tools, servers), extensions)
     definition = build_definition(options, options["model"], given, output, links)
-    if team is not None:
-        register_lead(definition)
     if needs_no_deps(definition):
         if team is None:
             return Agent(definition, (None,), decode)
-        return TeamAgent(definition, (None,), decode)
-    return Agent(definition, (), decode) if team is None else TeamAgent(definition, (), decode)
+        return _registered(TeamAgent(definition, (None,), decode))
+    return (
+        Agent(definition, (), decode)
+        if team is None
+        else _registered(TeamAgent(definition, (), decode))
+    )
+
+
+def _registered[D, O](lead: TeamAgent[D, O]) -> TeamAgent[D, O]:
+    """A lead, registered for open_team to rebind it."""
+    register_lead(lead, lead.definition)
+    return lead
 
 
 def _no_templates(options: _AgentCommon) -> None:

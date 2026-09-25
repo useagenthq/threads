@@ -74,23 +74,34 @@ def check_baseline(
 ) -> list[str]:
     """A gap added since the base is allowed only for a member the base contract lacks, or for a
     member of an owner the base listed missing whole: the owner landed without all of it, so the
-    gap narrows to what is still missing."""
+    gap narrows to what is still missing. A narrowed gap keeps its owner's lane, or the lane the
+    base already gives that member in another language."""
     before = {g.key for g in base_gaps}
-    whole = {g.name for g in base_gaps if g.lang == lang and g.kind == "missing"}
+    whole = {g.name: g.lane for g in base_gaps if g.lang == lang and g.kind == "missing"}
+    others = {g.name: g.lane for g in base_gaps if g.lang != lang}
 
-    def narrowed(name: str) -> bool:
+    def lanes(name: str) -> set[str]:
         parts = name.split(".")
-        return any(".".join(parts[:i]) in whole for i in range(1, len(parts)))
+        owners = (".".join(parts[:i]) for i in range(1, len(parts)))
+        found = {whole[o] for o in owners if o in whole}
+        return found | ({others[name]} if found and name in others else set())
 
-    return [
-        f"surface gate: new gap {_label(g)} for a member that exists at the base; "
-        "restore the member instead of listing it"
-        for g in gaps
-        if g.lang == lang
-        and g.key not in before
-        and g.name in base_contract
-        and not narrowed(g.name)
-    ]
+    errs: list[str] = []
+    for g in gaps:
+        if g.lang != lang or g.key in before or g.name not in base_contract:
+            continue
+        allowed = lanes(g.name)
+        if not allowed:
+            errs.append(
+                f"surface gate: new gap {_label(g)} for a member that exists at the base; "
+                "restore the member instead of listing it"
+            )
+        elif g.lane not in allowed:
+            errs.append(
+                f"surface gate: narrowed gap {_label(g)} takes lane {g.lane}; "
+                f"its owner's is {', '.join(sorted(allowed))}"
+            )
+    return errs
 
 
 def check_python(

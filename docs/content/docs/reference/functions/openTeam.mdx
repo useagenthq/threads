@@ -4,7 +4,7 @@ description: "A Team handle for a team another process ran, or to act as another
 icon: "SquareFunction"
 ---
 
-RunResult.team is the common path.
+RunResult.team is the common path. It binds the lead that ran: this process must define an agent of its name whose pin has its config_hash, else unavailable (nothing is recorded).
 
 Import from `@threads/core` (TypeScript) or `threads` (Python).
 
@@ -50,4 +50,4 @@ async def open_team(
 
 [`Team`](/docs/reference/types/Team)
 
-**Returns an error value** with one of these codes: `not_found`, `forbidden`.
+**Returns an error value** with one of these codes: `not_found`, `forbidden`, `unavailable`.

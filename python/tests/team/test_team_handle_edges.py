@@ -4,6 +4,7 @@ StoreCorruptError. Every test ends with the team's replay check. Mirrors TypeScr
 test/team/handle-edges.test.ts."""
 
 import asyncio
+import gc
 import sqlite3
 from collections.abc import Sequence
 from functools import partial
@@ -22,27 +23,33 @@ from threads import (
     Principal,
     StoreCorruptError,
     Team,
+    TeamAgent,
     TeamRef,
     agent,
     open_team,
     scripted_model,
     sqlite,
 )
-from threads.agents.member_results import MemberCompleted
+from threads.agents.member_results import MemberCompleted, hydrated
 from threads.agents.store import now_ms, open_store
 from threads.agents.team_handle_types import TeamStartRefused
+from threads.agents.team_leads import leads_named
 from threads.agents.team_log_mail import take_team_log_mail
 from threads.agents.team_tools import Sent, Started
 from threads.log import (
+    ArtifactRef,
     BranchId,
     CompletedResult,
     Event,
     MailEnvelope,
+    MemberRef,
     MemberStartedEvent,
     MessageSentEvent,
     ParseError,
     StoredMemberResult,
+    TextBody,
 )
+from threads.log.digest import sha256_hex
 from threads.result import Err, Ok
 from threads.team.dynamic import InvalidDefinition
 from threads.team.materialize import MaterializeOptions, Rebind, materialize
@@ -70,8 +77,11 @@ class _Crashing(sqlite3.Connection):
         return super().execute(sql, parameters)
 
 
-async def _world(path: Path, m: pytest.MonkeyPatch, *, lead_starts: bool = False) -> TeamRef:
-    """A lead that ran once in a store whose connection can die, and its team."""
+async def _world(
+    path: Path, m: pytest.MonkeyPatch, *, lead_starts: bool = False
+) -> tuple[TeamRef, TeamAgent[None, str]]:
+    """A lead that ran once in a store whose connection can die, its team, and the lead itself:
+    open_team rebinds it while the caller holds it."""
     store = sqlite(str(path))
     m.setattr(sqlite3, "connect", partial(sqlite3.connect, factory=_Crashing))
     await open_store(store)
@@ -83,7 +93,7 @@ async def _world(path: Path, m: pytest.MonkeyPatch, *, lead_starts: bool = False
     lead = agent(name="lead", model=scripted_model({"responses": script}), team=[member])
     r = await lead.run("Get ready.", store=store)
     assert isinstance(r, Completed)
-    return r.team.ref
+    return r.team.ref, lead
 
 
 async def _fresh(path: Path, ref: TeamRef) -> Team:
@@ -107,7 +117,7 @@ def test_a_crash_inside_team_start_stores_none_of_it_the_keyed_retry_starts_once
 ) -> None:
     async def main() -> None:
         with monkeypatch.context() as m:
-            ref = await _world(tmp_path, m)
+            ref, _lead = await _world(tmp_path, m)
             dying = await _fresh(tmp_path, ref)
             _Crashing.point = "INSERT INTO operator_receipts"
             with pytest.raises(CrashError):
@@ -131,7 +141,7 @@ def test_a_crash_inside_team_send_stores_none_of_it_the_keyed_retry_sends_once(
 ) -> None:
     async def main() -> None:
         with monkeypatch.context() as m:
-            ref = await _world(tmp_path, m)
+            ref, _lead = await _world(tmp_path, m)
             dying = await _fresh(tmp_path, ref)
             started = await dying.start("writer", "Draft.")
             assert isinstance(started, Started)
@@ -157,7 +167,7 @@ def test_a_crash_inside_the_team_logs_receipt_leaves_the_notice_pending_the_next
 ) -> None:
     async def main() -> None:
         with monkeypatch.context() as m:
-            ref = await _world(tmp_path, m)
+            ref, _lead = await _world(tmp_path, m)
             team = await _fresh(tmp_path, ref)
             await team.start("writer", "Draft.")
             sq = await open_store(sqlite(str(tmp_path)))
@@ -284,3 +294,30 @@ def test_team_start_with_a_dynamic_agents_fields_and_its_refusals_detail_replaye
         await assert_team_replays(sq, team.ref.id)
 
     asyncio.run(main())
+
+
+def test_an_output_artifact_that_is_not_utf8_raises_store_corrupt_error() -> None:
+    async def main() -> None:
+        data = b"\xff\xfe"
+        ref = ArtifactRef(sha256=sha256_hex(data), bytes=len(data), media_type="text/plain")
+        team = "0192c000-0000-7000-8000-000000000001"
+        member = MemberRef(tenant="local", team=team, name="writer-1", generation=1)
+        stored = CompletedResult(member=member, output=TextBody(ref=ref), status="completed")
+
+        async def read(_sha: str) -> Ok[bytes] | Err[ParseError]:
+            return Ok(data)
+
+        with pytest.raises(StoreCorruptError) as raised:
+            await hydrated(stored, read)
+        assert raised.value.code == "artifact_corrupt"
+
+    asyncio.run(main())
+
+
+def test_a_lead_nobody_holds_is_dropped_from_the_registry() -> None:
+    name = "a-lead-to-drop"
+    lead = agent(name=name, model=scripted_model({"responses": []}), team=[])
+    assert len(leads_named(name)) == 1
+    del lead
+    gc.collect()
+    assert leads_named(name) == ()

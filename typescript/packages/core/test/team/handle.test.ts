@@ -8,6 +8,7 @@ import {
   type Team,
   type TeamItem,
 } from "../../src";
+import { memberEntry } from "../../src/agent/registry";
 import { openStore } from "../../src/agent/sqlite";
 import { teamHandle } from "../../src/agent/team/handle";
 import { takeTeamLogMail } from "../../src/agent/team/log-mail";
@@ -184,10 +185,11 @@ describe("team.start and team.send", () => {
 
 describe("the busy bound", () => {
   test("a held team-log lease past the bound is busy, and nothing is recorded", async () => {
-    const { store, team } = await ran();
+    const { store, team, lead } = await ran();
     const log = await logOf(store);
     const row = teamRow(log.driver, team.ref.id);
-    if (row === undefined) throw new Error("no team");
+    const entry = memberEntry(lead);
+    if (row === undefined || entry === undefined) throw new Error("no team");
     const held = unwrap(log.acquire(row.team_log_branch_id, "someone-else"));
     const { artifacts } = await openStore(store);
     const bounded = teamHandle({
@@ -195,7 +197,7 @@ describe("the busy bound", () => {
       artifacts,
       ref: team.ref,
       principal: ALICE,
-      lead: undefined,
+      lead: entry,
       busyBoundMs: 30,
     });
     const before = (await teamLog(store, team)).length;
@@ -205,11 +207,8 @@ describe("the busy bound", () => {
     });
     expect(await teamLog(store, team)).toHaveLength(before);
     held.release();
-    // Released: the same request goes through (this handle has no definition of the lead).
-    expect(await bounded.start("writer", "Go.")).toEqual({
-      status: "refused",
-      code: "unknown_agent",
-    });
+    // Released: the same request goes through.
+    expect((await bounded.start("writer", "Go.")).status).toBe("started");
     assertTeamReplays(log, team.ref.id);
   });
 });
@@ -225,6 +224,47 @@ describe("openTeam", () => {
     );
     expect(request?.actor.principal).toEqual(BOB);
     assertTeamReplays(await logOf(store), team.ref.id);
+  });
+
+  test("two leads of one name: openTeam binds the one that ran, by its config_hash", async () => {
+    const { store, team } = await ran();
+    // Defined after the run, with the same name and another team.
+    agent({
+      name: "lead",
+      model: scriptedModel({ responses: [] }),
+      team: [
+        agent({ name: "hacker", model: scriptedModel({ responses: [] }) }),
+      ],
+    });
+    const opened = unwrap(await openTeam(store, team.ref, { principal: BOB }));
+    expect((await opened.start("writer", "Draft.")).status).toBe("started");
+    expect(await opened.start("hacker", "Go.")).toEqual({
+      status: "refused",
+      code: "unknown_agent",
+    });
+    assertTeamReplays(await logOf(store), team.ref.id);
+  });
+
+  test("a process that doesn't define the lead that ran gets unavailable, and nothing is logged", async () => {
+    const store = sqlite(":memory:");
+    const other = agent({
+      name: "lead",
+      model: scriptedModel({ responses: [say("Ready.")] }),
+      team: [
+        agent({ name: "editor", model: scriptedModel({ responses: [] }) }),
+      ],
+    });
+    const r = await other.run("Get ready.", { store });
+    const before = (await teamLog(store, r.team)).length;
+    // Stand-in for another process: this lead's definition is gone, another of its name is here.
+    const log = await logOf(store);
+    log.driver.run(
+      "UPDATE team_members SET config_hash = ? WHERE role = 'lead'",
+      ["0".repeat(64)],
+    );
+    const opened = await openTeam(store, r.team.ref, { principal: BOB });
+    expect(!opened.ok && opened.error.code).toBe("unavailable");
+    expect(await teamLog(store, r.team)).toHaveLength(before);
   });
 
   test("another tenant is forbidden and an unknown team is not_found", async () => {

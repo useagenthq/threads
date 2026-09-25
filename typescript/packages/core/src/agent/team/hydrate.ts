@@ -52,5 +52,11 @@ function readText(artifacts: ArtifactStore, ref: ArtifactRef): string {
       ref,
       `artifact ${ref.sha256} is ${got.value.length} bytes, not ${ref.bytes}`,
     );
-  return utf8.decode(got.value);
+  try {
+    return utf8.decode(got.value);
+  } catch (error) {
+    // A verified ref to bytes that aren't text: the ref itself is wrong.
+    if (!(error instanceof TypeError)) throw error;
+    throw new StoreCorruptError("artifact_corrupt", ref, error.message);
+  }
 }

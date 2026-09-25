@@ -4,6 +4,7 @@ Every test ends with the team's replay check. Mirrors TypeScript's test/team/han
 
 import asyncio
 from collections.abc import AsyncIterator, Sequence
+from dataclasses import replace
 
 from team.run_kit import say, sq_of, types
 from team.team_kit import assert_team_replays
@@ -35,6 +36,7 @@ from threads.agents.team_handle_types import (
 )
 from threads.agents.team_log_mail import take_team_log_mail
 from threads.agents.team_tools import Sent, Started
+from threads.agents.teams import pins
 from threads.log import BranchId, Event, OperatorRequestEvent
 from threads.result import Err, Ok
 from threads.team.rebuild import rebuild_team_index
@@ -78,7 +80,7 @@ async def _collect(items: AsyncIterator[TeamItem]) -> list[TeamItem]:
 def test_team_start_is_one_operator_request_the_member_starts_with_its_label() -> None:
     async def main() -> None:
         store = sqlite(":memory:")
-        _, _, team = await _ran(store)
+        _lead, _, team = await _ran(store)  # held: open_team rebinds it
         started = await team.start("writer", "Draft the summary.", label="drafter")
         assert started == Started(_ref(team, "writer-1"))
         assert types(await _team_log(store, team)) == [
@@ -120,7 +122,7 @@ def test_the_leads_next_run_materializes_and_runs_an_operators_member() -> None:
 def test_an_unknown_agent_and_a_member_not_started_yet_are_refused_and_logged() -> None:
     async def main() -> None:
         store = sqlite(":memory:")
-        _, _, team = await _ran(store)
+        _lead, _, team = await _ran(store)  # held: open_team rebinds it
         assert await team.start("editor", "Go.") == TeamStartRefused("unknown_agent")
         sent = await team.send(_ref(team, "writer-1"), "Hello.")
         assert sent == TeamSendRefused("unknown_member")
@@ -133,7 +135,7 @@ def test_an_unknown_agent_and_a_member_not_started_yet_are_refused_and_logged() 
 def test_team_send_reaches_a_started_member_once_its_key_replays_the_outcome() -> None:
     async def main() -> None:
         store = sqlite(":memory:")
-        _, _, team = await _ran(store)
+        _lead, _, team = await _ran(store)  # held: open_team rebinds it
         await team.start("writer", "Draft.")
         writer = _ref(team, "writer-1")
         first = await team.send(writer, "Keep it short.", idempotency_key="s1")
@@ -168,19 +170,20 @@ def test_team_send_reaches_a_started_member_once_its_key_replays_the_outcome() -
 def test_a_held_team_log_lease_past_the_bound_is_busy_and_nothing_is_recorded() -> None:
     async def main() -> None:
         store = sqlite(":memory:")
-        _, _, team = await _ran(store)
+        lead, _, team = await _ran(store)
         sq = await sq_of(store)
         row = await sq.run(lambda c: team_row(c, team.ref.id))
         assert row is not None
         held = await sq.acquire(BranchId(row.team_log_branch_id), "someone-else", now_ms)
         assert isinstance(held, Ok)
-        bounded = Team(HandleEnv(sq, team.ref, OPERATOR, None, busy_bound_ms=30))
+        env = HandleEnv(sq, team.ref, OPERATOR, pins(lead.definition), lead.definition.team_limits)
+        bounded = Team(replace(env, busy_bound_ms=30))
         before = len(await _team_log(store, team))
         assert await bounded.start("writer", "Go.") == TeamStartRefused("busy")
         assert len(await _team_log(store, team)) == before
         await held.value.release()
-        # Released: the same request goes through (this handle has no definition of the lead).
-        assert await bounded.start("writer", "Go.") == TeamStartRefused("unknown_agent")
+        # Released: the same request goes through.
+        assert isinstance(await bounded.start("writer", "Go."), Started)
         await assert_team_replays(sq, team.ref.id)
 
     asyncio.run(main())
@@ -189,7 +192,7 @@ def test_a_held_team_log_lease_past_the_bound_is_busy_and_nothing_is_recorded() 
 def test_another_principal_of_the_tenant_acts_through_its_own_handle() -> None:
     async def main() -> None:
         store = sqlite(":memory:")
-        _, _, team = await _ran(store)
+        _lead, _, team = await _ran(store)  # held: open_team rebinds it
         opened = await open_team(store, team.ref, principal=BOB)
         assert isinstance(opened, Ok)
         assert isinstance(await opened.value.start("writer", "Draft."), Started)
@@ -202,10 +205,48 @@ def test_another_principal_of_the_tenant_acts_through_its_own_handle() -> None:
     asyncio.run(main())
 
 
+def test_two_leads_of_one_name_open_team_binds_the_one_that_ran() -> None:
+    async def main() -> None:
+        store = sqlite(":memory:")
+        _lead, _, team = await _ran(store)  # held: open_team rebinds it
+        # Defined after the run, with the same name and another team.
+        hacker = agent(name="hacker", model=scripted_model({"responses": []}))
+        other = agent(name="lead", model=scripted_model({"responses": []}), team=[hacker])
+        opened = await open_team(store, team.ref, principal=BOB)
+        assert isinstance(opened, Ok)
+        assert isinstance(await opened.value.start("writer", "Draft."), Started)
+        assert await opened.value.start("hacker", "Go.") == TeamStartRefused("unknown_agent")
+        assert other.name == "lead"
+        await assert_team_replays(await sq_of(store), team.ref.id)
+
+    asyncio.run(main())
+
+
+def test_a_process_without_the_lead_that_ran_gets_unavailable_and_nothing_is_logged() -> None:
+    async def main() -> None:
+        store = sqlite(":memory:")
+        _lead, _, team = await _ran(store)  # held: open_team rebinds it
+        before = len(await _team_log(store, team))
+        # Stand-in for another process: the lead that ran isn't defined here, another of its
+        # name is.
+        sq = await sq_of(store)
+        await sq.run(
+            lambda c: c.execute(
+                "UPDATE team_members SET config_hash = ? WHERE role = 'lead'", ("0" * 64,)
+            )
+        )
+        opened = await open_team(store, team.ref, principal=BOB)
+        assert isinstance(opened, Err)
+        assert opened.error.code == "unavailable"
+        assert len(await _team_log(store, team)) == before
+
+    asyncio.run(main())
+
+
 def test_another_tenant_is_forbidden_and_an_unknown_team_is_not_found() -> None:
     async def main() -> None:
         store = sqlite(":memory:")
-        _, _, team = await _ran(store)
+        _lead, _, team = await _ran(store)  # held: open_team rebinds it
         other = Principal(issuer="api", tenant="globex", subject="m")
         forbidden = await open_team(store, team.ref, principal=other)
         assert isinstance(forbidden, Err)
@@ -221,7 +262,7 @@ def test_another_tenant_is_forbidden_and_an_unknown_team_is_not_found() -> None:
 def test_the_feed_team_opened_the_leads_events_then_the_operators_request() -> None:
     async def main() -> None:
         store = sqlite(":memory:")
-        _, _, team = await _ran(store)
+        _lead, _, team = await _ran(store)  # held: open_team rebinds it
         await team.start("writer", "Draft.")
         items = await _collect(team.events())
         kinds = [f"{i.source.kind}:{i.event.type}" for i in items if isinstance(i, TeamEvent)]
@@ -248,7 +289,7 @@ def test_the_feed_team_opened_the_leads_events_then_the_operators_request() -> N
 def test_a_rebuilt_feed_restarts_epoch_restarted_then_the_whole_new_epoch() -> None:
     async def main() -> None:
         store = sqlite(":memory:")
-        _, _, team = await _ran(store)
+        _lead, _, team = await _ran(store)  # held: open_team rebinds it
         before = await _collect(team.events())
         sq = await sq_of(store)
         assert isinstance(await rebuild_team_index(sq, team.ref.id), Ok)
