@@ -3,7 +3,7 @@ rows of the current epoch in offset order, each event as stored with its cursor 
 never writes and never drives the team."""
 
 import sqlite3
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 from pydantic.experimental.missing_sentinel import MISSING
@@ -45,20 +45,23 @@ _PAGE = 256
 """Feed rows read per query: the epoch is paged, never loaded whole."""
 
 
-def _epoch(conn: sqlite3.Connection, team: str) -> int | None:
-    row: tuple[object] = conn.execute(
-        "SELECT MAX(epoch) FROM team_feed WHERE team_id = ?", (team,)
+def _extent(conn: sqlite3.Connection, team: str) -> tuple[int, int] | None:
+    """The current epoch and its last offset, as the call finds them."""
+    row: tuple[object, object] = conn.execute(
+        "SELECT epoch, MAX(feed_offset) FROM team_feed WHERE team_id = ?"
+        " AND epoch = (SELECT MAX(epoch) FROM team_feed WHERE team_id = ?)",
+        (team, team),
     ).fetchone()
-    return None if row[0] is None else int_of(row[0])
+    return None if row[0] is None or row[1] is None else (int_of(row[0]), int_of(row[1]))
 
 
 def _page(
-    conn: sqlite3.Connection, team: str, epoch: int, after: int
+    conn: sqlite3.Connection, team: str, epoch: int, span: tuple[int, int]
 ) -> list[tuple[int, str, int]]:
     rows: list[tuple[object, ...]] = conn.execute(
         "SELECT feed_offset, branch_id, seq FROM team_feed WHERE team_id = ? AND epoch = ?"
-        " AND feed_offset > ? ORDER BY feed_offset LIMIT ?",
-        (team, epoch, after, _PAGE),
+        " AND feed_offset > ? AND feed_offset <= ? ORDER BY feed_offset LIMIT ?",
+        (team, epoch, *span, _PAGE),
     ).fetchall()
     return [(int_of(o), text_of(b), int_of(s)) for o, b, s in rows]
 
@@ -66,17 +69,19 @@ def _page(
 async def team_events(
     sq: SqliteStore, team: str, after: TeamCursor | None
 ) -> AsyncIterator[TeamItem]:
-    """The committed feed after `after`, then the end."""
-    epoch = await sq.run(lambda c: _epoch(c, team))
-    if epoch is None:
+    """The feed committed when the call began, after `after`, then the end. Rows appended while
+    it is read are past its last offset: the next call reads them."""
+    extent = await sq.run(lambda c: _extent(c, team))
+    if extent is None:
         return
+    epoch, end = extent
     restarted = after is not None and after.epoch != epoch
     if restarted:
         yield EpochRestarted(TeamCursor(epoch, 0))
     start = 0 if after is None or restarted else after.offset
     sources = await _sources(sq, team)
     while True:
-        rows = await sq.run(lambda c, s=start: _page(c, team, epoch, s))
+        rows = await sq.run(lambda c, s=start: _page(c, team, epoch, (s, end)))
         for offset, branch, seq in rows:
             event, source = await sources.at(branch, seq)
             yield TeamEvent(TeamCursor(epoch, offset), source, event)
@@ -111,14 +116,15 @@ class _Sources:
     sq: SqliteStore
     team: TeamRow
     members: dict[str, MemberRef]
-    branches: dict[str, Sequence[Event]] = field(default_factory=dict[str, Sequence[Event]])
+    branches: dict[str, dict[int, Event]] = field(default_factory=dict[str, dict[int, Event]])
+    """Each branch read, its events by seq."""
     requests: dict[str, str] = field(default_factory=dict[str, str])
     """The team log's events, by event id, attributed to their operator request."""
     principals: dict[str, Principal] = field(default_factory=dict[str, Principal])
 
     async def at(self, branch: str, seq: int) -> tuple[Event, TeamSource]:
         events = await self._events(branch)
-        event = next((e for e in events if e.seq == seq), None)
+        event = events.get(seq)
         if event is None:
             raise AssertionError(f"the feed names {branch}@{seq}, not stored")
         if branch == self.team.team_log_branch_id:
@@ -131,7 +137,7 @@ class _Sources:
             raise AssertionError(f"the feed names {branch}, no member's")
         return event, MemberSource(ref)
 
-    async def _events(self, branch: str) -> Sequence[Event]:
+    async def _events(self, branch: str) -> dict[int, Event]:
         known = self.branches.get(branch)
         if known is not None:
             return known
@@ -139,7 +145,8 @@ class _Sources:
         if isinstance(read, Err):
             raise AssertionError(f"team log {branch}: {read.error.message}")
         events = read.value.fold.events
-        self.branches[branch] = events
+        by_seq = {e.seq: e for e in events}
+        self.branches[branch] = by_seq
         # Attribution reads earlier team-log events: fold them all once, in order.
         for e in events:
             rid = self._request_of(e)
@@ -147,7 +154,7 @@ class _Sources:
                 self.requests[e.event_id] = rid
             if isinstance(e, OperatorRequestEvent):
                 self.principals[e.data.request_id] = e.data.principal
-        return events
+        return by_seq
 
     def _operator(self, e: Event) -> TeamSource:
         rid = self.requests.get(e.event_id)

@@ -317,6 +317,21 @@ describe("team.events", () => {
     assertTeamReplays(await logOf(store), team.ref.id);
   });
 
+  test("a feed read while the team grows past a page yields what was committed at the start", async () => {
+    const { store, team } = await ran();
+    // 120 refused starts: three feed rows each, more than one page.
+    for (let i = 0; i < 120; i += 1) await team.start("editor", "Go.");
+    const committed = (await collect(team.events())).length;
+    let seen = 0;
+    for await (const _item of team.events()) {
+      seen += 1;
+      if (seen === 1) await team.start("writer", "Draft.");
+    }
+    expect(seen).toBe(committed);
+    expect(await collect(team.events())).toHaveLength(committed + 4);
+    assertTeamReplays(await logOf(store), team.ref.id);
+  });
+
   test("a rebuilt feed restarts: epoch_restarted, then the whole new epoch", async () => {
     const { store, team } = await ran();
     const before = await collect(team.events());

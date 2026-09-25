@@ -10,7 +10,7 @@ from threads.agents.config import ConfigError
 from threads.agents.store import Store, now_ms, open_store, scoped
 from threads.agents.team_handle import HandleEnv, Team
 from threads.agents.team_handle_types import TeamRef
-from threads.agents.team_leads import Lead, leads_named
+from threads.agents.team_leads import AsRan, Lead, leads_named
 from threads.log import BranchId, Principal, ThreadStartedEvent
 from threads.result import Err, Ok
 from threads.store import SqliteStore
@@ -56,8 +56,11 @@ async def _rebound(sq: SqliteStore, ref: TeamRef) -> Ok[Lead] | Err[OpenTeamErro
     parent = started.data.parent
     member = parent is not MISSING and parent.relation == "team_member"
     answerer = any(t.name == "ask_user" for t in started.data.tools)
+    policy = started.data.policy
+    context = None if policy is MISSING else policy.context
+    defer = None if context is None or context is MISSING else context.defer_tools
     for lead in leads_named(row.agent):
-        if await _hash_of(lead, member=member, answerer=answerer) == row.config_hash:
+        if await _hash_of(lead, AsRan(member, answerer, defer)) == row.config_hash:
             return Ok(lead)
     message = (
         f"this process does not define lead {row.agent} at config {row.config_hash}; "
@@ -66,9 +69,9 @@ async def _rebound(sq: SqliteStore, ref: TeamRef) -> Ok[Lead] | Err[OpenTeamErro
     return Err(OpenTeamError("unavailable", message))
 
 
-async def _hash_of(lead: Lead, *, member: bool, answerer: bool) -> str | None:
+async def _hash_of(lead: Lead, as_ran: AsRan) -> str | None:
     """A candidate that can't be set up here is no match."""
     try:
-        return await lead.config_hash(member, answerer)
+        return await lead.config_hash(as_ran)
     except ConfigError:
         return None

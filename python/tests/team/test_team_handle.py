@@ -286,6 +286,26 @@ def test_the_feed_team_opened_the_leads_events_then_the_operators_request() -> N
     asyncio.run(main())
 
 
+def test_a_feed_read_while_the_team_grows_past_a_page_yields_what_was_committed() -> None:
+    async def main() -> None:
+        store = sqlite(":memory:")
+        _lead, _, team = await _ran(store)  # held: open_team rebinds it
+        # 120 refused starts: three feed rows each, more than one page.
+        for _ in range(120):
+            await team.start("editor", "Go.")
+        committed = len(await _collect(team.events()))
+        seen = 0
+        async for _item in team.events():
+            seen += 1
+            if seen == 1:
+                await team.start("writer", "Draft.")
+        assert seen == committed
+        assert len(await _collect(team.events())) == committed + 4
+        await assert_team_replays(await sq_of(store), team.ref.id)
+
+    asyncio.run(main())
+
+
 def test_a_rebuilt_feed_restarts_epoch_restarted_then_the_whole_new_epoch() -> None:
     async def main() -> None:
         store = sqlite(":memory:")

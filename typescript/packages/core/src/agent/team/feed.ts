@@ -28,29 +28,34 @@ type FeedRow = z.infer<typeof FeedRow>;
 /** Feed rows read per query: the epoch is paged, never loaded whole. */
 const PAGE = 256;
 
-/** The committed feed after `after`, then the end. */
+/**
+ * The feed committed when the call began, after `after`, then the end. Rows appended while it is
+ * read are past its last offset: the next call reads them.
+ */
 export async function* teamEvents(
   log: LogStore,
   team: TeamId,
   after: TeamCursor | undefined,
 ): AsyncGenerator<TeamItem> {
   const [top] = z
-    .array(z.strictObject({ epoch: Int.nullable() }))
+    .array(z.strictObject({ epoch: Int.nullable(), last: Int.nullable() }))
     .parse(
       log.driver.all(
-        "SELECT MAX(epoch) AS epoch FROM team_feed WHERE team_id = ?",
-        [team],
+        `SELECT epoch, MAX(feed_offset) AS last FROM team_feed
+          WHERE team_id = ? AND epoch = (SELECT MAX(epoch) FROM team_feed WHERE team_id = ?)`,
+        [team, team],
       ),
     );
   const epoch = top?.epoch ?? null;
-  if (epoch === null) return;
+  const end = top?.last ?? null;
+  if (epoch === null || end === null) return;
   const restarted = after !== undefined && after.epoch !== epoch;
   if (restarted)
     yield { kind: "epoch_restarted", cursor: { epoch, offset: 0 } };
   const sources = new Sources(log, team);
   let from = after === undefined || restarted ? 0 : after.offset;
   for (;;) {
-    const rows = page(log, team, epoch, from);
+    const rows = page(log, team, epoch, from, end);
     for (const row of rows) {
       const { event, source } = sources.at(row);
       yield {
@@ -71,13 +76,14 @@ function page(
   team: TeamId,
   epoch: number,
   from: number,
+  end: number,
 ): readonly FeedRow[] {
   return z.array(FeedRow).parse(
     log.driver.all(
       `SELECT epoch, feed_offset, branch_id, seq FROM team_feed
-        WHERE team_id = ? AND epoch = ? AND feed_offset > ?
+        WHERE team_id = ? AND epoch = ? AND feed_offset > ? AND feed_offset <= ?
         ORDER BY feed_offset LIMIT ?`,
-      [team, epoch, from, PAGE],
+      [team, epoch, from, end, PAGE],
     ),
   );
 }
@@ -85,7 +91,8 @@ function page(
 /** Each feed row's event and where it was written, reading every branch once. */
 class Sources {
   readonly #log: LogStore;
-  readonly #branches = new Map<string, readonly KnownEvent[]>();
+  /** Each branch read, its events by seq. */
+  readonly #branches = new Map<string, ReadonlyMap<number, KnownEvent>>();
   /** The team log's events, by event id, attributed to their operator request. */
   readonly #requests = new Map<string, string>();
   readonly #principals = new Map<string, Principal>();
@@ -105,7 +112,7 @@ class Sources {
     readonly source: TeamSource;
   } {
     const events = this.#events(row.branch_id);
-    const event = events.find((e) => e.seq === row.seq);
+    const event = events.get(row.seq);
     if (event === undefined)
       throw new Error(`the feed names ${row.branch_id}@${row.seq}, not stored`);
     if (row.branch_id === this.#row.team_log_branch_id)
@@ -124,13 +131,14 @@ class Sources {
     return member;
   }
 
-  #events(branch: BranchId): readonly KnownEvent[] {
+  #events(branch: BranchId): ReadonlyMap<number, KnownEvent> {
     const known = this.#branches.get(branch);
     if (known !== undefined) return known;
     const read = this.#log.read(branch);
     if (!read.ok) throw new Error(`team log ${branch}: ${read.error.message}`);
     const events = knownEvents(read.value);
-    this.#branches.set(branch, events);
+    const bySeq = new Map(events.map((e) => [e.seq, e]));
+    this.#branches.set(branch, bySeq);
     // Attribution reads earlier team-log events: fold them all once, in order.
     for (const e of events) {
       const rid = this.#requestOf(e);
@@ -138,7 +146,7 @@ class Sources {
       if (e.type === "operator_request")
         this.#principals.set(e.data.request_id, e.data.principal);
     }
-    return events;
+    return bySeq;
   }
 
   #operator(e: KnownEvent): TeamSource {

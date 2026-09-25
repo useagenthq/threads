@@ -7,6 +7,7 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass, replace
 from typing import Final
 
+from threads.agents.deferral import DeferTools
 from threads.agents.definition import Definition
 from threads.agents.pinned import outside_any_branch
 from threads.agents.servers import with_servers
@@ -17,13 +18,22 @@ from threads.team.ops import TeamLimits
 
 
 @dataclass(frozen=True, slots=True)
+class AsRan:
+    """How the lead's thread was pinned: a nested lead as a member, a hosted one with ask_user,
+    with the defer_tools it resolved."""
+
+    member: bool
+    answerer: bool
+    defer: DeferTools | None
+
+
+@dataclass(frozen=True, slots=True)
 class Lead:
     name: str
     pin: Pin
     limits: TeamLimits
-    config_hash: Callable[[bool, bool], Awaitable[str]]
-    """Its config_hash as a thread of its own (member, answerer): a nested lead's pinned as a
-    member, a hosted one's with ask_user. Raises ConfigError."""
+    config_hash: Callable[[AsRan], Awaitable[str]]
+    """Its config_hash as a thread of its own, pinned as that thread was. Raises ConfigError."""
 
 
 # The handle is the key: a lead nobody holds any more is dropped with it.
@@ -31,11 +41,18 @@ _LEADS: Final[weakref.WeakKeyDictionary[object, Lead]] = weakref.WeakKeyDictiona
 
 
 def register_lead[D](handle: object, definition: Definition[D]) -> None:
-    async def config_hash(member: bool, answerer: bool) -> str:
+    async def config_hash(as_ran: AsRan) -> str:
         await set_up(definition)
         async with AsyncExitStack() as stack:
             connected = await with_servers(definition, stack, outside_any_branch)
-            _, config = replace(connected, in_team=member, answerer=answerer).pin()
+            # What the thread resolved is what it inherited, unless the lead sets its own.
+            pinned = replace(
+                connected,
+                in_team=as_ran.member,
+                answerer=as_ran.answerer,
+                inherited_defer=as_ran.defer,
+            )
+            _, config = pinned.pin()
         return sha256_hex(config)
 
     lead = Lead(definition.name, pins(definition), definition.team_limits, config_hash)
