@@ -1,4 +1,4 @@
-import type { KnownEvent } from "../log";
+import type { ArtifactRef, KnownEvent } from "../log";
 import { parseStrictJson } from "../log/json";
 import { recordedStubs } from "../loop/stubs";
 import type { StubGateway } from "../loop/types";
@@ -16,8 +16,8 @@ import { type LogError, logError } from "../verify/error";
 /** The frozen script of the innermost stub fork on the chain, if the chain has one. */
 export function stubForkRef(
   chain: readonly KnownEvent[],
-): { readonly sha256: string; readonly bytes: number } | undefined {
-  let found: { readonly sha256: string; readonly bytes: number } | undefined;
+): ArtifactRef | undefined {
+  let found: ArtifactRef | undefined;
   for (const event of chain)
     if (event.type === "fork" && event.data.stub_script_ref !== undefined)
       found = event.data.stub_script_ref;
