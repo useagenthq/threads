@@ -1,0 +1,71 @@
+---
+title: Docker
+description: Run an agent's commands and files in a local Docker container.
+icon: Box
+---
+
+`docker()` runs each sandbox as a container on the Docker daemon you already have. It is keyless: it talks to the Engine API over its unix socket and never sends registry credentials.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { docker } from "@threads/docker";
+
+const local = docker({ cpus: 2, memoryMb: 4096 });
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads.docker import docker
+
+local = docker(cpus=2, memory_mb=4096)
+```
+
+</Tab>
+</Tabs>
+
+## Options
+
+| TypeScript | Python | Default | What it does |
+|---|---|---|---|
+| `image` | `image` | `node:22-bookworm` by digest | The image a container runs, as a tag or a digest. |
+| `allowInternet` | `allow_internet` | `false` | Puts the container on Docker's default network instead of none. Also set `egress: "unenforced"` on the agent. |
+| `cpus` | `cpus` | no limit | How many CPUs the container may use. |
+| `memoryMb` | `memory_mb` | no limit | How much memory the container may use, in MiB, with swap held to the same value. |
+| `fetch` | — | the socket | TypeScript only: the seam every Engine API request goes through. |
+| — | `transport` | the socket | Python only: the same seam. |
+| — | `name` | `"docker"` | Python only: the provider name sandboxes are recorded under. |
+
+The process limit is fixed at 1024 and has no option.
+
+## The image
+
+Any `linux/amd64` or `linux/arm64` image with `/bin/sh` and `env` works. threads injects its own supervisor into a root-only volume at start, so nothing has to be published or built first. The default image also has `bash`, `git`, `python3` and `tar`, which the `bash` tool, the workspace and snapshots need.
+
+A missing image is pulled anonymously. A private image must already be pulled:
+
+```bash
+docker pull ghcr.io/acme/agent-base:2026-09
+```
+
+## The socket
+
+threads looks at `DOCKER_HOST` first (it must be a `unix://` socket), then `/var/run/docker.sock`, then `~/.docker/run/docker.sock`. Colima and OrbStack users set `DOCKER_HOST`:
+
+```bash
+export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock
+```
+
+Docker Engine API 1.44 or newer is required, which means Docker 25 or newer.
+
+## Good to know
+
+- **The container is locked down.** Its root filesystem is read-only outside `/workspace`, `/run/threads` and `/tmp`; it has no network unless you ask for one; every capability is dropped but the four the supervisor needs; and commands run as uid 1000, which cannot read the supervisor's state or the container's own environment. Tools that write to `$HOME` or `/var` need `HOME=/tmp` in the command's environment.
+- **One command at a time.** Background processes do not outlive the tool call that started them, and a single command runs for at most an hour.
+- **Limits are enforced or refused.** If the daemon cannot apply a limit you asked for — rootless Docker without cgroup v2 delegation, say — the sandbox fails to start rather than running without it.
+- **The socket is root-equivalent.** Prefer rootless Docker or Podman.
+
+See [Sandboxes](/docs/sandboxes/overview) for the tools an agent gets and how internet access works.

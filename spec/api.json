@@ -91,6 +91,13 @@
       "provider": "Daytona",
       "doc": "Sandboxes on Daytona through its official API clients (Python extra daytona). Every control-plane and toolbox request goes through the run's fenced transport."
     },
+    "docker": {
+      "kind": "adapter",
+      "ts": "@threads/docker",
+      "py": "threads.docker",
+      "provider": "Docker",
+      "doc": "Sandboxes in local Docker containers over the Engine API on its unix socket (Python extra docker), with no SDK and no registry credentials. Every request goes through the run's fenced transport."
+    },
     "modal": {
       "kind": "adapter",
       "ts": "@threads/modal",
@@ -1367,6 +1374,24 @@
       "returns": {"$ref": "#/types/Sandbox"},
       "config_errors": [{"code": "invalid_config"}, {"code": "missing_secret"}]
     },
+    "docker": {
+      "ts": "docker",
+      "py": "docker",
+      "package": "docker",
+      "doc": "A Sandbox in a local Docker container. Pass it as agent({sandbox: docker()}). It is keyless: it talks to the Docker Engine over its unix socket and never sends registry credentials. Each container runs any Linux image with the threads supervisor injected, its root filesystem read-only, no network, every capability dropped but the four the supervisor needs, and commands as uid 1000 in a /workspace volume. Snapshots are core's host trees, so nothing is committed to an image.",
+      "async": false,
+      "params": [
+        {"name": "image", "kind": "option", "type": {"prim": "string"}, "required": false, "default": "node:22-bookworm@sha256:363e1587494626837fa7f9a23bdb453d13b0ff3c67c705c2805cfc69c2d2fad7", "doc": "The image a container runs, as a tag or a digest. Any linux/amd64 or linux/arm64 image with /bin/sh and env works; anything else is invalid_config naming its architecture. A missing image is pulled anonymously, so a private one must already be pulled. The default has bash, git, python3 and tar."},
+        {"name": "allow_internet", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "Puts the container on Docker's default network instead of none. Egress is then unenforced, so the agent must also set egress: \"unenforced\"."},
+        {"name": "cpus", "kind": "option", "type": {"prim": "number"}, "required": false, "doc": "How many CPUs the container may use (Docker's NanoCpus). Greater than 0; anything else is invalid_config. Omitted: no CPU limit."},
+        {"name": "memory_mb", "kind": "option", "type": {"prim": "integer"}, "required": false, "doc": "How much memory the container may use, in MiB, with swap held to the same value. An integer of at least 64; anything else is invalid_config. Omitted: no memory limit. A daemon that can't enforce a requested limit fails the create rather than running without it."},
+        {"name": "fetch", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}}, "required": false, "doc": "Seam: the fetch every Engine API request goes through (a test server); the run's fence wraps it either way, and redirects are never followed. Omitted: the Engine API over the discovered unix socket."},
+        {"name": "transport", "kind": "option", "lang": "py", "type": {"platform": {"py": "threads.adapters.sandboxes.docker.transport.MakeTransport"}}, "required": false, "doc": "Seam: makes the httpx transport every Engine API request goes through (a test server). Omitted: the Engine API over the discovered unix socket; the fence checks every request either way."},
+        {"name": "name", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "docker", "doc": "The provider name in SandboxInfo and the sandbox ledger ([a-z][a-z0-9_]*, else invalid_config); rows under another name are never touched."}
+      ],
+      "returns": {"$ref": "#/types/Sandbox"},
+      "config_errors": [{"code": "invalid_config"}, {"code": "docker_unreachable"}]
+    },
     "modal": {
       "ts": "modal",
       "py": "modal",
@@ -1940,7 +1965,8 @@
               "hosted_tool_unsupported",
               "egress_policy_unsupported",
               "transport_fence_unsupported",
-              "handoff_in_team"
+              "handoff_in_team",
+              "docker_unreachable"
             ]
           }
         }
@@ -2280,7 +2306,8 @@
               "hosted_tool_unsupported",
               "egress_policy_unsupported",
               "transport_fence_unsupported",
-              "handoff_in_team"
+              "handoff_in_team",
+              "docker_unreachable"
             ]
           }
         }
@@ -3975,7 +4002,8 @@
           "hosted_tool_unsupported",
           "egress_policy_unsupported",
           "transport_fence_unsupported",
-          "handoff_in_team"
+          "handoff_in_team",
+          "docker_unreachable"
         ]
       },
       "doc": "Why setup failed. For example: missing_secret is an unset secret, duplicate_name two tools or agents with one name, capability_missing an option the sandbox or model can't support."

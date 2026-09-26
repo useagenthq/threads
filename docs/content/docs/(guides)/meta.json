@@ -26,6 +26,7 @@
     "multi-agent/teams",
     "---[Box]Sandboxes---",
     "sandboxes/overview",
+    "sandboxes/docker",
     "sandboxes/e2b",
     "sandboxes/daytona",
     "sandboxes/modal",

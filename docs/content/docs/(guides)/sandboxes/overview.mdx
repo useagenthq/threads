@@ -43,6 +43,7 @@ coder = agent(
 
 | Provider | TypeScript | Python | Page |
 |---|---|---|---|
+| Docker | `@threads/docker` | `threads.docker` | [Docker](/docs/sandboxes/docker) |
 | E2B | `@threads/e2b` | `threads.e2b` | [E2B](/docs/sandboxes/e2b) |
 | Daytona | `@threads/daytona` | `threads.daytona` | [Daytona](/docs/sandboxes/daytona) |
 | Modal | not available yet | `threads.modal` | [Modal](/docs/sandboxes/modal) |
@@ -93,6 +94,7 @@ researcher = agent(
 
 | Provider | TypeScript option | Python option |
 |---|---|---|
+| Docker | `allowInternet: true` | `allow_internet=True` |
 | E2B | `allowInternet: true` | `allow_internet=True` |
 | Daytona | `allowInternet: true` | `allow_internet=True` |
 | Modal | — | `allow_internet=True` |
@@ -103,7 +105,7 @@ Allowlists of specific hosts (`egress: ["api.github.com"]`) are not supported ye
 
 ## Your credentials stay on the host
 
-Provider keys authenticate threads' own calls to E2B, Daytona or Modal. They are never passed into the sandbox. Tools that need a credential, like `git_push` and `open_pull_request`, go through a gateway on the host, so the token never reaches the sandbox and the clone's remote has no credential.
+Provider keys authenticate threads' own calls to E2B, Daytona or Modal. `docker()` is keyless and sends no registry credentials. They are never passed into the sandbox. Tools that need a credential, like `git_push` and `open_pull_request`, go through a gateway on the host, so the token never reaches the sandbox and the clone's remote has no credential.
 
 ## Forks get their own sandbox
 

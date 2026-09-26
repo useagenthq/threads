@@ -96,7 +96,8 @@
         "path_exists",
         "bundle_incomplete",
         "schedule_conflict",
-        "io_error"
+        "io_error",
+        "docker_unreachable"
       ]
     },
     "TsName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
@@ -133,7 +134,8 @@
         "hosted_tool_unsupported",
         "egress_policy_unsupported",
         "transport_fence_unsupported",
-        "handoff_in_team"
+        "handoff_in_team",
+        "docker_unreachable"
       ]
     },
     "ConfigErrorEntry": {
