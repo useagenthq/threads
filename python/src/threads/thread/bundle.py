@@ -17,6 +17,7 @@ from threads.log import BranchId, ParseError
 from threads.log.digest import sha256_hex
 from threads.log.jcs import canonicalize
 from threads.result import Err, Ok
+from threads.store.artifacts import fsync_dir
 from threads.store.sqlite import SqliteStore
 from threads.thread.case_log import artifact_refs
 
@@ -85,7 +86,7 @@ def _publish(
     artifacts.mkdir(mode=0o700)
     for sha256, data in files.items():
         _durable(artifacts / sha256, data)
-    _fsync_dir(artifacts)
+    fsync_dir(artifacts)
     manifest: JsonValue = {
         "format": 1,
         "branch_id": str(branch_id),
@@ -95,8 +96,8 @@ def _publish(
     temp = root / f".{MANIFEST}.tmp"
     _durable(temp, _canonical(manifest))
     temp.rename(root / MANIFEST)
-    _fsync_dir(root)
-    _fsync_dir(root.parent)
+    fsync_dir(root)
+    fsync_dir(root.parent)
     return ExportedBundle(str(root), branch_id, len(files))
 
 
@@ -113,15 +114,6 @@ def _durable(file: Path, data: bytes) -> None:
     fd = os.open(file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
         os.write(fd, data)
-        os.fsync(fd)
-    finally:
-        os.close(fd)
-
-
-def _fsync_dir(directory: Path) -> None:
-    """Makes a directory's entries durable, so a file published in it survives a crash."""
-    fd = os.open(directory, os.O_RDONLY)
-    try:
         os.fsync(fd)
     finally:
         os.close(fd)

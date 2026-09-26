@@ -21,6 +21,7 @@ import {
   ARTIFACTS_DIR,
   type Bundle,
   encodeBundle,
+  ioError,
   LOG_FILE,
   MANIFEST,
 } from "./bundle";
@@ -143,9 +144,4 @@ function code(error: unknown): string | undefined {
   return typeof error === "object" && error !== null && "code" in error
     ? String(error.code)
     : undefined;
-}
-
-export function ioError(error: unknown, path: string): LogError {
-  const why = error instanceof Error ? error.message : String(error);
-  return logError("io_error", `${path}: ${why}`);
 }

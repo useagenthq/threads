@@ -1,5 +1,4 @@
 import type { z } from "zod";
-import { stubForkRef } from "../agent/frozen-stubs";
 import type {
   BranchId,
   PermissionMode,
@@ -22,6 +21,7 @@ import {
 } from "./control";
 import { type CancelAccepted, writeControlItem } from "./control-items";
 import { decide } from "./decide";
+import { stubForkRef } from "./frozen-stubs";
 import {
   type BranchInfo,
   branchInfo,

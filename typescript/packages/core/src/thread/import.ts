@@ -15,10 +15,10 @@ import {
   checkFile,
   decodeBundle,
   incomplete,
+  ioError,
   LOG_FILE,
   MANIFEST,
 } from "./bundle";
-import { ioError } from "./export";
 import { type Thread, threadHandle } from "./handle";
 import { refsIn } from "./save-case";
 

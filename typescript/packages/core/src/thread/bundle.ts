@@ -83,3 +83,9 @@ export function checkFile(
 export function incomplete(why: string): LogError {
   return logError("bundle_incomplete", why);
 }
+
+/** A file-system failure under a bundle: the caller names the path it was working on. */
+export function ioError(error: unknown, path: string): LogError {
+  const why = error instanceof Error ? error.message : String(error);
+  return logError("io_error", `${path}: ${why}`);
+}
