@@ -48,7 +48,7 @@ export default function HomePage() {
 /** Real, checkable facts. No counts of users, stars or customers: we do not have any to quote. */
 const FACTS = [
   ["TypeScript and Python", "one log, both languages"],
-  ["73 event types", "in the v1 schema"],
+  ["No service to sign up for", "it runs in your process"],
   ["SQLite or Postgres", "your database, your data"],
   ["Apache-2.0", "open source"],
 ] as const;
