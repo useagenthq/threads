@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pythonBin } from "../python-bin";
 
 // The generator (spec/tools/gen_api_surface.py) over fixture contracts and packages, compiled by
 // tsc: each case checks tsc's verdict and the generated line it reports.
@@ -80,7 +81,7 @@ function compile(inputs: {
   writeFileSync(join(dir, "tsconfig.json"), tsconfig(dir));
   const out = join(dir, "generated", "surface.ts");
   const generate = Bun.spawnSync([
-    "python3",
+    pythonBin(root),
     join(root, "spec", "tools", "gen_api_surface.py"),
     ...["--api", join(dir, "api.json"), "--gaps", join(dir, "gaps.json")],
     ...["--out", out],
