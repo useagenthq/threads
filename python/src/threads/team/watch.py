@@ -84,10 +84,12 @@ def wait_members(
     members: Sequence[MemberRef], mode: WaitMode | None
 ) -> tuple[MemberRef, ...] | Literal["invalid_request"]:
     """An operator wait's members, a repeat dropped (they are frozen at the call);
-    invalid_request when a numeric mode is above their count, which is refused before any writer
-    is taken."""
+    invalid_request for an empty list, or a numeric mode below 1 or above their count, refused
+    before any writer is taken."""
     distinct = tuple(dict.fromkeys(members))
-    if isinstance(mode, int) and mode > len(distinct):
+    if not distinct:
+        return "invalid_request"
+    if isinstance(mode, int) and not 1 <= mode <= len(distinct):
         return "invalid_request"
     return distinct
 

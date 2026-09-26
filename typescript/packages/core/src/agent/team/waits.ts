@@ -90,7 +90,9 @@ export async function waitFor(
   if (done.status === "refused" && isIn(WAIT_CODES, done.code))
     return { status: "refused", code: done.code };
   if (done.status !== "waiting" && done.status !== "waited")
-    throw new Error(`a wait recorded ${done.status}`);
+    throw new Error(
+      `a wait recorded ${done.status}${done.status === "refused" ? `{${done.code}}` : ""}`,
+    );
   const waitId = done.status === "waiting" ? done.wait_id : opened;
   return drive(env, () => waitOutcome(env, env.ref.id, waitId));
 }
@@ -130,7 +132,7 @@ const OBSERVE: readonly ObserveRefusal[] = [
 const ASK_CODES: readonly AskCode[] = [
   ...OBSERVE,
   "member_ended",
-  "self",
+  "lead",
   "mailbox_full",
   "team_closed",
   "budget_exceeded",

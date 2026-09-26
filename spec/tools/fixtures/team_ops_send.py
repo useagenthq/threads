@@ -181,6 +181,18 @@ def _operator_sends() -> list[Vec]:
             refused("forbidden"),
             {"team": [OP, P, "operator_refused"]},
         ),
+        Vec(
+            "send-operator-foreign-tenant-ref",
+            "4.4, 4.5",
+            "A MemberRef carrying another tenant with this team's id names no member here: "
+            "refused unknown_member. A ref is read whole, tenant included.",
+            running(),
+            "send",
+            "team",
+            operator(REQUESTS[0], {**body, "to": {**RESEARCHER, "tenant": "globex"}}),
+            refused("unknown_member"),
+            {"team": [OP, P, "operator_refused"]},
+        ),
     ]
 
 

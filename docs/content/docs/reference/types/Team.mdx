@@ -122,7 +122,7 @@ async def send(
 
 ### ask
 
-Asks a member a question and waits for its reply, its end, or the deadline.
+Asks a member a question and waits for its reply, its end, or the deadline. Addressed to the team's lead it is refused lead: only members run a turn that could reply.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -151,7 +151,7 @@ async def ask(
 </Tabs>
 
 <Field name="to" type={"MemberRef"} required>
-  The member to ask. See [MemberRef](/docs/reference/types/MemberRef).
+  The member to ask; the team's lead is refused lead. See [MemberRef](/docs/reference/types/MemberRef).
 </Field>
 
 <Field name="question" type={"string"} required>
@@ -200,11 +200,11 @@ async def wait(
 </Tabs>
 
 <Field name="members" type={"readonly MemberRef[]"} required>
-  The members to wait for: non-empty, frozen at the call.
+  The members to wait for: frozen at the call. An empty list is refused invalid_request.
 </Field>
 
 <Field name="mode" type={"\"all\" | \"any\" | PosInt"} default={"all"}>
-  all, any, or how many must settle. any never cancels the others. A number above the count of distinct members is refused invalid_request before anything is recorded.
+  all, any, or how many must settle. any never cancels the others. A number below 1 or above the count of distinct members is refused invalid_request before anything is recorded.
 </Field>
 
 <Field name="timeoutMs / timeout_ms" type={"PosInt"}>

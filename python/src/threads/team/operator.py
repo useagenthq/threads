@@ -186,7 +186,8 @@ def ref_target(conn: Conn, team: TeamRow, ref: MemberRef) -> Target:
     """An operator's target: the member a ref names, known in this team at its generation."""
 
     def row() -> MemberRow | Refusal:
-        found = member_named(conn, team.team_id, ref.name) if ref.team == team.team_id else None
+        known = ref.team == team.team_id and ref.tenant == team.tenant_id
+        found = member_named(conn, team.team_id, ref.name) if known else None
         if found is None or ref.generation > found.generation:
             return Refusal("unknown_member")
         return Refusal("stale_member") if ref.generation < found.generation else found

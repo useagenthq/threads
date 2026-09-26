@@ -8,8 +8,9 @@ from typing import Literal
 from threads.agents.team_tools import SendRefusal
 from threads.log import BudgetExceededData, MemberErrorCode, MemberRef, ParkReason
 
-type AskRefusal = SendRefusal | Literal["budget_exceeded"]
-"""Why an ask was refused: a send's refusals, or no headroom for one request of its model."""
+type AskRefusal = SendRefusal | Literal["budget_exceeded", "lead"]
+"""Why an ask was refused: a send's refusals, no headroom for one request of its model, or lead
+(an operator's ask addressed to the team's lead, which nothing here ever answers)."""
 type ReplyRefusal = Literal["unknown_ask", "already_replied", "ask_closed"]
 """Why a reply was refused."""
 type ObserveRefusal = Literal["forbidden", "unknown_member", "stale_member"]

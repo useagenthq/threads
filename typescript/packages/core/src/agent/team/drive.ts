@@ -8,7 +8,11 @@ import { TeamWorker } from "./worker";
 // does, so its members materialize and run, and the team log takes its mail and runs its deadline
 // step. The worker stops with the outcome.
 
-/** `outcome()` once it has one, driving the team meanwhile. Throws a member run's bug. */
+/**
+ * `outcome()` once it has one, driving the team meanwhile. Throws a member run's bug. It has no
+ * ceiling of its own: the outcome comes from the team log's deadline step, which only the lease
+ * holder runs, so a lease held elsewhere leaves this call waiting on that holder.
+ */
 export async function drive<T>(
   env: HandleEnv,
   outcome: () => Promise<T | undefined>,

@@ -527,6 +527,48 @@
       }
     },
     {
+      "name": "send-operator-foreign-tenant-ref",
+      "section": "4.4, 4.5",
+      "description": "A MemberRef carrying another tenant with this team's id names no member here: refused unknown_member. A ref is read whole, tenant included.",
+      "given": {
+        "world": "send-operator"
+      },
+      "now": 1790000100000,
+      "op": "send",
+      "by": "team",
+      "input": {
+        "request_id": "0192d000-0000-7000-8000-000000000101",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body": {
+          "to": {
+            "tenant": "globex",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "researcher-1",
+            "generation": 1
+          },
+          "text": "Status?"
+        }
+      },
+      "expect": {
+        "outcome": {
+          "code": "unknown_member",
+          "status": "refused"
+        },
+        "appended": {
+          "team": [
+            "operator_request",
+            "message_policy_decided",
+            "operator_refused"
+          ]
+        },
+        "rows": {}
+      }
+    },
+    {
       "name": "ask-member-opens",
       "section": "4.8",
       "description": "writer-1 asks researcher-1: the grant, message_sent{ask} whose ask_id is its mail_id and whose deadline is now plus the default 120 s, then the park on the ask. It is the writer's first park while the lead's task monitor on it is unfired, so the same append sends the lead the one member_parked notice. The asks row is open.",
@@ -845,6 +887,48 @@
             ]
           }
         }
+      }
+    },
+    {
+      "name": "ask-operator-lead-refused",
+      "section": "4.4, 4.8",
+      "description": "team.ask addressed to the team's lead: refused lead, after the send checks and before headroom. Only members run a turn that could reply, so the ask could only end at its deadline. team.send and team.cancel to the lead stay meaningful.",
+      "given": {
+        "world": "send-operator"
+      },
+      "now": 1790000100000,
+      "op": "ask",
+      "by": "team",
+      "input": {
+        "request_id": "0192d000-0000-7000-8000-000000000101",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body": {
+          "to": {
+            "tenant": "acme",
+            "team": "0192c000-0000-7000-8000-000000000001",
+            "name": "lead",
+            "generation": 1
+          },
+          "question": "Any risks?"
+        }
+      },
+      "expect": {
+        "outcome": {
+          "code": "lead",
+          "status": "refused"
+        },
+        "appended": {
+          "team": [
+            "operator_request",
+            "message_policy_decided",
+            "operator_refused"
+          ]
+        },
+        "rows": {}
       }
     },
     {
@@ -8977,6 +9061,80 @@
           "mode": 3
         },
         "idempotency_key": "wait-1"
+      },
+      "expect": {
+        "outcome": {
+          "code": "invalid_request",
+          "status": "refused"
+        },
+        "appended": {},
+        "rows": {}
+      }
+    },
+    {
+      "name": "wait-operator-empty-invalid",
+      "section": "4.12",
+      "description": "team.wait with no members is refused invalid_request in the same guard: a wait with nothing to wait for is never recorded (wait_started lists at least one member).",
+      "given": {
+        "world": "consume-nothing-pending"
+      },
+      "now": 1790000100000,
+      "op": "wait",
+      "by": "team",
+      "input": {
+        "request_id": "0192d000-0000-7000-8000-000000000101",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body": {
+          "members": []
+        }
+      },
+      "expect": {
+        "outcome": {
+          "code": "invalid_request",
+          "status": "refused"
+        },
+        "appended": {},
+        "rows": {}
+      }
+    },
+    {
+      "name": "wait-operator-mode-zero-invalid",
+      "section": "4.12",
+      "description": "A numeric mode is a positive count: mode 0 is refused invalid_request, not finished at once having settled nothing.",
+      "given": {
+        "world": "consume-nothing-pending"
+      },
+      "now": 1790000100000,
+      "op": "wait",
+      "by": "team",
+      "input": {
+        "request_id": "0192d000-0000-7000-8000-000000000101",
+        "principal": {
+          "issuer": "api",
+          "tenant": "acme",
+          "subject": "alice"
+        },
+        "body": {
+          "members": [
+            {
+              "tenant": "acme",
+              "team": "0192c000-0000-7000-8000-000000000001",
+              "name": "researcher-1",
+              "generation": 1
+            },
+            {
+              "tenant": "acme",
+              "team": "0192c000-0000-7000-8000-000000000001",
+              "name": "writer-1",
+              "generation": 1
+            }
+          ],
+          "mode": 0
+        }
       },
       "expect": {
         "outcome": {

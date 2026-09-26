@@ -187,6 +187,30 @@ def _operator_waits() -> list[Vec]:
             {},
         ),
         Vec(
+            "wait-operator-empty-invalid",
+            "4.12",
+            "team.wait with no members is refused invalid_request in the same guard: a wait with "
+            "nothing to wait for is never recorded (wait_started lists at least one member).",
+            _both(),
+            "wait",
+            "team",
+            operator(REQUESTS[0], {"members": []}),
+            refused("invalid_request"),
+            {},
+        ),
+        Vec(
+            "wait-operator-mode-zero-invalid",
+            "4.12",
+            "A numeric mode is a positive count: mode 0 is refused invalid_request, not finished "
+            "at once having settled nothing.",
+            _both(),
+            "wait",
+            "team",
+            operator(REQUESTS[0], {"members": both, "mode": 0}),
+            refused("invalid_request"),
+            {},
+        ),
+        Vec(
             "wait-operator-observed",
             "4.12",
             "team.wait on an idle member: operator_request, the grant, wait_started, "

@@ -232,7 +232,7 @@ export function refTarget(tx: Tx, team: TeamRow, ref: MemberRef): Target {
     name: ref.name,
     row: async () => {
       const row =
-        ref.team === team.team_id
+        ref.team === team.team_id && ref.tenant === team.tenant_id
           ? await memberNamed(tx, team.team_id, ref.name)
           : undefined;
       if (row === undefined || ref.generation > row.generation)

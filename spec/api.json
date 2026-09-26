@@ -5205,7 +5205,7 @@
         "ask": {
           "ts": "ask",
           "py": "ask",
-          "doc": "Asks a member a question and waits for its reply, its end, or the deadline.",
+          "doc": "Asks a member a question and waits for its reply, its end, or the deadline. Addressed to the team's lead it is refused lead: only members run a turn that could reply.",
           "async": true,
           "params": [
             {
@@ -5215,7 +5215,7 @@
                 "$ref": "#/types/MemberRef"
               },
               "required": true,
-              "doc": "The member to ask."
+              "doc": "The member to ask; the team's lead is refused lead."
             },
             {
               "name": "question",
@@ -5267,7 +5267,7 @@
                 }
               },
               "required": true,
-              "doc": "The members to wait for: non-empty, frozen at the call."
+              "doc": "The members to wait for: frozen at the call. An empty list is refused invalid_request."
             },
             {
               "name": "mode",
@@ -5287,7 +5287,7 @@
               },
               "required": false,
               "default": "all",
-              "doc": "all, any, or how many must settle. any never cancels the others. A number above the count of distinct members is refused invalid_request before anything is recorded."
+              "doc": "all, any, or how many must settle. any never cancels the others. A number below 1 or above the count of distinct members is refused invalid_request before anything is recorded."
             },
             {
               "name": "timeout_ms",
@@ -5494,12 +5494,13 @@
           "stale_member",
           "member_ended",
           "self",
+          "lead",
           "mailbox_full",
           "team_closed",
           "budget_exceeded"
         ]
       },
-      "doc": "Why an ask was refused: a send's refusals, or no budget headroom for one request of the member's model."
+      "doc": "Why an ask was refused: a send's refusals, no budget headroom for one request of the member's model, or lead (the ask was addressed to the team's lead, which never answers an operator's ask)."
     },
     "ReplyRefusal": {
       "kind": "alias",
@@ -6427,7 +6428,7 @@
                 ]
               },
               "required": true,
-              "doc": "Why it was refused. invalid_request (mode above the member count) is returned before any writer, so, like busy, it is never logged."
+              "doc": "Why it was refused. invalid_request (no members, or a mode below 1 or above the member count) is returned before any writer, so, like busy, it is never logged."
             }
           },
           "casing": "api"

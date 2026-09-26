@@ -92,6 +92,29 @@ describe("team.ask", () => {
     await assertTeamReplays(await logOf(store), team.ref.id);
   });
 
+  test("an ask to the lead is refused lead, and waiting for it still works", async () => {
+    const { store, team } = await ran(answers([]));
+    const lead = refIn(team, "lead");
+    expect(await team.ask(lead, "Which topic?")).toEqual({
+      status: "refused",
+      code: "lead",
+    });
+    expect(types(await teamLog(store, team)).slice(-3)).toEqual([
+      "operator_request",
+      "message_policy_decided",
+      "operator_refused",
+    ]);
+    // wait and cancel on the lead are meaningful and stay.
+    expect(await team.wait([lead], { timeoutMs: 3000 })).toMatchObject({
+      status: "waited",
+      timedOut: false,
+    });
+    expect(await team.cancel(lead)).toMatchObject({
+      status: "cancel_requested",
+    });
+    await assertTeamReplays(await logOf(store), team.ref.id);
+  });
+
   test("askStatus of an ask the team log never sent is not_found", async () => {
     const { team } = await ran(answers([]));
     const id = AskId.parse("0192b000-0000-7000-8000-0000000000ff:nope");
@@ -137,6 +160,17 @@ describe("team.wait", () => {
     await assertTeamReplays(await logOf(store), team.ref.id);
   });
 
+  test("no members, or a mode below 1, is invalid_request and records nothing", async () => {
+    const { store, team } = await ran(answers([() => say("Drafted.")]));
+    await team.start("writer", "Draft.");
+    const writer = refIn(team, "writer-1");
+    const before = (await teamLog(store, team)).length;
+    const refused = { status: "refused", code: "invalid_request" } as const;
+    expect(await team.wait([])).toEqual(refused);
+    expect(await team.wait([writer], { mode: 0 })).toEqual(refused);
+    expect(await teamLog(store, team)).toHaveLength(before);
+  });
+
   test("mode any returns once one member settles; a mode above the count records nothing", async () => {
     const { store, team } = await ran(
       answers([() => say("Drafted.")]),
@@ -158,6 +192,16 @@ describe("team.wait", () => {
 });
 
 describe("team.cancel", () => {
+  test("a ref carrying another tenant names no member of this team", async () => {
+    const { team } = await ran(answers([() => say("Drafted.")]));
+    await team.start("writer", "Draft.");
+    const foreign = { ...refIn(team, "writer-1"), tenant: "globex" };
+    expect(await team.cancel(foreign)).toEqual({
+      status: "refused",
+      code: "unknown_member",
+    });
+  });
+
   test("a starting member's cancel is durable at once; it ends cancelled without running", async () => {
     let requests = 0;
     const writer = answers([

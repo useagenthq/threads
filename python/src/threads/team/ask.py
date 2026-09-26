@@ -75,11 +75,15 @@ def ask(ctx: CallContext, to: str, question: str, plan: AskPlan) -> JsonValue:
 
 
 def open_ask(req: Request, to: Target, question: str, plan: AskPlan) -> dict[str, JsonValue]:
-    """The ask's mail, for a model call or an operator request: the checks send makes, headroom,
-    then message_sent{ask} with its deadline. Nothing records the open ask as a result."""
+    """The ask's mail, for a model call or an operator request: the checks send makes, the lead
+    (an operator's ask only), headroom, then message_sent{ask} with its deadline. Nothing records
+    the open ask as a result."""
     row = deliverable(req, "ask", to, plan.limits)
     if isinstance(row, Refusal):
         return req.refuse(row)
+    # Only members run here, so nothing would ever consume an operator's ask to the lead.
+    if req.own is None and row.role == "lead":
+        return req.refuse(Refusal("lead"))
     if not plan.headroom(row):
         return req.refuse(Refusal("budget_exceeded"))
     cap = TEAM_CONSTANTS.ask_wait_default_ms

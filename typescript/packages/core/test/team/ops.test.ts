@@ -98,8 +98,8 @@ describe("team op vectors, run by this runtime", () => {
       ]),
     );
     // Pinned: a vector that drops out of the selection fails here, not silently.
-    expect(mine).toHaveLength(103);
-    expect(mine.filter((v) => v.by === "team")).toHaveLength(25);
+    expect(mine).toHaveLength(107);
+    expect(mine.filter((v) => v.by === "team")).toHaveLength(29);
   });
 
   for (const v of mine)

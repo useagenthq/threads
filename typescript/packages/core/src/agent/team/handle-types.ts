@@ -65,8 +65,8 @@ export type TeamAskResult =
     };
 
 /**
- * team.wait's result. invalid_request (a numeric mode above the member count) is returned before
- * any writer, so, like busy, it is never logged.
+ * team.wait's result. invalid_request (no members, or a numeric mode below 1 or above the member
+ * count) is returned before any writer, so, like busy, it is never logged.
  */
 export type TeamWaitResult =
   | Waited

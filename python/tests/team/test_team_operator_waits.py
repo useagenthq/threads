@@ -28,6 +28,7 @@ from threads.agents.store import now_ms
 from threads.agents.team_answers import Answered, CancelRequested, Waited
 from threads.agents.team_handle_types import (
     AskNotFound,
+    TeamAskRefused,
     TeamCancelRefused,
     TeamWaitRefused,
 )
@@ -113,6 +114,49 @@ def test_ask_status_of_an_ask_the_team_log_never_sent_is_not_found() -> None:
         _store, team = await _ran(answers([]))
         ask_id = "0192b000-0000-7000-8000-0000000000ff:nope"
         assert await team.ask_status(ask_id) == AskNotFound(ask_id)
+
+    asyncio.run(main())
+
+
+def test_an_ask_to_the_lead_is_refused_lead_and_waiting_for_it_still_works() -> None:
+    async def main() -> None:
+        store, team = await _ran(answers([]))
+        lead = _ref(team, "lead")
+        assert await team.ask(lead, "Which topic?") == TeamAskRefused("lead")
+        assert types(await _team_log(store, team))[-3:] == [
+            "operator_request",
+            "message_policy_decided",
+            "operator_refused",
+        ]
+        # wait and cancel on the lead are meaningful and stay.
+        waited = await team.wait([lead], timeout_ms=3000)
+        assert isinstance(waited, Waited)
+        assert not waited.timed_out
+        assert isinstance(await team.cancel(lead), CancelRequested)
+        await assert_team_replays(await sq_of(store), team.ref.id)
+
+    asyncio.run(main())
+
+
+def test_no_members_or_a_mode_below_one_is_invalid_request_and_records_nothing() -> None:
+    async def main() -> None:
+        store, team = await _ran(answers([lambda _r: say("Drafted.")]))
+        await team.start("writer", "Draft.")
+        ref = _ref(team, "writer-1")
+        before = len(await _team_log(store, team))
+        assert await team.wait([]) == TeamWaitRefused("invalid_request")
+        assert await team.wait([ref], mode=0) == TeamWaitRefused("invalid_request")
+        assert len(await _team_log(store, team)) == before
+
+    asyncio.run(main())
+
+
+def test_a_ref_carrying_another_tenant_names_no_member_of_this_team() -> None:
+    async def main() -> None:
+        _store, team = await _ran(answers([lambda _r: say("Drafted.")]))
+        await team.start("writer", "Draft.")
+        foreign = MemberRef(tenant="globex", team=team.ref.id, name="writer-1", generation=1)
+        assert await team.cancel(foreign) == TeamCancelRefused("unknown_member")
 
     asyncio.run(main())
 

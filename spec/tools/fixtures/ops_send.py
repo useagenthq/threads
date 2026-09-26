@@ -52,13 +52,16 @@ def send(w: World, label: str, inp: Obj) -> Obj:
 
 def ask(w: World, label: str, inp: Obj) -> Obj:
     """ask.open: send with kind ask, a deadline, headroom on the recipient's budgets, and a park
-    for a member asker whose turn has nothing else to run."""
+    for a member asker whose turn has nothing else to run. An operator's ask to the lead is
+    refused `lead`: only members run, so nothing would ever consume it."""
     replayed = keyed(w, label, "ask", inp)
     if replayed is not None:
         return replayed
     req = open_request(w, label, "ask", inp)
     try:
         row = _deliverable(req, "ask")
+        if req.operator and row["role"] == "lead":
+            raise Refused("lead")
         if not w.headroom:
             raise Refused("budget_exceeded")
     except Refused as r:

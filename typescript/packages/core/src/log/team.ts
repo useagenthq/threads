@@ -245,6 +245,7 @@ const TEAM_REFUSALS = [
   "stale_member",
   "member_ended",
   "self",
+  "lead",
   "mailbox_full",
   "idempotency_key_reused",
   "idempotency_key_principal_mismatch",

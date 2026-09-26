@@ -86,8 +86,9 @@ export async function wait(
 }
 
 /**
- * An operator wait's members, a repeat dropped (they are frozen at the call); invalid_request
- * when a numeric mode is above their count, which is refused before any writer is taken.
+ * An operator wait's members, a repeat dropped (they are frozen at the call); invalid_request for
+ * an empty list, or a numeric mode below 1 or above their count, refused before any writer is
+ * taken.
  */
 export function waitMembers(
   members: readonly MemberRef[],
@@ -96,9 +97,10 @@ export function waitMembers(
   const key = (m: MemberRef) =>
     JSON.stringify([m.tenant, m.team, m.name, m.generation]);
   const distinct = [...new Map(members.map((m) => [key(m), m])).values()];
-  return typeof mode === "number" && mode > distinct.length
-    ? "invalid_request"
-    : distinct;
+  const bad =
+    distinct.length === 0 ||
+    (typeof mode === "number" && (mode < 1 || mode > distinct.length));
+  return bad ? "invalid_request" : distinct;
 }
 
 /**

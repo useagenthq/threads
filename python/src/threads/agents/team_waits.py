@@ -136,7 +136,9 @@ async def cancel_member(env: HandleEnv, member: MemberRef, key: str | None) -> T
 async def _drive[T: AskOutcome | Waited](
     env: HandleEnv, outcome: Callable[[], Awaitable[T | None]]
 ) -> T:
-    """`outcome()` once it has one, driving the team meanwhile. Raises a member run's bug."""
+    """`outcome()` once it has one, driving the team meanwhile. Raises a member run's bug. It has
+    no ceiling of its own: the outcome comes from the team log's deadline step, which only the
+    lease holder runs, so a lease held elsewhere leaves this call waiting on that holder."""
     first = await outcome()
     if first is not None:
         return first
@@ -159,7 +161,7 @@ async def _drive[T: AskOutcome | Waited](
 
 _OBSERVE: Final[tuple[ObserveRefusal, ...]] = ("forbidden", "unknown_member", "stale_member")
 _ASK: Final[tuple[AskRefusal | OperatorRefusal, ...]] = (
-    *_OBSERVE, "member_ended", "self", "mailbox_full", "team_closed", "budget_exceeded", *KEYED,
+    *_OBSERVE, "member_ended", "lead", "mailbox_full", "team_closed", "budget_exceeded", *KEYED,
 )  # fmt: skip
 _WAIT: Final[tuple[ObserveRefusal | OperatorRefusal, ...]] = (*_OBSERVE, *KEYED)
 _CANCEL: Final[tuple[CancelRefusal | OperatorRefusal, ...]] = (*_OBSERVE, "member_ended", *KEYED)

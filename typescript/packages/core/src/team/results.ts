@@ -49,8 +49,11 @@ export type SendRefusal =
   | "mailbox_full"
   | "team_closed";
 
-/** Why an ask was refused: a send's refusals, or no headroom for one request of its model. */
-export type AskRefusal = SendRefusal | "budget_exceeded";
+/**
+ * Why an ask was refused: a send's refusals, no headroom for one request of its model, or lead
+ * (an operator's ask addressed to the team's lead, which nothing here ever answers).
+ */
+export type AskRefusal = SendRefusal | "budget_exceeded" | "lead";
 
 /** Why a reply was refused. */
 export type ReplyRefusal = "unknown_ask" | "already_replied" | "ask_closed";

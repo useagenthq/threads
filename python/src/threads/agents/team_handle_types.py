@@ -65,8 +65,8 @@ type TeamAskResult = AskOutcome | TeamAskRefused
 
 @dataclass(frozen=True, slots=True)
 class TeamWaitRefused:
-    """invalid_request (a numeric mode above the member count) is returned before any writer, so,
-    like busy, it is never logged."""
+    """invalid_request (no members, or a numeric mode below 1 or above the member count) is
+    returned before any writer, so, like busy, it is never logged."""
 
     code: ObserveRefusal | OperatorRefusal | Literal["invalid_request"]
     status: Literal["refused"] = "refused"

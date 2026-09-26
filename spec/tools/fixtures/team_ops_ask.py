@@ -26,7 +26,7 @@ from .team_ops_worlds import (
     team,
     writer_asks,
 )
-from .team_pieces import LOG_BRANCH, MEMBER_BRANCH, RESEARCHER, WRITER_BRANCH
+from .team_pieces import LEAD, LOG_BRANCH, MEMBER_BRANCH, RESEARCHER, WRITER_BRANCH
 
 if TYPE_CHECKING:
     from .jcs import Obj
@@ -88,6 +88,21 @@ def ask_vectors() -> list[Vec]:
             operator(REQUESTS[0], body),
             {"status": "open", "ask_id": f"{LOG_BRANCH}:{REQUESTS[0]}", "deadline": NOW + 60_000},
             {"team": [OP, P, S]},
+        )
+    )
+    out.append(
+        Vec(
+            "ask-operator-lead-refused",
+            "4.4, 4.8",
+            "team.ask addressed to the team's lead: refused lead, after the send checks and before "
+            "headroom. Only members run a turn that could reply, so the ask could only end at its "
+            "deadline. team.send and team.cancel to the lead stay meaningful.",
+            running(),
+            "ask",
+            "team",
+            operator(REQUESTS[0], {"to": LEAD, "question": "Any risks?"}),
+            refused("lead"),
+            {"team": [OP, P, "operator_refused"]},
         )
     )
     return out + reply_vectors(ask_id) + _ask_complete_vectors()

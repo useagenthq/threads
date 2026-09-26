@@ -43,7 +43,7 @@ def wait(w: World, label: str, inp: Obj) -> Obj:
     if "body" in inp:
         refs = arr(obj(inp["body"])["members"])
         unique = [m for i, m in enumerate(refs) if m not in refs[:i]]
-        if isinstance(mode, int) and mode > len(unique):
+        if not unique or (isinstance(mode, int) and not 1 <= mode <= len(unique)):
             return {"code": "invalid_request", "status": "refused"}  # before anything is recorded
     replayed = keyed(w, label, "wait", inp)
     if replayed is not None:

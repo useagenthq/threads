@@ -77,8 +77,9 @@ export async function ask(
 }
 
 /**
- * The ask's mail, for a model call or an operator request: the checks send makes, headroom, then
- * message_sent{ask} with its deadline. Nothing records the open ask as a result.
+ * The ask's mail, for a model call or an operator request: the checks send makes, the lead (an
+ * operator's ask only), headroom, then message_sent{ask} with its deadline. Nothing records the
+ * open ask as a result.
  */
 export async function openAsk(
   req: Request,
@@ -88,6 +89,9 @@ export async function openAsk(
 ): Promise<AskOpened | Refused> {
   const row = await deliverable(req, "ask", to, plan.limits);
   if ("refused" in row) return req.refuse(row);
+  // Only members run here, so nothing would ever consume an operator's ask to the lead.
+  if (req.self === undefined && row.role === "lead")
+    return req.refuse(refusal("lead"));
   if (!(await plan.headroom(row)))
     return req.refuse(refusal("budget_exceeded"));
   const cap = TEAM_CONSTANTS.askWaitDefaultMs;

@@ -76,7 +76,8 @@ class Request:
         if self.operator:
             ref = obj(to)
             name, generation = text(ref["name"]), num(ref["generation"])
-            if ref["team"] != self.w.team()["team_id"]:
+            team = self.w.team()
+            if ref["team"] != team["team_id"] or ref["tenant"] != team["tenant_id"]:
                 raise Refused("unknown_member")
         else:
             name, generation = text(to), self.w.bound(self.label, text(to)) or 0

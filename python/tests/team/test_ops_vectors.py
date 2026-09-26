@@ -94,8 +94,8 @@ def test_the_selection_covers_this_builds_ops() -> None:
         *("materialize", "idle", "end"),
     }
     # Pinned: a vector that drops out of the selection fails here, not silently.
-    assert len(MINE) == 103  # noqa: PLR2004 - the pinned selection size
-    assert sum(v["by"] == "team" for v in MINE) == 25  # noqa: PLR2004 - of them, the operator's
+    assert len(MINE) == 107  # noqa: PLR2004 - the pinned selection size
+    assert sum(v["by"] == "team" for v in MINE) == 29  # noqa: PLR2004 - of them, the operator's
 
 
 @pytest.mark.parametrize("v", MINE, ids=[str(v["name"]) for v in MINE])
