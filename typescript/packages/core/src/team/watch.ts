@@ -1,4 +1,5 @@
 import type { MemberRef } from "../log";
+import { isPosInt } from "../pos-int";
 import {
   addressed,
   type CallContext,
@@ -86,10 +87,16 @@ export async function wait(
   return { status: "waiting", wait_id: waitId };
 }
 
+/** "all", "any", or a positive integer no greater than `count`: everything spec/api.json allows. */
+function modeOk(mode: unknown, count: number): boolean {
+  if (mode === undefined || mode === "all" || mode === "any") return true;
+  return isPosInt(mode) && mode <= count;
+}
+
 /**
  * An operator wait's members, a repeat dropped (they are frozen at the call); invalid_request for
- * an empty list, or a numeric mode below 1 or above their count, refused before any writer is
- * taken.
+ * an empty list, or a mode that is neither "all", "any", nor a positive integer no greater than
+ * their count, refused before any writer is taken.
  */
 export function waitMembers(
   members: readonly MemberRef[],
@@ -98,9 +105,7 @@ export function waitMembers(
   const key = (m: MemberRef) =>
     JSON.stringify([m.tenant, m.team, m.name, m.generation]);
   const distinct = [...new Map(members.map((m) => [key(m), m])).values()];
-  const bad =
-    distinct.length === 0 ||
-    (typeof mode === "number" && (mode < 1 || mode > distinct.length));
+  const bad = distinct.length === 0 || !modeOk(mode, distinct.length);
   return bad ? "invalid_request" : distinct;
 }
 

@@ -58,17 +58,21 @@ export type TeamSendResult =
       readonly code: SendRefusal | OperatorRefusal;
     };
 
-/** team.ask's result: how the ask ended, or why it was refused. */
+/**
+ * team.ask's result: how the ask ended, or why it was refused. invalid_request (a timeoutMs that
+ * is not a positive integer) is returned before any writer, so, like busy, it is never logged.
+ */
 export type TeamAskResult =
   | AskOutcome
   | {
       readonly status: "refused";
-      readonly code: AskRefusal | OperatorRefusal;
+      readonly code: AskRefusal | OperatorRefusal | "invalid_request";
     };
 
 /**
- * team.wait's result. invalid_request (no members, or a numeric mode below 1 or above the member
- * count) is returned before any writer, so, like busy, it is never logged.
+ * team.wait's result. invalid_request (no members, a mode that is neither all, any nor a positive
+ * integer no greater than the member count, or a timeoutMs that is not a positive integer) is
+ * returned before any writer, so, like busy, it is never logged.
  */
 export type TeamWaitResult =
   | Waited
@@ -137,12 +141,17 @@ export type TeamItem =
 /** Every Team method's retry key: the same key, principal and body replay the first outcome. */
 type Keyed = { readonly idempotencyKey?: string };
 
-/** team.ask's options. timeoutMs: omitted, the default (120 s), and never more than it. */
+/**
+ * team.ask's options. timeoutMs: a positive integer, omitted for the default (120 s), and never
+ * more than it; anything else is refused invalid_request.
+ */
 export type TeamAskOptions = Keyed & { readonly timeoutMs?: number };
 
 /**
  * team.wait's options. mode: all (the default), any, or how many must settle; any never cancels
- * the others. timeoutMs: omitted, the default (120 s), and never more than it.
+ * the others. timeoutMs: a positive integer, omitted for the default (120 s), and never more
+ * than it. Any other mode, and a timeoutMs that is not a positive integer, is refused
+ * invalid_request.
  */
 export type TeamWaitOptions = Keyed & {
   readonly mode?: "all" | "any" | number;

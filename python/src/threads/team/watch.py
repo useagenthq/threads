@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import JsonValue
 
 from threads.log import MemberRef, WaitStartedEvent
+from threads.pos_int import is_pos_int
 from threads.store.lines import Draft
 from threads.team.call import (
     CallContext,
@@ -85,14 +86,17 @@ def wait_members(
     members: Sequence[MemberRef], mode: WaitMode | None
 ) -> tuple[MemberRef, ...] | Literal["invalid_request"]:
     """An operator wait's members, a repeat dropped (they are frozen at the call);
-    invalid_request for an empty list, or a numeric mode below 1 or above their count, refused
-    before any writer is taken."""
+    invalid_request for an empty list, or a mode that is neither "all", "any", nor a positive
+    integer no greater than their count, refused before any writer is taken."""
     distinct = tuple(dict.fromkeys(members))
     if not distinct:
         return "invalid_request"
-    if isinstance(mode, int) and not 1 <= mode <= len(distinct):
-        return "invalid_request"
-    return distinct
+    if mode is None:
+        return distinct
+    if isinstance(mode, str):
+        return distinct if mode in ("all", "any") else "invalid_request"
+    bad = not is_pos_int(mode) or mode > len(distinct)
+    return "invalid_request" if bad else distinct
 
 
 def open_wait(
