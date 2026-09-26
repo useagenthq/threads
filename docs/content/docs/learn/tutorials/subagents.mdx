@@ -171,7 +171,8 @@ Order 42 arrived 12 days ago, inside the 30-day refund window.
 ```
 
 The id changes every run. What matters is that there is one: the order desk's work is a thread of
-its own, which you can read with `timeline()`, replay or fork exactly like the parent's.
+its own, which you can read with `timeline()`, replay or fork from an eligible snapshot exactly like
+the parent's.
 
 ## What a subagent may do
 
@@ -198,6 +199,6 @@ report back as they finish, that's a team.
     Two desks working in parallel, and a lead that waits for both.
   </Card>
   <Card title="Fork" icon={<GitFork />} href="/docs/evals/fork">
-    Take any step of either thread and try it again.
+    Fork from an eligible snapshot in either thread and try it again.
   </Card>
 </Cards>
