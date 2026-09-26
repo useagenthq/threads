@@ -183,10 +183,11 @@ from threads.openai import openai
 
 model=anthropic("claude-sonnet-5")                  # ANTHROPIC_API_KEY
 model=openai("gpt-5.5", max_tokens=32_000)          # OPENAI_API_KEY; max_tokens is the per-request cap
-model=litellm("openai/my-model", base_url="http://localhost:4000", max_input_tokens=128_000, max_output_tokens=8192)
+model=litellm("openai/my-model", base_url="http://localhost:4000", max_input_tokens=128_000, max_output_tokens=8192, cache_ttl_ms="none")
 ```
 
 Limits for listed model ids come from a catalog verified against each provider (`spec/models/`); another id takes `maxInputTokens` and `maxOutputTokens` (`max_input_tokens`, `max_output_tokens`). The per-request output cap defaults to 8192.
+For a LiteLLM endpoint that caches prompts, replace `cache_ttl_ms="none"` with its actual lifetime in milliseconds.
 
 </details>
 

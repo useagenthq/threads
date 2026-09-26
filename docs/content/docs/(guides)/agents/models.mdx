@@ -175,10 +175,11 @@ A thread continues only with the same pinned limits and cap it started with. The
         base_url="http://localhost:4000",
         max_input_tokens=128_000,
         max_output_tokens=8192,
+        cache_ttl_ms="none",
     )
     ```
 
-    The two limits are required: the name doesn't say which model sits behind `base_url`. Only the `openai/` route is supported; other routes raise `ConfigError("transport_fence_unsupported")`. The key comes from `api_key`, or from `OPENAI_API_KEY` when you don't pass one. `cache_ttl_ms` declares how long the provider keeps prompt-cache entries, in milliseconds, or `"none"` (see [Cache lifetimes](#cache-lifetimes)).
+    The two limits are required: the name doesn't say which model sits behind `base_url`. Only the `openai/` route is supported; other routes raise `ConfigError("transport_fence_unsupported")`. The key comes from `api_key`, or from `OPENAI_API_KEY` when you don't pass one. Use `cache_ttl_ms="none"` when the endpoint does not cache prompts. If it does, pass its actual lifetime in milliseconds (see [Cache lifetimes](#cache-lifetimes)).
   </Tab>
 </Tabs>
 

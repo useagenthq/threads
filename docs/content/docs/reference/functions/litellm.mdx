@@ -4,7 +4,7 @@ description: "A model behind LiteLLM's openai/ route: any OpenAI-compatible endp
 icon: "Plug"
 ---
 
-Only that route sends through a transport threads can fence, so any other is transport_fence_unsupported at setup. There is no catalog behind the endpoint, so both limits are required. Pass it as agent(model=litellm("openai/my-model", base_url="http://localhost:4000", max_input_tokens=128000, max_output_tokens=8192)).
+Only that route sends through a transport threads can fence, so any other is transport_fence_unsupported at setup. There is no catalog behind the endpoint, so both limits and its prompt-cache lifetime are required. Pass cache_ttl_ms="none" when the endpoint does not cache prompts; otherwise pass its actual lifetime in milliseconds. Example: agent(model=litellm("openai/my-model", base_url="http://localhost:4000", max_input_tokens=128000, max_output_tokens=8192, cache_ttl_ms="none")).
 
 Import from `threads.litellm` (Python).
 
