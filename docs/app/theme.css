@@ -36,6 +36,13 @@
   --color-fd-accent-foreground: #1d1b16;
   --color-fd-ring: var(--brand);
   --prose-body: #45423e;
+  /*
+   * Landing surfaces. One raised step and one recessed step, so a panel, the band under it and the
+   * page are three different depths instead of three identical bordered boxes. Neutral alpha only:
+   * the brand tint belongs to content, not to chrome.
+   */
+  --shadow-panel: 0 1px 2px rgb(29 27 22 / 0.04), 0 12px 32px -16px rgb(29 27 22 / 0.16);
+  --surface-sunken: #f2efe9;
 }
 
 .dark {
@@ -56,6 +63,9 @@
   --color-fd-accent-foreground: #f4f2ee;
   --color-fd-ring: var(--brand);
   --prose-body: #a5a29e;
+  /* Dark takes almost no drop shadow: depth reads from the surface step instead. */
+  --shadow-panel: 0 1px 0 rgb(255 255 255 / 0.04), 0 16px 40px -24px rgb(0 0 0 / 0.8);
+  --surface-sunken: #090908;
 }
 
 /* Top bar: one bottom border under logo row and tabs, pill search. */

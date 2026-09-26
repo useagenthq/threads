@@ -124,6 +124,13 @@ export type UseCase = Sample & { id: string; title: string; body: string; href: 
 
 export const USE_CASES: UseCase[] = [
   {
+    id: "quickstart",
+    title: "Your first agent",
+    body: "One tool, one agent, one run. This is the whole quickstart program, and the thread it writes is the one timeline() reads back.",
+    href: "/docs/quickstart",
+    ...QUICKSTART,
+  },
+  {
     id: "slack",
     title: "Support bot on Slack",
     body: "Each Slack conversation becomes a thread. Risky actions get Approve and Deny buttons in the channel.",

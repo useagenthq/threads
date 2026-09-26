@@ -12,6 +12,8 @@
  * tracing tool the reader already runs.
  */
 
+import { panel } from "./section";
+
 type Span = {
   /** The span id the exporter derives from the opening event; here, its first bytes. */
   readonly id: string;
@@ -160,7 +162,7 @@ function SpanRow({ span, last }: { span: Span; last: boolean }) {
 
 export function Trace() {
   return (
-    <div className="min-w-0 overflow-hidden rounded-2xl border border-fd-border bg-fd-background">
+    <div className={`min-w-0 overflow-hidden bg-fd-background ${panel}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-fd-border px-4 py-2.5 text-xs">
         <span className="font-medium text-fd-foreground">One trace, the run above</span>
         <span className="ml-auto font-mono text-fd-muted-foreground">trace 7037b65c44b8f46e…</span>

@@ -1,5 +1,6 @@
 import { CodeSample } from "./code-sample";
 import { EVALS } from "./samples";
+import { panel } from "./section";
 
 /*
  * `threads eval` output and the four checks it runs.
@@ -59,11 +60,11 @@ export function Evals() {
   return (
     <div className="mt-12">
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-8">
-        <div className="overflow-hidden rounded-2xl border border-fd-border bg-fd-card">
+        <div className={`overflow-hidden bg-fd-card ${panel}`}>
           <CodeSample sample={EVALS} />
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-fd-border bg-fd-card">
+        <div className={`overflow-hidden bg-fd-card ${panel}`}>
           <div className="border-b border-fd-border px-4 py-2.5 font-mono text-xs">
             <span className="text-fd-muted-foreground">$ </span>
             <span className="text-fd-foreground">threads eval --agent ./agents.ts</span>
@@ -83,7 +84,7 @@ export function Evals() {
         </div>
       </div>
 
-      <dl className="mt-6 grid gap-px overflow-hidden rounded-2xl border border-fd-border bg-fd-border sm:grid-cols-2 lg:grid-cols-4">
+      <dl className={`mt-6 grid gap-px overflow-hidden bg-fd-border sm:grid-cols-2 lg:grid-cols-4 ${panel}`}>
         {CHECKS.map((c) => (
           <div key={c.name} className="bg-fd-card px-4 py-4">
             <dt className="flex flex-wrap items-baseline gap-x-2">

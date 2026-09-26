@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import recorded from "./recorded-run.json";
+import { panel } from "./section";
 
 /*
  * One real run, as thread.timeline() returned it.
@@ -132,7 +133,7 @@ export function Timeline() {
   if (!row) return null;
 
   return (
-    <div className="mt-12 overflow-hidden rounded-2xl border border-fd-border bg-fd-card">
+    <div className={`mt-12 overflow-hidden bg-fd-card ${panel}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-fd-border px-4 py-2.5 text-xs">
         <span className="font-medium text-fd-foreground">await thread.timeline()</span>
         <span className="font-mono text-fd-muted-foreground">{recorded.thread_id.slice(0, 13)}…</span>

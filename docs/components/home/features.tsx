@@ -12,6 +12,7 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import { panel } from "./section";
 
 /** Each card is one option on agent() or host(); the tags are the names you actually type. */
 type Feature = {
@@ -90,7 +91,7 @@ const FEATURES: readonly Feature[] = [
 
 export function Features() {
   return (
-    <ul className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-fd-border bg-fd-border sm:grid-cols-2 lg:grid-cols-3">
+    <ul className={`mt-12 grid gap-px overflow-hidden bg-fd-border sm:grid-cols-2 lg:grid-cols-3 ${panel}`}>
       {FEATURES.map((f) => (
         <li key={f.title} className="bg-fd-background">
           <Link

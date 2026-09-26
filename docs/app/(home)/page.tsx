@@ -3,29 +3,30 @@ import Link from "next/link";
 import { CodeSample } from "@/components/home/code-sample";
 import { CopyCommand } from "@/components/home/copy-command";
 import { Evals } from "@/components/home/evals";
-import { EventLog } from "@/components/home/event-log";
 import { Features } from "@/components/home/features";
 import { GitHubIcon } from "@/components/home/github-icon";
 import { HeroThreads } from "@/components/home/hero-threads";
-import { Plumbing } from "@/components/home/plumbing";
+import { Ledger, LogDiagram } from "@/components/home/plumbing";
 import { Providers } from "@/components/home/providers";
-import { QUICKSTART, TELEMETRY } from "@/components/home/samples";
-import { Band, Code, SectionHeading } from "@/components/home/section";
+import { TELEMETRY } from "@/components/home/samples";
+import { Band, Code, Eyebrow, panel, SectionHeading } from "@/components/home/section";
 import { Timeline } from "@/components/home/timeline";
 import { Backends, Trace } from "@/components/home/trace";
 import { UseCases } from "@/components/home/use-cases";
-import { LogoMark } from "@/components/logo";
-import { githubUrl, tagline } from "@/lib/shared";
+import { githubUrl } from "@/lib/shared";
 
 const buttonBase =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-full px-5 text-sm font-medium transition-colors";
+  "inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium transition-colors";
 
 /*
- * The argument, in order: here it is → here is the plumbing you stop writing → here is one run,
- * read three ways (the log, the trace, the eval) → here is what you build with it → start.
+ * The argument, in order: the claim → the models it runs on → the plumbing you stop writing →
+ * why that works, in one picture → one run read three ways (log, trace, eval) → what you build →
+ * start.
  *
- * Sections alternate surfaces so two large ones never share a background, and the three "read it
- * back" sections share a numbered eyebrow so they read as one movement instead of three clones.
+ * Each beat is a different shape on purpose. A statement with air, a bordered rail, a two-column
+ * ledger, one full-width picture, one very dense panel, an asymmetric split, a tab set, a grid,
+ * and a statement again. Surfaces alternate between the page colour, a raised card and a sunken
+ * well, so nothing sits on the same depth as the thing above it.
  */
 export default function HomePage() {
   return (
@@ -33,6 +34,7 @@ export default function HomePage() {
       <Hero />
       <Providers />
       <StopRebuilding />
+      <TheIdea />
       <TheRecord />
       <Observability />
       <EvalsSection />
@@ -43,44 +45,52 @@ export default function HomePage() {
   );
 }
 
+/** Real, checkable facts. No counts of users, stars or customers: we do not have any to quote. */
+const FACTS = [
+  ["TypeScript and Python", "one log, both languages"],
+  ["73 event types", "in the v1 schema"],
+  ["SQLite or Postgres", "your database, your data"],
+  ["Apache-2.0", "open source"],
+] as const;
+
 function Hero() {
   return (
     <section className="relative overflow-hidden border-b border-fd-border">
       <HeroThreads />
-      <div className="relative mx-auto flex max-w-6xl flex-col items-center px-4 pt-14 pb-16 text-center sm:px-6 sm:pt-20 lg:pb-20">
-        <LogoMark className="mb-5 h-11 w-auto text-fd-primary sm:h-12" />
+      <div className="relative mx-auto flex max-w-[80rem] flex-col items-center px-4 pt-20 pb-16 text-center sm:px-6 sm:pt-28 lg:pt-32 lg:pb-24">
         <Link
           href={githubUrl}
-          className="mb-6 inline-flex items-center gap-2 rounded-full border border-fd-border bg-fd-background/70 px-3 py-1 text-xs font-medium text-fd-muted-foreground backdrop-blur transition-colors hover:text-fd-foreground"
+          className="mb-8 inline-flex items-center gap-2.5 rounded-full border border-fd-primary/30 bg-fd-background/80 py-1.5 pr-4 pl-3 text-sm font-medium text-fd-foreground shadow-[var(--shadow-panel)] backdrop-blur transition-colors hover:border-fd-primary/60"
         >
-          <span className="size-1.5 rounded-full bg-fd-primary" aria-hidden="true" />
-          Alpha · Open source · Apache-2.0
+          <span className="size-2 rounded-full bg-fd-primary" aria-hidden="true" />
+          Alpha · Open source on GitHub
+          <ArrowRight className="size-3.5 text-fd-muted-foreground" aria-hidden="true" />
         </Link>
-        <h1 className="max-w-4xl text-4xl leading-[1.08] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
+        <h1 className="max-w-4xl text-[2.75rem] leading-[1.04] font-semibold tracking-[-0.03em] text-balance sm:text-6xl lg:text-7xl">
           Agents you can <span className="text-fd-primary">inspect</span>,{" "}
           <span className="text-fd-primary">replay</span> and <span className="text-fd-primary">trust</span>.
         </h1>
-        <p className="mt-5 max-w-2xl text-base leading-7 text-pretty text-fd-muted-foreground sm:text-lg">
+        <p className="mt-7 max-w-2xl text-lg leading-8 text-pretty text-fd-muted-foreground">
           Build in TypeScript or Python on an append-only event log. Inspect model calls, tool effects and
           approvals; use built-in sandboxes, channels, memory and evals.
         </p>
-        <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
           <Link
             href="/docs/quickstart"
-            className={`${buttonBase} bg-fd-primary text-fd-primary-foreground hover:bg-fd-primary/90`}
+            className={`${buttonBase} h-11 bg-fd-primary px-6 text-fd-primary-foreground shadow-[var(--shadow-panel)] hover:bg-fd-primary/90`}
           >
             Get started
             <ArrowRight className="size-4" aria-hidden="true" />
           </Link>
           <Link
             href={githubUrl}
-            className={`${buttonBase} border border-fd-border bg-fd-background hover:bg-fd-accent hover:text-fd-accent-foreground`}
+            className={`${buttonBase} h-11 border border-fd-border bg-fd-background px-5 hover:bg-fd-accent hover:text-fd-accent-foreground`}
           >
             <GitHubIcon className="size-4" />
             GitHub
           </Link>
         </div>
-        <div className="mt-6 flex w-full max-w-full flex-col items-center gap-2">
+        <div className="mt-7 flex w-full max-w-full flex-col items-center gap-2">
           <CopyCommand command="git clone https://github.com/useagenthq/threads" />
           <p className="text-xs text-fd-muted-foreground">
             Not on npm or PyPI yet.{" "}
@@ -91,18 +101,14 @@ function Hero() {
           </p>
         </div>
 
-        <div className="mt-12 grid w-full overflow-hidden rounded-2xl border border-fd-border bg-fd-card text-left shadow-2xl shadow-fd-primary/5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="min-w-0 border-fd-border lg:border-r">
-            <CodeSample sample={QUICKSTART} />
-          </div>
-          <div className="border-t border-fd-border lg:border-t-0">
-            <EventLog />
-          </div>
-        </div>
-        <p className="mt-4 max-w-xl text-sm text-fd-muted-foreground">
-          That is the whole program. Beside it are the events <Code>thread.timeline()</Code> gives back for
-          that run, in order, and nothing was added to get them.
-        </p>
+        <dl className="mt-16 grid w-full max-w-4xl grid-cols-2 gap-px overflow-hidden rounded-xl border border-fd-border bg-fd-border text-left md:grid-cols-4">
+          {FACTS.map(([head, note]) => (
+            <div key={head} className="bg-fd-background/80 px-4 py-4 backdrop-blur">
+              <dt className="text-sm font-semibold tracking-tight text-fd-foreground">{head}</dt>
+              <dd className="mt-0.5 text-xs text-fd-muted-foreground">{note}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </section>
   );
@@ -110,15 +116,14 @@ function Hero() {
 
 function StopRebuilding() {
   return (
-    <Band tone="card">
+    <Band>
       <SectionHeading
         eyebrow="The problem"
         title="Stop rebuilding the same agent plumbing"
         aside={
           <>
-            The v1 schema has 73 event types, each stored as one canonical JSON line. Those exact bytes are
-            what SQLite holds, what <Code>threads export</Code> writes and what the conformance fixtures pin,
-            so a log written by the TypeScript library reduces to the same state in Python.
+            Every line on the right is a real event type or function. Follow any row into the guide that
+            documents it.
           </>
         }
       >
@@ -126,7 +131,25 @@ function StopRebuilding() {
         one its own little system. threads writes one append-only log instead and reads all of them back out
         of it.
       </SectionHeading>
-      <Plumbing />
+      <Ledger />
+    </Band>
+  );
+}
+
+function TheIdea() {
+  return (
+    <Band tone="sunken" pad="loose">
+      <div className="flex flex-col items-center text-center">
+        <Eyebrow>The idea</Eyebrow>
+        <p className="mt-6 font-mono text-3xl tracking-tight text-fd-foreground sm:text-5xl">
+          state = <span className="text-fd-primary">reduce</span>(log)
+        </p>
+        <p className="mt-6 max-w-2xl text-lg leading-8 text-pretty text-fd-muted-foreground">
+          Every run is an append-only log of what the agent saw and did. Nothing is kept beside it, so nothing
+          can drift from it.
+        </p>
+      </div>
+      <LogDiagram />
     </Band>
   );
 }
@@ -179,9 +202,9 @@ function Observability() {
         recovered still traces, and an approval a person gave hours later lands in the same trace as the turn
         that asked for it.
       </SectionHeading>
-      <div className="mt-12 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-10">
+      <div className="mt-12 grid items-start gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.3fr)] lg:gap-12">
         <div className="flex min-w-0 flex-col gap-6">
-          <div className="overflow-hidden rounded-2xl border border-fd-border bg-fd-background">
+          <div className={`overflow-hidden bg-fd-background ${panel}`}>
             <CodeSample sample={TELEMETRY} />
           </div>
           <div>
@@ -277,31 +300,30 @@ function WhatYouCanBuild() {
 
 function CallToAction() {
   return (
-    <section className="relative overflow-hidden">
+    <section className="relative overflow-hidden bg-[var(--surface-sunken)]">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -top-40 left-1/2 h-80 w-[56rem] max-w-[140vw] -translate-x-1/2 rounded-full bg-fd-primary/12 blur-3xl"
+        className="pointer-events-none absolute -top-48 left-1/2 h-96 w-[64rem] max-w-[160vw] -translate-x-1/2 rounded-full bg-fd-primary/15 blur-3xl"
       />
-      <div className="relative mx-auto w-full max-w-6xl px-4 py-20 text-center sm:px-6 lg:py-28">
-        <p className="font-mono text-sm font-medium tracking-wide text-fd-primary">state = reduce(log)</p>
-        <h2 className="mt-4 text-3xl font-semibold tracking-tight text-balance sm:text-4xl lg:text-5xl">
+      <div className="relative mx-auto w-full max-w-[80rem] px-4 py-24 text-center sm:px-6 lg:py-32">
+        <h2 className="text-4xl font-semibold tracking-[-0.03em] text-balance sm:text-5xl">
           Run your first agent with no API key
         </h2>
-        <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-fd-muted-foreground">
+        <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-fd-muted-foreground">
           The quickstart builds a weather agent on a scripted model, so it runs offline with no keys. Then you
           swap in a real one and read back the thread you just produced.
         </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
+        <div className="mt-9 flex flex-wrap justify-center gap-3">
           <Link
             href="/docs/quickstart"
-            className={`${buttonBase} bg-fd-primary text-fd-primary-foreground hover:bg-fd-primary/90`}
+            className={`${buttonBase} h-11 bg-fd-primary px-6 text-fd-primary-foreground shadow-[var(--shadow-panel)] hover:bg-fd-primary/90`}
           >
             Read the quickstart
             <ArrowRight className="size-4" aria-hidden="true" />
           </Link>
           <Link
             href="/docs/how-it-works"
-            className={`${buttonBase} border border-fd-border bg-fd-background hover:bg-fd-accent hover:text-fd-accent-foreground`}
+            className={`${buttonBase} h-11 border border-fd-border bg-fd-background px-5 hover:bg-fd-accent hover:text-fd-accent-foreground`}
           >
             How it works
           </Link>
