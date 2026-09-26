@@ -331,7 +331,9 @@
                             "snapshot_restore_failed",
                             "snapshot_manifest_mismatch",
                             "resource_unknown",
-                            "egress_policy_unsupported"
+                            "egress_policy_unsupported",
+                            "artifact_missing",
+                            "artifact_corrupt"
                           ]
                         }
                       }
@@ -13172,7 +13174,9 @@
           "snapshot_restore_failed",
           "snapshot_manifest_mismatch",
           "resource_unknown",
-          "egress_policy_unsupported"
+          "egress_policy_unsupported",
+          "artifact_missing",
+          "artifact_corrupt"
         ],
         "parameters": [
           {

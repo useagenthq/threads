@@ -6,6 +6,7 @@ stubbed. Stub mode needs a sandbox that enforces deny-all egress."""
 
 import asyncio
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, JsonValue
@@ -23,11 +24,14 @@ from threads import (
     tool,
 )
 from threads.agents.config import ConfigError
+from threads.agents.store import Store, now_ms, open_store
 from threads.anthropic import anthropic
-from threads.log import Permissions, ToolResultEvent
+from threads.log import EffectCommitEvent, Permissions, ToolResultEvent
 from threads.result import Err, Ok
 from threads.sandbox.fake import FakeSandbox
 from threads.sandbox.protocol import SandboxInfo
+from threads.thread.frozen_stubs import stub_fork_ref
+from threads.thread.handle import open_thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 BYPASS = Permissions(
@@ -92,9 +96,9 @@ def bot(
     )
 
 
-async def recorded(box: FakeSandbox, sent: list[str]) -> Thread:
+async def recorded(box: FakeSandbox, sent: list[str], store: Store | None = None) -> Thread:
     """A thread with a fork point after its first turn, then a live send in its second."""
-    store = sqlite(":memory:")
+    store = store or sqlite(":memory:")
     write = use("write", {"path": "a.txt", "content": "A"}, "w1")
     first = await bot(box, sent, [write, text("Wrote it.")]).run("write", store=store, deps=None)
     assert isinstance(first, Completed)
@@ -186,5 +190,115 @@ def test_stub_mode_needs_a_sandbox_that_enforces_egress() -> None:
         refused = await handle.fork(points.value[0], mode="stub")
         assert isinstance(refused, Err)
         assert refused.error.code == "egress_policy_unsupported"
+
+    asyncio.run(main())
+
+
+def test_a_reopened_stub_child_still_runs_stubbed_and_branches_reports_stub() -> None:
+    """The mode lives on the fork event, not on the handle that made it: a handle opened by id
+    knows nothing about the fork and must still run stubbed (ADR 0010)."""
+    sent: list[str] = []
+
+    async def main() -> None:
+        box = fake_sandbox()
+        thread = await recorded(box, sent)
+        child = await stub_child(thread)
+        reopened = await open_thread(thread.store, thread.id, branch_id=child.branch, sandbox=box)
+        assert isinstance(reopened, Ok)
+        listed = await reopened.value.branches()
+        modes = {b.branch_id: b.mode for b in listed}
+        assert modes[child.branch] == "stub"
+        assert modes[thread.branch] == "live"
+        replay = [use("send", {"text": "x"}), text("Sent again.")]
+        done = await bot(box, sent, replay).run("send", deps=None, thread=reopened.value)
+        assert isinstance(done, Completed), done
+
+    asyncio.run(main())
+    # The reopened run answered from the frozen script: the tool body never ran again.
+    assert sent == ["x"]
+
+
+def test_later_parent_appends_never_change_a_child() -> None:
+    """The script is frozen at the fork, so what the parent does afterwards can't reach it."""
+    sent: list[str] = []
+
+    async def main() -> None:
+        box = fake_sandbox()
+        thread = await recorded(box, sent)
+        child = await stub_child(thread)
+        # The parent runs another mediated call after the fork.
+        more = [use("send", {"text": "z"}, "p2"), text("Sent z.")]
+        later = await bot(box, sent, more).run("again", deps=None, thread=thread)
+        assert isinstance(later, Completed), later
+        assert sent == ["x", "z"]
+        # The child answers x from the frozen script, and knows nothing of z.
+        answered = [use("send", {"text": "x"}, "c1"), text("Sent again.")]
+        done = await bot(box, sent, answered).run("send", deps=None, thread=child)
+        assert isinstance(done, Completed), done
+        # The parent's later z is not in this child's script, so asking for it fails closed.
+        refused = await bot(box, sent, [use("send", {"text": "z"}, "c2"), text("never")]).run(
+            "send", deps=None, thread=done.thread
+        )
+        assert isinstance(refused, Failed), refused
+        assert refused.error.code == "unmatched_external_op"
+
+    asyncio.run(main())
+    # Only the parent's own runs sent anything; neither child went live.
+    assert sent == ["x", "z"]
+
+
+def test_a_stub_fork_whose_parent_artifact_is_gone_fails_and_creates_no_child(
+    tmp_path: Path,
+) -> None:
+    """A preview is never substituted: the fork fails with the typed error, and no branch is left
+    behind for a later run to take live."""
+
+    async def main() -> None:
+        box = fake_sandbox()
+        sent: list[str] = []
+        thread = await recorded(box, sent, sqlite(str(tmp_path)))
+        sq = await open_store(thread.store)
+        read = await sq.read(thread.branch, now_ms())
+        assert isinstance(read, Ok)
+        commits = [e for e in read.value.fold.events if isinstance(e, EffectCommitEvent)]
+        assert commits, "the recorded send committed an output"
+        gone = commits[-1].data.result_ref.sha256
+        found = [f for f in (tmp_path / "artifacts").rglob("*") if f.name == gone]
+        assert found, "the committed output is stored as a file"
+        found[0].unlink()
+        points = await thread.fork_points()
+        assert isinstance(points, Ok)
+        before = await thread.branches()
+        refused = await thread.fork(points.value[0], mode="stub")
+        assert isinstance(refused, Err), refused
+        assert refused.error.code in ("artifact_missing", "artifact_corrupt")
+        assert await thread.branches() == before
+
+    asyncio.run(main())
+
+ARGS_HASH = "fcd1ccec08db6f78a81fee6c26da9e6b8d0d3ba58b4403713fffebcfaa6cf119"
+"""sha256 of the canonical {"text":"x"} the recorded send was called with."""
+
+
+def test_the_frozen_script_is_the_same_bytes_typescript_writes() -> None:
+    """RFC 8785 canonical JSON, keyed the same way in both languages, so a fork frozen by one
+    implementation replays in the other."""
+
+    async def main() -> None:
+        box = fake_sandbox()
+        thread = await recorded(box, [])
+        child = await stub_child(thread)
+        sq = await open_store(child.store)
+        read = await sq.read(child.branch, now_ms())
+        assert isinstance(read, Ok)
+        ref = stub_fork_ref(read.value.fold.events)
+        assert ref is not None
+        assert ref.media_type == "application/json"
+        data = await sq.get_artifact(ref.sha256)
+        assert isinstance(data, Ok)
+        assert data.value.decode("utf-8") == (
+            '{"stubs":[{"args_hash":"' + ARGS_HASH + '","is_error":false,'
+            '"occurrence":0,"output":"sent x","tool":"send"}]}'
+        )
 
     asyncio.run(main())

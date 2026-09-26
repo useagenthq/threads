@@ -58,7 +58,7 @@
       },
       "ForkError": {
         "description": "Typed failure of fork.",
-        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "sandbox_required", "no_snapshot_boundary", "snapshot_expired", "snapshot_missing", "snapshot_restore_failed", "snapshot_manifest_mismatch", "resource_unknown", "egress_policy_unsupported"] } } } } }] } } }
+        "content": { "application/json": { "schema": { "allOf": [{ "$ref": "host-api.v1.schema.json#/$defs/ErrorBody" }, { "properties": { "error": { "properties": { "code": { "enum": ["unauthenticated", "forbidden", "not_found", "invalid_request", "sandbox_required", "no_snapshot_boundary", "snapshot_expired", "snapshot_missing", "snapshot_restore_failed", "snapshot_manifest_mismatch", "resource_unknown", "egress_policy_unsupported", "artifact_missing", "artifact_corrupt"] } } } } }] } } }
       },
       "ListApprovalsError": {
         "description": "Typed failure of listApprovals.",
@@ -189,7 +189,7 @@
       "post": {
         "operationId": "fork",
         "x-api": ["Thread.fork"],
-        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "sandbox_required", "no_snapshot_boundary", "snapshot_expired", "snapshot_missing", "snapshot_restore_failed", "snapshot_manifest_mismatch", "resource_unknown", "egress_policy_unsupported"],
+        "x-error-codes": ["unauthenticated", "forbidden", "not_found", "invalid_request", "sandbox_required", "no_snapshot_boundary", "snapshot_expired", "snapshot_missing", "snapshot_restore_failed", "snapshot_manifest_mismatch", "resource_unknown", "egress_policy_unsupported", "artifact_missing", "artifact_corrupt"],
         "parameters": [{ "$ref": "#/components/parameters/thread_id" }, { "$ref": "#/components/parameters/branch_id" }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "host-api.v1.schema.json#/$defs/ForkRequest" } } } },
         "responses": {

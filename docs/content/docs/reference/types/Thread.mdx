@@ -130,7 +130,7 @@ async def fork(
   "pinned": the new branch searches knowledge as it was at the snapshot. "current": it searches the live knowledge base.
 </Field>
 
-**Returns an error value** with one of these codes: `sandbox_required`, `no_snapshot_boundary`, `snapshot_expired`, `snapshot_missing`, `snapshot_restore_failed`, `snapshot_manifest_mismatch`, `resource_unknown`, `egress_policy_unsupported`.
+**Returns an error value** with one of these codes: `sandbox_required`, `no_snapshot_boundary`, `snapshot_expired`, `snapshot_missing`, `snapshot_restore_failed`, `snapshot_manifest_mismatch`, `resource_unknown`, `egress_policy_unsupported`, `artifact_missing`, `artifact_corrupt`.
 
 ### saveCase / save_case
 

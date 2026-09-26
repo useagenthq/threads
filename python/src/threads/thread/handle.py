@@ -50,6 +50,7 @@ from threads.thread.case import CaseExpectation, CaseRequest, SavedCase, save_ca
 from threads.thread.case_files import encode_stub_script, stub_script
 from threads.thread.control import Accepted, Controlled
 from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch, fork_point
+from threads.thread.frozen_stubs import stub_fork_ref
 from threads.thread.member_view import member_of, with_member
 from threads.thread.read import read_error, read_log
 from threads.thread.usage import tree_cost
@@ -255,16 +256,33 @@ class Thread:
         return Ok(cache_breaks(fold, defaults.context(fold).cache_ttl_ms))
 
     async def branches(self) -> tuple[BranchInfo, ...]:
-        """The thread's visible branches; a forking or failed fork is never listed."""
-        rows = await (await open_store(self.store)).tables.branches(self.id)
-        return tuple(
-            BranchInfo.model_validate(
-                {"branch_id": r.branch_id, "mode": "live", "runnable": r.state == "ready"}
-                | ({} if r.parent_branch_id is None else {"parent_branch_id": r.parent_branch_id})
-                | ({} if r.fork_at_seq is None else {"fork_at_seq": r.fork_at_seq})
+        """The thread's visible branches; a forking or failed fork is never listed. A branch whose
+        resolved chain holds a stub fork reports mode stub: every run of it is stubbed."""
+        sq = await open_store(self.store)
+        rows = await sq.tables.branches(self.id)
+        listed: list[BranchInfo] = []
+        for r in rows:
+            mode = "stub" if await self._stubbed(sq, r.branch_id, r.parent_branch_id) else "live"
+            listed.append(
+                BranchInfo.model_validate(
+                    {"branch_id": r.branch_id, "mode": mode, "runnable": r.state == "ready"}
+                    | (
+                        {}
+                        if r.parent_branch_id is None
+                        else {"parent_branch_id": r.parent_branch_id}
+                    )
+                    | ({} if r.fork_at_seq is None else {"fork_at_seq": r.fork_at_seq})
+                )
             )
-            for r in rows
-        )
+        return tuple(listed)
+
+    async def _stubbed(self, sq: SqliteStore, branch: BranchId, parent: str | None) -> bool:
+        """Whether a listed branch runs stubbed: its chain holds a fork that froze a stub script.
+        A root branch never does, so the common case reads nothing."""
+        if parent is None:
+            return False
+        read = await sq.read(branch, now_ms())
+        return isinstance(read, Ok) and stub_fork_ref(read.value.fold.events) is not None
 
     async def pending_approvals(self) -> Ok[tuple[PendingApproval, ...]] | Err[ParseError]:
         """Open challenges on this branch, with the rules an approver may keep."""

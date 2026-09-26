@@ -2660,7 +2660,7 @@
               "type": {"enum": ["live", "stub"]},
               "required": false,
               "default": "live",
-              "doc": "stub runs the branch per the spec. A stub-mode run whose settings epoch model is a live model (not a test kit) declaring hosted tools is refused before recovery or any dispatch with ConfigError hosted_tool_unsupported, because hosted calls can't be stubbed."
+              "doc": "stub freezes the parent's mediated calls after the fork point as an artifact and records it on the fork event, so every later run of the branch answers from it, in this process or another; branches() reports the branch as stub. A parent whose committed output is gone or corrupt fails the fork with artifact_missing or artifact_corrupt and creates no child, and a truncated preview is never substituted. A stub-mode run whose settings epoch model is a live model (not a test kit) declaring hosted tools is refused before recovery or any dispatch with ConfigError hosted_tool_unsupported, because hosted calls can't be stubbed."
             },
             {
               "name": "knowledge",
@@ -2681,7 +2681,9 @@
               "snapshot_restore_failed",
               "snapshot_manifest_mismatch",
               "resource_unknown",
-              "egress_policy_unsupported"
+              "egress_policy_unsupported",
+              "artifact_missing",
+              "artifact_corrupt"
             ]
           }
         },
