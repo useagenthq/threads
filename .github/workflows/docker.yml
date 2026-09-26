@@ -1,0 +1,60 @@
+name: docker
+
+on:
+  push:
+    paths:
+      - "docker/**"
+      - "typescript/packages/docker/**"
+      - "python/src/threads/adapters/sandboxes/docker/**"
+      - "python/tests/adapters/sandboxes/test_live_docker.py"
+      - "scripts/build-supervisor.sh"
+      - ".github/workflows/docker.yml"
+  pull_request:
+    paths:
+      - "docker/**"
+      - "typescript/packages/docker/**"
+      - "python/src/threads/adapters/sandboxes/docker/**"
+      - "python/tests/adapters/sandboxes/test_live_docker.py"
+      - "scripts/build-supervisor.sh"
+      - ".github/workflows/docker.yml"
+
+jobs:
+  supervisor:
+    # The two binaries ship inside both packages, so their bytes are the contract:
+    # a rebuild that does not reproduce docker/supervise/binaries.json fails here.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - run: ./scripts/build-supervisor.sh
+      - name: The pinned sha256 values still reproduce
+        run: git diff --exit-code docker/supervise/binaries.json
+
+  live:
+    # docker() against the real Engine API. Docker is preinstalled on the runner, so
+    # nothing here is skipped for want of a daemon.
+    runs-on: ubuntu-latest
+    needs: supervisor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - run: ./scripts/build-supervisor.sh
+      - run: docker pull node:22-bookworm
+      - run: docker pull busybox
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: typescript
+      - name: TypeScript, against the real daemon
+        run: bun test packages/docker/test/live.test.ts
+        working-directory: typescript
+        env:
+          THREADS_LIVE: "1"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked --all-extras
+        working-directory: python
+      - run: ./scripts/generate.sh py
+      - name: Python, against the real daemon
+        run: uv run pytest -m live tests/adapters/sandboxes/test_live_docker.py
+        working-directory: python
+        env:
+          THREADS_LIVE: "1"

@@ -903,6 +903,51 @@
       "tests/adapters/sandboxes/test_dev.py::test_the_confinement_defaults_to_the_platforms_and_one_that_cannot_run_is_refused"
     ]
   },
+  "docker": {
+    "ts": [
+      "packages/docker/test/docker.test.ts > docker declarations > egress, termination, snapshots and lookup are declared as Docker enforces them"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_docker_defaults"
+    ]
+  },
+  "docker!docker_unreachable": {
+    "ts": [
+      "packages/docker/test/docker.test.ts > docker declarations > no socket is docker_unreachable, and nothing is connected"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_docker.py::test_no_socket_is_docker_unreachable_without_connecting"
+    ]
+  },
+  "docker!invalid_config": {
+    "ts": [
+      "packages/docker/test/docker.test.ts > docker declarations > a limit Docker can't express is invalid_config"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_a_docker_limit_that_cannot_be_expressed_is_invalid_config"
+    ]
+  },
+  "docker.allow_internet=default": {
+    "ts": [
+      "packages/docker/test/docker.test.ts > docker declarations > defaults: the pinned node:22-bookworm digest, no internet and no limits"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_docker_defaults"
+    ]
+  },
+  "docker.image=default": {
+    "ts": [
+      "packages/docker/test/docker.test.ts > docker declarations > defaults: the pinned node:22-bookworm digest, no internet and no limits"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_docker_defaults"
+    ]
+  },
+  "docker.name=default": {
+    "py": [
+      "tests/adapters/sandboxes/test_factory_defaults.py::test_docker_defaults"
+    ]
+  },
   "dynamicAgent": {
     "ts": [
       "packages/core/test/team/dynamic-start.test.ts > a lead defines a member of a dynamic agent > the choice is recorded on member_started and bound by the member's pin"
