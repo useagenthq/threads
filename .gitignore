@@ -33,3 +33,7 @@ python/tests/spec_tools/generated/
 
 # JUnit reports the API surface gate reads (bun run test, pytest --junitxml)
 junit.xml
+
+# Built by scripts/build-supervisor.sh; pinned by docker/supervise/binaries.json
+typescript/packages/docker/bin/
+python/src/threads/adapters/sandboxes/docker/bin/
