@@ -41,7 +41,12 @@ export function baseOptions(): BaseLayoutProps {
         ],
       },
       { text: "Integrations", url: "/docs/integrations" },
-      { text: "Reference", url: "/docs/reference", active: "nested-url" },
+      // /docs/reference has no index page; overview is the folder's landing page.
+      {
+        text: "Reference",
+        url: "/docs/reference/overview",
+        active: "nested-url",
+      },
     ],
   };
 }
