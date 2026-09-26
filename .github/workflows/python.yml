@@ -9,6 +9,8 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      THREADS_REQUIRE_CONFINEMENT: "1"
     defaults:
       run:
         working-directory: python
@@ -20,6 +22,15 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           working-directory: python
+      - name: Bubblewrap, so the dev sandbox's confinement tests run instead of skipping
+        working-directory: .
+        # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor, which is what
+        # bwrap needs; the sysctl is best effort. THREADS_REQUIRE_CONFINEMENT makes an
+        # unavailable confinement fail rather than quietly skip the dev sandbox's denials.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - run: uv sync --locked --all-extras
       - name: Generate code from spec/
         working-directory: .
