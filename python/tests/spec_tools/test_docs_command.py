@@ -18,8 +18,8 @@ def check_gen_command() -> list[str]:
     """The first command of `bun run check:gen`, run with this interpreter."""
     scripts = json.loads((ROOT / "docs" / "package.json").read_text())["scripts"]
     first = shlex.split(scripts["check:gen"].split("&&")[0])
-    assert first[0] == "python3"
-    return [sys.executable, *first[1:]]
+    assert first[:5] == ["uv", "run", "--project", "../python", "python"]
+    return [sys.executable, *first[5:]]
 
 
 def run(args: list[str], cwd: Path) -> CompletedProcess[str]:

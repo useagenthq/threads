@@ -4,7 +4,8 @@ The website for Threads AI: the landing page at `/` and the documentation at `/d
 
 ## Run it
 
-Requires [Bun](https://bun.sh) and Python 3.12 or newer (for the reference generator).
+Requires [Bun](https://bun.sh), [uv](https://docs.astral.sh/uv/) and Python 3.12 or newer
+(for the reference generator).
 
 ```sh
 cd docs
