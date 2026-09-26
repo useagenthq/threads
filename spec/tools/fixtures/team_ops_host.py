@@ -2,7 +2,8 @@
 """Team op vectors of Teams Phase 2 (spec/schema/README.md, "Teams Phase 2"): a caller's ask and
 send of a host member under the host rules, a host member's reply to a caller, the caller's
 consume, a host member's failed and hop-capped turns, the supervisor step, and deleting a caller.
-Each names the sub-lane that builds it (`lane`), and runtimes skip it until then."""
+Supervision's vectors name their sub-lane (`lane`), and runtimes skip one until that build; lane
+29D's are built, so they carry none."""
 
 from __future__ import annotations
 
@@ -60,7 +61,7 @@ def _vec(  # noqa: PLR0913, PLR0917 - Vec's own fields, positional as its other 
     inp: Obj,
     outcome: Obj,
     appended: dict[str, list[str]],
-    lane: str = "29D",
+    lane: str | None = None,
 ) -> Vec:
     return Vec(
         name, "29", desc, w, op, by, inp, outcome, appended, given={"rules": ASK_ONLY}, lane=lane

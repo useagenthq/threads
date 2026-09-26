@@ -168,6 +168,14 @@ def reply(log: Log, ask: Obj, cid: str, answer_text: str, generation: int = 1) -
 def turn_failed(log: Log, asks: list[Obj], error: Obj, turn_end: Obj, generation: int = 1) -> None:
     """A host member's failed turn: one turn_failed bounce per ask it took, then
     member_idle{turn_failed}. Only the turn ends."""
+    turn_failed_bounces(log, asks, error, turn_end, generation)
+    log.add("member_idle", {"turn_failed": error})
+
+
+def turn_failed_bounces(
+    log: Log, asks: list[Obj], error: Obj, turn_end: Obj, generation: int = 1
+) -> None:
+    """A failed turn's bounces alone, without the member_idle that returns the member to idle."""
     for ask in asks:
         env: Obj = {
             "mail_id": f"{log.branch}:{eid(log.seq + 1, log.branch)}",
@@ -182,7 +190,25 @@ def turn_failed(log: Log, asks: list[Obj], error: Obj, turn_end: Obj, generation
             "error": error,
         }
         log.add("message_sent", {"envelope": env})
-    log.add("member_idle", {"turn_failed": error})
+
+
+def ended_bounce(log: Log, ask: Obj, result: Obj, causal: Obj, generation: int = 1) -> Obj:
+    """The bounce an ended member owes an ask it never answered (coordinator decision 6): the
+    end's result goes back to the asker, so a caller never waits out the deadline for an answer
+    from a member that has demonstrably ended. `causal` is the member_ended for an ask the member
+    had taken, or the mail_refused for one still pending."""
+    return {
+        "mail_id": f"{log.branch}:{eid(log.seq + 1, log.branch)}",
+        "kind": "bounce",
+        "team": HOST_TEAM,
+        "from": billing(generation),
+        "to": ask["from"],
+        "provenance": ask["provenance"],
+        "causal": {"thread_id": log.thread, "event_id": causal["event_id"]},
+        "ask_id": ask["ask_id"],
+        "code": "member_ended",
+        "result": result,
+    }
 
 
 def take(log: Log, env: Obj) -> Obj:

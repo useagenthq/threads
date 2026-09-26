@@ -44,8 +44,8 @@
       ],
       "status": "idle",
       "head": {
-        "seq": 5,
-        "hash": "7a2dad279f71e68f7aadf8bfa60eeae76ace392c111408d2edb1197b5130bf2e"
+        "seq": 6,
+        "hash": "0868e92f5bdce26b393169f3c8befe3ea53ff45bf9af6960250c3cbdada0ec6d"
       }
     },
     "support": {
@@ -129,6 +129,72 @@
       }
     ],
     "mail": [
+      {
+        "mail_id": "0192b000-0000-7000-8000-0000000000c1:0192e001-0000-7000-8000-000000000006",
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "kind": "bounce",
+        "to_kind": "caller",
+        "to_name": null,
+        "to_generation": null,
+        "to_branch_id": "0192b000-0000-7000-8000-0000000000d1",
+        "principal_key": "api/acme/alice",
+        "root_request": "0192a000-0000-7000-8000-0000000000d1:0192e001-0000-7000-8000-000000000002",
+        "envelope": {
+          "mail_id": "0192b000-0000-7000-8000-0000000000c1:0192e001-0000-7000-8000-000000000006",
+          "kind": "bounce",
+          "team": "e34fb000-e656-8122-a748-65b36a92d548",
+          "from": {
+            "tenant": "acme",
+            "team": "e34fb000-e656-8122-a748-65b36a92d548",
+            "name": "billing",
+            "generation": 1
+          },
+          "to": {
+            "caller": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000d1",
+              "branch_id": "0192b000-0000-7000-8000-0000000000d1",
+              "agent": "support"
+            }
+          },
+          "provenance": {
+            "principal": {
+              "issuer": "api",
+              "tenant": "acme",
+              "subject": "alice"
+            },
+            "root_request": {
+              "thread_id": "0192a000-0000-7000-8000-0000000000d1",
+              "event_id": "0192e001-0000-7000-8000-000000000002"
+            },
+            "via": []
+          },
+          "causal": {
+            "thread_id": "0192a000-0000-7000-8000-0000000000c1",
+            "event_id": "0192e001-0000-7000-8000-000000000005"
+          },
+          "ask_id": "0192b000-0000-7000-8000-0000000000d1:c1",
+          "code": "member_ended",
+          "result": {
+            "member": {
+              "tenant": "acme",
+              "team": "e34fb000-e656-8122-a748-65b36a92d548",
+              "name": "billing",
+              "generation": 1
+            },
+            "status": "budget_exhausted",
+            "budget": {
+              "scope": "thread",
+              "limit": "max_cost_nanos",
+              "limit_value": 5000000000,
+              "observed": 5200000000,
+              "observed_is_upper_bound": false
+            }
+          }
+        },
+        "created_at": 1790000006000,
+        "state": "pending",
+        "consumed_seq": null
+      },
       {
         "mail_id": "0192b000-0000-7000-8000-0000000000d1:c1",
         "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
@@ -220,6 +286,11 @@
         "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
         "branch_id": "0192b000-0000-7000-8000-0000000000c1",
         "seq": 5
+      },
+      {
+        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 6
       },
       {
         "team_id": "e34fb000-e656-8122-a748-65b36a92d548",

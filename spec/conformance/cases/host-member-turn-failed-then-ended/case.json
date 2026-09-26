@@ -1,0 +1,16 @@
+{
+  "name": "host-member-turn-failed-then-ended",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Rule 53's order (coordinator decision 7, 2026-09-26): a reader admits a failed turn's turn_failed bounces followed by the member's member_ended with no member_idle between. A member that fails a turn and then ends never became idle, and demanding member_idle in between would force both runtimes to emit a transition that did not happen. This pins the readers, not the writer: an append that ends the member skips rule 53's bounces and bounces member_ended instead (host-member-end-bounces-taken-ask), so no writer produces this order. An ask a turn_failed bounce answered is not bounced again.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

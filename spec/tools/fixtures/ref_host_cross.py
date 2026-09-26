@@ -42,6 +42,27 @@ def _reply_address(ask: Obj) -> JsonValue:
     return {"name": frm["name"], "generation": frm["generation"]}
 
 
+def ended_bounce(events: list[Obj], env: Obj, sent: dict[str, Obj], end: Obj) -> str | None:
+    """Rule 43, the end's own bounce (coordinator decision 6): a member that ends bounces every
+    ask it had taken and never answered, so its causal is that member_ended rather than a
+    mail_refused there never was. It carries the end's result and the ask's provenance back."""
+    if "ask_id" not in env:
+        return "43: a bounce whose causal is the member's end names the ask it answers"
+    if env.get("result") != obj(end["data"])["result"]:
+        return "43: an end's bounce carries the end's result"
+    ask = sent.get(text(env["ask_id"]))
+    if ask is None:
+        return None
+    took = any(
+        e["type"] == "message_received" and obj(e["data"])["mail_id"] == ask["mail_id"]
+        for e in events
+    )
+    if not took:
+        return "43: an end's bounce answers an ask the member had taken"
+    ok = env["provenance"] == ask["provenance"] and env["to"] == _reply_address(ask)
+    return None if ok else "43: an end's bounce goes back to its asker, with its provenance"
+
+
 def reply_to_caller(env: Obj, sent: dict[str, Obj]) -> str | None:
     """Rule 43: a reply to a caller answers an ask that caller sent."""
     to = env["to"]

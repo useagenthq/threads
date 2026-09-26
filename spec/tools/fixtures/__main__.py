@@ -45,6 +45,7 @@ from . import (
     host_ends,
     host_rules,
     host_sends,
+    host_super,
     integrity,
     ladder,
     legacy_run,
@@ -162,6 +163,9 @@ FAMILIES = (
     dynamic,
     questions,
     host_sends,
+    host_cases,
+    host_rules,
+    host_ends,
     ui_cases,
     ui_cases_live,
 )
@@ -198,8 +202,9 @@ def _build(out: pathlib.Path) -> None:
 # (cancel application) moved team_cancel_rule. None is staged now.
 STAGED_PHASE_1: tuple[Callable[[pathlib.Path], None], ...] = ()
 # Teams Phase 2 (lane 29): its own directory, since both runtimes refuse its forms until the build
-# (unsupported_critical_event) and so can't read these logs as they read staged/.
-STAGED_PHASE_2 = (host_cases.build, host_rules.build, host_ends.build)
+# (unsupported_critical_event) and so can't read these logs as they read staged/. Lane 29D's build
+# moved host_cases, host_rules and host_ends into FAMILIES; supervision waits for 29E.
+STAGED_PHASE_2 = (host_super.build,)
 
 
 def _build_staged(out: pathlib.Path) -> None:

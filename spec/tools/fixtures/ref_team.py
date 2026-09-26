@@ -12,7 +12,13 @@ from typing import TYPE_CHECKING
 
 from .common import obj, text
 from .dynamic_rules import member_matches
-from .ref_host_cross import caller_key, host_clause, reply_to_caller, turn_failed_bounce
+from .ref_host_cross import (
+    caller_key,
+    ended_bounce,
+    host_clause,
+    reply_to_caller,
+    turn_failed_bounce,
+)
 from .ref_rules import Check
 from .turn_open import mail_renders
 
@@ -62,8 +68,15 @@ def _bounce(events: list[Obj], env: Obj, sent: dict[str, Obj]) -> str | None:
         return turn_failed_bounce(events, env, sent)
     cause = obj(env["causal"])["event_id"]
     refusal = next((e for e in events if e["event_id"] == cause), None)
+    if refusal is not None and refusal["type"] == "member_ended":
+        return ended_bounce(events, env, sent, refusal)
     if refusal is None or refusal["type"] != "mail_refused":
         return "43: a bounce's causal is not its mail_refused"
+    return _refused_bounce(env, refusal, sent)
+
+
+def _refused_bounce(env: Obj, refusal: Obj, sent: dict[str, Obj]) -> str | None:
+    """A bounce that answers a pending mail its recipient refused."""
     refused = sent.get(text(obj(refusal["data"])["mail_id"]))
     if refused is None:
         return None

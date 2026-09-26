@@ -9942,7 +9942,6 @@
           "question": "Is INV-1001 paid?"
         }
       },
-      "lane": "29D",
       "expect": {
         "outcome": {
           "status": "open",
@@ -10055,7 +10054,6 @@
           "text": "FYI: INV-1001."
         }
       },
-      "lane": "29D",
       "expect": {
         "outcome": {
           "code": "forbidden",
@@ -10096,7 +10094,6 @@
           "text": "Paid."
         }
       },
-      "lane": "29D",
       "expect": {
         "outcome": {
           "id": "0192b000-0000-7000-8000-0000000000c1:r1",
@@ -10188,7 +10185,6 @@
       "op": "consume",
       "by": "support",
       "input": {},
-      "lane": "29D",
       "expect": {
         "outcome": {
           "status": "consumed",
@@ -10307,7 +10303,6 @@
           "message": "billing's turn failed"
         }
       },
-      "lane": "29D",
       "expect": {
         "outcome": {
           "status": "idle",
@@ -10435,7 +10430,6 @@
           "message": "the hop cap ended billing's turn"
         }
       },
-      "lane": "29D",
       "expect": {
         "outcome": {
           "status": "idle",
@@ -10551,7 +10545,6 @@
       "op": "consume",
       "by": "support",
       "input": {},
-      "lane": "29D",
       "expect": {
         "outcome": {
           "status": "consumed",
@@ -10845,7 +10838,6 @@
       "op": "delete",
       "by": "support",
       "input": {},
-      "lane": "29D",
       "expect": {
         "outcome": {
           "status": "refused",
@@ -10875,7 +10867,6 @@
       "op": "delete",
       "by": "support",
       "input": {},
-      "lane": "29D",
       "expect": {
         "outcome": {
           "status": "refused",
@@ -10905,7 +10896,6 @@
       "op": "delete",
       "by": "support",
       "input": {},
-      "lane": "29D",
       "expect": {
         "outcome": {
           "status": "refused",
@@ -10935,7 +10925,6 @@
       "op": "delete",
       "by": "support",
       "input": {},
-      "lane": "29D",
       "expect": {
         "outcome": {
           "status": "deleted"

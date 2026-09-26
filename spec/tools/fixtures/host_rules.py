@@ -1,6 +1,7 @@
 # pyright: strict
-"""The staged Teams Phase 2 rejections (spec/schema/README.md, semantic rules 50-55): each log
-breaks one rule at one event, which the reference validator (ref_host.py) catches there."""
+"""The Teams Phase 2 rejections of lane 29D (spec/schema/README.md, semantic rules 50, 52-55):
+each log breaks one rule at one event, which the reference validator (ref_host.py) catches there.
+Supervision's rejections (rule 51) are staged in host_super.py until lane 29E's build."""
 
 from __future__ import annotations
 
@@ -10,12 +11,10 @@ from .common import eid, num, obj
 from .host_cases import asked, write_host
 from .host_pieces import (
     HOST_TEAM,
-    POLICY,
     billing,
-    billing_log,
     caller,
+    ended_bounce,
     host_start,
-    host_team_log,
     take,
     turn_failed,
 )
@@ -29,6 +28,11 @@ if TYPE_CHECKING:
     from .log import Log
 
 ERROR: Obj = {"code": "content_unsupported", "message": "billing's turn failed"}
+ENDED: Obj = {
+    "member": billing(),
+    "status": "failed",
+    "error": {"code": "pin_unavailable", "message": "rebind failed: pin_unavailable"},
+}
 
 
 def reject_at(
@@ -39,29 +43,10 @@ def reject_at(
     write_host(root, name, desc, logs, error)
 
 
-def _ended(bill: Log) -> Obj:
-    failed: Obj = {
-        "member": billing(1),
-        "status": "failed",
-        "error": {"code": "pin_unavailable", "message": "rebind failed: pin_unavailable"},
-    }
-    return bill.add("member_ended", {"result": failed})
-
-
-def _decision(ended: Obj, action: str, count: int) -> Obj:
-    return {
-        "member": billing(1),
-        "ended": {"branch_id": ended["branch_id"], "seq": ended["seq"]},
-        "action": action,
-        "restarts_in_window": count,
-        "policy": POLICY,
-    }
-
-
 def build(root: pathlib.Path) -> None:
     _placement(root)
-    _supervision(root)
     _callers(root)
+    _end_bounces(root)
     _turn_failures(root)
     _classes(root)
 
@@ -75,53 +60,6 @@ def _placement(root: pathlib.Path) -> None:
         "Rule 50: only a host team's log starts host members: a lead's team log records "
         "member_started{host_member}: invalid_transition there, in the team log.",
         {"team": lead_team},
-        ("team", bad),
-    )
-    lead_team, bill = team_log(), billing_log()
-    bad = lead_team.add("supervisor_decided", _decision(_ended(bill), "restart", 0))
-    reject_at(
-        root,
-        "supervisor-decided-in-lead-team-rejected",
-        "Rule 50: supervisor_decided belongs to a host team's log only; a lead's team log takes "
-        "none: invalid_transition there, in the team log.",
-        {"team": lead_team, "billing": bill},
-        ("team", bad),
-    )
-
-
-def _supervision(root: pathlib.Path) -> None:
-    team, bill = host_team_log(), billing_log()
-    ended = _ended(bill)
-    team.add("supervisor_decided", _decision(ended, "stop", 0))
-    bad = team.add("supervisor_decided", _decision(ended, "stop", 0))
-    reject_at(
-        root,
-        "supervisor-decided-twice-rejected",
-        "Rule 51: one supervisor_decided per ended generation. A second decision on billing's "
-        "generation 1 (two hosts racing, the loser not rolled back) is invalid_transition.",
-        {"team": team, "billing": bill},
-        ("team", bad),
-    )
-    team, bill = host_team_log(), billing_log()
-    bad = team.add("supervisor_decided", _decision(_ended(bill), "restart", 1))
-    reject_at(
-        root,
-        "supervisor-restarts-miscounted-rejected",
-        "Rule 51: restarts_in_window is the log's count of earlier restart decisions for the "
-        "name within the window. The first decision records 1 where the log holds none: "
-        "invalid_transition.",
-        {"team": team, "billing": bill},
-        ("team", bad),
-    )
-    team = host_team_log()
-    bad = team.add("member_started", host_start(2, restart_of=1))
-    reject_at(
-        root,
-        "host-restart-without-decision-rejected",
-        "Rule 51: a restart (member_started{restart_of}) follows the supervisor's restart "
-        "decision on that generation, or an operator's request after a stop. Generation 2 "
-        "starts with no decision on generation 1: invalid_transition.",
-        {"team": team},
         ("team", bad),
     )
 
@@ -158,6 +96,24 @@ def _callers(root: pathlib.Path) -> None:
         "addressed to the sales thread: invalid_transition.",
         {"team": team, "billing": bill, "support": support},
         ("support", bad),
+    )
+
+
+def _end_bounces(root: pathlib.Path) -> None:
+    team, bill, support, ask = asked()
+    take(bill, ask)
+    ended = bill.add("member_ended", {"result": ENDED})
+    cancelled: Obj = {**ENDED, "status": "cancelled"}
+    wrong: Obj = {**ended_bounce(bill, ask, ENDED, ended), "result": cancelled}
+    bad = bill.add("message_sent", {"envelope": wrong})
+    reject_at(
+        root,
+        "end-bounce-result-mismatch-rejected",
+        "Rule 43: a bounce whose causal is its sender's own member_ended carries that end's "
+        "result. billing's end bounces support's taken ask with a cancelled result instead of "
+        "the end's: invalid_transition at the bounce.",
+        {"team": team, "billing": bill, "support": support},
+        ("billing", bad),
     )
 
 

@@ -18,8 +18,8 @@
       "transcript": [],
       "status": "idle",
       "head": {
-        "seq": 4,
-        "hash": "afc2abc405b6f61ee24e3b71297ed390ee9f06cd25292ec75f63542d1486361f"
+        "seq": 2,
+        "hash": "2d78c7dbde7dc6a7227458b92f9b1790f8f90c43b908758e7d7ef400c9603272"
       }
     },
     "billing": {
@@ -44,50 +44,22 @@
       ],
       "status": "idle",
       "head": {
-        "seq": 5,
-        "hash": "6f16e1c24459abcdc154086e309ac78711497f392fc330935a639ba72f81fdda"
-      }
-    },
-    "billing2": {
-      "thread_id": "0192a000-0000-7000-8000-0000000000c2",
-      "branch_id": "0192b000-0000-7000-8000-0000000000c2",
-      "epoch": 1,
-      "turns_completed": 0,
-      "pending_calls": [],
-      "effects": [],
-      "parked": [],
-      "fork_points": [],
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "unknown_responses": 0
-      },
-      "transcript": [],
-      "status": "idle",
-      "head": {
-        "seq": 1,
-        "hash": "707dfbf56aca7b456db42549250b195b0fec4b0464e165febf564c76416d094c"
+        "seq": 6,
+        "hash": "0868e92f5bdce26b393169f3c8befe3ea53ff45bf9af6960250c3cbdada0ec6d"
       }
     },
     "support": {
       "thread_id": "0192a000-0000-7000-8000-0000000000d1",
       "branch_id": "0192b000-0000-7000-8000-0000000000d1",
       "epoch": 1,
-      "turns_completed": 0,
-      "pending_calls": [
-        "c1"
-      ],
+      "turns_completed": 1,
+      "pending_calls": [],
       "effects": [],
-      "parked": [
-        {
-          "kind": "ask",
-          "id": "0192b000-0000-7000-8000-0000000000d1:c1"
-        }
-      ],
+      "parked": [],
       "fork_points": [],
       "usage": {
-        "input_tokens": 80,
-        "output_tokens": 20,
+        "input_tokens": 170,
+        "output_tokens": 30,
         "unknown_responses": 0
       },
       "transcript": [
@@ -98,12 +70,20 @@
         {
           "role": "assistant",
           "event_id": "0192e001-0000-7000-8000-000000000004"
+        },
+        {
+          "role": "tool",
+          "event_id": "0192e001-0000-7000-8000-00000000000d"
+        },
+        {
+          "role": "assistant",
+          "event_id": "0192e001-0000-7000-8000-00000000000f"
         }
       ],
-      "status": "parked",
+      "status": "idle",
       "head": {
-        "seq": 9,
-        "hash": "5b146172f8d7a104869808d576259085afd7944bf4671de785a0bcb1440c0554"
+        "seq": 16,
+        "hash": "50549535cc592456410fb4949c97c2d31008b0e38899a153ed2655c99188f8f2"
       }
     }
   },
@@ -137,32 +117,21 @@
             "name": "billing",
             "generation": 1
           },
-          "status": "failed",
-          "error": {
-            "code": "pin_unavailable",
-            "message": "rebind failed: pin_unavailable"
+          "status": "budget_exhausted",
+          "budget": {
+            "scope": "thread",
+            "limit": "max_cost_nanos",
+            "limit_value": 5000000000,
+            "observed": 5200000000,
+            "observed_is_upper_bound": false
           }
         },
-        "updated_seq": 4
-      },
-      {
-        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
-        "name": "billing",
-        "generation": 2,
-        "role": "host_member",
-        "agent": "billing",
-        "config_hash": "5800e46921bd898ffefe26cbb45e8038fd946b9719bd1f0e155c1d94aa9f459b",
-        "thread_id": "0192a000-0000-7000-8000-0000000000c2",
-        "branch_id": "0192b000-0000-7000-8000-0000000000c2",
-        "provenance": null,
-        "state": "idle",
-        "result": null,
-        "updated_seq": 1
+        "updated_seq": 5
       }
     ],
     "mail": [
       {
-        "mail_id": "0192b000-0000-7000-8000-0000000000c1:0192e001-0000-7000-8000-000000000005",
+        "mail_id": "0192b000-0000-7000-8000-0000000000c1:0192e001-0000-7000-8000-000000000006",
         "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
         "kind": "bounce",
         "to_kind": "caller",
@@ -172,7 +141,7 @@
         "principal_key": "api/acme/alice",
         "root_request": "0192a000-0000-7000-8000-0000000000d1:0192e001-0000-7000-8000-000000000002",
         "envelope": {
-          "mail_id": "0192b000-0000-7000-8000-0000000000c1:0192e001-0000-7000-8000-000000000005",
+          "mail_id": "0192b000-0000-7000-8000-0000000000c1:0192e001-0000-7000-8000-000000000006",
           "kind": "bounce",
           "team": "e34fb000-e656-8122-a748-65b36a92d548",
           "from": {
@@ -202,7 +171,7 @@
           },
           "causal": {
             "thread_id": "0192a000-0000-7000-8000-0000000000c1",
-            "event_id": "0192e001-0000-7000-8000-000000000004"
+            "event_id": "0192e001-0000-7000-8000-000000000005"
           },
           "ask_id": "0192b000-0000-7000-8000-0000000000d1:c1",
           "code": "member_ended",
@@ -213,16 +182,19 @@
               "name": "billing",
               "generation": 1
             },
-            "status": "failed",
-            "error": {
-              "code": "pin_unavailable",
-              "message": "rebind failed: pin_unavailable"
+            "status": "budget_exhausted",
+            "budget": {
+              "scope": "thread",
+              "limit": "max_cost_nanos",
+              "limit_value": 5000000000,
+              "observed": 5200000000,
+              "observed_is_upper_bound": false
             }
           }
         },
-        "created_at": 1790000005000,
-        "state": "pending",
-        "consumed_seq": null
+        "created_at": 1790000006000,
+        "state": "consumed",
+        "consumed_seq": 10
       },
       {
         "mail_id": "0192b000-0000-7000-8000-0000000000d1:c1",
@@ -284,8 +256,8 @@
         "recipient_name": "billing",
         "recipient_generation": 1,
         "deadline": 1790000600000,
-        "state": "open",
-        "closed_seq": null
+        "state": "member_ended",
+        "closed_seq": 11
       }
     ],
     "monitors": [],
@@ -318,8 +290,8 @@
       },
       {
         "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
-        "branch_id": "0192b000-0000-7000-8000-0000000000c2",
-        "seq": 1
+        "branch_id": "0192b000-0000-7000-8000-0000000000c1",
+        "seq": 6
       },
       {
         "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
@@ -330,16 +302,6 @@
         "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
         "branch_id": "34c8bb75-7146-872c-a9d6-f1fd978fd58c",
         "seq": 2
-      },
-      {
-        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
-        "branch_id": "34c8bb75-7146-872c-a9d6-f1fd978fd58c",
-        "seq": 3
-      },
-      {
-        "team_id": "e34fb000-e656-8122-a748-65b36a92d548",
-        "branch_id": "34c8bb75-7146-872c-a9d6-f1fd978fd58c",
-        "seq": 4
       }
     ],
     "pending_wakes": []

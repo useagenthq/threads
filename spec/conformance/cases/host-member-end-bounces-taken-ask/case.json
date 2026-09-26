@@ -1,0 +1,16 @@
+{
+  "name": "host-member-end-bounces-taken-ask",
+  "family": "agents_teams",
+  "kind": "team",
+  "description": "Teams Phase 2 (coordinator decision 6, 2026-09-26): billing's own thread budget, a lifetime cap for a host member, runs out in the turn that took support's ask. The append ends the member, so rule 53 does not apply: no turn_failed bounce and no member_idle. The ask the turn had taken is no pending row, so the end's refusal of pending mail cannot reach it; the same append bounces it member_ended with the end's result, whose causal is that member_ended. support closes the ask member_ended at once instead of waiting out its deadline for an answer from a member that has ended.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "logs": [
+      "team",
+      "billing",
+      "support"
+    ]
+  }
+}

@@ -1,27 +1,27 @@
 # pyright: strict
-"""The staged Teams Phase 2 cases (spec/schema/README.md, "Teams Phase 2"): a caller's ask of a
-host member answered, the two replay cases whose rows only one log holds, a host member's failed
-and hop-capped turns, supervision (a restart, the cap, and asks across a restart), a deleted
-caller, and the feed. Staged until lane 29's build reads them (spec/conformance/README.md)."""
+"""The Teams Phase 2 cases of lane 29D (spec/schema/README.md, "Teams Phase 2"): a caller's ask of
+a host member answered, the two replay cases whose rows only one log holds, a host member's failed
+and hop-capped turns, an end that bounces the ask it had taken, a deleted caller, and the feed.
+Supervision's cases are staged in host_super.py until lane 29E's build."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import NOW, arr, eid, num, obj, text
+from .common import NOW, arr, obj, text
 from .host_feed import feed
 from .host_pieces import (
-    POLICY,
     SUPPORT_THREAD,
     ask_billing,
     billing,
     billing_log,
     caller_log,
-    host_start,
+    ended_bounce,
     host_team_log,
     reply,
     take,
     turn_failed,
+    turn_failed_bounces,
 )
 from .jcs import JsonValue, canonical
 from .log import Log, reduce
@@ -35,6 +35,19 @@ if TYPE_CHECKING:
     from .jcs import Obj
 
 QUESTION = "Is INV-1001 paid?"
+# A host member's own lifetime budget, the one budget that ends it rather than its turn.
+OWN_BUDGET: Obj = {
+    "scope": "thread",
+    "limit": "max_cost_nanos",
+    "limit_value": 5_000_000_000,
+    "observed": 5_200_000_000,
+    "observed_is_upper_bound": False,
+}
+REBIND_FAILED: Obj = {
+    "member": billing(),
+    "status": "failed",
+    "error": {"code": "pin_mismatch", "message": "rebind failed: pin_mismatch"},
+}
 
 
 def write_host(
@@ -109,7 +122,7 @@ def build(root: pathlib.Path) -> None:
     _answered(root)
     _replay(root)
     _failed(root)
-    _supervised(root)
+    _ends(root)
     _deleted(root)
 
 
@@ -209,97 +222,54 @@ def _last_sent(log: Log) -> Obj:
     return obj(obj(e["data"])["envelope"])
 
 
-def _end_gen1(bill: Log) -> Obj:
-    failed: Obj = {
-        "member": billing(1),
-        "status": "failed",
-        "error": {"code": "pin_unavailable", "message": "rebind failed: pin_unavailable"},
-    }
-    return bill.add("member_ended", {"result": failed})
-
-
-def decide(team: Log, ended: Obj, action: str, count: int, *, policy: Obj = POLICY) -> None:
-    """The supervisor's decision on the generation `ended` (its member_ended) ends."""
-    gen = num(obj(obj(obj(ended["data"])["result"])["member"])["generation"])
-    data: Obj = {
-        "member": billing(gen),
-        "ended": {"branch_id": ended["branch_id"], "seq": ended["seq"]},
-        "action": action,
-        "restarts_in_window": count,
-        "policy": policy,
-    }
-    team.add("supervisor_decided", data)
-    if action == "restart":
-        team.add("member_started", host_start(gen + 1, restart_of=gen))
-
-
-def _supervised(root: pathlib.Path) -> None:
-    team, bill1 = host_team_log(), billing_log(1)
-    ended = _end_gen1(bill1)
-    decide(team, ended, "restart", 0)
-    write_host(
-        root,
-        "host-supervisor-restart",
-        "Teams Phase 2 (E): billing's generation 1 fails its rebind (member_ended{failed "
-        "pin_unavailable}). The host team log's writer decides once: supervisor_decided{restart, "
-        "restarts_in_window 0} and, in the same append, member_started of generation 2 with "
-        "restart_of 1. Generation 2 opens a new, empty thread and is idle.",
-        {"team": team, "billing": bill1, "billing2": billing_log(2)},
+def _ends(root: pathlib.Path) -> None:
+    """The two ends a host member's own append can take beside a turn failure."""
+    team, bill, support, ask = asked()
+    take(bill, ask)
+    bill.add("budget_exceeded", OWN_BUDGET)
+    bill.add("turn_completed", {"reason": "budget_exhausted"})
+    result: Obj = {"member": billing(), "status": "budget_exhausted", "budget": OWN_BUDGET}
+    ended = bill.add("member_ended", {"result": result})
+    back = ended_bounce(bill, ask, result, ended)
+    bill.add("message_sent", {"envelope": back})
+    close_ask(
+        support,
+        back,
+        {"status": "member_ended", "result": result},
+        {
+            "status": "member_ended",
+            "result": result,
+        },
     )
-    team, bill1, bill2 = host_team_log(), billing_log(1), billing_log(2)
-    capped: Obj = {**POLICY, "max_restarts": 1}
-    decide(team, _end_gen1(bill1), "restart", 0, policy=capped)
-    ended2 = bill2.add("member_ended", {"result": {**failure(2)}})
-    decide(team, ended2, "stop", 1, policy=capped)
     write_host(
         root,
-        "host-supervisor-stop-at-cap",
-        "Teams Phase 2 (E): with maxRestarts 1, generation 1 fails and is restarted; generation "
-        "2 fails within the window, so restarts_in_window is 1 and the decision is stop. The "
-        "name stays ended: no generation 3.",
-        {"team": team, "billing": bill1, "billing2": bill2},
+        "host-member-end-bounces-taken-ask",
+        "Teams Phase 2 (coordinator decision 6, 2026-09-26): billing's own thread budget, a "
+        "lifetime cap for a host member, runs out in the turn that took support's ask. The "
+        "append ends the member, so rule 53 does not apply: no turn_failed bounce and no "
+        "member_idle. The ask the turn had taken is no pending row, so the end's refusal of "
+        "pending mail cannot reach it; the same append bounces it member_ended with the end's "
+        "result, whose causal is that member_ended. support closes the ask member_ended at once "
+        "instead of waiting out its deadline for an answer from a member that has ended.",
+        {"team": team, "billing": bill, "support": support},
     )
-    _across_restart(root)
-
-
-def failure(gen: int) -> Obj:
-    return {
-        "member": billing(gen),
-        "status": "failed",
-        "error": {"code": "pin_mismatch", "message": "rebind failed: pin_mismatch"},
-    }
-
-
-def _across_restart(root: pathlib.Path) -> None:
-    team, bill1, support, ask = asked()
-    bill1.add("mail_refused", {"mail_id": ask["mail_id"], "code": "member_ended"})
-    result_: Obj = {**failure(1)}
-    ended = bill1.add("member_ended", {"result": result_})
-    bounce: Obj = {
-        "mail_id": f"{bill1.branch}:{eid(bill1.seq + 1, bill1.branch)}",
-        "kind": "bounce",
-        "team": ask["team"],
-        "from": billing(1),
-        "to": ask["from"],
-        "provenance": ask["provenance"],
-        "causal": {"thread_id": bill1.thread, "event_id": bill1.events[-2]["event_id"]},
-        "ask_id": ask["ask_id"],
-        "code": "member_ended",
-        "result": result_,
-    }
-    bill1.add("message_sent", {"envelope": bounce})
-    decide(team, ended, "restart", 0)
-    ended_as: Obj = {"status": "member_ended", "result": result_}
-    close_ask(support, bounce, ended_as, {"status": "member_ended", "result": result_})
+    team, bill, support, ask = asked()
+    take(bill, ask)
+    end = bill.add("turn_completed", {"reason": "error", "code": "content_unsupported"})
+    error: Obj = {"code": "content_unsupported", "message": "billing's turn failed"}
+    turn_failed_bounces(bill, [ask], error, end)
+    bill.add("member_ended", {"result": REBIND_FAILED})
     write_host(
         root,
-        "host-ask-across-restart-never-stale",
-        "Teams Phase 2 (E, the stale negative): support's ask is pending when billing's "
-        "generation 1 ends. Its end append refuses the ask (mail_refused{member_ended}, the row "
-        "returned) and bounces it to the caller with the result; the supervisor restarts "
-        "generation 2. The ask closes member_ended; no mail is ever stale, since a sender binds "
-        "the current generation and an end refuses every pending row.",
-        {"team": team, "billing": bill1, "billing2": billing_log(2), "support": support},
+        "host-member-turn-failed-then-ended",
+        "Rule 53's order (coordinator decision 7, 2026-09-26): a reader admits a failed turn's "
+        "turn_failed bounces followed by the member's member_ended with no member_idle between. "
+        "A member that fails a turn and then ends never became idle, and demanding member_idle "
+        "in between would force both runtimes to emit a transition that did not happen. This "
+        "pins the readers, not the writer: an append that ends the member skips rule 53's "
+        "bounces and bounces member_ended instead (host-member-end-bounces-taken-ask), so no "
+        "writer produces this order. An ask a turn_failed bounce answered is not bounced again.",
+        {"team": team, "billing": bill, "support": support},
     )
 
 
