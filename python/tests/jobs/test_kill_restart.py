@@ -35,6 +35,10 @@ def test_a_killed_host_restarts_from_the_log(tmp_path: Path, point: str, lookup:
     kill(first)
     expire_leases(tmp_path)
     before = acked(tmp_path)
+    if point == "effect_commit":
+        # What that stop point claims, pinned rather than assumed: the worker paused once the
+        # commit was durable in the log (`worker.py`), so the kill really is after it.
+        assert any(isinstance(e, EffectCommitEvent) for e in log(tmp_path).events)
     sent_before = sends(tmp_path)
 
     finish(spawn("serve", tmp_path, DRILL_WEBHOOK="1", DRILL_LOOKUP=lookup))

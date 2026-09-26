@@ -44,6 +44,11 @@ TESTS: Final = str(WORKER.parent.parent)
 DUE: Final = 1_790_000_220_000
 REPLAYED: Final = 0.05
 """The share of schedules that also wipe and rebuild the team index."""
+ENDED: Final[Obj] = {
+    "reason": "error",
+    "result": {"status": "failed", "error": {"code": "model_error", "message": "stopped"}},
+}
+"""The `end` op's input: a member that failed."""
 
 
 class _Side:
@@ -110,24 +115,35 @@ def _schedule(
         side.send({**job, "path": str(path), "spin_ms": random.random() * 2})  # noqa: S311
     for side in sides:
         side.answer()
+    return asyncio.run(_logs(world, path))
 
-    async def read() -> dict[str, Sequence[Event]]:
-        opened = await SqliteStore.open(str(path), tenant_id="acme")
-        assert isinstance(opened, Ok)
-        store = opened.value
-        try:
-            out: dict[str, Sequence[Event]] = {}
-            for label, log in world_logs(world).items():
-                got = await store.read(BranchId(str(log["branch_id"])), 0)
-                assert isinstance(got, Ok)
-                out[label] = got.value.fold.events
-            if random.random() < REPLAYED:  # noqa: S311
-                await assert_team_replays(store, TEAM)
-            return out
-        finally:
-            await store.close()
 
-    return asyncio.run(read())
+def _in_turn(
+    sides: tuple[_Side, _Side], world: Obj, path: Path, jobs: tuple[Obj, Obj]
+) -> dict[str, Sequence[Event]]:
+    """One schedule in a fixed turn order: each side answers before the next one is sent, so the
+    ordering under test is the one asserted, never the one the scheduler happened to pick."""
+    for side, job in zip(sides, jobs, strict=True):
+        side.send({**job, "path": str(path), "spin_ms": 0})
+        side.answer()
+    return asyncio.run(_logs(world, path))
+
+
+async def _logs(world: Obj, path: Path) -> dict[str, Sequence[Event]]:
+    opened = await SqliteStore.open(str(path), tenant_id="acme")
+    assert isinstance(opened, Ok)
+    store = opened.value
+    try:
+        out: dict[str, Sequence[Event]] = {}
+        for label, log in world_logs(world).items():
+            got = await store.read(BranchId(str(log["branch_id"])), 0)
+            assert isinstance(got, Ok)
+            out[label] = got.value.fold.events
+        if random.random() < REPLAYED:  # noqa: S311
+            await assert_team_replays(store, TEAM)
+        return out
+    finally:
+        await store.close()
 
 
 def _job(world: Obj, label: str, op: Obj, now: int) -> Obj:
@@ -147,6 +163,27 @@ def _sent(log: Sequence[Event], kind: str) -> list[str]:
         for e in log
         if isinstance(e, MessageSentEvent) and e.data.envelope.kind == kind
     ]
+
+
+def _already_settled_jobs(world: Obj, now: int) -> dict[str, Obj]:
+    """The already-settled race's two ops: the lead's wait and the member's end."""
+    return {
+        "wait": _job(world, "lead", {}, now),
+        "end": _job(world, "researcher", {"op": "end", "input": ENDED}, now),
+    }
+
+
+def _settled(logs: dict[str, Sequence[Event]]) -> str:
+    """Which way one already-settled schedule went, once its invariant holds: the wait observed
+    the settled member, or the member's end mailed the monitor, and never both."""
+    started = next(e for e in logs["lead"] if isinstance(e, WaitStartedEvent))
+    monitor = f"{started.branch_id}:{started.event_id}:researcher-1"
+    observed = any(
+        isinstance(e, MemberObservedEvent) and e.data.monitor_id == monitor for e in logs["lead"]
+    )
+    mailed = monitor in _sent(logs["researcher"], "member_ended")
+    assert observed is not mailed
+    return "observed" if observed else "mailed"
 
 
 def test_deadline_race_a_settlement_counts_iff_it_deleted_the_monitor_row_first(
@@ -182,33 +219,30 @@ def test_already_settled_race_exactly_one_of_observation_or_mail(
 ) -> None:
     world = _vector("wait-registers-monitor")
     template = _template(world, tmp_path)
-    ended: Obj = {
-        "reason": "error",
-        "result": {"status": "failed", "error": {"code": "model_error", "message": "stopped"}},
-    }
     now = world["now"]
     assert isinstance(now, int)
-    seen: set[str] = set()
+    jobs = _already_settled_jobs(world, now)
     for n in range(SCHEDULES):
-        logs = _schedule(
-            sides,
-            world,
-            _copy(template, tmp_path, n),
-            (
-                _job(world, "lead", {}, now),
-                _job(world, "researcher", {"op": "end", "input": ended}, now),
-            ),
-        )
-        started = next(e for e in logs["lead"] if isinstance(e, WaitStartedEvent))
-        monitor = f"{started.branch_id}:{started.event_id}:researcher-1"
-        observed = any(
-            isinstance(e, MemberObservedEvent) and e.data.monitor_id == monitor
-            for e in logs["lead"]
-        )
-        mailed = monitor in _sent(logs["researcher"], "member_ended")
-        assert observed is not mailed
-        seen.add("observed" if observed else "mailed")
-    assert seen == {"observed", "mailed"}
+        # Whichever way a schedule falls, it falls exactly one way; which ways exist at all is
+        # the next test's job, since a sample of schedules is luck, not a gate.
+        _settled(_schedule(sides, world, _copy(template, tmp_path, n), (jobs["wait"], jobs["end"])))
+
+
+def test_already_settled_the_turn_order_decides_between_observation_and_mail(
+    sides: tuple[_Side, _Side], tmp_path: Path
+) -> None:
+    """Both orders of the same two ops, forced rather than sampled: a wait that ran first left a
+    monitor row for the end to mail; an end that ran first left a settled member to observe."""
+    world = _vector("wait-registers-monitor")
+    template = _template(world, tmp_path)
+    now = world["now"]
+    assert isinstance(now, int)
+    jobs = _already_settled_jobs(world, now)
+    for n, (first, second, expected) in enumerate(
+        (("wait", "end", "mailed"), ("end", "wait", "observed"))
+    ):
+        logs = _in_turn(sides, world, _copy(template, tmp_path, n), (jobs[first], jobs[second]))
+        assert _settled(logs) == expected
 
 
 def test_reply_versus_deadline_answered_iff_the_reply_was_sent(
@@ -241,10 +275,6 @@ def test_cancel_versus_the_members_end_refused_or_sent_and_refused_by_the_end(
 ) -> None:
     world = _vector("cancel-requested")
     template = _template(world, tmp_path)
-    ended: Obj = {
-        "reason": "error",
-        "result": {"status": "failed", "error": {"code": "model_error", "message": "stopped"}},
-    }
     now = world["now"]
     assert isinstance(now, int)
     seen: set[str] = set()
@@ -255,7 +285,7 @@ def test_cancel_versus_the_members_end_refused_or_sent_and_refused_by_the_end(
             _copy(template, tmp_path, n),
             (
                 _job(world, "lead", {}, now),
-                _job(world, "researcher", {"op": "end", "input": ended}, now),
+                _job(world, "researcher", {"op": "end", "input": ENDED}, now),
             ),
         )
         cancels = [
