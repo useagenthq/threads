@@ -3,8 +3,10 @@ published on didOpen. Run as a program by the in-sandbox driver."""
 
 import json
 import sys
+from typing import Union
 
-type Json = dict[str, Json] | list[Json] | str | int | float | bool | None
+# The sandbox's fixed system PATH may start this fake server with Python 3.9.
+Json = Union[dict[str, "Json"], list["Json"], str, int, float, bool, None]  # noqa: UP007
 
 
 def send(message: dict[str, Json]) -> None:
@@ -20,20 +22,18 @@ def at(line: int, character: int) -> Json:
 def answer(method: str, params: dict[str, Json]) -> Json:
     doc = params.get("textDocument")
     uri = doc.get("uri") if isinstance(doc, dict) else None
-    match method:
-        case "initialize":
-            return {"capabilities": {}}
-        case "textDocument/definition":
-            return {"uri": uri, "range": at(2, 0)}
-        case "textDocument/references":
-            return [{"uri": uri, "range": at(2, 0)}, {"uri": uri, "range": at(5, 4)}]
-        case "textDocument/hover":
-            return {"contents": {"kind": "markdown", "value": "def f() -> int"}}
-        case "textDocument/documentSymbol":
-            child: Json = {"name": "g", "kind": 12, "range": at(3, 4)}
-            return [{"name": "f", "kind": 12, "range": at(2, 0), "children": [child]}]
-        case _:
-            return None
+    if method == "initialize":
+        return {"capabilities": {}}
+    if method == "textDocument/definition":
+        return {"uri": uri, "range": at(2, 0)}
+    if method == "textDocument/references":
+        return [{"uri": uri, "range": at(2, 0)}, {"uri": uri, "range": at(5, 4)}]
+    if method == "textDocument/hover":
+        return {"contents": {"kind": "markdown", "value": "def f() -> int"}}
+    if method == "textDocument/documentSymbol":
+        child: Json = {"name": "g", "kind": 12, "range": at(3, 4)}
+        return [{"name": "f", "kind": 12, "range": at(2, 0), "children": [child]}]
+    return None
 
 
 def main() -> None:
