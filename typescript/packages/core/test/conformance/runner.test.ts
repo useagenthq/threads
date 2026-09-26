@@ -22,6 +22,13 @@ import { runTeam } from "./team";
 // cases run in full. Other kinds need features after step 2b; their log still imports and reduces here, and
 // what they need beyond that is skipped by name with the reason below, never silently.
 
+/**
+ * Every case asserts bytes and state, never a duration, so none of them may fail on a clock. The
+ * ceiling is here to catch a hang, not a slow machine: bun's 5 s default was overshooting on
+ * loaded runners and blaming whichever branch was in flight.
+ */
+const CEILING_MS = 60_000;
+
 const LATER: Readonly<Record<Kind, string | undefined>> = {
   reduce: undefined,
   render: undefined,
@@ -183,7 +190,7 @@ describe("replay: every importable case log round-trips through SQLite", () => {
     // A render case that expects an error is refused by import itself.
     if (log === undefined || !verifyExport(log).ok) continue;
     if (c.kind === "render" && c.error !== undefined) continue;
-    test(name, () => replay(c, log));
+    test(name, () => replay(c, log), CEILING_MS);
   }
 });
 
@@ -227,10 +234,13 @@ describe("conformance", () => {
         : log === undefined
           ? undefined
           : runnerFor(c, log);
-    if (run !== undefined) test(`${c.kind}: ${name}`, run);
+    if (run !== undefined) test(`${c.kind}: ${name}`, run, CEILING_MS);
     else if (log !== undefined)
-      test(`${c.kind}: ${name} (import and state only; skipped: ${later})`, () =>
-        runImport(c, log));
+      test(
+        `${c.kind}: ${name} (import and state only; skipped: ${later})`,
+        () => runImport(c, log),
+        CEILING_MS,
+      );
     else test.skip(`${c.kind}: ${name} (skipped: ${later})`, () => {});
   }
 });
