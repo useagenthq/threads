@@ -267,6 +267,36 @@ def _generate(out: pathlib.Path) -> None:
             raise AssertionError(f"artifact name is not its hash: {f}")
 
 
+def _write_all(
+    out: pathlib.Path,
+    staged: pathlib.Path,
+    phase2: pathlib.Path,
+    traces: pathlib.Path,
+    built_evals: pathlib.Path,
+) -> None:
+    """Write every vector file, then replace each committed fixture tree with what was built."""
+    tool_inputs.write()
+    tool_groups.write()
+    team_wire.write()
+    team_ops.write()
+    handoff_transcripts.write()
+    agent_pins.write()
+    anthropic_requests.write()
+    dynamic.write()
+    tool_search_vectors.write()
+    e2b_wire.write()
+    tar_vectors.write()
+    questions.write()
+    ui_vectors.write()
+    eval_vectors.write()
+    otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
+    staged_all = ((staged, STAGED), (phase2, STAGED_PHASE_2_DIR))
+    for built, dest in ((out, CASES), *staged_all, (built_evals, EVALS), *otel_parts):
+        shutil.rmtree(dest, ignore_errors=True)
+        shutil.copytree(built, dest)
+    print(f"wrote {sum(1 for _ in CASES.iterdir())} cases")
+
+
 def main() -> int:
     if sys.argv[1:] not in ([], ["--check"]):
         print(__doc__)
@@ -306,27 +336,7 @@ def main() -> int:
                 print(d)
             print("fixtures up to date" if not diffs else f"{len(diffs)} difference(s)")
             return 1 if diffs else 0
-        tool_inputs.write()
-        tool_groups.write()
-        team_wire.write()
-        team_ops.write()
-        handoff_transcripts.write()
-        agent_pins.write()
-        anthropic_requests.write()
-        dynamic.write()
-        tool_search_vectors.write()
-        e2b_wire.write()
-        tar_vectors.write()
-        questions.write()
-        ui_vectors.write()
-        otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
-        eval_vectors.write()
-        evals_out = (built_evals, EVALS)
-        staged_all = ((staged, STAGED), (phase2, STAGED_PHASE_2_DIR))
-        for built, dest in ((out, CASES), *staged_all, evals_out, *otel_parts):
-            shutil.rmtree(dest, ignore_errors=True)
-            shutil.copytree(built, dest)
-        print(f"wrote {sum(1 for _ in CASES.iterdir())} cases")
+        _write_all(out, staged, phase2, traces, built_evals)
     return 0
 
 
