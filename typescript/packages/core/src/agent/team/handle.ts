@@ -61,7 +61,7 @@ async function startMember(
     ...chosen,
     ...(budget === undefined ? {} : { budget }),
   };
-  const lead = await leadOf(env);
+  const lead = await leadOf(env.log, env.ref.id);
   // Read before the append: the lead's and its ancestors' budgets cover the new member.
   const starter = await ancestorsOf(env.log, lead.parent);
   const pin = pins(env.lead.team ?? [], lead.deferTools);

@@ -23,8 +23,8 @@ from threads.agents.store import Store, now_ms
 from threads.agents.team_budgets import ancestors_of, started_cap
 from threads.agents.team_log_mail import take_team_log_mail
 from threads.agents.team_rebind import bound, rebind
-from threads.agents.team_scan import closed, members_under, principal_of
-from threads.agents.team_units import end_unbound, refuse_ended
+from threads.agents.team_scan import closed, lease_free, members_under, principal_of
+from threads.agents.team_units import end_unbound, take_mail
 from threads.log import (
     BranchId,
     MailEnvelope,
@@ -39,8 +39,6 @@ from threads.loop.covering import Covering
 from threads.loop.team_runtime import TeamAgentPin
 from threads.result import Err
 from threads.store import SqliteStore, lease
-from threads.store.conn import Conn
-from threads.store.sql import int_of
 from threads.team.batch import Mint
 from threads.team.claim import claim_mail
 from threads.team.constants import TEAM_CONSTANTS
@@ -243,7 +241,7 @@ class TeamWorker:
             return (lambda: self._member(row, BranchId(branch))) if wake else None
         if row.state == "ended":
             return (
-                (lambda: refuse_ended(self._env.sq, self._env.mint, BranchId(branch)))
+                (lambda: self._take_mail(BranchId(branch)))
                 if pending and await self._free(branch)
                 else None
             )
@@ -251,6 +249,11 @@ class TeamWorker:
         stranded = row.state == "running" and (recovering or cancelled or await self._free(branch))
         woken = await self._claim(pending)
         return (lambda: self._member(row, BranchId(branch))) if woken or stranded else None
+
+    async def _take_mail(self, branch: BranchId) -> bool:
+        """An ended member's writer refuses the mail that still reaches it. False: its lease is
+        held elsewhere."""
+        return (await take_mail(self._env.sq, self._env.mint, branch)) is not None
 
     async def _claim(self, mail: Sequence[MailEnvelope]) -> bool:
         """mail.claim (design §4.6) on the first row this worker would wake the member for: a
@@ -274,13 +277,8 @@ class TeamWorker:
         return due is not None and due <= now_ms()
 
     async def _free(self, branch: str) -> bool:
-        def expired(conn: Conn) -> bool:
-            row = conn.execute(
-                "SELECT expires_at FROM leases WHERE branch_id = ?", (branch,)
-            ).fetchone()
-            return row is None or int_of(row[0]) <= now_ms()
-
-        return await self._env.sq.run(expired)
+        now = now_ms()
+        return await self._env.sq.run(lambda c: lease_free(c, branch, now))
 
     def _launch(self, thread: str, work: Unit) -> None:
         """Runs one unit for a member. One that did nothing backs off, so a pass never relaunches

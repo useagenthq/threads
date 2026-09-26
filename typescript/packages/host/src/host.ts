@@ -30,6 +30,7 @@ import { type RunAccepted, type StartRunCode, startRun } from "./runs";
 import { bindSchedules, type Schedule, tick } from "./schedules";
 import type { StartRunRequest } from "./schemas";
 import { type SseMessage, subscribe } from "./subscribe";
+import { Teams } from "./team-worker";
 import { Telemetry } from "./telemetry";
 import { Watch } from "./watch";
 
@@ -133,6 +134,7 @@ export function host(options: HostOptions): Host {
   let tickWaiters: (() => void)[] = [];
   const watch = new Watch();
   const recovery = new Recovery(ctx);
+  const teams = new Teams(ctx);
   // A run of this host that meets a store outage is run on by recovery, with backoff.
   ctx.onStoreOutage = (tenant, thread, error) => {
     recovery.failed(thread.branch, error);
@@ -221,6 +223,8 @@ export function host(options: HostOptions): Host {
     // Runs are aborted first: a tick or a consumer may be waiting on one.
     ctx.abort();
     await ticking;
+    // The team workers stop claiming and let their member runs finish; every row stays durable.
+    await teams.stop();
     await Promise.all(consuming.values());
     await ctx.stop();
     // After the runs: their last events are committed, so the last sync sends them.
@@ -267,6 +271,8 @@ export function host(options: HostOptions): Host {
             await isolated("schedule tick", () =>
               tick(ctx, bound, startedAt, Date.now(), recovery),
             );
+            // Before the recovery pass: a turn a woken lead opens is run on in this same tick.
+            await isolated("team tick", () => teams.pass(watch));
             await isolated("reply recovery", recoverReplies);
             await isolated("inbox sweep", sweep);
           } finally {

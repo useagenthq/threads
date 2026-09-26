@@ -1,6 +1,7 @@
-"""The team worker's appends on a member branch that run no loop: a failed rebind's end, and an
-ended member refusing the mail that still reaches it. Each takes the member's lease, appends once
-and hands the lease back; a lease held elsewhere means its holder does it."""
+"""The appends on a team branch that run no loop: a failed rebind's end, and the consume of the
+mail waiting for a branch nothing is running (an ended member's refusals, an idle lead's
+receipts). Each takes the branch's lease, appends once and hands the lease back; a lease held
+elsewhere means its holder does it."""
 
 import uuid
 from collections.abc import Sequence
@@ -12,7 +13,7 @@ from threads.store import Draft, SqliteStore
 from threads.store.writer import DecideTx, Refusal
 from threads.team.batch import Batch, Mint
 from threads.team.close import reader_of
-from threads.team.consume import ConsumeContext, consume
+from threads.team.consume import ConsumeContext, Consumed, consume
 from threads.team.materialize import RebindCode
 from threads.team.rebind import rebind_failed
 from threads.team.settle import AppendContext
@@ -43,22 +44,27 @@ async def end_unbound(
     return True
 
 
-async def refuse_ended(sq: SqliteStore, mint: Mint | None, branch: BranchId) -> bool:
-    """An ended member's writer refuses the mail that still reaches it. False: its lease is
-    held elsewhere."""
+async def take_mail(sq: SqliteStore, mint: Mint | None, branch: BranchId) -> Consumed | None:
+    """The branch's own writer takes its pending mail (design §4.7): an ended member's refusals,
+    an idle member's or an idle lead's receipts, which open its turn. None: its lease is held
+    elsewhere, and its holder consumes."""
     got = await sq.acquire(branch, f"team-{uuid.uuid4().hex}", now_ms)
     if isinstance(got, Err):
-        return False
+        return None
     w = got.value
     thread = w.fold.thread_id
     if thread is None:
         raise AssertionError("an acquired branch has a thread")
+    taken: Consumed = Consumed("nothing_pending", ())
 
     def decide(tx: DecideTx) -> Sequence[Draft] | Refusal[None]:
+        nonlocal taken
         batch = Batch(tx.fold.seq, tx.now, mint)
-        consume(ConsumeContext(tx.conn, batch, thread, branch, tx.fold, reader_of(tx.read)))
+        taken = consume(ConsumeContext(tx.conn, batch, thread, branch, tx.fold, reader_of(tx.read)))
         return batch.drafts
 
-    await w.append_decided(decide)
+    appended = await w.append_decided(decide)
     await w.release()
-    return True
+    if isinstance(appended, Err):
+        raise AssertionError(f"consume on {branch}: {appended.error}")
+    return taken

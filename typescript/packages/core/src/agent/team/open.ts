@@ -57,7 +57,7 @@ export async function openTeam(
  * has the lead thread's config_hash, as materialize rebinds a member. Anything else would start
  * agents the team never listed, so no match is `unavailable` and nothing is recorded.
  */
-async function rebound(
+export async function rebound(
   log: LogStore,
   ref: TeamRef,
 ): Promise<Result<MemberEntry, OpenTeamError>> {
