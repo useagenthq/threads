@@ -78,9 +78,15 @@ def _openai(key: str | None) -> Agent[None, str]:
 
 def _litellm(key: str | None) -> Agent[None, str]:
     model = (
-        litellm("openai/gpt-test", max_input_tokens=1000, max_output_tokens=8)
+        litellm("openai/gpt-test", max_input_tokens=1000, max_output_tokens=8, cache_ttl_ms="none")
         if key is None
-        else litellm("openai/gpt-test", max_input_tokens=1000, max_output_tokens=8, api_key=key)
+        else litellm(
+            "openai/gpt-test",
+            max_input_tokens=1000,
+            max_output_tokens=8,
+            cache_ttl_ms="none",
+            api_key=key,
+        )
     )
     return agent(name="spare", model=model)
 
