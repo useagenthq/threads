@@ -23,6 +23,9 @@ export type Inspected = {
   readonly pidsLimit: number;
 };
 
+/** Every Engine API failure answers this one shape. */
+const Failed = z.object({ message: z.string() });
+
 const InspectedWire = z.object({
   State: z.object({ Running: z.boolean() }),
   HostConfig: z.object({
@@ -61,13 +64,23 @@ function tooOld(status: number, body: string): boolean {
   );
 }
 
+/** The `message` of a failure body, or the body itself when it isn't the one shape. */
+function said(body: string): string {
+  try {
+    const parsed = Failed.safeParse(JSON.parse(body));
+    return parsed.success ? parsed.data.message : body;
+  } catch {
+    return body;
+  }
+}
+
 export async function failure(res: Response, what: string): Promise<Error> {
   const body = await excerpt(res);
   if (tooOld(res.status, body))
     return unavailable(
       "Docker Engine API 1.44 or newer is needed (Docker 25+)",
     );
-  return unavailable(`Docker ${what} failed with ${res.status}: ${body}`);
+  return unavailable(`Docker ${what} failed with ${res.status}: ${said(body)}`);
 }
 
 export function engine(inner: Fetch): Engine {

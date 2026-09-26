@@ -12,7 +12,7 @@ import { resolveSocket, socketFetch } from "./socket";
 //
 // What it declares, and why:
 // - Keyless: the Engine API over its unix socket, spoken directly (no SDK, so every request
-//   can be fenced). No registry credential is ever sent, so a private image must be pulled.
+//   can be fenced). No registry credentials are ever sent, so a private image must be pulled.
 // - Egress: no network at all by default (egress enforced). `allowInternet: true` puts the
 //   container on Docker's bridge, which filters nothing (egress unenforced).
 // - Create: the container is named and labelled by its operation key, so a duplicate create

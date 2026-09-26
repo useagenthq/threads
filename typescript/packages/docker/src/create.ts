@@ -10,7 +10,7 @@ import { parsed, unavailable } from "./wire";
 // The create sequence: resolve the image (pulling it anonymously when it is missing), refuse
 // an architecture there is no supervisor for, create the container, prove the daemon applied
 // every requested limit, inject the supervisor under its pinned sha256, start, and prove the
-// image has the shell the kit's scripts need. No registry credential is ever sent, and the
+// image has the shell the kit's scripts need. No registry credentials are ever sent, and the
 // request adds nothing to the environment but PATH (AGENTS invariant 4).
 
 const Created = z.object({
@@ -134,7 +134,7 @@ async function architecture(engine: Engine, image: string): Promise<Arch> {
   return arch;
 }
 
-/** An anonymous pull: no registry credential is sent, so a private image must be local. */
+/** An anonymous pull: no registry credentials are sent, so a private image must be local. */
 async function pull(engine: Engine, image: string): Promise<void> {
   const res = await engine.send(
     "POST",
@@ -227,13 +227,17 @@ async function checkImage(
   const text = new TextDecoder().decode(
     Uint8Array.from(out.flatMap((c) => [...c])),
   );
-  const tools = exit === 0 ? parsed(Tools, text, "the image check") : undefined;
-  if (tools?.sh !== true || tools.env !== true) {
+  try {
+    const tools =
+      exit === 0 ? parsed(Tools, text, "the image check") : undefined;
+    if (tools?.sh === true && tools.env === true) return;
+  } catch (error) {
+    // A probe whose answer can't be read leaves no container behind either.
     await remove(engine, name);
-    throw unavailable(
-      `image ${image} lacks /bin/sh (docker() needs sh and env)`,
-    );
+    throw error;
   }
+  await remove(engine, name);
+  throw unavailable(`image ${image} lacks /bin/sh (docker() needs sh and env)`);
 }
 
 /**

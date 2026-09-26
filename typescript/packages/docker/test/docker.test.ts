@@ -204,48 +204,46 @@ describe("docker declarations", () => {
     expect(docker().quiescence).toBe("none");
   });
 
-  test.skipIf(ARCH === undefined)(
-    "defaults: the pinned node:22-bookworm digest, no internet and no limits",
-    async () => {
-      const world = new World();
-      const { sandbox, backend } = adapter(world);
-      unwrap(await sandbox.create("op-d", CTX));
-      const body = only(backend.traffic(), "/containers/create?")[0] ?? "";
-      expect(body).toContain(
-        '"Image":"node:22-bookworm@sha256:363e1587494626837fa7f9a23bdb453d13b0ff3c67c705c2805cfc69c2d2fad7"',
-      );
-      expect(body).toContain('"NetworkMode":"none"');
-      expect(body).toContain(`"PidsLimit":${PIDS_LIMIT}`);
-      expect(body).not.toContain("NanoCpus");
-      expect(body).not.toContain('"Memory"');
-      expect(body).toContain('"ReadonlyRootfs":true');
-      expect(body).toContain('"CapDrop":["ALL"]');
-      // Nothing but PATH: the image's own env reaches no command (invariant 4).
-      expect(body).toContain(
-        '"Env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"]',
-      );
-      const limited = dockerBackend(new World());
-      limited.architecture = ARCH ?? "arm64";
-      await docker({ cpus: 2, memoryMb: 4096, fetch: limited.fetch }).create(
-        "op-l",
-        CTX,
-      );
-      const withLimits =
-        only(limited.traffic(), "/containers/create?")[0] ?? "";
-      expect(withLimits).toContain('"NanoCpus":2000000000');
-      expect(withLimits).toContain('"Memory":4294967296');
-      expect(withLimits).toContain('"MemorySwap":4294967296');
-      const open = dockerBackend(new World());
-      open.architecture = ARCH ?? "arm64";
-      await docker({ allowInternet: true, fetch: open.fetch }).create(
-        "op-i",
-        CTX,
-      );
-      expect(only(open.traffic(), "/containers/create?")[0]).not.toContain(
-        "NetworkMode",
-      );
-    },
-  );
+  // The create request is what this checks, so it stands whether or not the injection that
+  // follows it has the binaries (they are build output).
+  test("defaults: the pinned node:22-bookworm digest, no internet and no limits", async () => {
+    const world = new World();
+    const { sandbox, backend } = adapter(world);
+    await sandbox.create("op-d", CTX);
+    const body = only(backend.traffic(), "/containers/create?")[0] ?? "";
+    expect(body).toContain(
+      '"Image":"node:22-bookworm@sha256:363e1587494626837fa7f9a23bdb453d13b0ff3c67c705c2805cfc69c2d2fad7"',
+    );
+    expect(body).toContain('"NetworkMode":"none"');
+    expect(body).toContain(`"PidsLimit":${PIDS_LIMIT}`);
+    expect(body).not.toContain("NanoCpus");
+    expect(body).not.toContain('"Memory"');
+    expect(body).toContain('"ReadonlyRootfs":true');
+    expect(body).toContain('"CapDrop":["ALL"]');
+    // Nothing but PATH: the image's own env reaches no command (invariant 4).
+    expect(body).toContain(
+      '"Env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"]',
+    );
+    const limited = dockerBackend(new World());
+    limited.architecture = ARCH ?? "arm64";
+    await docker({ cpus: 2, memoryMb: 4096, fetch: limited.fetch }).create(
+      "op-l",
+      CTX,
+    );
+    const withLimits = only(limited.traffic(), "/containers/create?")[0] ?? "";
+    expect(withLimits).toContain('"NanoCpus":2000000000');
+    expect(withLimits).toContain('"Memory":4294967296');
+    expect(withLimits).toContain('"MemorySwap":4294967296');
+    const open = dockerBackend(new World());
+    open.architecture = ARCH ?? "arm64";
+    await docker({ allowInternet: true, fetch: open.fetch }).create(
+      "op-i",
+      CTX,
+    );
+    expect(only(open.traffic(), "/containers/create?")[0]).not.toContain(
+      "NetworkMode",
+    );
+  });
 
   test("a limit Docker can't express is invalid_config", () => {
     for (const cpus of [0, -1, -0.5])

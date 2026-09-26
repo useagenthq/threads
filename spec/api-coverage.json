@@ -318,7 +318,7 @@
   },
   "SandboxSession.exec.process_key": {
     "ts": [
-      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > terminate kills what the provider tracks but never confirms it"
+      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > terminate kills what the provider tracks, and claims it only when confirmed"
     ],
     "py": [
       "tests/sandbox/test_fake.py::test_exec_is_scripted_per_command_with_provider_dedup"
@@ -334,7 +334,7 @@
   },
   "SandboxSession.terminate": {
     "ts": [
-      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > terminate kills what the provider tracks but never confirms it"
+      "packages/core/test/sandbox/remote/remote.test.ts > sandbox adapter contract: remote kit > terminate kills what the provider tracks, and claims it only when confirmed"
     ],
     "py": [
       "tests/sandbox/test_fake.py::test_exec_is_scripted_per_command_with_provider_dedup"

@@ -13,7 +13,14 @@ export function containerName(operationKey: string): string {
   return `threads-${shortHash(operationKey)}`;
 }
 
-/** The label every container carries, so a lost create is found by its operation key. */
+/**
+ * The label every container carries, so a lost create is found by its operation key.
+ *
+ * ponytail: R4's orphan gc is not wired into core's gc here. Every container already carries
+ * this label, so listing and removing the ones whose key has no `resources` row (or a
+ * released one) past the artifact grace is what is left; it needs core's gc to hand the
+ * adapter that view, which is more than a one-liner.
+ */
 export const OPERATION_KEY = "threads.operation_key";
 
 /** The three named volumes of a container: /run/threads, /workspace and /tmp. */

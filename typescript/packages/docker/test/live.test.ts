@@ -5,15 +5,22 @@ import { drained, run } from "../../core/test/sandbox/remote/kit";
 import { trees } from "../../core/test/sandbox/remote/trees";
 import { code, unwrap } from "../../core/test/store/helpers";
 import { docker } from "../src";
+import { resolveSocket } from "../src/socket";
 
 // Live gate: the real Docker Engine on this machine, so it runs only with THREADS_LIVE=1.
-// It creates real containers and removes them, with their three volumes, in `finally`.
+// A missing socket under that flag is a loud failure, not a skip: the CI job that sets it
+// runs on a machine with Docker, and a silent skip there would be a green vacuum.
+// Every container is removed, with its three volumes, in `finally`.
 
 const live = process.env["THREADS_LIVE"] === "1";
 const utf8 = new TextEncoder();
 const MINUTE = 120_000;
 
 describe.skipIf(!live)("live gate: docker", () => {
+  test("the Engine socket is where discovery looks for it", () => {
+    expect(resolveSocket()).toMatch(/docker\.sock$/);
+  });
+
   test(
     "create, exec, files, terminate and release against the real daemon",
     async () => {
@@ -79,6 +86,8 @@ describe.skipIf(!live)("live gate: docker", () => {
         expect(unwrap(await box.terminate("held", CTX))).toBe("terminated");
         expect((await drained(held)).exit).not.toBe(0);
         expect(unwrap(await box.terminate("held", CTX))).toBe("terminated");
+        // D-3, on purpose: a key that never ran has no record, so the call parks.
+        expect(unwrap(await box.terminate("never-ran", CTX))).toBe("unknown");
       } finally {
         unwrap(await box.close(CTX));
       }

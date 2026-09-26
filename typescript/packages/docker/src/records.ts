@@ -179,7 +179,9 @@ async function fromProbe(
   }
   if (status === BUSY) {
     const left = await leftRunning(engine, name, key, deadlineMs + 5_000);
-    return left === "stuck" ? "unknown" : left;
+    // A stuck record blocks admission until the container restarts, so it goes back to the
+    // probe (which then takes the lock and stops the container), never to unknown.
+    return left === "stuck" ? "again" : left;
   }
   return status === 0 || status === GONE ? "again" : "unknown";
 }
