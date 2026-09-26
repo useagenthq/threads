@@ -10,7 +10,6 @@ import {
 import { dirname, join } from "node:path";
 import { sha256Hex } from "../hash";
 import type { BranchId } from "../log";
-import { knownEvents } from "../reduce";
 import { err, ok, type Result } from "../result";
 import type { ArtifactStore } from "../store";
 import { fsyncDir } from "../store/artifacts";
@@ -58,6 +57,8 @@ export async function exportBundle(
   }
 }
 
+// ponytail: every artifact is held in memory while the bundle is written; stream them through
+// the artifact sink if bundles of very large spilled outputs become a problem.
 type Contents = {
   readonly log: Uint8Array;
   readonly artifacts: ReadonlyMap<string, Uint8Array>;
@@ -73,8 +74,13 @@ async function collect(
   if (!bytes.ok) return bytes;
   const verified = verifyExport(bytes.value);
   if (!verified.ok) return verified;
+  // Walked over the stored lines, not the parsed events, so a ref inside an event this version
+  // doesn't know is still bundled — the same set Python's artifact_refs collects.
   const refs = new Set<string>();
-  refsIn(knownEvents(verified.value), refs);
+  for (const segment of verified.value.segments) {
+    refsIn(parsed(segment.bytes), refs);
+    for (const line of segment.events) refsIn(parsed(line.bytes), refs);
+  }
   const files = new Map<string, Uint8Array>();
   for (const sha256 of [...refs].toSorted()) {
     const got = await artifacts.get(sha256);
@@ -82,6 +88,11 @@ async function collect(
     files.set(sha256, got.value);
   }
   return ok({ log: bytes.value, artifacts: files });
+}
+
+/** One stored line as JSON; a line that doesn't parse can't be here, since the export verified. */
+function parsed(line: Uint8Array): unknown {
+  return JSON.parse(new TextDecoder().decode(line));
 }
 
 /** `path` claimed by this export alone: an exclusive mkdir, so a racing export loses it. */
