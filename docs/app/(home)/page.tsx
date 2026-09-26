@@ -21,6 +21,7 @@ import { CodeSample } from "@/components/home/code-sample";
 import { CopyCommand } from "@/components/home/copy-command";
 import { EventLog } from "@/components/home/event-log";
 import { GitHubIcon } from "@/components/home/github-icon";
+import { HeroThreads } from "@/components/home/hero-threads";
 import { Providers } from "@/components/home/providers";
 import { QUICKSTART } from "@/components/home/samples";
 import { UseCases } from "@/components/home/use-cases";
@@ -145,14 +146,7 @@ export default function HomePage() {
 function Hero() {
   return (
     <section className="relative overflow-hidden border-b border-fd-border">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 [background-image:linear-gradient(to_right,var(--color-fd-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-fd-border)_1px,transparent_1px)] [background-size:48px_48px] [mask-image:radial-gradient(ellipse_70%_60%_at_50%_0%,#000_40%,transparent_100%)]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -top-40 left-1/2 h-[28rem] w-[56rem] max-w-[140vw] -translate-x-1/2 rounded-full bg-fd-primary/15 blur-3xl"
-      />
+      <HeroThreads />
       <div className="relative mx-auto flex max-w-6xl flex-col items-center px-4 pt-16 pb-16 text-center sm:px-6 sm:pt-24 lg:pb-24">
         <LogoMark className="mb-6 h-12 w-auto text-fd-primary sm:h-14" />
         <Link
