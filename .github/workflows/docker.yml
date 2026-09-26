@@ -29,6 +29,12 @@ jobs:
       - run: ./scripts/build-supervisor.sh
       - name: The pinned sha256 values still reproduce
         run: git diff --exit-code docker/supervise/binaries.json
+      - run: docker pull node:22-bookworm
+      - run: docker pull busybox
+      - name: D1's proof, on a glibc image and on BusyBox
+        run: |
+          ./docker/supervise/test.sh node:22-bookworm
+          ./docker/supervise/test.sh busybox
 
   live:
     # docker() against the real Engine API. Docker is preinstalled on the runner, so

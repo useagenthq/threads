@@ -116,9 +116,11 @@ int mode_run(const char *key, long long deadline_ms, int with_stdin, char *const
   }
   clear_stop(key);
 
-  if (pipe(wake) != 0) die("cannot open the wake pipe");
+  /* O_CLOEXEC on all three: the child uses the ack and go pipes before it execs, and no
+     descriptor of the supervisor's own may survive into the command. */
+  if (pipe2(wake, O_CLOEXEC) != 0) die("cannot open the wake pipe");
   int ack[2], go[2];
-  if (pipe(ack) != 0 || pipe(go) != 0) die("cannot open the child pipes");
+  if (pipe2(ack, O_CLOEXEC) != 0 || pipe2(go, O_CLOEXEC) != 0) die("cannot open the child pipes");
   fcntl(wake[0], F_SETFL, O_NONBLOCK);
   struct sigaction sa;
   memset(&sa, 0, sizeof sa);
