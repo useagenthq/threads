@@ -221,7 +221,7 @@ class Runner:
             # An earlier run's failure is not this run's answer.
             self.last.pop(branch, None)
         self._live.add(task)
-        task.add_done_callback(lambda done: self._ended(thread, done))
+        task.add_done_callback(lambda done: self._ended(thread, done, intake))
         return task
 
     @property
@@ -289,7 +289,7 @@ class Runner:
             return await self.resume(store, thread_id, root.value)
         return None
 
-    def _ended(self, thread: Thread, task: RunTask) -> None:
+    def _ended(self, thread: Thread, task: RunTask, intake: Intake | None = None) -> None:
         branch = thread.branch
         self._live.discard(task)
         # A run launched since (this callback may run after it) owns the branch's answer now.
@@ -314,7 +314,9 @@ class Runner:
             self._pending.add(follow)
             follow.add_done_callback(self._pending.discard)
             self._next[task] = follow
-        elif self.on_end is not None:
+        elif self.on_end is not None and (
+            intake is None or intake.source != "channel" or intake.recorded.done()
+        ):
             self.on_end(thread.store, thread.id)
 
     def wake(self, branch: BranchId) -> None:

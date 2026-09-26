@@ -4,15 +4,17 @@ channel_send from the log and issues it through the effect path, once."""
 
 import asyncio
 import json
+import logging
 import threading
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
+import pytest
 from pydantic import JsonValue, TypeAdapter
 
-from threads import agent, scripted_model, sqlite
+from threads import agent, extension, scripted_model, sqlite
 from threads.agents.agent import Agent
-from threads.agents.store import Store, open_store, scoped
+from threads.agents.store import Store, now_ms, open_store, scoped
 from threads.host import (
     ChannelCapabilities,
     DeliveryOutcome,
@@ -23,13 +25,23 @@ from threads.host import (
     VerifiedDelivery,
     host,
 )
+from threads.host import intake as intake_module
 from threads.host.app import recovered
 from threads.host.intake import ChannelIntake
 from threads.host.runs import Runner
-from threads.log import Event, JsonObject, ParseError, Principal, ToolCallEvent, TurnCompletedEvent
+from threads.log import (
+    BranchId,
+    Event,
+    JsonObject,
+    ParseError,
+    Principal,
+    ToolCallEvent,
+    TurnCompletedEvent,
+)
 from threads.loop.model import LookupResult, LookupUnknown
 from threads.result import Err, Ok
 from threads.secrets import Secret
+from threads.store.lines import uuid7
 
 TEAM = "T1"
 USER = Principal(issuer="fake:T1", tenant=TEAM, subject="U1")
@@ -117,15 +129,18 @@ async def until(probe: Callable[[], Awaitable[bool]]) -> None:
     raise AssertionError("the host never got there")
 
 
-async def sends(store: Store) -> list[str]:
+async def events(store: Store) -> Sequence[Event]:
     sq = await open_store(scoped(store, TEAM))
     rows = await sq.tables.inbox_rows()
     root = await sq.root(rows[0].thread_id)
     assert isinstance(root, Ok)
     read = await sq.read(root.value, 0)
     assert isinstance(read, Ok)
-    events = read.value.fold.events
-    return [e.data.call_id for e in events if isinstance(e, ToolCallEvent)]
+    return read.value.fold.events
+
+
+async def sends(store: Store) -> list[str]:
+    return [e.data.call_id for e in await events(store) if isinstance(e, ToolCallEvent)]
 
 
 class _Dead(Replies):
@@ -240,6 +255,85 @@ def test_stop_waits_out_an_intake_task_whose_bookkeeping_is_still_queued() -> No
     stopped.start()
     stopped.join(5)
     assert not stopped.is_alive(), "drain spun on a finished task"
+
+
+def test_a_channel_setup_failure_retries_with_a_cap_and_leaves_the_item_for_a_new_host(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(intake_module, "RETRY_S", 0.01)
+    store, channel, attempts = sqlite(":memory:"), Replies(), [0]
+    marker = "setup-secret-that-must-not-be-logged"
+
+    async def fail() -> None:
+        attempts[0] += 1
+        raise RuntimeError(marker)
+
+    model = scripted_model({"responses": []})
+    broken = agent(model=model, extensions=[extension(name="boot", setup=fail)])
+
+    async def main() -> None:
+        async with host(store=store, agents={"bot": broken}, channels={"fake": channel}) as served:
+            raw = webhook("d1", "m1", "private payload")
+            await served.receive("fake", raw)
+            await until(lambda: _attempted(attempts, 3))
+            for _ in range(5):
+                await served.receive("fake", raw)
+            await asyncio.sleep(0.05)
+            assert attempts == [3]
+            assert not await _consumed(store)
+        healthy = agent(model=scripted_model({"responses": [text("recovered")]}))
+        async with host(store=store, agents={"bot": healthy}, channels={"fake": channel}):
+            await until(lambda: _consumed(store))
+            types = [event.type for event in await events(store)]
+            assert types.count("channel_delivery") == types.count("user_input") == 1
+
+    with caplog.at_level(logging.WARNING, logger="threads.host.intake"):
+        asyncio.run(main())
+    said = "\n".join(record.getMessage() for record in caplog.records)
+    assert said.count("retry cap reached") == 1
+    assert marker not in said
+    assert "private payload" not in said
+
+
+def test_branch_busy_channel_run_uses_same_retry_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(intake_module, "RETRY_S", 0.01)
+
+    async def main() -> None:
+        store, channel = sqlite(":memory:"), Replies()
+        bot = agent(model=scripted_model({"responses": [text("recovered")]}))
+        runner = Runner(store, {"bot": bot}, {"fake": channel})
+        intake = ChannelIntake(runner, {"fake": channel})
+        consume = intake.consume
+        intake.consume = lambda _store, _thread: None  # pyright: ignore[reportAttributeAccessIssue] - hold delivery before consuming
+        await intake.receive("fake", webhook("d1", "m1", "private payload"))
+        intake.consume = consume
+        tenant = runner.store(TEAM)
+        sq = await open_store(tenant)
+        (row,) = await sq.tables.inbox_rows()
+        now = now_ms()
+        branch = await sq.root_or_create(row.thread_id, BranchId(uuid7(now)), now)
+        held = await sq.acquire(branch, "other-host", now_ms)
+        assert isinstance(held, Ok)
+        launches = [0]
+        launch = runner.launch
+
+        def counted(*args: object, **kwargs: object) -> object:
+            launches[0] += 1
+            return launch(*args, **kwargs)  # pyright: ignore[reportArgumentType] - launch spy
+
+        runner.launch = counted  # pyright: ignore[reportAttributeAccessIssue] - launch spy
+        consume(tenant, row.thread_id)
+        await until(lambda: _attempted(launches, 3))
+        await asyncio.sleep(0.05)
+        assert launches == [3]
+        assert not await _consumed(store)
+        await intake.drain()
+
+    asyncio.run(main())
+
+
+async def _attempted(count: list[int], wanted: int) -> bool:
+    return count[0] >= wanted
 
 
 def test_the_same_host_started_again_waits_for_its_new_recovery_pass() -> None:
