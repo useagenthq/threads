@@ -96,7 +96,9 @@ describe("thread.export", () => {
         thread.export(path),
         thread.export(path),
       ]);
-      const codes = [first, second].map((r) => (r?.ok === true ? "ok" : "path_exists"));
+      const codes = [first, second].map((r) =>
+        r?.ok === true ? "ok" : "path_exists",
+      );
       expect(codes.toSorted()).toEqual(["ok", "path_exists"]);
       expect(readdirSync(path)).toContain("bundle.json");
     } finally {

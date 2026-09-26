@@ -7,9 +7,9 @@ import {
   agent,
   fakeSandbox,
   openThread,
+  type Store,
   scriptedModel,
   sqlite,
-  type Store,
   type Thread,
   tool,
 } from "../../src";
@@ -78,7 +78,9 @@ async function recorded(
   const second = bot(sent, [use("send", { text: "x" }, "s1"), say("Sent.")]);
   const two = await second.bot.run("send", { store, thread: one.thread });
   expect(two.status).toBe("completed");
-  return unwrap(await openThread(store, one.thread.id, { sandbox: first.sandbox }));
+  return unwrap(
+    await openThread(store, one.thread.id, { sandbox: first.sandbox }),
+  );
 }
 
 async function stubChild(thread: Thread): Promise<Thread> {
