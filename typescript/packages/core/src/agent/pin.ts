@@ -16,6 +16,7 @@ import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
 import { TEAM_TOOLS } from "../team/constants";
 import { type DynamicChoice, KEPT_TOOLS } from "../team/dynamic";
+import { type MessagePolicyRule, teamTools } from "../team/policy";
 import { builtins, type Capabilities, type Egress } from "../tools";
 import { frameworkSpec, searchToolSpec } from "../tools/framework";
 import { requireCapabilities } from "../tools/gated";
@@ -58,6 +59,11 @@ export type PinOptions = {
   readonly handoffs: readonly string[];
   /** agent({team}): the agents start may name. Undefined: no team. */
   readonly team: readonly string[] | undefined;
+  /**
+   * The host's messagePolicy rules with this agent as `from` (lane 29C): they add the agents it
+   * may start and, without a team of its own, the only team tools it is offered.
+   */
+  readonly rules?: readonly MessagePolicyRule[];
   /** The agents behind team, in order: each dynamic one adds a line to the listing. */
   readonly members: readonly { readonly name: string }[];
   /** A member of a dynamic agent: what its starter chose (lane 26). */
@@ -152,6 +158,7 @@ function pinned(
   const o = { ...base, context: { ...base.context, defer_tools: deferTools } };
   const user = [...o.tools, ...extensionTools(o.extensions, o.mcp)];
   const deferred = deferredNames(ownTools(user, within, o.dynamic), deferTools);
+  const team = teamTools(o.team, member, o.rules ?? []);
   const artifacts: Uint8Array[] = [];
   const pinnedSpec = (t: {
     readonly name: string;
@@ -172,12 +179,7 @@ function pinned(
   const all = [
     ...[
       ...builtins(o.sandbox, o.egress, o.capabilities).map((b) => b.spec),
-      ...agentTools(
-        o,
-        within !== undefined,
-        o.team !== undefined || member,
-        answerer,
-      ).map(frameworkSpec),
+      ...agentTools(o, within !== undefined, team, answerer).map(frameworkSpec),
       ...(o.memory === undefined ? [] : memorySpecs(o.memory)),
       ...(o.knowledge === undefined ? [] : knowledgeSpecs()),
       ...skillSpecs(o.skills),
@@ -202,7 +204,7 @@ function pinned(
       "duplicate_name",
       `two extensions are named ${again}`,
     );
-  if (o.team !== undefined || member) checkTeamNames(o);
+  if (team.length > 0) checkTeamNames(o);
   const names = specs.map((s) => s.name);
   const twice = names.find((n, i) => names.indexOf(n) !== i);
   if (twice !== undefined)
@@ -324,12 +326,12 @@ const TEAM = [
 
 /**
  * todo_write always; ask_user for an answerer; spawn and task-board tools with subagents;
- * handoff with targets; the team tools for a lead (agent({team})) and for a team's members.
+ * handoff with targets; the team tools `team` names (team/policy.ts teamTools).
  */
 function agentTools(
   o: PinOptions,
   subagent: boolean,
-  team: boolean,
+  team: readonly string[],
   answerer: boolean,
 ): readonly string[] {
   return [
@@ -338,7 +340,7 @@ function agentTools(
     ...(o.subagents.length > 0 ? ["spawn_agent"] : []),
     ...(o.subagents.length > 0 || subagent ? TEAM : []),
     ...(o.handoffs.length > 0 ? ["handoff"] : []),
-    ...(team ? TEAM_TOOLS : []),
+    ...team,
   ];
 }
 

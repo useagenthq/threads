@@ -20,7 +20,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.definition import Definition
 from threads.agents.store import Store, now_ms
-from threads.agents.team_budgets import ancestors_of
+from threads.agents.team_budgets import ancestors_of, started_cap
 from threads.agents.team_log_mail import take_team_log_mail
 from threads.agents.team_rebind import bound, rebind
 from threads.agents.team_scan import closed, members_under, principal_of
@@ -388,7 +388,10 @@ class TeamWorker:
             principal or task.actor.principal,
             holder,
             self.notify,
-            await ancestors_of(self._env.sq, parent),
+            (
+                *await started_cap(self._env.sq, parent),
+                *await ancestors_of(self._env.sq, parent),
+            ),
             self._aborts.get(row.thread_id, asyncio.Event()),
         )
         await self._env.run(found, run)

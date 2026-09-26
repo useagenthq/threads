@@ -6,6 +6,7 @@ import {
   callMailId,
   callRequest,
   decide,
+  decision,
   isRefusal,
   named,
   type Refused,
@@ -162,7 +163,13 @@ export async function monitor(
 ): Promise<Wire<MonitorResult> | Refused> {
   const caller = await callerOf(ctx);
   if (caller === undefined) throw new Error("a team tool call outside a team");
-  decide(ctx, "monitor", args.member, true);
+  const denied = decide(
+    ctx,
+    "monitor",
+    args.member,
+    decision(ctx, caller, "monitor", args.member),
+  );
+  if (denied !== undefined) return recorded(ctx, denied);
   const row = await addressed(ctx, caller, args.member);
   if (isRefusal(row)) return recorded(ctx, row);
   const member = refOf(caller.team, row);

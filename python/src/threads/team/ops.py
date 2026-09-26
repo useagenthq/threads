@@ -9,6 +9,7 @@ from typing import Literal
 
 from pydantic import JsonValue
 
+from threads.log import Budget
 from threads.reduce.handlers import to_json
 from threads.store.lines import Draft
 from threads.team.call import Refusal
@@ -39,6 +40,11 @@ class StartPlan:
     """The new member's thread id, minted before the append."""
     resolved: Resolved | InvalidDefinition = field(default_factory=Resolved)
     """The start's label and chosen fields, resolved against the agent (resolve_definition)."""
+    budget: Budget | None = None
+    """The member's own budget, which member_started records: the smaller of the start's own and
+    the matching message_policy rule's (spec/api.json MessagePolicyRule.budget). Only one of the
+    two is ever set today, since the start tool takes no budget and an operator start matches no
+    rule. None: the agent's own budget alone."""
 
 
 _LIVE = frozenset({"starting", "running"})
@@ -67,6 +73,8 @@ def start(req: Request, agent: str, task: str, plan: StartPlan) -> dict[str, Jso
         "parent": req.parent(started_id),
         "provenance": req.provenance,
     }
+    if plan.budget is not None:
+        data["budget"] = to_json(plan.budget)
     if isinstance(plan.resolved, Resolved) and plan.resolved.define is not None:
         data["define"] = to_json(plan.resolved.define)
     if isinstance(plan.resolved, Resolved) and plan.resolved.label is not None:

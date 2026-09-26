@@ -5,6 +5,7 @@ import type { EventDraft, Writer } from "../../store";
 import { reading } from "../../store/driver";
 import { uuidv7 } from "../../store/encode";
 import { TEAM_TOOLS } from "../../team/constants";
+import { leads } from "../../team/policy";
 import { cancelPendingFor } from "../../team/rows";
 import type { DeferTools } from "../defer";
 import { ConfigError } from "../errors";
@@ -18,13 +19,16 @@ import { TeamWorker } from "./worker";
 // its new team; its loop gets the team tools' runtime; and the lead of an in-process run drives
 // its team's worker for as long as the run is open.
 
-/** A lead's thread_started names a new team, whose log its first append opens. */
+/**
+ * A lead's thread_started names a new team, whose log its first append opens. A host rule that
+ * allows start makes its from a lead too, with no team of its own (lane 29C).
+ */
 export function leadStarted<Deps, Output>(
   def: Resolved<Deps, Output>,
   started: EventDraft,
   now: number,
 ): EventDraft {
-  if (def.team === undefined || started.type !== "thread_started")
+  if (!leads(def.team, def.rules ?? []) || started.type !== "thread_started")
     return started;
   return { ...started, data: { ...started.data, team: newTeam(now) } };
 }
@@ -60,7 +64,8 @@ export function teamOf<Deps, Output>(
 ):
   | { readonly runtime: TeamRuntime; readonly stop: () => Promise<void> }
   | undefined {
-  if (def.team === undefined && plan.member === undefined) return undefined;
+  if (!leads(def.team, def.rules ?? []) && plan.member === undefined)
+    return undefined;
   // Members inherit the lead's resolved defer_tools unless they set their own.
   const deferTools = writer.chain.fold.policy?.context?.defer_tools;
   const thread = writer.chain.segments[0]?.header.thread_id;
@@ -74,6 +79,7 @@ export function teamOf<Deps, Output>(
     // One run, one authority (design §2.6): its ordinary mail is its own principal's; mail of
     // another waits for a run under that one.
     principal: plan.principal,
+    ...(def.rules === undefined ? {} : { rules: def.rules }),
   };
   if (plan.member !== undefined)
     return {

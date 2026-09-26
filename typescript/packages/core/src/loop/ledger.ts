@@ -1,6 +1,7 @@
+import type { z } from "zod";
 import { runOpener } from "../fold/openers";
 import type { EventOf, Fold, ModelRef } from "../fold/state";
-import type { JsonObject, KnownEvent, Policy, ThreadId } from "../log";
+import type { Budget, JsonObject, KnownEvent, Policy, ThreadId } from "../log";
 import { reservation, settlement, tokenBounds } from "../reduce/cost";
 import type { Claim, LimitName } from "../store";
 import { spentIn } from "../store/budget";
@@ -106,8 +107,9 @@ export async function roomFor(
   member: TeamAgentPin,
   covers: readonly Covering[],
   tx: Tx,
+  cap?: z.infer<typeof Budget>,
 ): Promise<boolean> {
-  return s.config.budgets === undefined || startRoom(covers, member, tx);
+  return s.config.budgets === undefined || startRoom(covers, member, tx, cap);
 }
 
 /**
@@ -119,6 +121,7 @@ export function startRoom(
   starter: readonly Covering[],
   member: TeamAgentPin,
   tx: Tx,
+  cap?: z.infer<typeof Budget>,
 ): Promise<boolean> {
   const own = member.budget;
   const all: readonly Covering[] = [
@@ -126,6 +129,9 @@ export function startRoom(
     ...(own === undefined
       ? []
       : [{ budgetId: "member", budget: own, scope: "thread" as const }]),
+    ...(cap === undefined
+      ? []
+      : [{ budgetId: "start", budget: cap, scope: "thread" as const }]),
   ];
   return fits(all, boundsFor(member.policy, member.model, member.params), tx);
 }

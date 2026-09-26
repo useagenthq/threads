@@ -1,7 +1,8 @@
-import type { Agent, ChannelAdapter } from "@threads/core";
+import type { Agent, ChannelAdapter, MessagePolicyRule } from "@threads/core";
 import {
   asks,
   type BranchId,
+  checkMessagePolicy,
   type EventDraft,
   type HostRunner,
   hostRunner,
@@ -12,6 +13,7 @@ import {
   type Principal,
   principalKey,
   type RunResult,
+  rulesFrom,
   type Store,
   StoreError,
   type ThreadId,
@@ -65,14 +67,22 @@ export class HostContext {
     agents: Readonly<Record<string, Agent<never, unknown>>>,
     channels: Readonly<Record<string, ChannelAdapter>>,
     ceiling?: HostCeiling,
+    messagePolicy: readonly MessagePolicyRule[] = [],
   ) {
     this.store = store;
     this.ceiling = ceiling;
+    const handles = Object.values(agents);
+    checkMessagePolicy(messagePolicy, new Set(handles.map((a) => a.name)));
     this.agents = new Map(
       Object.entries(agents).map(([key, agent]) => {
-        const runner = hostRunner(agent);
-        if (runner === undefined)
+        const plain = hostRunner(agent);
+        if (plain === undefined)
           throw new Error(`host agent ${key} was not made by agent()`);
+        const rules = rulesFrom(messagePolicy, agent.name);
+        const runner =
+          rules.length === 0
+            ? plain
+            : plain.withPolicy({ rules, agents: handles });
         return [key, { key, name: agent.name, runner }];
       }),
     );

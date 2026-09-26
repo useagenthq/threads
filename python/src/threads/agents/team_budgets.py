@@ -12,6 +12,7 @@ from threads.agents.store import now_ms
 from threads.log import (
     BranchId,
     Event,
+    MemberStartedEvent,
     MessageReceivedEvent,
     ModelRef,
     Parent,
@@ -35,6 +36,28 @@ async def ancestors_of(sq: SqliteStore, parent: Parent | None) -> tuple[Covering
 
 type _At = tuple[str, str]
 """(thread_id, branch_id) of a structural parent."""
+
+
+async def started_cap(sq: SqliteStore, parent: Parent | None) -> tuple[Covering, ...]:
+    """The cap a start put on the member (Team.start's budget, capped by the message_policy rule's):
+    member_started.budget, a budget of the member's own thread beside the one its pin carries. The
+    pin is hashed, so a per-start cap can only live here."""
+    if parent is None:
+        return ()
+    read = await sq.read(BranchId(parent.branch_id), now_ms())
+    if isinstance(read, Err):
+        return ()
+    started = next(
+        (
+            e
+            for e in read.value.fold.events
+            if isinstance(e, MemberStartedEvent) and e.event_id == parent.event_id
+        ),
+        None,
+    )
+    if started is None or started.data.budget is MISSING:
+        return ()
+    return (Covering(f"start:{parent.event_id}", started.data.budget, "thread"),)
 
 
 async def _ancestors(sq: SqliteStore, at: _At | None) -> tuple[Covering, ...]:
@@ -67,6 +90,10 @@ class _Pinned(BaseModel):
     policy: Policy | None = None
 
 
+type _Recipient = tuple[_Pinned, _At | None, tuple[Covering, ...]]
+"""A member's pin, its structural parent, and the cap its start put on it."""
+
+
 def recipient_of(sq: SqliteStore) -> Callable[[MemberRow], Awaitable[TeamRecipient | None]]:
     """An asked member's budgets (ask's headroom): its own thread budget and every ancestor's,
     with what one request of its model reserves, from its thread_started; a member still starting
@@ -76,17 +103,17 @@ def recipient_of(sq: SqliteStore) -> Callable[[MemberRow], Awaitable[TeamRecipie
         got = await (_configured(sq, row) if row.branch_id is None else _started(sq, row.branch_id))
         if got is None:
             return None
-        pinned, parent = got
+        pinned, parent, cap = got
         policy = pinned.policy
         own = () if policy is None or policy.budget is MISSING else (policy.budget,)
         mine = tuple(Covering(f"thread:{row.thread_id}", b, "thread") for b in own)
-        covering = (*mine, *await _ancestors(sq, parent))
+        covering = (*mine, *cap, *await _ancestors(sq, parent))
         return TeamRecipient(pinned.model, pinned.model_params, policy, covering)
 
     return recipient
 
 
-async def _started(sq: SqliteStore, branch: str) -> tuple[_Pinned, _At | None] | None:
+async def _started(sq: SqliteStore, branch: str) -> _Recipient | None:
     read = await sq.read(BranchId(branch), now_ms())
     if isinstance(read, Err):
         return None
@@ -97,16 +124,20 @@ async def _started(sq: SqliteStore, branch: str) -> tuple[_Pinned, _At | None] |
     policy = None if data.policy is MISSING else data.policy
     pinned = _Pinned(model=data.model, model_params=dict(data.model_params), policy=policy)
     parent = None if data.parent is MISSING else (data.parent.thread_id, data.parent.branch_id)
-    return pinned, parent
+    cap = await started_cap(sq, None if data.parent is MISSING else data.parent)
+    return pinned, parent, cap
 
 
-async def _configured(sq: SqliteStore, row: MemberRow) -> tuple[_Pinned, _At | None] | None:
+async def _configured(sq: SqliteStore, row: MemberRow) -> _Recipient | None:
+    """A member still starting: its start already checked its cap, so only the pin and its
+    ancestors are read here."""
     config = await sq.get_artifact(row.config_hash)
     team = await sq.run(lambda c: team_row(c, row.team_id))
     lead = None if team is None else await sq.root(ThreadId(team.lead_thread_id))
     if isinstance(config, Err) or team is None or lead is None or isinstance(lead, Err):
         return None
-    return _Pinned.model_validate_json(config.value), (team.lead_thread_id, lead.value)
+    at = (team.lead_thread_id, lead.value)
+    return _Pinned.model_validate_json(config.value), at, ()
 
 
 def run_covering(sq: SqliteStore) -> Callable[[Event], Awaitable[Covering | None]]:

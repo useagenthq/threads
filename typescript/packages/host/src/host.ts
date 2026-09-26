@@ -3,6 +3,7 @@ import {
   type ChannelAdapter,
   ConfigError,
   type Exporter,
+  type MessagePolicyRule,
 } from "@threads/core";
 import {
   dueQuestionBranches,
@@ -54,6 +55,13 @@ export type HostOptions = {
   readonly ceiling?: HostCeiling;
   /** An exporter, such as otel(), synced every second and once more on stop(). */
   readonly telemetry?: Exporter;
+  /**
+   * Rules that let one host agent start, send to, ask, monitor or cancel another beyond what a
+   * team grants. They decide after a team's grant and before default deny, and only add. An
+   * agent gets the team tools only for the ops some rule with it as `from` allows, and a rule
+   * that allows start makes its `from` a lead. Default []: everything else is denied.
+   */
+  readonly messagePolicy?: readonly MessagePolicyRule[];
 };
 
 export type Host = {
@@ -113,6 +121,7 @@ export function host(options: HostOptions): Host {
     options.agents,
     options.channels ?? {},
     options.ceiling,
+    options.messagePolicy ?? [],
   );
   const consuming = new Map<string, Promise<void>>();
   const telemetry =

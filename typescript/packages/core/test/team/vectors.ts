@@ -11,6 +11,7 @@ import {
 import type { StoreDriver } from "../../src/store";
 import { IMPL } from "../../src/store/writer";
 import type { Template } from "../../src/team/dynamic";
+import type { MessagePolicyRule } from "../../src/team/policy";
 import { rebuildTeamIndex } from "../../src/team/rebuild";
 import { VERSION } from "../../src/version";
 import { type Fixture, fixture, unwrap } from "../store/helpers";
@@ -43,6 +44,7 @@ export type Vector = {
     readonly mailbox?: number | undefined;
     readonly concurrent?: number | undefined;
     readonly headroom?: boolean | undefined;
+    readonly rules?: readonly MessagePolicyRule[] | undefined;
     readonly templates?: Readonly<Record<string, Template>> | undefined;
   };
   readonly expect: {
@@ -81,6 +83,17 @@ const Doc: z.ZodType<Doc> = z.object({
         mailbox: z.int().optional(),
         concurrent: z.int().optional(),
         headroom: z.boolean().optional(),
+        rules: z
+          .array(
+            z.object({
+              from: z.string(),
+              to: z.string(),
+              allow: z.array(
+                z.enum(["start", "send", "ask", "monitor", "cancel"]),
+              ),
+            }),
+          )
+          .optional(),
         templates: z
           .record(
             z.string(),

@@ -22,6 +22,11 @@ export type TeamLimits = {
 /** An agent the caller's team lists, as start pins it. */
 export type Listed = {
   readonly configHash: string;
+  /**
+   * The member's own budget, which member_started records: the smaller of the start's own and the
+   * matching messagePolicy rule's. Only one of the two is ever set today, since the start tool
+   * takes no budget and an operator start matches no rule.
+   */
   readonly budget?: z.infer<typeof Budget>;
 };
 

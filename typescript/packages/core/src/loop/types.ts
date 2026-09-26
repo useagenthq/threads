@@ -19,6 +19,7 @@ import type { Stale } from "../sandbox/protocol";
 import type { BudgetLedger } from "../store/budget";
 import type { Tx } from "../store/driver";
 import type { DynamicChoice } from "../team/dynamic";
+import type { MessagePolicyRule } from "../team/policy";
 import type { MemberRow } from "../team/rows";
 
 /**
@@ -360,6 +361,8 @@ export type TeamRuntime = {
   readonly cancelPending: () => Promise<boolean>;
   /** The event ids of team appends; tests inject deterministic ones. */
   readonly mint?: (seq: number, now: number) => string;
+  /** The host's messagePolicy rules with this agent as `from`; none outside a host. */
+  readonly rules?: readonly MessagePolicyRule[];
 };
 
 /** A batch the cancel barrier refused: nothing of the work it would start was recorded. */

@@ -9,6 +9,7 @@ import { type CallContext, callRequest, named } from "../../team/call";
 import { cancel } from "../../team/cancel";
 import { readerOf } from "../../team/close";
 import { send, start } from "../../team/ops";
+import { ruleFor } from "../../team/policy";
 import { monitor, wait } from "../../team/watch";
 import {
   AskInput,
@@ -52,6 +53,7 @@ async function decided(
       call,
       put: (text) => s.store(text, "text/plain"),
       read: readerOf(s.artifacts),
+      rules: team.rules ?? [],
     });
     return ok(batch.drafts);
   });
@@ -71,21 +73,24 @@ export async function startTool(
 ): Promise<Halt | undefined> {
   const team = teamOf(s);
   const args = StartInput.parse(call.data.input);
+  const starter = starterOf(s);
   const { pinned, resolved } = await startPin(
     team.pin,
     s.artifacts,
     args,
-    starterOf(s),
+    starter,
   );
+  // A model start has no budget of its own, so the member's is the rule's alone (lane 29C).
+  const cap = ruleFor(team.rules ?? [], starter, args.agent, "start")?.budget;
   // Read before the append: the run budget's lookup reads the store outside its transaction.
   const covers = await covering(s);
   return decided(s, call, async (ctx) =>
     start(await callRequest(ctx), args, {
-      agents: listedOf(args.agent, pinned),
+      agents: listedOf(args.agent, pinned, cap),
       resolved,
       limits: team.limits,
       headroom: async (_agent, tx) =>
-        pinned !== undefined && (await roomFor(s, pinned, covers, tx)),
+        pinned !== undefined && (await roomFor(s, pinned, covers, tx, cap)),
       threadId: ThreadId.parse(uuidv7(s.now())),
     }),
   );

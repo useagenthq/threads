@@ -88,6 +88,7 @@ export { sweepArtifacts } from "./store/retention";
 export { parseRows } from "./store/tables";
 export { inputText, UI_RECEIPT, uiBodyHash } from "./store/ui-receipts";
 export { pendingWakes, wakeBranches } from "./store/wakes";
+export { checkMessagePolicy, rulesFrom } from "./team/policy";
 export { bindTelemetry } from "./telemetry";
 export { cancelChildren } from "./thread/cancel";
 export { type Alongside, control, resumed } from "./thread/control";

@@ -13,6 +13,7 @@ from threads.loop.covering import Covering
 from threads.team.batch import Mint
 from threads.team.dynamic import Choice, Template
 from threads.team.ops import TeamLimits
+from threads.team.policy import MessagePolicyRule
 
 if TYPE_CHECKING:
     from threads.loop.runtime import Appended, Runtime
@@ -79,3 +80,5 @@ class TeamRuntime:
     recipient: "Callable[[MemberRow], Awaitable[TeamRecipient | None]] | None" = None
     """An asked member's budgets, read from its log (or its pinned config while starting); None:
     no budget is known, and ask's headroom holds."""
+    rules: tuple[MessagePolicyRule, ...] = ()
+    """The host's message_policy rules with this agent as `from`; none outside a host."""

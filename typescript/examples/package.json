@@ -4,7 +4,10 @@
   "license": "Apache-2.0",
   "type": "module",
   "dependencies": {
+    "@threads/anthropic": "workspace:*",
     "@threads/core": "workspace:*",
+    "@threads/host": "workspace:*",
+    "@threads/slack": "workspace:*",
     "zod": "^4.6.5"
   }
 }

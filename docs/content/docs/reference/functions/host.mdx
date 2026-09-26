@@ -20,6 +20,7 @@ function host(options: {
   telemetry?: Exporter;
   schedules?: readonly Schedule[];
   authenticate?: (request: Request) => Promise<Principal | null>;
+  messagePolicy?: readonly MessagePolicyRule[];
 }): Host
 ```
 
@@ -36,6 +37,7 @@ def host(
     telemetry: Exporter | None = None,
     schedules: Sequence[Schedule] = (),
     authenticate: Callable[[starlette.requests.Request], Awaitable[Principal | None]] | None = None,
+    message_policy: Sequence[MessagePolicyRule] = (),
 ) -> Host
 ```
 
@@ -74,6 +76,10 @@ def host(
 
 <Field name="authenticate(request)" type={"Request"} required>
   The incoming HTTP request, to read its headers or cookies: a fetch Request in TypeScript, a Starlette Request in Python.
+</Field>
+
+<Field name="messagePolicy / message_policy" type={"readonly MessagePolicyRule[]"} default={"[]"}>
+  Rules that let one host agent start, send to, ask, monitor or cancel another beyond what a team grants (wait is decided as monitor). They decide after a team's grant and before default deny, for every op of every sender, and only add. Each (from, to) pair appears once (a repeat is refused at setup with duplicate_name), so a logged decision names its rule by from and to. A from or to that names no host agent is refused at setup (invalid_config); so is an empty allow, a rule to a host member that allows start, monitor or cancel, and a rule between host members that allows anything but send or ask (invalid_config, naming the rule). An agent gets the team tools only for the ops some rule with it as from allows. A rule that allows start makes its from a lead; one whose rules target only host members makes it a caller, in no team. Default []: everything else is denied. Every decision is logged as message_policy_decided.
 </Field>
 
 ## Returns

@@ -149,6 +149,7 @@
     "types/TeamCursor",
     "types/TeamSource",
     "types/TeamItem",
-    "types/StoreCorruptError"
+    "types/StoreCorruptError",
+    "types/MessagePolicyRule"
   ]
 }

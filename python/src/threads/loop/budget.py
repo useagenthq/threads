@@ -270,20 +270,27 @@ async def inherited_by(rt: Runtime) -> list[Covering]:
     ]
 
 
-async def room_for(rt: Runtime, member: TeamAgentPin) -> bool:
-    """start's headroom: every budget that would cover the new member (the starter's, and the
-    member's own) has room for one request of its model. A limit it can't bound has none."""
-    return await start_room(rt.store.budgets, await covering_of(rt), member)
+async def room_for(rt: Runtime, member: TeamAgentPin, cap: Budget | None = None) -> bool:
+    """start's headroom: every budget that would cover the new member (the starter's, the
+    member's own and the start's cap) has room for one request of its model. A limit it can't
+    bound has none."""
+    return await start_room(rt.store.budgets, await covering_of(rt), member, cap)
 
 
 async def start_room(
-    budgets: BudgetLedger, starter: Sequence[Covering], member: TeamAgentPin
+    budgets: BudgetLedger,
+    starter: Sequence[Covering],
+    member: TeamAgentPin,
+    cap: Budget | None = None,
 ) -> bool:
-    """Whether `starter` (every budget covering whoever starts the member) and the member's own
-    budget have room for one request of its model. An operator start's starter is the lead."""
+    """Whether `starter` (every budget covering whoever starts the member), the member's own
+    budget and the start's cap have room for one request of its model. An operator start's
+    starter is the lead."""
     covering = list(starter)
     if member.budget is not None:
         covering.append(Covering("member", member.budget, "thread"))
+    if cap is not None:
+        covering.append(Covering("start", cap, "thread"))
     return await _fits(budgets, covering, member.policy, member.model, member.params)
 
 

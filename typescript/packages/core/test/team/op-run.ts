@@ -72,7 +72,10 @@ async function callOp(w: Writer, v: Op): Promise<unknown> {
   if (call === undefined) throw new Error(`no call ${callId}`);
   let out: unknown;
   await decided(w, async (ctx) => {
-    out = await modelOp({ ...ctx, call, put, read }, v);
+    out = await modelOp(
+      { ...ctx, call, put, read, rules: v.given.rules ?? [] },
+      v,
+    );
   });
   if (out !== undefined) return out;
   const result = knownEvents(w.chain).findLast((e) => e.type === "tool_result");

@@ -1,3 +1,4 @@
+export type { MessagePolicyRule } from "../team/policy";
 export {
   type Agent,
   type AgentOptions,

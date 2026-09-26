@@ -26,6 +26,7 @@ from threads.store.lines import Draft
 from threads.team.batch import Batch
 from threads.team.dynamic import InvalidDefinition
 from threads.team.mail import PutText
+from threads.team.policy import MessagePolicyRule, rule_for
 from threads.team.provenance import turn_provenance
 from threads.team.request import PolicyOp, Request, Target
 from threads.team.rows import MemberRow, TeamRow, member_named, own_rows, ref_of, team_row
@@ -45,6 +46,8 @@ class CallContext:
     call: ToolCallEvent
     put: PutText
     read: ReadText
+    rules: tuple[MessagePolicyRule, ...] = ()
+    """The host's message_policy rules with the calling agent as `from`; none outside a host."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,22 +94,41 @@ def causal_of(ctx: CallContext) -> JsonValue:
     return {"thread_id": ctx.call.thread_id, "event_id": ctx.call.event_id}
 
 
+@dataclass(frozen=True, slots=True)
+class Decision:
+    """What decided an op: the team's grant, a host rule that adds to it, or default deny."""
+
+    source: Literal["team", "message_policy", "default"]
+    rule: MessagePolicyRule | None = None
+    """message_policy only: the rule, named by its from and to."""
+
+
+def decision(ctx: CallContext, caller: Caller, op: PolicyOp, target: str) -> Decision:
+    """The decision order (spec/api.json host.message_policy): the team's grant, then the host's
+    rules, which only add, then default deny."""
+    if _granted(ctx, caller, op, target):
+        return Decision("team")
+    rule = rule_for(ctx.rules, caller.row.agent, target, op)
+    return Decision("default") if rule is None else Decision("message_policy", rule)
+
+
 def decide(
     ctx: CallContext,
-    op: Literal["start", "send", "ask", "monitor", "cancel"],
+    op: PolicyOp,
     target: str,
-    *,
-    allow: bool,
+    decided: Decision,
 ) -> Refusal | None:
-    """Phase 1 policy: the team's grant (source team), else default deny, which refuses
-    forbidden. The decision is recorded either way."""
+    """Records the decision; default deny refuses forbidden."""
+    allow = decided.source != "default"
     data: dict[str, JsonValue] = {
         "op": op,
         "decision": "allow" if allow else "deny",
-        "source": "team" if allow else "default",
+        "source": decided.source,
         "target": target,
         "call_id": ctx.call.data.call_id,
     }
+    if decided.rule is not None:
+        data["rule"] = {"from": decided.rule["from"], "to": decided.rule["to"]}
     ctx.batch.add(Draft("message_policy_decided", data))
     return None if allow else Refusal("forbidden")
 
@@ -156,7 +178,7 @@ def call_request(ctx: CallContext) -> Request:
     caller = caller_of(ctx)
 
     def decide_(op: PolicyOp, target: str) -> Refusal | None:
-        return decide(ctx, op, target, allow=_granted(ctx, caller, op, target))
+        return decide(ctx, op, target, decision(ctx, caller, op, target))
 
     def parent(started_id: str) -> JsonValue:
         return {

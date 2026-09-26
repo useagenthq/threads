@@ -1,0 +1,25 @@
+---
+title: "MessagePolicyRule"
+description: "One host messagePolicy rule."
+icon: "Braces"
+---
+
+Anything no rule or team grant allows is denied.
+
+## Fields
+
+<Field name="from" type={"Name"} required>
+  The acting agent.
+</Field>
+
+<Field name="to" type={"Name"} required>
+  The target agent.
+</Field>
+
+<Field name="allow" type={"readonly (\"start\" | \"send\" | \"ask\" | \"monitor\" | \"cancel\")[]"} required>
+  What from may do to to; wait is monitor.
+</Field>
+
+<Field name="budget" type={"Budget"}>
+  Caps each member from starts, whose budget is the smaller of this and start's; and caps each turn that a send or ask to a host member opens, reserved under hop:&lt;member branch_id>:&lt;turn opener event_id> beside the member's and the request's own budgets (a hop cap ends only that turn). A host member reserves against no caller's thread budget: the caller pays through its run budget. Omitted: no cap beyond the agent's own.
+</Field>

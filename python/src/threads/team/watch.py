@@ -18,6 +18,7 @@ from threads.team.call import (
     call_request,
     caller_of,
     decide,
+    decision,
     named,
     recorded,
 )
@@ -133,7 +134,9 @@ def monitor(ctx: CallContext, member: str) -> JsonValue:
     observation and the ended result at once, else an end monitor row whose firing opens a turn
     when idle."""
     caller = caller_of(ctx)
-    decide(ctx, "monitor", member, allow=True)
+    denied = decide(ctx, "monitor", member, decision(ctx, caller, "monitor", member))
+    if denied is not None:
+        return recorded(ctx, denied)
     row = addressed(ctx, caller, member)
     if isinstance(row, Refusal):
         return recorded(ctx, row)

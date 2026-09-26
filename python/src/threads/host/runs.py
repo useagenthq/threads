@@ -8,7 +8,7 @@ in flight is one task per branch; a resume starts one only when none is in fligh
 
 import asyncio
 import contextlib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from weakref import WeakKeyDictionary
 
@@ -21,6 +21,7 @@ from threads.agents.store import Store, open_store, scoped
 from threads.host.channel import ChannelAdapter
 from threads.host.deliver import deliver, undelivered
 from threads.host.emit import Emit
+from threads.host.policy import ruled
 from threads.host.send import Conversation, SendServer
 from threads.host.ui.hub import LiveHub
 from threads.log import (
@@ -37,6 +38,7 @@ from threads.reduce.fold import loop_parked
 from threads.result import Ok
 from threads.secrets import resolve
 from threads.store import SqliteStore, StoreError
+from threads.team.policy import MessagePolicyRule
 from threads.thread import tree
 from threads.thread.authority import Checked
 from threads.thread.handle import Thread
@@ -73,12 +75,17 @@ class Runner:
         agents: Mapping[str, Agent[None, object]],
         channels: Mapping[str, ChannelAdapter],
         ceiling: Permissions | None = None,
+        message_policy: Sequence[MessagePolicyRule] = (),
     ) -> None:
         self._root = root
         self._ceiling = ceiling
         self._agents = agents
+        # Every agent runs under the host's rules: they decide its team calls, give it its team
+        # tools and, with a start rule, make it a lead (lane 29C). One definition per host, so a
+        # thread's pin and its continuations see the same rules.
+        self._defs = ruled(agents, message_policy)
         # A thread a host answers for (a channel conversation, an API call) is offered ask_user.
-        self._answering = {k: replace(a.definition, answerer=True) for k, a in agents.items()}
+        self._answering = {k: replace(d, answerer=True) for k, d in self._defs.items()}
         self._channels = channels
         self._stores: dict[str, Store] = {}
         self._credentials: dict[str, Mapping[str, str]] = {}
@@ -125,7 +132,7 @@ class Runner:
         self, key: str, *, channel: Conversation | None = None, answerer: bool = False
     ) -> Bound:
         """An agent key's binding; `answerer` offers ask_user (a channel or API thread)."""
-        definition = self._answering[key] if answerer else self._agents[key].definition
+        definition = self._answering[key] if answerer else self._defs[key]
         return Bound(definition, channel)
 
     async def bound(self, store: Store, thread_id: ThreadId) -> Bound | None:

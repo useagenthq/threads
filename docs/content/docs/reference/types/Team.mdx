@@ -25,6 +25,7 @@ Starts a member from an agent the team lists, with task as its first input. Reco
 
 ```ts
 start(agent: Name, task: string, options?: {
+  budget?: Budget;
   label?: string;
   instructions?: string;
   tools?: readonly string[];
@@ -41,6 +42,7 @@ async def start(
     agent: Name,
     task: str,
     *,
+    budget: Budget | None = None,
     label: str | None = None,
     instructions: str | None = None,
     tools: Sequence[str] | None = None,
@@ -58,6 +60,10 @@ async def start(
 
 <Field name="task" type={"string"} required>
   The member's first input; it sees nothing else.
+</Field>
+
+<Field name="budget" type={"Budget"}>
+  The member's own budget, capped by policy. Omitted: the agent's own budget.
 </Field>
 
 <Field name="label" type={"string"}>
