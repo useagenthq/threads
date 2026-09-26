@@ -126,6 +126,20 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         )
 
 
+def _stream[D](
+    sq: SqliteStore,
+    writer: Writer,
+    definition: Definition[D],
+    emit: Emit,
+    on_delta: OnDelta | None,
+) -> RunStream:
+    """The run's stream, with the observer pump already poked for this branch."""
+    observers = {e.name: e.on for e in definition.extensions}
+    pump = ObserverPump(sq.cursors, writer.branch_id, lambda: writer.fold.events, observers)
+    pump.poke()
+    return RunStream(emit, pump, on_delta)
+
+
 async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
     definition: Definition[D],
     input: Input | None,
@@ -164,10 +178,7 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
         sandbox = definition.sandbox or (None if thread is None else thread.sandbox)
         handle = Thread(thread_id, writer.branch_id, store, sandbox=sandbox)
         ctx = RunContext(deps, handle.id, handle.branch, principal)
-        observers = {e.name: e.on for e in definition.extensions}
-        pump = ObserverPump(sq.cursors, writer.branch_id, lambda: writer.fold.events, observers)
-        pump.poke()
-        stream = RunStream(emit, pump, on_delta)
+        stream = _stream(sq, writer, definition, emit, on_delta)
         box = definition.sandbox
         shared = None if launch is None else launch.shared
         builtins = shared or (
