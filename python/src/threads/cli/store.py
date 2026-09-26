@@ -3,7 +3,6 @@ the typed API or the store (7 and 8)."""
 
 import json
 import sys
-from pathlib import Path
 
 from threads.adapters.loop_resources import holding
 from threads.agents.store import Store, now_ms, open_store, scoped, sqlite
@@ -13,10 +12,11 @@ from threads.log.jcs import canonicalize
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.sandbox.ledger import gc as release
-from threads.store import deletion, retention, verify_export
+from threads.store import deletion, retention
 from threads.store.lines import uuid7
 from threads.store.sql import text_of
 from threads.thread.handle import open_thread
+from threads.thread.importing import import_thread
 
 
 def store_at(path: str) -> Store:
@@ -53,9 +53,12 @@ async def timeline(path: str, tenant: str, thread: str, branch: str | None) -> i
     return 0
 
 
-async def export(path: str, tenant: str, branch: str) -> int:
-    """The branch's JSONL export, the stored bytes one line each, ending with its head."""
-    sq = await open_store(_store(path, tenant))
+async def export(path: str, tenant: str, branch: str, bundle: str | None = None) -> int:
+    """The branch's JSONL export on stdout, or, with --bundle, a portable bundle directory."""
+    store = _store(path, tenant)
+    if bundle is not None:
+        return await _bundle(store, BranchId(branch), bundle)
+    sq = await open_store(store)
     lines = await sq.export(BranchId(branch))
     if isinstance(lines, Err):
         return _fail(f"{lines.error.code}: {lines.error.message}")
@@ -63,16 +66,32 @@ async def export(path: str, tenant: str, branch: str) -> int:
     return 0
 
 
+async def _bundle(store: Store, branch: BranchId, into: str) -> int:
+    """`--bundle`: Thread.export, the public method, and nothing else."""
+    sq = await open_store(store)
+    read = await sq.read(branch, now_ms())
+    if isinstance(read, Err):
+        return _fail(f"{read.error.code}: {read.error.message}")
+    thread_id = read.value.fold.thread_id
+    if thread_id is None:
+        return _fail(f"branch_not_found: no branch {branch}")
+    opened = await open_thread(store, thread_id, branch_id=branch)
+    if isinstance(opened, Err):
+        return _fail(f"{opened.error.code}: {opened.error.message}")
+    written = await opened.value.export(into)
+    if isinstance(written, Err):
+        return _fail(f"{written.error.code}: {written.error.message}")
+    print(written.value.path)
+    return 0
+
+
 async def import_(path: str, tenant: str, file: str) -> int:
-    """Verifies an export and stores its exact bytes."""
-    verified = verify_export(Path(file).read_bytes(), now_ms())
-    if isinstance(verified, Err):
-        return _fail(f"{verified.error.code} at seq {verified.error.seq}: {verified.error.message}")
-    sq = await open_store(_store(path, tenant))
-    stored = await sq.import_log(verified.value)
+    """Verifies a bundle or a bare export and stores its exact bytes."""
+    stored = await import_thread(_store(path, tenant), file)
     if isinstance(stored, Err):
-        return _fail(f"{stored.error.code}: {stored.error.message}")
-    print(verified.value.segments[-1].header.branch_id)
+        seq = "" if stored.error.seq is None else f" at seq {stored.error.seq}"
+        return _fail(f"{stored.error.code}{seq}: {stored.error.message}")
+    print(stored.value.branch)
     return 0
 
 
