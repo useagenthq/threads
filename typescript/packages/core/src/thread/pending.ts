@@ -156,15 +156,15 @@ function shellWords(text: string): readonly string[] | undefined {
   );
 }
 
-// ponytail: every branch reports mode live; a stub fork records no mode yet.
-export function branchInfo(row: ListedBranch): BranchInfo {
+/** `stub` when the branch's resolved chain holds a stub fork: every run of it is stubbed. */
+export function branchInfo(row: ListedBranch, stub: boolean): BranchInfo {
   return {
     branch_id: row.branch_id,
     ...(row.parent_branch_id === null
       ? {}
       : { parent_branch_id: row.parent_branch_id }),
     ...(row.fork_at_seq === null ? {} : { fork_at_seq: row.fork_at_seq }),
-    mode: "live",
+    mode: stub ? "stub" : "live",
     runnable: row.state === "ready",
   };
 }

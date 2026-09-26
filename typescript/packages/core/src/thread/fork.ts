@@ -1,4 +1,4 @@
-import type { BranchId, EventId } from "../log";
+import type { ArtifactRef, BranchId, EventId } from "../log";
 import { knownEvents } from "../reduce";
 import { err, ok, type Result } from "../result";
 import { isRefusal, ownerContext } from "../sandbox/context";
@@ -15,8 +15,15 @@ import type {
   SandboxSession,
   SnapshotData,
 } from "../sandbox/protocol";
-import type { LogStore, ResourceRow, ResourceState, Writer } from "../store";
+import type {
+  ArtifactStore,
+  LogStore,
+  ResourceRow,
+  ResourceState,
+  Writer,
+} from "../store";
 import { type LogError, logError } from "../verify/error";
+import { encodeStubScript, stubScript } from "./case-files";
 
 // fork(): a new branch restored into an isolated sandbox, and only then
 // visible. The child's ledger row and its operation key are durable before the restore call; a
@@ -30,6 +37,8 @@ export type ForkInput = {
   readonly child: BranchId;
   readonly knowledge: KnowledgePolicy;
   readonly holderId: string;
+  /** "stub": freeze the parent's mediated calls after the fork point onto the fork event. */
+  readonly mode: "live" | "stub";
 };
 
 /** The snapshot event `point` names on the parent's chain, or no_snapshot_boundary. */
@@ -55,11 +64,16 @@ async function snapshotAt(log: LogStore, input: ForkInput) {
 /** Creates the child branch, restores its sandbox, and makes it ready; else fails it cleanly. */
 export async function forkBranch(
   log: LogStore,
+  artifacts: ArtifactStore,
   sandbox: Sandbox | undefined,
   input: ForkInput,
 ): Promise<Result<void, LogError>> {
   const at = await snapshotAt(log, input);
   if (!at.ok) return at;
+  // The script is frozen before the child exists, so a missing or corrupt parent artifact fails
+  // the fork and leaves no branch behind (ADR 0010: a stub run never falls back to live).
+  const frozen = await freeze(log, artifacts, input, at.value.seq);
+  if (!frozen.ok) return frozen;
   const writer = await log.beginFork({
     parent: input.parent,
     atSeq: at.value.seq,
@@ -90,6 +104,32 @@ export async function forkBranch(
   return log.finishFork(writer.value, {
     sandboxId: restored.value.id,
     knowledgePolicy: input.knowledge,
+    ...(frozen.value === undefined ? {} : { stubScriptRef: frozen.value }),
+  });
+}
+
+/**
+ * A stub fork's frozen script: the parent's mediated calls after the fork point, each with its
+ * complete verified output, stored as an artifact before the fork event names it. A live fork
+ * freezes nothing, so old forks and live ones are byte-identical to before.
+ */
+async function freeze(
+  log: LogStore,
+  artifacts: ArtifactStore,
+  input: ForkInput,
+  atSeq: number,
+): Promise<Result<ArtifactRef | undefined, LogError>> {
+  if (input.mode !== "stub") return ok(undefined);
+  const parent = await log.read(input.parent);
+  if (!parent.ok) return parent;
+  const after = knownEvents(parent.value).filter((e) => e.seq > atSeq);
+  const script = await stubScript(after, artifacts);
+  if (!script.ok) return script;
+  const bytes = encodeStubScript(script.value);
+  return ok({
+    sha256: await artifacts.put(bytes),
+    bytes: bytes.length,
+    media_type: "application/json",
   });
 }
 

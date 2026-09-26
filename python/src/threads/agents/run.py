@@ -54,6 +54,7 @@ from threads.hooks.observers import ObserverPump
 from threads.log import (
     BranchId,
     Budget,
+    Event,
     InputPart,
     ParseError,
     Permissions,
@@ -73,6 +74,7 @@ from threads.sandbox.tree.tree import Tree
 from threads.store import SqliteStore, Writer
 from threads.store.lines import uuid7
 from threads.thread.control import LOCAL_OPERATOR
+from threads.thread.frozen_stubs import frozen_stubs, stub_fork_ref
 from threads.tools import ReadResults, SandboxTools
 from threads.tools.specs import SKILL
 
@@ -115,11 +117,12 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
     intake: Intake | None = None,
     member: MemberRun | None = None,
     on_delta: OnDelta | None = None,
+    stubs: tuple[Stub, ...] | None = None,
 ) -> RunResult[str]:
     # The run holds its loop's adapter connections; the last holder on a loop closes them.
     async with holding():
         return await _execute(
-            definition, input, options, deps, emit, on_delta, launch, intake, member
+            definition, input, options, deps, emit, on_delta, launch, intake, member, stubs
         )
 
 
@@ -133,6 +136,7 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
     launch: Launch | None,
     intake: Intake | None,
     member: MemberRun | None,
+    stubs: tuple[Stub, ...] | None = None,
 ) -> RunResult[str]:
     await _set_up(definition, options.get("budget"))
     store, sq, thread = await _where(options.get("store"), options.get("thread"))
@@ -179,9 +183,12 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
         if definition.skills:
             routes[SKILL] = SkillLoader(definition.skills)
         app = AppTools(definition.tools, ctx)
+        frozen = await _stubs(sq, writer.fold.events, launch, stubs)
+        if isinstance(frozen, Err):
+            return Failed(RunError(_refusal(frozen.error), frozen.error.message), handle)
         tools = stub_mode(
             Routed(builtins, results, app, provided, ext, gateways=routes),
-            _stubs(thread, launch),
+            frozen.value,
             definition.model.info,
             sealed=box is not None
             and box.info.egress == "enforced"
@@ -192,7 +199,7 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
             principal,
             store,
             sq,
-            _child_runner(store, _stubs(thread, launch)),
+            _child_runner(store, frozen.value),
             _ceilings(options, launch),
             builtins,
             None if launch is None else launch.team,
@@ -348,11 +355,19 @@ def _refusal(error: ParseError) -> RunErrorCode:
     return "branch_busy" if error.code in ("branch_busy", "stale_epoch") else "branch_not_runnable"
 
 
-def _stubs(thread: Thread | None, launch: Launch | None) -> tuple[Stub, ...] | None:
-    """Stub mode comes with the thread handle, or with the launch of a stub run's child."""
-    if thread is not None:
-        return thread.stubs
-    return None if launch is None else launch.stubs
+async def _stubs(
+    sq: SqliteStore, chain: Sequence[Event], launch: Launch | None, given: tuple[Stub, ...] | None
+) -> Ok[tuple[Stub, ...] | None] | Err[ParseError]:
+    """Stub mode comes from the branch's own stub fork first: its frozen script is the durable
+    record of how this branch runs. Otherwise from the launch of a stub run's child, or from a
+    live eval's recorded case."""
+    ref = stub_fork_ref(chain)
+    if ref is not None:
+        data = await sq.get_artifact(ref.sha256)
+        return data if isinstance(data, Err) else frozen_stubs(chain, data.value)
+    if launch is not None and launch.stubs is not None:
+        return Ok(launch.stubs)
+    return Ok(given)
 
 
 def _child_runner(store: Store, stubs: tuple[Stub, ...] | None) -> Execute:

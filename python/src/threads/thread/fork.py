@@ -47,6 +47,8 @@ class ForkAt:
     """The snapshot event."""
     child: BranchId
     knowledge: KnowledgePolicy = "pinned"
+    stub_script_ref: "JsonValue" = None
+    """A stub fork's frozen script (an ArtifactRef), durable before the fork event names it."""
 
 
 async def fork_branch(
@@ -78,6 +80,9 @@ async def fork_branch(
         "sandbox_id": session.id,
         "knowledge_policy": at.knowledge,
     }
+    if at.stub_script_ref is not None:
+        data["mode"] = "stub"
+        data["stub_script_ref"] = at.stub_script_ref
     finished = await store.finish_fork(forking, data, clock)
     if isinstance(finished, Ok) and finished.value is not None:
         return Ok(finished.value)

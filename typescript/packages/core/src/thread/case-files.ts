@@ -1,8 +1,10 @@
 import type { SandboxResult, SandboxResults } from "../evals/files";
 import { sha256Hex } from "../hash";
 import { canonicalize, type KnownEvent } from "../log";
+import { err, ok, type Result } from "../result";
 import type { ArtifactStore } from "../store";
 import { isLoopTool } from "../tools/loop-tools";
+import { type LogError, logError } from "../verify/error";
 
 // The scripts a saved case replays its turn against (spec/conformance/case.schema.json
 // ModelScript, StubScript, SandboxScript v2), read off the recorded turn. Built from typed
@@ -54,22 +56,35 @@ function resultOf(
   );
 }
 
-/** A mediated call's full recorded output: the committed artifact, else the result preview. */
+/**
+ * A mediated call's complete recorded output. A committed one is read from its artifact and
+ * verified (sha256 by the store, length here): a missing or corrupt one is an error naming the
+ * call, never the truncated preview. A call with no `effect_commit` committed no output at all
+ * (nothing was sent, or it failed), so its result preview is the whole recorded output.
+ */
 async function outputOf(
   turn: readonly KnownEvent[],
   callId: string,
   artifacts: ArtifactStore,
-): Promise<string> {
+): Promise<Result<string, LogError>> {
   const commit = turn.find(
     (e): e is Of<"effect_commit"> =>
       e.type === "effect_commit" && e.data.call_id === callId,
   );
-  const bytes =
-    commit === undefined
-      ? undefined
-      : await artifacts.get(commit.data.result_ref.sha256);
-  if (bytes?.ok === true) return new TextDecoder().decode(bytes.value);
-  return resultOf(turn, callId)?.data.preview ?? "";
+  if (commit === undefined)
+    return ok(resultOf(turn, callId)?.data.preview ?? "");
+  const ref = commit.data.result_ref;
+  const bytes = await artifacts.get(ref.sha256);
+  if (!bytes.ok)
+    return err(logError(bytes.error.code, `${callId}: ${bytes.error.message}`));
+  if (bytes.value.length !== ref.bytes)
+    return err(
+      logError(
+        "artifact_corrupt",
+        `${callId}: artifact ${ref.sha256} is ${bytes.value.length} bytes, not ${ref.bytes}`,
+      ),
+    );
+  return ok(new TextDecoder().decode(bytes.value));
 }
 
 const begun = (turn: readonly KnownEvent[], callId: string): boolean =>
@@ -82,11 +97,15 @@ export function argsHash(input: Of<"tool_call">["data"]["input"]): string {
   return sha256Hex(args.value);
 }
 
-/** Every mediated call (one with effect events) as a stub, by (tool, args_hash, occurrence). */
+/**
+ * Every mediated call (one with effect events) as a stub, by (tool, args_hash, occurrence), each
+ * holding its complete verified output. A stub fork freezes this as an artifact and a saved case
+ * writes it as stubs.json, so both carry the same guarantee.
+ */
 export async function stubScript(
   turn: readonly KnownEvent[],
   artifacts: ArtifactStore,
-): Promise<StubScriptFile> {
+): Promise<Result<StubScriptFile, LogError>> {
   const seen = new Map<string, number>();
   const stubs: StubScriptFile["stubs"][number][] = [];
   for (const e of turn) {
@@ -95,15 +114,26 @@ export async function stubScript(
     const key = `${e.data.name}\n${hash}`;
     const occurrence = seen.get(key) ?? 0;
     seen.set(key, occurrence + 1);
+    const output = await outputOf(turn, e.data.call_id, artifacts);
+    if (!output.ok) return output;
     stubs.push({
       tool: e.data.name,
       args_hash: hash,
       occurrence,
-      output: await outputOf(turn, e.data.call_id, artifacts),
+      output: output.value,
       is_error: resultOf(turn, e.data.call_id)?.data.is_error ?? false,
     });
   }
-  return { stubs };
+  return ok({ stubs });
+}
+
+/** The script's artifact bytes: RFC 8785 canonical JSON, the same bytes in both languages. */
+export function encodeStubScript(script: StubScriptFile): Uint8Array {
+  const text = canonicalize({
+    stubs: script.stubs.map((stub) => ({ ...stub })),
+  });
+  if (!text.ok) throw new Error("a stub script is JSON");
+  return new TextEncoder().encode(text.value);
 }
 
 /**
