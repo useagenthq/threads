@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/hero-dark.svg">
-  <img alt="threads: Agents you can replay, fork and trust." src=".github/assets/hero-light.svg" width="100%">
+  <img alt="threads: Agents you can inspect, replay and trust." src=".github/assets/hero-light.svg" width="100%">
 </picture>
 
 <h3>An agent framework for TypeScript and Python, built on an append-only event log.</h3>

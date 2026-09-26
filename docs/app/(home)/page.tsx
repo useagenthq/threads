@@ -157,12 +157,12 @@ function Hero() {
           Alpha · Open source · Apache-2.0
         </Link>
         <h1 className="max-w-4xl text-4xl leading-[1.08] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
-          Agents you can <span className="text-fd-primary">replay</span>,{" "}
-          <span className="text-fd-primary">fork</span> and <span className="text-fd-primary">trust</span>.
+          Agents you can <span className="text-fd-primary">inspect</span>,{" "}
+          <span className="text-fd-primary">replay</span> and <span className="text-fd-primary">trust</span>.
         </h1>
         <p className="mt-6 max-w-2xl text-base leading-7 text-pretty text-fd-muted-foreground sm:text-lg">
-          {tagline} Sandboxes, channels, memory, hooks and evals come built in. You write what your agent does
-          and add your API keys.
+          Build in TypeScript or Python on an append-only event log. Inspect model calls, tool effects and
+          approvals; use built-in sandboxes, channels, memory and evals.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link
