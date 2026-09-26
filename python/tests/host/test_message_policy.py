@@ -211,5 +211,11 @@ def test_the_rules_budget_is_the_started_members_own() -> None:
         events = await branch_events(store, branch)
         member = next(e for e in events if isinstance(e, MemberStartedEvent))
         assert member.data.model_dump(mode="json")["budget"] == {"max_model_requests": 3}
+        # And it covers the member: every request of its turns reserves against the cap.
+        sq = await open_store(scoped(store, "acme"))
+        reserved = await sq.run(
+            lambda c: c.execute("SELECT DISTINCT budget_id FROM budget_ledger").fetchall()
+        )
+        assert (f"start:{member.event_id}",) in reserved
 
     run(main)
