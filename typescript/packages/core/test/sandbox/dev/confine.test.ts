@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -94,19 +94,36 @@ withConfinement("a confined command", () => {
       }),
     );
     const text = new TextDecoder().decode(await joined(output.stdout));
+    const lines = text.trim() === "" ? [] : text.trim().split("\n");
     expect(await output.exit_code).toBe(0);
-    expect(text.trim().split("\n").toSorted()).toEqual(["GREETING=hello"]);
+    // Names, not values: a CI log masks a value that matches one of its own secrets, so a leak
+    // has to be named to be readable at all.
+    expect(lines.map((line) => line.split("=")[0]).toSorted()).toEqual([
+      "GREETING",
+    ]);
+    expect(lines).toContain("GREETING=hello");
   });
 
-  test("writes only inside its own workspace", async () => {
+  test("writes only inside its own workspace, and the host is unchanged", async () => {
     const session = await box();
     expect((await ran(session, "echo made > made.txt")).code).toBe(0);
     expect(unwrap(await session.download("/workspace/made.txt", CTX))).toEqual(
       new TextEncoder().encode("made\n"),
     );
-    // The sandbox's directory is the only writable place the host shares with it.
-    const elsewhere = await ran(session, "echo x > /threads-escape.txt 2>&1");
-    expect(elsewhere.code).not.toBe(0);
+
+    // The promise is that the host is unchanged, not that every write fails. bwrap gives the
+    // command a private tmpfs root, so a write outside /workspace can succeed inside and go
+    // away with the sandbox; sandbox-exec has no root to replace and refuses it instead. This
+    // asserts the part that has to hold on either platform: the dev root is writable by this
+    // user on the host, so a file appearing there would be a real escape.
+    const outside = join(ROOT, "threads-escape.txt");
+    const escaped = await ran(
+      session,
+      `echo x > ${JSON.stringify(outside)} 2>&1; echo done`,
+    );
+    expect(escaped.out).toContain("done");
+    expect(existsSync(outside)).toBe(false);
+    expect(existsSync("/threads-escape.txt")).toBe(false);
   });
 
   test("can't read a planted home file", async () => {
