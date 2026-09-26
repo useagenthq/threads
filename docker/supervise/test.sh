@@ -8,7 +8,9 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 image="${1:-node:22-bookworm}"
 name="threads-supervise-test"
 supervise=/run/threads/bin/supervise
-arch=$("$docker" version --format '{{.Server.Arch}}')
+# ARCH runs the other architecture's binary under emulation, which is how the amd64 build is
+# exercised from an arm64 machine (and the reverse) without waiting for CI.
+arch="${ARCH:-$("$docker" version --format '{{.Server.Arch}}')}"
 binary="$root/docker/supervise/dist/linux-$arch/supervise"
 fails=0
 
@@ -20,6 +22,14 @@ is() { # is <label> <expected> <actual>
 has() { # has <label> <needle> <haystack>
   case "$3" in *"$2"*) ok "$1" ;; *) bad "$1: [$3] does not contain [$2]" ;; esac
 }
+# The daemon's reply to an exec says only "container is not running", never why it stopped.
+# The supervisor's own die() writes to stderr, so its logs are the answer.
+logs() { "$docker" logs "$name" 2>&1 | tail -20; }
+alive() {
+  [ "$("$docker" inspect "$name" --format '{{.State.Running}}' 2>&1)" = true ] && return 0
+  bad "the container is not running: $(logs)"
+  return 1
+}
 in_box() { "$docker" exec "$name" "$@" 2>&1; }
 as_command_uid() { "$docker" exec -u 1000 "$name" "$@" 2>&1; }
 record() { in_box cat "/run/threads/state/records/$1.json"; }
@@ -30,7 +40,8 @@ state_of() { record "$1" | sed -n 's/.*"state":"\([a-z]*\)".*/\1/p'; }
 start_container() {
   "$docker" rm -f "$name" >/dev/null 2>&1
   "$docker" volume rm -f "threads-exec-$name" "threads-ws-$name" >/dev/null 2>&1
-  "$docker" create --name "$name" --init --user 0 --entrypoint "$supervise" \
+  "$docker" create --name "$name" --platform "linux/$arch" \
+    --init --user 0 --entrypoint "$supervise" \
     --read-only --tmpfs /tmp --network none \
     --cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add KILL --cap-add CHOWN \
     --security-opt no-new-privileges --pids-limit 1024 --no-healthcheck \
@@ -44,8 +55,8 @@ start_container() {
   cp "$binary" "$stage/bin/supervise"
   chmod 0700 "$stage/bin/supervise" "$stage/bin" "$stage/state"
   xattr -rc "$stage" 2>/dev/null
-  COPYFILE_DISABLE=1 tar --no-xattrs --uid 0 --gid 0 --uname root \
-    --gname root -cf - -C "$stage" bin state | "$docker" cp - "$name:/run/threads/"
+  COPYFILE_DISABLE=1 tar --no-xattrs --owner=root:0 --group=root:0 \
+    -cf - -C "$stage" bin state | "$docker" cp - "$name:/run/threads/"
   rm -rf "$stage"
   "$docker" start "$name" >/dev/null
   # Admission waits for state/generation, so there is nothing to poll for here.
@@ -53,6 +64,7 @@ start_container() {
 
 echo "== the image is usable and /workspace belongs to the command uid"
 start_container
+alive || { echo; echo "supervisor: the container would not stay up"; exit 1; }
 has "--check reports the image's tools" '"sh":true' "$(in_box $supervise --check)"
 is "/workspace is the command uid's" "1000:1000 755" "$(in_box stat -c '%u:%g %a' /workspace)"
 
@@ -71,8 +83,14 @@ has "the supervisor's binary is root-only" "ermission denied" "$(as_command_uid 
 echo "== the child holds no lock fd"
 # The command is the child, so it can read its own fd directory; root cannot read anyone
 # else's, because every capability but the supervisor's four is dropped.
-is "the command's open files are only its three streams" "0 1 2" \
-  "$(in_box $supervise ab00 5000 sh -c 'ls /proc/$$/fd | tr "\n" " "' | sed 's/ $//')"
+# Asserted by what the descriptors point at, not by how many there are: under emulation Rosetta
+# keeps its own regular files open in the command, which says nothing about the supervisor. What
+# must never appear is the lock, or either of the two pipes the supervisor forked behind.
+# The command lists its own descriptors in one pass and the filtering happens here: a command
+# substitution inside it would open a pipe of its own and report that instead.
+is "no descriptor of the supervisor's reaches the command" "" \
+  "$(in_box $supervise ab00 5000 sh -c 'ls -l /proc/$$/fd' |
+    awk '$(NF - 2) > 2 && ($NF ~ /^pipe:/ || $NF ~ /state\/lock/) { print $(NF - 2) " -> " $NF }')"
 "$docker" exec -d "$name" $supervise ab01 30000 sh -c 'sleep 20'
 sleep 2
 "$docker" exec "$name" $supervise --terminate ab01 >/dev/null 2>&1
@@ -97,7 +115,7 @@ stdin_stage=$(mktemp -d)
 mkdir -p "$stdin_stage/state/stdin"
 printf 'payload' > "$stdin_stage/state/stdin/ae01"
 xattr -rc "$stdin_stage" 2>/dev/null
-COPYFILE_DISABLE=1 tar --no-xattrs --uid 0 --gid 0 --uname root --gname root \
+COPYFILE_DISABLE=1 tar --no-xattrs --owner=root:0 --group=root:0 \
   -cf - -C "$stdin_stage" state | "$docker" cp - "$name:/run/threads/"
 rm -rf "$stdin_stage"
 is "the staged stdin is the command's fd 0" "payload" "$(in_box $supervise ae01 5000 --stdin cat)"
