@@ -143,7 +143,7 @@ describe("team.start and team.send", () => {
   });
 
   test("team.send reaches a started member once; its key replays the outcome", async () => {
-    const { store, team } = await ran();
+    const { store, team, lead: agentLead } = await ran();
     await team.start("writer", "Draft.");
     const first = await team.send(refIn(team, "writer-1"), "Keep it short.", {
       idempotencyKey: "s1",
@@ -181,6 +181,8 @@ describe("team.start and team.send", () => {
       ),
     ).toEqual([undefined, "s1", undefined, undefined]);
     await assertTeamReplays(await logOf(store), team.ref.id);
+    // Held until here: openTeam binds a lead this process defines.
+    expect(agentLead.name).toBe("lead");
   });
 });
 
@@ -219,7 +221,7 @@ describe("the busy bound", () => {
 
 describe("openTeam", () => {
   test("another principal of the tenant acts through its own handle", async () => {
-    const { store, team } = await ran();
+    const { store, team, lead: agentLead } = await ran();
     const opened = unwrap(await openTeam(store, team.ref, { principal: BOB }));
     const started = await opened.start("writer", "Draft.");
     expect(started.status).toBe("started");
@@ -228,12 +230,14 @@ describe("openTeam", () => {
     );
     expect(request?.actor.principal).toEqual(BOB);
     await assertTeamReplays(await logOf(store), team.ref.id);
+    // Held until here: openTeam binds a lead this process defines.
+    expect(agentLead.name).toBe("lead");
   });
 
   test("two leads of one name: openTeam binds the one that ran, by its config_hash", async () => {
-    const { store, team } = await ran();
+    const { store, team, lead: ranLead } = await ran();
     // Defined after the run, with the same name and another team.
-    agent({
+    const competingLead = agent({
       name: "lead",
       model: scriptedModel({ responses: [] }),
       team: [
@@ -247,6 +251,8 @@ describe("openTeam", () => {
       code: "unknown_agent",
     });
     await assertTeamReplays(await logOf(store), team.ref.id);
+    // Held until here: openTeam selects the lead whose config hash ran.
+    expect([ranLead.name, competingLead.name]).toEqual(["lead", "lead"]);
   });
 
   test("a process that doesn't define the lead that ran gets unavailable, and nothing is logged", async () => {
