@@ -7,7 +7,12 @@ import { type Host, host } from "@threads/host";
 const bot = agent({
   name: "support",
   model: scriptedModel({ responses: [] }),
-  sandbox: devSandbox({ root: process.env["THREADS_TEST_DEV_ROOT"] ?? "" }),
+  // A trivial program stands in for the confinement: this host only has to ready,
+  // so the CLI test runs without bubblewrap.
+  sandbox: devSandbox({
+    root: process.env["THREADS_TEST_DEV_ROOT"] ?? "",
+    tool: "/usr/bin/true",
+  }),
 });
 
 const app: Host = host({

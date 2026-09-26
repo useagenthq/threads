@@ -28,6 +28,11 @@ from threads.sandbox.trees import HashOnly, read_tree
 from threads.store.artifacts import MemoryArtifacts
 
 STALE = KitContext(live=False)
+STUB = "/usr/bin/true"
+"""Stands in for the confinement in this file. These cases exercise the ledger, the host path
+walk and the tree, never a confined command, so a trivial program that the probe accepts lets
+them run on any host. The confinement itself is test_dev_confine.py, which skips loudly."""
+
 EXECUTABLE = 0o755
 """The mode an import keeps; a setuid bit above it never survives."""
 
@@ -63,7 +68,7 @@ async def _opened(sandbox: DevSandbox, key: str = "op-1") -> SandboxSession:
 
 
 def test_declarations_have_no_snapshots_a_final_lookup_and_denied_egress(tmp_path: Path) -> None:
-    assert dev_sandbox(root=str(tmp_path)).info == SandboxInfo(
+    assert dev_sandbox(root=str(tmp_path), tool=STUB).info == SandboxInfo(
         provider="dev",
         egress="enforced",
         capture_classes=(),
@@ -75,7 +80,9 @@ def test_declarations_have_no_snapshots_a_final_lookup_and_denied_egress(tmp_pat
 
 
 def test_allow_internet_declares_egress_unenforced(tmp_path: Path) -> None:
-    assert dev_sandbox(root=str(tmp_path), allow_internet=True).info.egress == "unenforced"
+    assert (
+        dev_sandbox(root=str(tmp_path), allow_internet=True, tool=STUB).info.egress == "unenforced"
+    )
 
 
 def test_the_confinement_defaults_to_the_platforms_and_one_that_cannot_run_is_refused(
@@ -95,7 +102,7 @@ def test_the_confinement_defaults_to_the_platforms_and_one_that_cannot_run_is_re
 def test_the_sandbox_directories_live_in_threads_dev_in_the_hosts_temp_directory() -> None:
     async def main() -> None:
         # /usr/bin/true stands in for the confinement, so this runs wherever the tests do.
-        sandbox = dev_sandbox(tool="/usr/bin/true")
+        sandbox = dev_sandbox(tool=STUB)
         session = await _opened(sandbox, "op-default-root")
         try:
             default = Path(os.path.realpath(tempfile.gettempdir())) / "threads-dev"
@@ -108,7 +115,7 @@ def test_the_sandbox_directories_live_in_threads_dev_in_the_hosts_temp_directory
 
 def test_restore_release_and_snapshot_refuse_there_are_no_snapshots(tmp_path: Path) -> None:
     async def main() -> None:
-        sandbox = dev_sandbox(root=str(tmp_path))
+        sandbox = dev_sandbox(root=str(tmp_path), tool=STUB)
         assert _failed(await sandbox.restore("snap", "hash", "op", OPEN)) == "snapshot_missing"
         assert _failed(await sandbox.release("snap", OPEN)) == "unavailable"
         session = await _opened(sandbox)
@@ -121,7 +128,7 @@ def test_restore_release_and_snapshot_refuse_there_are_no_snapshots(tmp_path: Pa
 
 def test_create_makes_the_keys_directory_and_lookup_is_final_on_it(tmp_path: Path) -> None:
     async def main() -> None:
-        sandbox = dev_sandbox(root=str(tmp_path))
+        sandbox = dev_sandbox(root=str(tmp_path), tool=STUB)
         session = await _opened(sandbox)
         assert session.id.startswith("threads-dev-")
         assert (tmp_path / session.id).is_dir()
@@ -139,7 +146,7 @@ def test_create_makes_the_keys_directory_and_lookup_is_final_on_it(tmp_path: Pat
 
 def test_a_second_create_of_the_same_key_answers_the_same_directory(tmp_path: Path) -> None:
     async def main() -> None:
-        sandbox = dev_sandbox(root=str(tmp_path))
+        sandbox = dev_sandbox(root=str(tmp_path), tool=STUB)
         first = await _opened(sandbox)
         again = await _opened(sandbox)
         assert again.id == first.id
@@ -150,7 +157,7 @@ def test_a_second_create_of_the_same_key_answers_the_same_directory(tmp_path: Pa
 
 def test_attach_finds_a_live_sandbox_and_refuses_a_ref_that_is_not_one(tmp_path: Path) -> None:
     async def main() -> None:
-        sandbox = dev_sandbox(root=str(tmp_path))
+        sandbox = dev_sandbox(root=str(tmp_path), tool=STUB)
         session = await _opened(sandbox)
         assert _ok(await sandbox.attach(session.id, OPEN)).id == session.id
         assert _failed(await sandbox.attach("../escape", OPEN)) == "resource_unknown"
@@ -161,7 +168,7 @@ def test_attach_finds_a_live_sandbox_and_refuses_a_ref_that_is_not_one(tmp_path:
 
 def test_close_removes_the_directory(tmp_path: Path) -> None:
     async def main() -> None:
-        sandbox = dev_sandbox(root=str(tmp_path))
+        sandbox = dev_sandbox(root=str(tmp_path), tool=STUB)
         session = await _opened(sandbox)
         assert await session.close(OPEN) == Ok(None)
         assert list(tmp_path.iterdir()) == []
@@ -171,7 +178,7 @@ def test_close_removes_the_directory(tmp_path: Path) -> None:
 
 def test_a_stale_owner_creates_nothing_and_writes_nothing(tmp_path: Path) -> None:
     async def main() -> None:
-        sandbox = dev_sandbox(root=str(tmp_path))
+        sandbox = dev_sandbox(root=str(tmp_path), tool=STUB)
         assert _failed(await sandbox.create("op-1", STALE)) == "stale_epoch"
         assert list(tmp_path.iterdir()) == []
 
@@ -187,7 +194,7 @@ def test_a_stale_writer_spawns_nothing(tmp_path: Path) -> None:
     async def main() -> None:
         # /usr/bin/true stands in for the confinement: the fence is refused before any spawn, so
         # this runs wherever the tests do and nothing is ever confined.
-        sandbox = dev_sandbox(root=str(tmp_path), tool="/usr/bin/true")
+        sandbox = dev_sandbox(root=str(tmp_path), tool=STUB)
         session = await _opened(sandbox)
         spawned = await session.exec(
             ["/bin/sh", "-c", "echo x > spawned.txt"], STALE, process_key="k-stale"
@@ -201,7 +208,7 @@ def test_a_stale_writer_spawns_nothing(tmp_path: Path) -> None:
 def test_a_symlink_chain_never_reaches_a_file_outside_the_root(tmp_path: Path) -> None:
     async def main() -> None:
         (tmp_path / "outside.txt").write_text("a credential")
-        sandbox = dev_sandbox(root=str(tmp_path))
+        sandbox = dev_sandbox(root=str(tmp_path), tool=STUB)
         session = await _opened(sandbox)
         at = tmp_path / session.id
         # The rev-7 chain: `a/b -> ..` then `c -> a/b/..` leaves the root one lexical step at a
@@ -224,7 +231,7 @@ def test_a_symlink_chain_never_reaches_a_file_outside_the_root(tmp_path: Path) -
 
 def test_a_cwd_reached_through_a_symlink_is_refused(tmp_path: Path) -> None:
     async def main() -> None:
-        sandbox = dev_sandbox(root=str(tmp_path), tool="/usr/bin/true")
+        sandbox = dev_sandbox(root=str(tmp_path), tool=STUB)
         session = await _opened(sandbox)
         os.symlink("..", tmp_path / session.id / "up")
         ran = await session.exec(
@@ -237,7 +244,7 @@ def test_a_cwd_reached_through_a_symlink_is_refused(tmp_path: Path) -> None:
 
 def test_a_path_outside_workspace_is_refused(tmp_path: Path) -> None:
     async def main() -> None:
-        sandbox = dev_sandbox(root=str(tmp_path))
+        sandbox = dev_sandbox(root=str(tmp_path), tool=STUB)
         session = await _opened(sandbox)
         assert _failed(await session.download("/etc/passwd", OPEN)) == "invalid_path"
         outside = await session.upload("/tmp/planted", b"x", OPEN)  # noqa: S108 - the point
@@ -248,7 +255,7 @@ def test_a_path_outside_workspace_is_refused(tmp_path: Path) -> None:
 
 def test_a_file_its_mode_and_a_symlink_survive_an_export_and_an_import(tmp_path: Path) -> None:
     async def main() -> None:
-        sandbox = dev_sandbox(root=str(tmp_path))
+        sandbox = dev_sandbox(root=str(tmp_path), tool=STUB)
         session = await _opened(sandbox)
         at = tmp_path / session.id
         (at / "sub").mkdir()
@@ -271,7 +278,7 @@ def test_a_file_its_mode_and_a_symlink_survive_an_export_and_an_import(tmp_path:
 
 def test_a_setuid_bit_never_survives_an_import(tmp_path: Path) -> None:
     async def main() -> None:
-        sandbox = dev_sandbox(root=str(tmp_path))
+        sandbox = dev_sandbox(root=str(tmp_path), tool=STUB)
         session = await _opened(sandbox)
         suid = tmp_path / session.id / "suid"
         suid.write_text("x")

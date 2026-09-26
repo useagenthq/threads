@@ -36,6 +36,13 @@ const STALE: SandboxContext = {
     err({ code: "stale_epoch", message: "another owner took the branch" }),
 };
 
+/**
+ * Stands in for the confinement in this file. These cases exercise the ledger, the host path walk
+ * and the tree, never a confined command, so a trivial program that the probe accepts lets them
+ * run on any host. The confinement itself is confine.test.ts, which skips loudly.
+ */
+const STUB = "/usr/bin/true";
+
 const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
 
 function root(): string {
@@ -73,7 +80,9 @@ describe("devSandbox declarations", () => {
   });
 
   test("allowInternet declares egress unenforced", () => {
-    expect(devSandbox({ allowInternet: true }).info.egress).toBe("unenforced");
+    expect(devSandbox({ allowInternet: true, tool: STUB }).info.egress).toBe(
+      "unenforced",
+    );
   });
 
   test("the confinement program defaults to the platform's, and one that can't run is capability_missing", async () => {
@@ -99,7 +108,7 @@ describe("devSandbox declarations", () => {
 
   test("the sandbox directories live in threads-dev in the host's temp directory", async () => {
     // /usr/bin/true stands in for the confinement, so this runs wherever the tests do.
-    const sandbox = devSandbox({ tool: "/usr/bin/true" });
+    const sandbox = devSandbox({ tool: STUB });
     const session = unwrap(await sandbox.create("op-default-root", CTX));
     try {
       expect(
@@ -111,7 +120,7 @@ describe("devSandbox declarations", () => {
   });
 
   test("restore and release refuse: the dev sandbox has no snapshots", async () => {
-    const sandbox = devSandbox({ root: root() });
+    const sandbox = devSandbox({ root: root(), tool: STUB });
     expect(await sandbox.restore("snap", "hash", "op", CTX)).toEqual(
       err({
         code: "snapshot_missing",
@@ -122,7 +131,7 @@ describe("devSandbox declarations", () => {
   });
 
   test("a snapshot is unavailable, and a termination is never confirmed", async () => {
-    const sandbox = devSandbox({ root: root() });
+    const sandbox = devSandbox({ root: root(), tool: STUB });
     const session = unwrap(await sandbox.create("op-1", CTX));
     expect(code(await session.snapshot("op-snap", CTX))).toBe("unavailable");
     // Unconfirmed: an in-doubt call parks instead of being retried.
@@ -133,7 +142,7 @@ describe("devSandbox declarations", () => {
 describe("the directory an operation key owns", () => {
   test("create makes threads-dev-<key>, and lookup is final on it", async () => {
     const at = root();
-    const sandbox = devSandbox({ root: at });
+    const sandbox = devSandbox({ root: at, tool: STUB });
     const session = unwrap(await sandbox.create("op-1", CTX));
     expect(session.id).toMatch(/^threads-dev-[0-9a-f]{32}$/);
     expect(existsSync(join(at, session.id))).toBe(true);
@@ -148,7 +157,7 @@ describe("the directory an operation key owns", () => {
 
   test("a second create of the same key answers the same directory", async () => {
     const at = root();
-    const sandbox = devSandbox({ root: at });
+    const sandbox = devSandbox({ root: at, tool: STUB });
     const first = unwrap(await sandbox.create("op-1", CTX));
     const again = unwrap(await sandbox.create("op-1", CTX));
     expect(again.id).toBe(first.id);
@@ -157,7 +166,7 @@ describe("the directory an operation key owns", () => {
 
   test("attach finds a live sandbox, and refuses a ref that isn't one", async () => {
     const at = root();
-    const sandbox = devSandbox({ root: at });
+    const sandbox = devSandbox({ root: at, tool: STUB });
     const session = unwrap(await sandbox.create("op-1", CTX));
     expect(unwrap(await sandbox.attach(session.id, CTX)).id).toBe(session.id);
     expect(code(await sandbox.attach("../escape", CTX))).toBe(
@@ -170,7 +179,7 @@ describe("the directory an operation key owns", () => {
 
   test("close removes the directory", async () => {
     const at = root();
-    const sandbox = devSandbox({ root: at });
+    const sandbox = devSandbox({ root: at, tool: STUB });
     const session = unwrap(await sandbox.create("op-1", CTX));
     expect(await session.close(CTX)).toEqual(ok(undefined));
     expect(readdirSync(at)).toEqual([]);
@@ -180,7 +189,7 @@ describe("the directory an operation key owns", () => {
 describe("a stale owner touches nothing", () => {
   test("create, upload and download are refused before any syscall", async () => {
     const at = root();
-    const sandbox = devSandbox({ root: at });
+    const sandbox = devSandbox({ root: at, tool: STUB });
     expect(code(await sandbox.create("op-1", STALE))).toBe("stale_epoch");
     expect(readdirSync(at)).toEqual([]);
 
@@ -198,7 +207,7 @@ describe("a stale owner touches nothing", () => {
     const at = root();
     // /usr/bin/true stands in for the confinement: the fence is refused before any spawn, so
     // this runs wherever the tests do and nothing is ever confined.
-    const sandbox = devSandbox({ root: at, tool: "/usr/bin/true" });
+    const sandbox = devSandbox({ root: at, tool: STUB });
     const session = unwrap(await sandbox.create("op-1", CTX));
     const spawned = await session.exec(
       ["/bin/sh", "-c", "echo x > spawned.txt"],
@@ -214,7 +223,7 @@ describe("a symlink is never followed on the host", () => {
   test("read, write and export of c/x never reach a file outside the root", async () => {
     const at = root();
     writeFileSync(join(at, "outside.txt"), "a credential");
-    const sandbox = devSandbox({ root: at });
+    const sandbox = devSandbox({ root: at, tool: STUB });
     const session = unwrap(await sandbox.create("op-1", CTX));
     const dir = join(at, session.id);
     // The rev-7 chain: `a/b -> ..` then `c -> a/b/..` leaves the root one lexical step at a
@@ -241,7 +250,7 @@ describe("a symlink is never followed on the host", () => {
 
   test("a cwd reached through a symlink is refused, so no command starts there", async () => {
     const at = root();
-    const sandbox = devSandbox({ root: at, tool: "/usr/bin/true" });
+    const sandbox = devSandbox({ root: at, tool: STUB });
     const session = unwrap(await sandbox.create("op-1", CTX));
     symlinkSync("..", join(at, session.id, "up"));
     const ran = await session.exec(["/bin/sh", "-c", "pwd"], CTX, {
@@ -252,7 +261,7 @@ describe("a symlink is never followed on the host", () => {
   });
 
   test("a path outside /workspace is refused: the dev sandbox holds only /workspace", async () => {
-    const sandbox = devSandbox({ root: root() });
+    const sandbox = devSandbox({ root: root(), tool: STUB });
     const session = unwrap(await sandbox.create("op-1", CTX));
     expect(code(await session.download("/etc/passwd", CTX))).toBe(
       "invalid_path",
@@ -266,7 +275,7 @@ describe("a symlink is never followed on the host", () => {
 describe("the Trees capability on the directory", () => {
   test("a file, its mode and a symlink survive an export and an import", async () => {
     const at = root();
-    const sandbox = devSandbox({ root: at });
+    const sandbox = devSandbox({ root: at, tool: STUB });
     const session = unwrap(await sandbox.create("op-1", CTX));
     const dir = join(at, session.id);
     mkdirSync(join(dir, "sub"));
@@ -295,7 +304,7 @@ describe("the Trees capability on the directory", () => {
 
   test("a setuid bit never survives an import", async () => {
     const at = root();
-    const sandbox = devSandbox({ root: at });
+    const sandbox = devSandbox({ root: at, tool: STUB });
     const session = unwrap(await sandbox.create("op-1", CTX));
     const suid = join(at, session.id, "suid");
     writeFileSync(suid, "x");
