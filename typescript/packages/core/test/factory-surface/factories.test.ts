@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pythonBin } from "../python-bin";
 
 // The TypeScript factory signature checks (spec/tools/gen_api_surface_factories.py), compiled
 // by tsc over a fixture contract: the matching package is green, and each kind of drift fails
@@ -96,7 +97,7 @@ function compile(): { found: Map<string, Set<string>>; stray: string[] } {
     );
     const gen = Bun.spawnSync(
       [
-        "python3",
+        pythonBin(ROOT),
         GEN,
         "--api",
         join(dir, "api.json"),
