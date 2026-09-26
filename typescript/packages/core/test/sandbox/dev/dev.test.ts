@@ -239,6 +239,18 @@ describe("a symlink is never followed on the host", () => {
     ]);
   });
 
+  test("a cwd reached through a symlink is refused, so no command starts there", async () => {
+    const at = root();
+    const sandbox = devSandbox({ root: at, tool: "/usr/bin/true" });
+    const session = unwrap(await sandbox.create("op-1", CTX));
+    symlinkSync("..", join(at, session.id, "up"));
+    const ran = await session.exec(["/bin/sh", "-c", "pwd"], CTX, {
+      processKey: "k-cwd",
+      cwd: "/workspace/up",
+    });
+    expect(code(ran)).toBe("invalid_path");
+  });
+
   test("a path outside /workspace is refused: the dev sandbox holds only /workspace", async () => {
     const sandbox = devSandbox({ root: root() });
     const session = unwrap(await sandbox.create("op-1", CTX));

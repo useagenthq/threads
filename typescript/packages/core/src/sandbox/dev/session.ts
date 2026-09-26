@@ -19,7 +19,7 @@ import { fenceHere, guarded, messageOf } from "../remote/fence";
 import { sandboxPath, WORKSPACE } from "../remote/scripts";
 import type { Confinement } from "./confine";
 import { exportDir, importDir } from "./trees";
-import { hostPath, readIn, workspaceParts, writeIn } from "./walk";
+import { hostDir, readIn, workspaceParts, writeIn } from "./walk";
 
 // One dev sandbox as a SandboxSession: commands run inside the platform's confinement
 // (confine.ts), and everything else is a host file operation on the sandbox's directory that
@@ -138,7 +138,7 @@ export function devSession(
         const parts = workspaceParts(cwd);
         if (!parts.ok)
           return err({ code: "invalid_path", message: parts.error.message });
-        const at = hostPath(dir, parts.value, false);
+        const at = hostDir(dir, parts.value);
         if (!at.ok)
           return err({ code: "invalid_path", message: at.error.message });
         const [name = "", ...rest] = command;

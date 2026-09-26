@@ -113,6 +113,16 @@ def walked(
         os.close(fd)
 
 
+def host_dir(directory: str, parts: Sequence[str]) -> Ok[str] | Err[SandboxError]:
+    """The host path of a directory under `directory`, every component of it proven to be a real
+    directory. An exec's cwd goes through this, so no symlink chain ever chooses where a command
+    starts."""
+    with walked(directory, (*parts, "."), create=False) as found:
+        if isinstance(found, Err):
+            return found
+        return Ok(os.path.join(directory, *parts))
+
+
 def read_in(directory: str, parts: Sequence[str]) -> Ok[bytes] | Err[SandboxError]:
     """The file's bytes, refusing a symlink at any component."""
     with walked(directory, parts, create=False) as found:

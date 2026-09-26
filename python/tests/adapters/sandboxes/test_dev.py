@@ -222,6 +222,19 @@ def test_a_symlink_chain_never_reaches_a_file_outside_the_root(tmp_path: Path) -
     asyncio.run(main())
 
 
+def test_a_cwd_reached_through_a_symlink_is_refused(tmp_path: Path) -> None:
+    async def main() -> None:
+        sandbox = dev_sandbox(root=str(tmp_path), tool="/usr/bin/true")
+        session = await _opened(sandbox)
+        os.symlink("..", tmp_path / session.id / "up")
+        ran = await session.exec(
+            ["/bin/sh", "-c", "pwd"], OPEN, process_key="k-cwd", cwd="/workspace/up"
+        )
+        assert _failed(ran) == "invalid_path"
+
+    asyncio.run(main())
+
+
 def test_a_path_outside_workspace_is_refused(tmp_path: Path) -> None:
     async def main() -> None:
         sandbox = dev_sandbox(root=str(tmp_path))

@@ -111,6 +111,20 @@ export function hostPath(
   return ok(last === undefined ? at : `${at}/${last}`);
 }
 
+/**
+ * The host path of a directory under `dir`, every component of it proven to be a real
+ * directory. An exec's cwd goes through this, so no symlink chain ever chooses where a command
+ * starts.
+ */
+export function hostDir(
+  dir: string,
+  parts: readonly string[],
+): Result<string, FileFailure> {
+  const walked = hostPath(dir, [...parts, "."], false);
+  if (!walked.ok) return walked;
+  return ok(parts.length === 0 ? dir : `${dir}/${parts.join("/")}`);
+}
+
 /** The file's bytes, refusing a symlink at any component. */
 export function readIn(
   dir: string,

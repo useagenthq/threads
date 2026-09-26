@@ -13,7 +13,7 @@ from collections.abc import AsyncIterable, Mapping, Sequence
 
 from threads.adapters.sandboxes.dev.confine import WORKSPACE, ConfinedSpec, Confinement
 from threads.adapters.sandboxes.dev.trees import export_dir, import_dir
-from threads.adapters.sandboxes.dev.walk import read_in, workspace_parts, write_in
+from threads.adapters.sandboxes.dev.walk import host_dir, read_in, workspace_parts, write_in
 from threads.adapters.sandboxes.streams import Pipe, pump
 from threads.log import SnapshotData
 from threads.loop.tools import Termination
@@ -97,7 +97,9 @@ class DevSession:
         inside = workspace_parts(cwd)
         if isinstance(inside, Err):
             return inside
-        at = os.path.join(self._dir, *inside.value)
+        at = host_dir(self._dir, inside.value)
+        if isinstance(at, Err):
+            return at
         program = _program(argv[0])
         if program is None:
             return Ok(await _not_found(argv[0]))
@@ -113,7 +115,7 @@ class DevSession:
         try:
             process = await asyncio.create_subprocess_exec(
                 *wrapped,
-                cwd=at,
+                cwd=at.value,
                 env=self._confined.spawn_env(exact),
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
