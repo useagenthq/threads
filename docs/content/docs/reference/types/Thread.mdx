@@ -145,6 +145,7 @@ saveCase(name: string, options: {
   externalEffects: "stub";
   at?: EventId;
   rubric?: readonly string[];
+  simulate?: Simulate;
   dir?: string;
 }): Promise<Result<SavedCase>>
 ```
@@ -160,6 +161,7 @@ async def save_case(
     external_effects: Literal["stub"],
     at: EventId | None = None,
     rubric: Sequence[str] | None = None,
+    simulate: Simulate | None = None,
     dir: str = "cases",
 ) -> Ok[SavedCase] | Err[Failure]
 ```
@@ -185,6 +187,10 @@ async def save_case(
 
 <Field name="rubric" type={"readonly string[]"}>
   Criteria a live eval's judge checks the current agent's work against; each passes or fails, and the case passes only when all do. 1 to 20 criteria of 1 to 500 characters, else invalid_request. Omitted: the case has no criteria of its own.
+</Field>
+
+<Field name="simulate" type={"Simulate"}>
+  Makes the case a multi-turn live eval: the saved turn's text becomes the simulation's first user message, and this plays the user after it, either a model with a persona and a goal or a fixed script. saveCase then also stubs every settled effect of the turns before the saved one (stubs.json entries with scope prefix), so a live run can re-drive them; a prefix effect nothing settled is recorded as simulate_blocked unsettled_effect and a live run skips the simulation. Offline nothing changes: the case reruns its saved turn with no model call. Any bound broken is invalid_request naming the field. Omitted: the case is single-turn. See [Simulate](/docs/reference/types/Simulate).
 </Field>
 
 <Field name="dir" type={"string"} default={"cases"}>

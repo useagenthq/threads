@@ -64,7 +64,7 @@ from threads.log import (
 from threads.loop import gates
 from threads.loop.drive import drive
 from threads.loop.runtime import Halt, Idle, Parked, RunErrorCode, Runtime, serving
-from threads.loop.stubs import Stub
+from threads.loop.stubs import Stubs
 from threads.memory.authority import with_memory_write
 from threads.memory.setup import Providers, RunBinding, provider_tools
 from threads.result import Err, Ok
@@ -116,7 +116,7 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
     intake: Intake | None = None,
     member: MemberRun | None = None,
     on_delta: OnDelta | None = None,
-    stubs: tuple[Stub, ...] | None = None,
+    stubs: Stubs | None = None,
 ) -> RunResult[str]:
     # The run holds its loop's adapter connections; the last holder on a loop closes them.
     async with holding():
@@ -135,7 +135,7 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
     launch: Launch | None,
     intake: Intake | None,
     member: MemberRun | None,
-    stubs: tuple[Stub, ...] | None = None,
+    stubs: Stubs | None = None,
 ) -> RunResult[str]:
     await _set_up(definition, options.get("budget"))
     store, sq, thread = await _where(options.get("store"), options.get("thread"))
@@ -352,11 +352,11 @@ def _refusal(error: ParseError) -> RunErrorCode:
 
 
 async def _stubs(
-    sq: SqliteStore, chain: Sequence[Event], launch: Launch | None, given: tuple[Stub, ...] | None
-) -> Ok[tuple[Stub, ...] | None] | Err[ParseError]:
+    sq: SqliteStore, chain: Sequence[Event], launch: Launch | None, given: Stubs | None
+) -> Ok[Stubs | None] | Err[ParseError]:
     """Stub mode comes from the branch's own stub fork first: its frozen script is the durable
     record of how this branch runs. Otherwise from the launch of a stub run's child, or from a
-    live eval's recorded case."""
+    live eval's recorded case (a simulated conversation shares one gateway across its turns)."""
     ref = stub_fork_ref(chain)
     if ref is not None:
         data = await sq.get_artifact(ref.sha256)
@@ -366,7 +366,7 @@ async def _stubs(
     return Ok(given)
 
 
-def _child_runner(store: Store, stubs: tuple[Stub, ...] | None) -> Execute:
+def _child_runner(store: Store, stubs: Stubs | None) -> Execute:
     """How this run starts a launched thread: the same pipeline, in the same store, in the same
     mode (a stub run's children never go live either)."""
 

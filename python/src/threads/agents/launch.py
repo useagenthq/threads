@@ -11,7 +11,7 @@ from pydantic import JsonValue
 from threads.log import BranchId, ParseError, Permissions, Principal, ThreadId, UserInputEvent
 from threads.loop.covering import Covering
 from threads.loop.runtime import Runtime
-from threads.loop.stubs import Stub
+from threads.loop.stubs import Stubs
 from threads.result import Err, Ok
 from threads.store import SqliteStore, Writer
 from threads.store.lines import Draft, uuid7
@@ -49,7 +49,7 @@ class Launch:
     """A fresh handoff target's forwarded history, recorded before its input."""
     team: Team | None = None
     """How this member reaches its team's lead."""
-    stubs: tuple[Stub, ...] | None = None
+    stubs: Stubs | None = None
     """Set when the launching run is in stub mode: so is this thread's run."""
 
 

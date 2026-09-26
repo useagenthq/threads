@@ -74,7 +74,7 @@ describe("live eval side effects", () => {
       "skipped",
       "live_not_runnable:team_calls",
     ]);
-    expect(report.model_calls).toEqual({ agent: 0, judge: 0 });
+    expect(report.model_calls).toEqual({ agent: 0, user: 0, judge: 0 });
   });
 
   const bashTurn = [use("bash", { command: "echo hi" }, "s1"), ...REFUND_TURN];

@@ -30,9 +30,10 @@ from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import SqliteStore, VerifiedLog
-from threads.thread.case_files import model_script, sandbox_results, stub_script
+from threads.thread.case_files import model_script, sandbox_results, stubs_of
 from threads.thread.case_hooks import extension_script
 from threads.thread.case_log import IMPLS, artifact_refs, per_impl
+from threads.thread.case_simulate import Simulate, prefix_stubs, simulate_field
 from threads.thread.case_turn import Offline, Turn, find_turn, offline_reason
 from threads.thread.fork import fork_point
 
@@ -66,6 +67,7 @@ class CaseRequest:
     at: EventId | None
     dir: str
     rubric: tuple[str, ...] | None = None
+    simulate: Simulate | None = None
 
 
 def _invalid(message: str) -> Err[ParseError]:
@@ -85,6 +87,10 @@ def _check(request: CaseRequest, sandbox: Sandbox | None) -> ParseError | None:
                 "invalid_request",
                 "rubric: 1 to 20 criteria, each 1 to 500 characters; pass rubric=None for none",
             )
+    if request.simulate is not None:
+        checked = simulate_field(request.simulate)
+        if isinstance(checked, Err):
+            return checked.error
     if sandbox is not None and sandbox.info.egress != "enforced":
         why = "a case needs a sandbox that enforces deny-all egress"
         return ParseError("egress_policy_unsupported", why)
@@ -174,13 +180,23 @@ async def _files(
     store: SqliteStore, fold: Fold, turn: Turn, request: CaseRequest, export: bytes
 ) -> Ok[tuple[dict[str, bytes], Offline | None]] | Err[ParseError]:
     files: dict[str, bytes] = {}
-    built = await stub_script(turn.events, store.get_artifact)
+    built = await stubs_of(turn.events, store.get_artifact)
     # A mediated call whose committed output is gone makes the case unreplayable, the same way a
     # missing chain artifact does.
     if isinstance(built, Err):
         return Err(ParseError("case_missing_dependency", built.error.message))
-    stubs = built.value
-    consumed = len(_list(stubs, "stubs"))
+    turn_stubs = built.value
+    consumed = len(turn_stubs)
+    events = [e for e in fold.events if not isinstance(e, UnknownEvent)]
+    before = [e for e in events if e.seq <= turn.restore_seq]
+    blocked = None
+    entries = turn_stubs
+    if request.simulate is not None:
+        earlier = await prefix_stubs(before, turn_stubs, events, store.get_artifact)
+        if isinstance(earlier, Err):
+            return Err(ParseError("case_missing_dependency", earlier.error.message))
+        entries, blocked = earlier.value
+    stubs: JsonValue = {"stubs": entries}
     appended: list[JsonValue] = [_wire(e) for e in turn.events]
     for impl in IMPLS:
         log = per_impl(export, impl, fold.now)
@@ -211,7 +227,7 @@ async def _files(
         files["line0.json"] = prefix
     files["model.json"] = _json(model_script(turn.events))
     files["stubs.json"] = _json(stubs)
-    meta = _case(request, fold, turn, offline, prefix)
+    meta = _case(request, fold, turn, offline, prefix, blocked)
     files["case.json"] = _json(meta | _scripts(sandbox, extensions))
     return Ok((files, offline))
 
@@ -234,8 +250,13 @@ def _snapshot(fold: Fold, seq: int) -> JsonValue | None:
     return None
 
 
-def _case(
-    request: CaseRequest, fold: Fold, turn: Turn, offline: Offline | None, prefix: bytes | None
+def _case(  # noqa: PLR0913, PLR0917 - case.json's fields, as saveCase writes them
+    request: CaseRequest,
+    fold: Fold,
+    turn: Turn,
+    offline: Offline | None,
+    prefix: bytes | None,
+    blocked: str | None = None,
 ) -> dict[str, JsonValue]:
     text = turn.input.data.text
     expect: dict[str, JsonValue] = {
@@ -256,6 +277,12 @@ def _case(
     }
     if request.rubric is not None:
         meta["rubric"] = list(request.rubric)
+    if request.simulate is not None:
+        checked = simulate_field(request.simulate)
+        if isinstance(checked, Ok):
+            meta["simulate"] = checked.value.model_dump(mode="json", exclude_unset=True)
+    if blocked is not None:
+        meta["simulate_blocked"] = blocked
     snapshot = _snapshot(fold, turn.restore_seq)
     if snapshot is not None:
         meta["snapshot"] = snapshot
@@ -267,11 +294,6 @@ def _case(
     if prefix is not None:
         meta["line0"] = {"sha256": sha256_hex(prefix)}
     return meta
-
-
-def _list(value: JsonValue, key: str) -> list[JsonValue]:
-    got = value.get(key) if isinstance(value, dict) else None
-    return got if isinstance(got, list) else []
 
 
 def canonical_json(value: JsonValue) -> str:

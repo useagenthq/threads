@@ -1,0 +1,19 @@
+{
+  "stubs": [
+    {
+      "tool": "issue_refund",
+      "args_hash": "389bf6f649e1a6dca027ed7b7d5124457a00a16e130fe39e18474dccf85094b9",
+      "occurrence": 0,
+      "output": "refunded order 7",
+      "is_error": false,
+      "scope": "prefix"
+    },
+    {
+      "tool": "issue_refund",
+      "args_hash": "8aa5b6751d68bd72901cea96bbbddca8624efa387d5442a63197d5fedb2b693d",
+      "occurrence": 0,
+      "output": "refunded order 42",
+      "is_error": false
+    }
+  ]
+}

@@ -117,7 +117,7 @@ With `--live`, each case's input runs on a **new thread** of your current agent,
 - **A budget is required.** `live.budget` is the run budget of every agent run and every judge run, subagents included. A run it stops is an `error` with `budget_exhausted`.
 - **Nothing runs live by accident:** there are zero model calls unless you pass `live` / `--live`.
 
-Live runs start a new thread from the case's last input, without the earlier turns, since a changed agent can't continue a thread pinned to the old config. Save cases whose input stands alone.
+Live runs start a new thread from the case's last input, without the earlier turns, since a changed agent can't continue a thread pinned to the old config. Save cases whose input stands alone — or save the turn with [`simulate`](/docs/evals/simulated-users), which keeps the earlier turns and grades a whole conversation against a user the runner plays.
 
 By default the live and judge threads live in a private in-memory store and are not kept. Pass `--store <dir>` (or `store`) to keep them under tenant `evals`, so `threads timeline` can show them. With `--store`, a run stopped by the test model guard can leave one request without a response; running that thread again abandons it cleanly.
 

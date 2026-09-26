@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   type Agent,
@@ -75,12 +75,16 @@ function fromModule(
     .safeParse(exported(module, "rubric"));
   if (!rubric.success)
     return `rubric exported from ${path} must be a list of criteria`;
+  const user = exported(module, "user");
+  if (user !== undefined && !isModel(user))
+    return `user exported from ${path} must be a model`;
   return {
     agents,
     live: {
       judge,
       budget: budget.data,
       ...(rubric.data === undefined ? {} : { rubric: rubric.data }),
+      ...(user === undefined ? {} : { user }),
     },
   };
 }
@@ -118,25 +122,80 @@ function canonical(value: unknown): string {
   return text.value;
 }
 
-export async function evals(args: EvalArgs, io: Io): Promise<number> {
-  const loaded = await load(args, io);
-  if (typeof loaded === "number") return loaded;
-  const { live } = loaded;
-  if (live !== undefined) {
-    const n = caseNames(args.cases).filter(
-      (c) => args.only.length === 0 || args.only.includes(c),
-    ).length;
-    io.out(
-      `live: ${n} cases, up to ${2 * n} model runs (agent + judge), budget ${canonical(live.budget)} per run\n`,
-    );
+const Simulated = z.looseObject({
+  simulate: z
+    .union([
+      z.looseObject({
+        kind: z.literal("model"),
+        max_messages: z.int().optional(),
+      }),
+      z.looseObject({
+        kind: z.literal("script"),
+        messages: z.array(z.string()),
+      }),
+    ])
+    .optional(),
+});
+
+/** The `simulate` of each case, read off case.json: what the preflight line counts. */
+function simulations(
+  cases: string,
+  only: readonly string[],
+): readonly NonNullable<z.infer<typeof Simulated>["simulate"]>[] {
+  return caseNames(cases)
+    .filter((c) => only.length === 0 || only.includes(c))
+    .flatMap((name) => {
+      try {
+        const meta = Simulated.safeParse(
+          JSON.parse(readFileSync(resolve(cases, name, "case.json"), "utf8")),
+        );
+        return meta.success && meta.data.simulate !== undefined
+          ? [meta.data.simulate]
+          : [];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/** What a live run will cost, printed before the first model call; 2 when a model is missing. */
+function preflight(args: EvalArgs, live: Live, io: Io): number | undefined {
+  const n = caseNames(args.cases).filter(
+    (c) => args.only.length === 0 || args.only.includes(c),
+  ).length;
+  const sims = simulations(args.cases, args.only);
+  if (sims.some((s) => s.kind === "model") && live.user === undefined) {
+    io.err(`export user from ${args.agent ?? "./agents.ts"}\n`);
+    return 2;
   }
-  let report: Awaited<ReturnType<typeof runEvals>>;
+  const messages = sims.reduce(
+    (total, s) =>
+      total +
+      (s.kind === "model" ? (s.max_messages ?? 5) : s.messages.length + 1),
+    0,
+  );
+  io.out(
+    sims.length === 0
+      ? `live: ${n} cases, up to ${2 * n} model runs (agent + judge), budget ${canonical(live.budget)} per run\n`
+      : `live: ${n} cases (${sims.length} simulated, up to ${messages} user messages), budget ${canonical(live.budget)} per conversation and per judge run\n`,
+  );
+  return undefined;
+}
+
+type Report = Awaited<ReturnType<typeof runEvals>>;
+
+/** The run, or exit 2 when the options are a setup mistake. */
+async function report(
+  args: EvalArgs,
+  loaded: Loaded,
+  io: Io,
+): Promise<Report | number> {
   try {
-    report = await runEvals({
+    return await runEvals({
       cases: args.cases,
       ...(args.only.length === 0 ? {} : { only: args.only }),
       ...(args.agent === undefined ? {} : { agents: loaded.agents }),
-      ...(live === undefined ? {} : { live }),
+      ...(loaded.live === undefined ? {} : { live: loaded.live }),
       ...(args.store === undefined ? {} : { store: sqlite(args.store) }),
       strict: args.strict,
     });
@@ -145,10 +204,22 @@ export async function evals(args: EvalArgs, io: Io): Promise<number> {
     io.err(`${error.code}: ${error.message}\n`);
     return 2;
   }
-  for (const c of report.cases) io.out(`${caseLine(c)}\n`);
+}
+
+export async function evals(args: EvalArgs, io: Io): Promise<number> {
+  const loaded = await load(args, io);
+  if (typeof loaded === "number") return loaded;
+  const { live } = loaded;
+  if (live !== undefined) {
+    const stop = preflight(args, live, io);
+    if (stop !== undefined) return stop;
+  }
+  const ran = await report(args, loaded, io);
+  if (typeof ran === "number") return ran;
+  for (const c of ran.cases) io.out(`${caseLine(c)}\n`);
   if (live !== undefined && args.store === undefined)
     io.out("judge threads were not kept; pass --store to keep them\n");
-  io.out(`${report.summary}\n`);
-  if (args.out !== undefined) writeFileSync(args.out, `${canonical(report)}\n`);
-  return report.ok ? 0 : 1;
+  io.out(`${ran.summary}\n`);
+  if (args.out !== undefined) writeFileSync(args.out, `${canonical(ran)}\n`);
+  return ran.ok ? 0 : 1;
 }

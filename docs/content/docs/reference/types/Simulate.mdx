@@ -1,0 +1,24 @@
+---
+title: "Simulate"
+description: "Who plays the user of a simulated case: {kind: \"model\", persona, goal, max_messages} or {kind: \"script\", messages}."
+icon: "Braces"
+---
+
+TS takes the object literal (maxMessages); Python takes a plain dict typed by a Simulate TypedDict union.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+type Simulate = CaseSimulate;
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+type Simulate = CaseSimulate
+```
+
+</Tab>
+</Tabs>

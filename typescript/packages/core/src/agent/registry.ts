@@ -146,6 +146,8 @@ export type LiveOptions = {
   readonly principal: Principal;
   readonly budget: z.infer<typeof Budget>;
   readonly stub: StubGateway;
+  /** A simulated case's later turns continue one thread (spec lane 32, B.1). */
+  readonly thread?: ThreadRef;
 };
 export type LiveRun = (
   input: string,

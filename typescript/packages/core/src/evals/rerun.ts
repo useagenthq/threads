@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { memoryStore } from "../agent/sqlite";
 import type { KnownEvent, Policy, ToolSpec } from "../log";
-import { type LoopConfig, type LoopEnd, recordedStubs, resume } from "../loop";
+import { type LoopConfig, type LoopEnd, resume } from "../loop";
 import { knownEvents } from "../reduce";
 import { prefetch } from "../render";
 import { readSpec } from "../render/tool-specs";
@@ -12,6 +12,7 @@ import { answers, type Counters } from "./answers";
 import type { ExtensionScript, SandboxResults } from "./files";
 import { recordedAuthorizer, replayedModels } from "./replayed";
 import { standIns } from "./stand-in";
+import { stubQueue } from "./stub-queue";
 
 // The rerun (spec lane 22, B.2), promoted from the conformance runner, which now imports it:
 // import the case log into a private in-memory store, take the lease (recovery runs first),
@@ -91,8 +92,10 @@ function config(
     artifacts,
     now: () => clock.now,
   });
+  // Offline the rerun answers only from the saved turn's entries: a simulated case's prefix
+  // stubs are the live re-drive's, and lane 22's "no stub left over" rule is unchanged.
   const stubs =
-    input.stubs === undefined ? undefined : recordedStubs(input.stubs);
+    input.stubs === undefined ? undefined : stubQueue(input.stubs, "turn");
   const hooks = standIns(input.extensions);
   const output = outputOf(writer.chain.fold.policy);
   const started = events().find((e) => e.type === "thread_started");

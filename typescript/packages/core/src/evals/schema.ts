@@ -56,6 +56,8 @@ const ToolResultItem: Strict<{
 });
 const AssistantItem: Strict<{ kind: Lit<"assistant">; text: z.ZodString }> =
   z.strictObject({ kind: z.literal("assistant"), text: z.string() });
+const UserItem: Strict<{ kind: Lit<"user">; text: z.ZodString }> =
+  z.strictObject({ kind: z.literal("user"), text: z.string() });
 const OmittedItem: Strict<{ kind: Lit<"omitted">; count: typeof PosInt }> =
   z.strictObject({ kind: z.literal("omitted"), count: PosInt });
 
@@ -64,6 +66,7 @@ export const TranscriptItem: z.ZodDiscriminatedUnion<
     typeof ToolCallItem,
     typeof ToolResultItem,
     typeof AssistantItem,
+    typeof UserItem,
     typeof OmittedItem,
   ],
   "kind"
@@ -72,6 +75,7 @@ export const TranscriptItem: z.ZodDiscriminatedUnion<
     ToolCallItem,
     ToolResultItem,
     AssistantItem,
+    UserItem,
     OmittedItem,
   ])
   .meta({ id: "TranscriptItem" });
@@ -80,18 +84,44 @@ export type TranscriptItem = z.infer<typeof TranscriptItem>;
 /** The judge thread's user_input text, as RFC 8785 canonical JSON: the task stays data. */
 export const JudgeInput: Strict<{
   answer: typeof JsonValue;
+  goal: Opt<z.ZodString>;
   rubric: typeof Rubric;
   task: z.ZodString;
   transcript: Arr<typeof TranscriptItem>;
 }> = z
   .strictObject({
     answer: JsonValue,
+    goal: z
+      .string()
+      .describe(
+        "The simulated user's goal; absent unless the case simulates a model user.",
+      )
+      .optional(),
     rubric: Rubric,
     task: z.string(),
     transcript: z.array(TranscriptItem),
   })
   .meta({ id: "JudgeInput" });
 export type JudgeInput = z.infer<typeof JudgeInput>;
+
+/** The simulated user's structured output each turn (spec lane 32, C). */
+export const UserTurn: Strict<{
+  message: z.ZodString;
+  done: z.ZodBoolean;
+}> = z
+  .strictObject({
+    message: z
+      .string()
+      .max(4000)
+      .describe("The next message the user would send; empty only when done."),
+    done: z
+      .boolean()
+      .describe(
+        "The goal is met or clearly can't be met; the message is not sent.",
+      ),
+  })
+  .meta({ id: "UserTurn" });
+export type UserTurn = z.infer<typeof UserTurn>;
 
 /** case.schema.json EventMatcher: exact on the listed envelope keys, deep subset on data. */
 export const EventMatcher: Strict<{
@@ -235,10 +265,37 @@ const STATUSES = [
   "not_run",
 ] as const;
 
+const PREFIXES = ["continued", "redriven", "none"] as const;
+const ENDINGS = ["user_done", "script_done", "max_messages"] as const;
+
+/** What a simulated case's live conversation did (spec lane 32, E). */
+const Simulation: Strict<{
+  messages: typeof Int;
+  prefix: EnumOf<typeof PREFIXES>;
+  prefix_turns: typeof Int;
+  ended: EnumOf<typeof ENDINGS>;
+  user_thread_id: Opt<z.ZodString>;
+}> = z.strictObject({
+  messages: Int.describe("User messages sent, the opener included."),
+  prefix: z
+    .enum(PREFIXES)
+    .describe(
+      "continued: the case log was imported and the thread went on. redriven: the prefix inputs were re-sent to the changed agent. none: the saved turn was the first.",
+    ),
+  prefix_turns: Int.describe("Recorded inputs re-sent before the opener."),
+  ended: z.enum(ENDINGS),
+  user_thread_id: z
+    .string()
+    .describe("The simulated user's thread; kept only with a persistent store.")
+    .optional(),
+});
+export type Simulation = z.infer<typeof Simulation>;
+
 export const EvalCaseResult: Strict<{
   name: z.ZodString;
   status: EnumOf<typeof STATUSES>;
   reason: Opt<z.ZodString>;
+  simulation: Opt<typeof Simulation>;
   checks: Strict<{
     replay: Opt<typeof ReplayCheck>;
     rerun: Opt<typeof RerunCheck>;
@@ -250,6 +307,7 @@ export const EvalCaseResult: Strict<{
     name: z.string(),
     status: z.enum(STATUSES),
     reason: z.string().optional(),
+    simulation: Simulation.optional(),
     checks: z.strictObject({
       replay: ReplayCheck.optional(),
       rerun: RerunCheck.optional(),
@@ -280,7 +338,11 @@ export const EvalReport: Strict<{
       model: z.ZodString;
     }>
   >;
-  model_calls: Strict<{ agent: typeof Int; judge: typeof Int }>;
+  model_calls: Strict<{
+    agent: typeof Int;
+    user: typeof Int;
+    judge: typeof Int;
+  }>;
   cost: z.ZodNullable<typeof Cost>;
   cases: Arr<typeof EvalCaseResult>;
 }> = z
@@ -309,7 +371,11 @@ export const EvalReport: Strict<{
         "The model-request guard blocked a live model: the run stopped, the rest are not_run.",
       )
       .optional(),
-    model_calls: z.strictObject({ agent: Int, judge: Int }),
+    model_calls: z.strictObject({
+      agent: Int,
+      user: Int.describe("Runs of the simulated user (spec lane 32)."),
+      judge: Int,
+    }),
     cost: Cost.nullable().describe("null: some live usage had no price."),
     cases: z.array(EvalCaseResult),
   })

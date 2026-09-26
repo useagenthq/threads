@@ -69,7 +69,7 @@ test("model_calls counts a subagent's request, and cost is the sum of the tree c
   // The judge passed it; the agent's config changed since the case was saved, so it is stale.
   expect(report.cases[0]?.status).toBe("stale");
   expect(judge?.score).toBe(1);
-  expect(report.model_calls).toEqual({ agent: 5, judge: 1 });
+  expect(report.model_calls).toEqual({ agent: 5, user: 0, judge: 1 });
   const agentCost = await treeCost(store, judge?.thread_id);
   const judgeCost = await treeCost(store, judge?.judge_thread_id);
   expect(report.cost?.known_nanos).toBe(

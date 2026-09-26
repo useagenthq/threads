@@ -302,7 +302,12 @@ export function registerAs<Deps, Output>(
       run(
         def,
         text,
-        { store: o.store, principal: o.principal, budget: o.budget },
+        {
+          store: o.store,
+          principal: o.principal,
+          budget: o.budget,
+          ...(o.thread === undefined ? {} : { thread: o.thread }),
+        },
         {},
         denyAll(def.sandbox, def.egress)
           ? { ...o.stub, live: SANDBOX_TOOLS }

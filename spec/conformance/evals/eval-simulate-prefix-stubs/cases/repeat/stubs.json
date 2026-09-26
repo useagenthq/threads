@@ -1,0 +1,19 @@
+{
+  "stubs": [
+    {
+      "tool": "issue_refund",
+      "args_hash": "8aa5b6751d68bd72901cea96bbbddca8624efa387d5442a63197d5fedb2b693d",
+      "occurrence": 0,
+      "output": "refunded order 42 the first time",
+      "is_error": false,
+      "scope": "prefix"
+    },
+    {
+      "tool": "issue_refund",
+      "args_hash": "8aa5b6751d68bd72901cea96bbbddca8624efa387d5442a63197d5fedb2b693d",
+      "occurrence": 1,
+      "output": "refunded order 42",
+      "is_error": false
+    }
+  ]
+}

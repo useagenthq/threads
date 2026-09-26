@@ -58,7 +58,7 @@ describe("runEvals live", () => {
       [2, "Looks up the order before refunding", true],
     ]);
     expect(judge?.score).toBe(1);
-    expect(report.model_calls).toEqual({ agent: 3, judge: 1 });
+    expect(report.model_calls).toEqual({ agent: 3, user: 0, judge: 1 });
     const evals = tenantStore(store, "evals");
     const lead = await eventsOf(evals, judge?.thread_id ?? "");
     const judged = await eventsOf(evals, judge?.judge_thread_id ?? "");
@@ -72,7 +72,7 @@ describe("runEvals live", () => {
       }),
     );
     expect(report.summary).toMatch(
-      /^1 passed, 0 failed; 4 model calls \(3 agent, 1 judge\), /,
+      /^1 passed, 0 failed; 4 model calls \(3 agent, 0 user, 1 judge\), /,
     );
   });
 
@@ -125,7 +125,7 @@ describe("runEvals live", () => {
       "skipped",
       "no_rubric",
     ]);
-    expect(report.model_calls).toEqual({ agent: 0, judge: 0 });
+    expect(report.model_calls).toEqual({ agent: 0, user: 0, judge: 0 });
   });
 
   test("an effect with unrecorded arguments fails closed; nothing is refunded", async () => {

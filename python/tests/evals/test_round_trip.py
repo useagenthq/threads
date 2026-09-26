@@ -65,8 +65,18 @@ def test_a_changed_read_only_result_fails_the_rerun(tmp_path: Path) -> None:
     assert not report.ok
 
 
+EVALS = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "evals"
+
+
 def test_a_typescript_saved_case_passes_in_python() -> None:
     """Cross-language: the corpus's saved cases are TypeScript bytes (spec/conformance/evals)."""
-    root = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "evals" / "eval-pass"
-    report = asyncio.run(run_evals(cases=str(root / "cases")))
+    report = asyncio.run(run_evals(cases=str(EVALS / "eval-pass" / "cases")))
     assert [c.status for c in report.cases] == ["passed"]
+
+
+def test_a_simulated_case_saved_elsewhere_reruns_offline_in_python() -> None:
+    """Cross-language (spec lane 32, test 11): a case with `simulate` and prefix stubs reruns its
+    saved turn here exactly as one without them, and no prefix stub is left over."""
+    for name in ("eval-simulate-offline", "eval-simulate-prefix-stubs"):
+        report = asyncio.run(run_evals(cases=str(EVALS / name / "cases")))
+        assert all(c.status == "passed" for c in report.cases), (name, report.summary)

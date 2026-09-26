@@ -24,6 +24,8 @@ FRAMEWORK_ONLY = " (framework checks only; pass --agent to detect changes to you
 class CaseOpts(TypedDict, total=False):
     must: list[JsonValue]
     rubric: list[JsonValue]
+    simulate: Obj
+    simulate_blocked: str
     offline: Obj
     snapshot: Obj
     drop: list[str]
@@ -52,7 +54,7 @@ def _meta(name: str, turn: Turn, files: dict[str, JsonValue | bytes], opts: Case
         more["extension_script"] = "extensions.json"
     more["input"] = {"text": turn.text}
     more["expect"] = {"must": opts.get("must", [{"type": "turn_completed"}]), "expect": []}
-    for key in ("rubric", "snapshot", "offline"):
+    for key in ("rubric", "simulate", "simulate_blocked", "snapshot", "offline"):
         value = opts.get(key)
         if value is not None:
             more[key] = value
@@ -167,7 +169,7 @@ def report(cases: list[Obj], *, agents: bool = False) -> bytes:
         "summary": _summary(counts, agents),
         "ok": counts["failed"] + counts["errors"] + counts["not_run"] == 0,
         **counts,
-        "model_calls": {"agent": 0, "judge": 0},
+        "model_calls": {"agent": 0, "user": 0, "judge": 0},
         "cost": None,
         "cases": list[JsonValue](cases),
     }

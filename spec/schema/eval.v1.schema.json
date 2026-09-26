@@ -36,6 +36,67 @@
       ],
       "type": "object"
     },
+    "CaseSimulate": {
+      "description": "A saved case's simulated user: a model playing a persona and goal, or fixed scripted messages.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "goal": {
+              "description": "What that user wants from the agent.",
+              "maxLength": 2000,
+              "minLength": 1,
+              "type": "string"
+            },
+            "kind": {
+              "const": "model"
+            },
+            "max_messages": {
+              "description": "User messages in the simulation, the opener included. Default 5.",
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "persona": {
+              "description": "Who the user is; author text, pinned in the simulator's instructions.",
+              "maxLength": 2000,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "persona",
+            "goal"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "script"
+            },
+            "messages": {
+              "description": "Fixed user messages, sent in order after the opener; no user model is needed.",
+              "items": {
+                "maxLength": 4000,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 20,
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "messages"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "CaseSnapshot": {
       "additionalProperties": false,
       "description": "A sandbox snapshot at the case's restore point; only a live run restores it.",
@@ -303,6 +364,45 @@
         "reason": {
           "type": "string"
         },
+        "simulation": {
+          "additionalProperties": false,
+          "properties": {
+            "ended": {
+              "enum": [
+                "user_done",
+                "script_done",
+                "max_messages"
+              ]
+            },
+            "messages": {
+              "$ref": "urn:threads:schema:events:v1#/$defs/Int",
+              "description": "User messages sent, the opener included."
+            },
+            "prefix": {
+              "description": "continued: the case log was imported and the thread went on. redriven: the prefix inputs were re-sent to the changed agent. none: the saved turn was the first.",
+              "enum": [
+                "continued",
+                "redriven",
+                "none"
+              ]
+            },
+            "prefix_turns": {
+              "$ref": "urn:threads:schema:events:v1#/$defs/Int",
+              "description": "Recorded inputs re-sent before the opener."
+            },
+            "user_thread_id": {
+              "description": "The simulated user's thread; kept only with a persistent store.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "messages",
+            "prefix",
+            "prefix_turns",
+            "ended"
+          ],
+          "type": "object"
+        },
         "status": {
           "enum": [
             "passed",
@@ -382,10 +482,15 @@
             },
             "judge": {
               "$ref": "urn:threads:schema:events:v1#/$defs/Int"
+            },
+            "user": {
+              "$ref": "urn:threads:schema:events:v1#/$defs/Int",
+              "description": "Runs of the simulated user (spec lane 32)."
             }
           },
           "required": [
             "agent",
+            "user",
             "judge"
           ],
           "type": "object"
@@ -775,6 +880,10 @@
         "answer": {
           "$ref": "urn:threads:schema:events:v1#/$defs/JsonValue"
         },
+        "goal": {
+          "description": "The simulated user's goal; absent unless the case simulates a model user.",
+          "type": "string"
+        },
         "rubric": {
           "$ref": "#/$defs/Rubric"
         },
@@ -1047,6 +1156,12 @@
         "knowledge"
       ]
     },
+    "SimulateBlocked": {
+      "description": "A prefix effect that never settled has no result to stub, so a live run skips the simulation.",
+      "enum": [
+        "unsettled_effect"
+      ]
+    },
     "TranscriptItem": {
       "oneOf": [
         {
@@ -1113,6 +1228,22 @@
         {
           "additionalProperties": false,
           "properties": {
+            "kind": {
+              "const": "user"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "count": {
               "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
             },
@@ -1127,6 +1258,25 @@
           "type": "object"
         }
       ]
+    },
+    "UserTurn": {
+      "additionalProperties": false,
+      "properties": {
+        "done": {
+          "description": "The goal is met or clearly can't be met; the message is not sent.",
+          "type": "boolean"
+        },
+        "message": {
+          "description": "The next message the user would send; empty only when done.",
+          "maxLength": 4000,
+          "type": "string"
+        }
+      },
+      "required": [
+        "message",
+        "done"
+      ],
+      "type": "object"
     },
     "Verdict": {
       "additionalProperties": false,

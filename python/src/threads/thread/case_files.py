@@ -81,20 +81,22 @@ async def _output(
     return Ok(got.value.decode("utf-8"))
 
 
-async def stub_script(turn: Sequence[Event], read: ReadArtifact) -> Ok[JsonValue] | Err[ParseError]:
-    """Every mediated call (one with effect events) as a stub, by (tool, args_hash, occurrence),
-    each holding its complete verified output. A stub fork freezes this as an artifact and a saved
-    case writes it as stubs.json, so both carry the same guarantee."""
+async def stubs_of(
+    events: Sequence[Event], read: ReadArtifact
+) -> Ok[list[JsonValue]] | Err[ParseError]:
+    """Every mediated call (one with effect events) of a slice of the log, by (tool, args_hash),
+    each holding its complete verified output. Occurrences count within the slice; a caller that
+    joins two slices renumbers them (spec lane 32, A.3)."""
     seen: dict[tuple[str, str], int] = {}
     stubs: list[JsonValue] = []
-    for e in turn:
-        if not isinstance(e, ToolCallEvent) or not _begun(turn, e.data.call_id):
+    for e in events:
+        if not isinstance(e, ToolCallEvent) or not _begun(events, e.data.call_id):
             continue
         key = (e.data.name, args_hash(e.data.input))
         occurrence = seen.get(key, 0)
         seen[key] = occurrence + 1
-        result = _result(turn, e.data.call_id)
-        output = await _output(turn, e.data.call_id, read)
+        result = _result(events, e.data.call_id)
+        output = await _output(events, e.data.call_id, read)
         if isinstance(output, Err):
             return output
         stubs.append(
@@ -106,7 +108,16 @@ async def stub_script(turn: Sequence[Event], read: ReadArtifact) -> Ok[JsonValue
                 "is_error": False if result is None else result.data.is_error,
             }
         )
-    script: JsonValue = {"stubs": stubs}
+    return Ok(stubs)
+
+
+async def stub_script(turn: Sequence[Event], read: ReadArtifact) -> Ok[JsonValue] | Err[ParseError]:
+    """The turn's stubs as one script. A stub fork freezes this as an artifact and a saved case
+    writes it as stubs.json, so both carry the same guarantee."""
+    built = await stubs_of(turn, read)
+    if isinstance(built, Err):
+        return built
+    script: JsonValue = {"stubs": built.value}
     return Ok(script)
 
 

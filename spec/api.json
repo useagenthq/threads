@@ -1550,7 +1550,7 @@
       "ts": "runEvals",
       "py": "run_evals",
       "package": "core",
-      "doc": "Runs every saved case under cases through the checks, cheapest first: replay (the recorded requests re-render byte for byte with the code running now), rerun (the recorded turn reruns offline to the same events, with no model call and every effect stubbed), drift (with agents: the case's recorded config against each agent as it is pinned now, by a dry pin that runs no setup, reads no secret and connects to no MCP server) and, only with live, a judged run of the current agent. Without agents the free checks prove the threads code, not your agent. Per-case outcomes, and a model-request guard abort, are values in the report; a setup mistake is ConfigError invalid_config naming the option. `threads eval` runs it.",
+      "doc": "Runs every saved case under cases through the checks, cheapest first: replay (the recorded requests re-render byte for byte with the code running now), rerun (the recorded turn reruns offline to the same events, with no model call and every effect stubbed), drift (with agents: the case's recorded config against each agent as it is pinned now, by a dry pin that runs no setup, reads no secret and connects to no MCP server) and, only with live, a judged run of the current agent. A case saved with simulate is graded as a whole conversation instead: live.budget covers that conversation, and an unrecorded side effect in any simulated turn ends the case as error unmatched_external_op. Without agents the free checks prove the threads code, not your agent. Per-case outcomes, and a model-request guard abort, are values in the report; a setup mistake is ConfigError invalid_config naming the option. `threads eval` runs it.",
       "async": true,
       "params": [
         {
@@ -2739,6 +2739,13 @@
             },
             {"name": "rubric", "kind": "option", "type": {"array": {"prim": "string"}}, "required": false, "doc": "Criteria a live eval's judge checks the current agent's work against; each passes or fails, and the case passes only when all do. 1 to 20 criteria of 1 to 500 characters, else invalid_request. Omitted: the case has no criteria of its own."},
             {
+              "name": "simulate",
+              "kind": "option",
+              "type": {"$ref": "#/types/Simulate"},
+              "required": false,
+              "doc": "Makes the case a multi-turn live eval: the saved turn's text becomes the simulation's first user message, and this plays the user after it, either a model with a persona and a goal or a fixed script. saveCase then also stubs every settled effect of the turns before the saved one (stubs.json entries with scope prefix), so a live run can re-drive them; a prefix effect nothing settled is recorded as simulate_blocked unsettled_effect and a live run skips the simulation. Offline nothing changes: the case reruns its saved turn with no model call. Any bound broken is invalid_request naming the field. Omitted: the case is single-turn."
+            },
+            {
               "name": "dir",
               "kind": "option",
               "type": {"prim": "string"},
@@ -3144,9 +3151,30 @@
           "required": false,
           "default": [],
           "doc": "Criteria added after each case's own."
+        },
+        "user": {
+          "type": {
+            "$ref": "#/types/Model"
+          },
+          "required": false,
+          "doc": "The model that plays the user of a case whose simulate is kind model (simulated_user.v1 instructions, one call per user message). A case that needs one without it is ConfigError invalid_config naming the case, before any model call."
         }
       },
-      "doc": "What a live eval costs money with: the judge and a required budget. Live evals need agents too."
+      "doc": "What a live eval costs money with: the judge and a required budget. Live evals need agents too. For a simulated case, budget covers the whole conversation; for every other run, one run."
+    },
+    "Simulate": {
+      "kind": "alias",
+      "type": {
+        "$ref": "urn:threads:schema:eval:v1#/$defs/CaseSimulate"
+      },
+      "doc": "Who plays the user of a simulated case: {kind: \"model\", persona, goal, max_messages} or {kind: \"script\", messages}. TS takes the object literal (maxMessages); Python takes a plain dict typed by a Simulate TypedDict union."
+    },
+    "UserTurn": {
+      "kind": "alias",
+      "type": {
+        "$ref": "urn:threads:schema:eval:v1#/$defs/UserTurn"
+      },
+      "doc": "The simulated user's structured reply each turn: the next message it would send, and done when the goal is met or clearly can't be. Output the runner can't accept after one retry ends the case as error simulator_invalid."
     },
     "EvalReport": {
       "kind": "alias",

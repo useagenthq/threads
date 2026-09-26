@@ -161,3 +161,66 @@ export const CaseLine0: Strict<{ sha256: typeof Sha256 }> = z
     id: "CaseLine0",
     description: "sha256 of line0.json: the recorded Render v1 line 0 bytes.",
   });
+
+const SimulateModel: Strict<{
+  kind: Lit<"model">;
+  persona: z.ZodString;
+  goal: z.ZodString;
+  max_messages: Opt<z.ZodInt>;
+}> = z.strictObject({
+  kind: z.literal("model"),
+  persona: z
+    .string()
+    .min(1)
+    .max(2000)
+    .describe(
+      "Who the user is; author text, pinned in the simulator's instructions.",
+    ),
+  goal: z
+    .string()
+    .min(1)
+    .max(2000)
+    .describe("What that user wants from the agent."),
+  max_messages: z
+    .int()
+    .min(1)
+    .max(20)
+    .describe(
+      "User messages in the simulation, the opener included. Default 5.",
+    )
+    .optional(),
+});
+
+const SimulateScript: Strict<{
+  kind: Lit<"script">;
+  messages: Arr<z.ZodString>;
+}> = z.strictObject({
+  kind: z.literal("script"),
+  messages: z
+    .array(z.string().min(1).max(4000))
+    .min(1)
+    .max(20)
+    .describe(
+      "Fixed user messages, sent in order after the opener; no user model is needed.",
+    ),
+});
+
+/** case.json `simulate` (spec lane 32, A.1): who plays the user in a live multi-turn run. */
+export const CaseSimulate: z.ZodDiscriminatedUnion<
+  [typeof SimulateModel, typeof SimulateScript],
+  "kind"
+> = z.discriminatedUnion("kind", [SimulateModel, SimulateScript]).meta({
+  id: "CaseSimulate",
+  description:
+    "A saved case's simulated user: a model playing a persona and goal, or fixed scripted messages.",
+});
+export type CaseSimulate = z.infer<typeof CaseSimulate>;
+
+const BLOCKED = ["unsettled_effect"] as const;
+/** case.json `simulate_blocked`: why a live run can't simulate this case. */
+export const SimulateBlocked: EnumOf<typeof BLOCKED> = z.enum(BLOCKED).meta({
+  id: "SimulateBlocked",
+  description:
+    "A prefix effect that never settled has no result to stub, so a live run skips the simulation.",
+});
+export type SimulateBlocked = z.infer<typeof SimulateBlocked>;

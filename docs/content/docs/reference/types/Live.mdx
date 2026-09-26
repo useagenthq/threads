@@ -4,7 +4,7 @@ description: "What a live eval costs money with: the judge and a required budget
 icon: "Braces"
 ---
 
-Live evals need agents too.
+Live evals need agents too. For a simulated case, budget covers the whole conversation; for every other run, one run.
 
 ## Fields
 
@@ -18,4 +18,8 @@ Live evals need agents too.
 
 <Field name="rubric" type={"readonly string[]"} default={"[]"}>
   Criteria added after each case's own.
+</Field>
+
+<Field name="user" type={"Model"}>
+  The model that plays the user of a case whose simulate is kind model (simulated_user.v1 instructions, one call per user message). A case that needs one without it is ConfigError invalid_config naming the case, before any model call.
 </Field>

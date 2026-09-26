@@ -25,6 +25,7 @@ from threads.evals.checks import (
 )
 from threads.evals.drift import DriftResult
 from threads.evals.live import Env, EvalAgent, Live, Outcome, live_check
+from threads.evals.live_env import Simulation
 from threads.evals.report import Totals, add_cost, report
 from threads.log import Cost, ThreadStartedEvent
 from threads.result import Err
@@ -46,11 +47,18 @@ class Plan:
 
 
 def _result(
-    name: str, status: str, checks: Mapping[str, JsonValue], reason: str | None = None
+    name: str,
+    status: str,
+    checks: Mapping[str, JsonValue],
+    reason: str | None = None,
+    simulation: Simulation | None = None,
 ) -> Case:
-    out: Case = {"name": name, "status": status, "checks": dict(checks)}
+    out: Case = {"name": name, "status": status}
     if reason is not None:
         out["reason"] = reason
+    if simulation is not None:
+        out["simulation"] = simulation.to_json()
+    out["checks"] = dict(checks)
     return out
 
 
@@ -75,12 +83,12 @@ def _judged(name: str, checks: Mapping[str, JsonValue], live: Outcome) -> Case:
     if live.kind == "blocked":
         return _result(name, "error", checks, "model_blocked")
     if live.kind != "graded":
-        return _result(name, live.kind, checks, live.reason)
+        return _result(name, live.kind, checks, live.reason, live.simulation)
     graded = {**checks, "judge": live.check}
     failing = _failing(live.check)
     if failing is None:
-        return _result(name, "passed", graded)
-    return _result(name, "failed", graded, f"judge: criterion {failing} failed")
+        return _result(name, "passed", graded, None, live.simulation)
+    return _result(name, "failed", graded, f"judge: criterion {failing} failed", live.simulation)
 
 
 async def _live(plan: Plan, log: CaseLog, case: CaseDir) -> Outcome | None:
@@ -94,7 +102,8 @@ async def _live(plan: Plan, log: CaseLog, case: CaseDir) -> Outcome | None:
     if pinned.leads_team:
         return Outcome("skipped", reason="live_not_runnable:team_calls")
     fresh = "sandbox_provider" in pinned.started
-    return await live_check(case, target, Env(plan.live, plan.store, plan.kept, fresh))
+    env = Env(plan.live, plan.store, plan.kept, fresh)
+    return await live_check(case, log, target, env)
 
 
 def _stale(case: Case, drift: DriftResult) -> Case:
@@ -145,7 +154,7 @@ async def evaluate(plan: Plan, name: str) -> tuple[Case, Outcome | None]:
 async def evals_of(plan: Plan, names: Sequence[str], *, strict: bool = False) -> EvalReport:
     """The cases in order; a guard block stops the run and leaves the rest not_run."""
     cases: list[Case] = []
-    agent_calls = judge_calls = 0
+    agent_calls = user_calls = judge_calls = 0
     cost: Cost | None = None
     priced = False
     aborted: dict[str, JsonValue] | None = None
@@ -159,11 +168,13 @@ async def evals_of(plan: Plan, names: Sequence[str], *, strict: bool = False) ->
             aborted = {"code": "model_blocked", "case": name, "model": live.reason}
         elif live is not None:
             agent_calls += live.agent_calls
+            user_calls += live.user_calls
             judge_calls += live.judge_calls
             cost = add_cost(cost, live.cost, first=not priced)
             priced = True
     totals = Totals(
         agent_calls,
+        user_calls,
         judge_calls,
         cost,
         live=plan.live is not None,
@@ -197,4 +208,18 @@ async def run_evals(  # noqa: PLR0913 - spec/api.json runEvals options
         store is not None,
     )
     names = [n for n in case_names(root) if only is None or n in only]
+    _check_user(root, names, live)
     return await evals_of(plan, names, strict=strict)
+
+
+def _check_user(root: Path, names: Sequence[str], live: Live | None) -> None:
+    """A model-kind simulated case needs live.user, before the first model call (32 E)."""
+    if live is None or live.user is not None:
+        return
+    for name in names:
+        read = read_case(root, name)
+        if isinstance(read, Err) or read.value.meta.simulate is None:
+            continue
+        if read.value.meta.simulate.kind == "model":
+            why = f"case {name} simulates a user with a model: set live.user"
+            raise ConfigError("invalid_config", why)

@@ -8,7 +8,12 @@ VERSION: Final[str] = "0.0.0"
 __version__: Final[str] = VERSION
 
 # The public surface imports the store, which reads VERSION above: keep these after it.
-from threads._generated.eval_v1 import EvalCaseResult, EvalReport, Verdict  # noqa: E402
+from threads._generated.eval_v1 import (  # noqa: E402
+    EvalCaseResult,
+    EvalReport,
+    UserTurn,
+    Verdict,
+)
 from threads.agents.agent import Agent, RunStream  # noqa: E402
 from threads.agents.config import ConfigError, ConfigErrorCode, Failure  # noqa: E402
 from threads.agents.context import RunContext  # noqa: E402
@@ -125,6 +130,7 @@ from threads.team.policy import MessagePolicyRule  # noqa: E402
 from threads.telemetry import Exporter, SkippedBranch, SyncReport  # noqa: E402
 from threads.thread.bundle import ExportedBundle  # noqa: E402
 from threads.thread.case import CaseExpectation, SavedCase  # noqa: E402
+from threads.thread.case_simulate import Simulate  # noqa: E402
 from threads.thread.handle import open_thread  # noqa: E402
 from threads.thread.importing import import_thread  # noqa: E402
 from threads.web.search import SearchBackend, SearchHit  # noqa: E402
@@ -212,6 +218,7 @@ __all__ = [
     "SendRefusal",
     "SendResult",
     "SetsUp",
+    "Simulate",
     "Skill",
     "SkippedBranch",
     "StartRefusal",
@@ -239,6 +246,7 @@ __all__ = [
     "Thread",
     "Tool",
     "Trees",
+    "UserTurn",
     "Verdict",
     "WaitResult",
     "Waited",

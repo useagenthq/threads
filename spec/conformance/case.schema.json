@@ -261,6 +261,14 @@
           "$ref": "urn:threads:schema:eval:v1#/$defs/Rubric",
           "description": "Criteria a live eval's judge checks the current agent's work against."
         },
+        "simulate": {
+          "$ref": "urn:threads:schema:eval:v1#/$defs/CaseSimulate",
+          "description": "A live eval turns this case into a multi-turn conversation: the saved turn's text is the first user message, and this plays the user after it. Offline the case reruns exactly as one without it."
+        },
+        "simulate_blocked": {
+          "$ref": "urn:threads:schema:eval:v1#/$defs/SimulateBlocked",
+          "description": "Written when saveCase found a prefix effect nothing settled: the case still reruns offline, and a live run skips its simulation."
+        },
         "snapshot": {
           "$ref": "urn:threads:schema:eval:v1#/$defs/CaseSnapshot"
         },
@@ -1051,6 +1059,10 @@
               },
               "is_error": {
                 "type": "boolean"
+              },
+              "scope": {
+                "description": "prefix: an effect of a simulated case's earlier turns (spec lane 32, A.3). An offline rerun reads only the entries without it; a live re-drive reads them all, in order. Occurrences are numbered across both, in log order.",
+                "const": "prefix"
               }
             }
           }

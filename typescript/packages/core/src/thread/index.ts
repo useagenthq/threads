@@ -1,3 +1,4 @@
+export type { SimulateUser as Simulate } from "./case-simulate";
 export type { Appended, ControlError, SettingsChange } from "./control";
 export type { CancelAccepted } from "./control-items";
 export type { ThreadControl } from "./controls";

@@ -16,6 +16,7 @@ from threads.loop.model import ModelInfo
 from threads.loop.scripted import SCRIPTED_INFO, ScriptedModel
 from threads.result import Ok
 from threads.thread.case import SavedCase
+from threads.thread.case_simulate import Simulate
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 
@@ -109,6 +110,56 @@ async def saved(
         expect=CaseExpectation(must=({"type": "tool_call", "data": {"name": "lookup_order"}},)),
         external_effects="stub",
         rubric=rubric,
+        dir=str(folder),
+    )
+    assert isinstance(got, Ok), got
+    return got.value
+
+
+def user_replies(replies: Sequence[str | bool | dict[str, JsonValue]]) -> list[JsonValue]:
+    """The simulated user's replies, in order: each is one structured UserTurn output. A string is
+    a message it sends; True is the user stopping; a dict is raw output. Call ids are unique."""
+    out: list[JsonValue] = []
+    for i, reply in enumerate(replies):
+        if isinstance(reply, str):
+            output: dict[str, JsonValue] = {"message": reply, "done": False}
+        elif isinstance(reply, bool):
+            output = {"message": "", "done": True}
+        else:
+            output = reply
+        out.append(use("final_output", output, f"u{i + 1}"))
+    return out
+
+
+async def saved_turns(  # noqa: PLR0913 - one saved case, and every option it takes
+    folder: Path,
+    name: str,
+    target: Agent[None, str],
+    inputs: Sequence[str],
+    *,
+    must: dict[str, JsonValue] | None = None,
+    rubric: tuple[str, ...] | None = None,
+    simulate: Simulate | None = None,
+) -> SavedCase:
+    """Runs `inputs` in order on one thread and saves the last turn as `folder/name`. Earlier
+    inputs become the case's prefix, which a simulated live run continues or re-drives."""
+    store = sqlite(":memory:")
+    thread = None
+    for text in inputs:
+        run = (
+            await target.run(text, store=store, thread=thread)
+            if thread
+            else await target.run(text, store=store)
+        )
+        assert isinstance(run, Completed), run
+        thread = run.thread
+    assert thread is not None, "saved_turns needs an input"
+    got = await thread.save_case(
+        name,
+        expect=CaseExpectation(must=(must or {"type": "turn_completed"},)),
+        external_effects="stub",
+        rubric=rubric,
+        simulate=simulate,
         dir=str(folder),
     )
     assert isinstance(got, Ok), got

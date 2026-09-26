@@ -4,6 +4,7 @@ export {
   type EvalCaseResult,
   EvalReport,
   type JudgeInput,
+  UserTurn,
   Verdict,
   Verdicts,
 } from "./schema";
