@@ -2,8 +2,9 @@
 environment and with stdin, a file round trip, a tree exported and imported back, a long
 command terminated, and the container and both its volumes released.
 
-Gated on THREADS_LIVE=1 and a reachable Engine socket; never part of the offline suite
-(AGENTS.md, Tests).
+Gated on THREADS_LIVE=1 and the `live` marker, like test_live_daytona.py; never part of the
+offline suite (AGENTS.md, Tests). A daemon that isn't there fails the gate rather than skipping
+it: the workflow that runs this job installs one.
 
     THREADS_LIVE=1 uv run pytest -m live tests/adapters/sandboxes/test_live_docker.py
 """
@@ -18,7 +19,6 @@ from loop_kit import held
 from sandbox_kit import OPEN
 
 from threads.adapters.sandboxes.posix import collect
-from threads.agents.config import ConfigError
 from threads.docker import docker
 from threads.loop.model import Found
 from threads.result import Err, Ok
@@ -31,10 +31,7 @@ def test_docker_round_trip() -> None:
     if os.environ.get("THREADS_LIVE") != "1":
         pytest.skip("live gate: set THREADS_LIVE=1 with a running Docker daemon")
     sandbox = docker()
-    try:
-        asyncio.run(sandbox.setup())
-    except ConfigError as unreachable:
-        pytest.skip(f"live gate: {unreachable.message}")
+    asyncio.run(sandbox.setup())
 
     async def main() -> None:
         op = str(uuid.uuid4())
@@ -126,10 +123,7 @@ def test_docker_enforces_the_limits_it_was_given() -> None:
     if os.environ.get("THREADS_LIVE") != "1":
         pytest.skip("live gate: set THREADS_LIVE=1 with a running Docker daemon")
     sandbox = docker(cpus=1.5, memory_mb=256)
-    try:
-        asyncio.run(sandbox.setup())
-    except ConfigError as unreachable:
-        pytest.skip(f"live gate: {unreachable.message}")
+    asyncio.run(sandbox.setup())
 
     async def main() -> None:
         made = await sandbox.create(str(uuid.uuid4()), OPEN)

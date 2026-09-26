@@ -187,6 +187,36 @@ def test_an_unreadable_architecture_is_invalid_config() -> None:
     assert "riscv64" in refused.value.message
 
 
+def test_a_daemon_too_old_for_the_pinned_api_says_so() -> None:
+    """The negotiation refusal is a 400 whose message says "too old"; every other 400 keeps
+    the daemon's own words."""
+
+    async def main() -> Ok[SandboxSession] | Err[SandboxError]:
+        backend = FakeBackend.scripted()
+        engine = DockerEngine(backend)
+        engine.too_old = True
+        async with holding():
+            return await adapter(backend, "docker", engine).create("k", OPEN)
+
+    got = asyncio.run(main())
+    assert isinstance(got, Err)
+    assert got.error.code == "unavailable"
+    assert got.error.message == "Docker Engine API 1.44 or newer is needed (Docker 25+)"
+
+
+def test_an_error_body_carries_the_daemon_s_own_message() -> None:
+    """Every Engine error body is {"message": "..."}, parsed strictly and carried through."""
+
+    async def main() -> Ok[SandboxSession] | Err[SandboxError]:
+        backend = FakeBackend.scripted()
+        async with holding():
+            return await adapter(backend, "docker").attach("threads-nope", OPEN)
+
+    got = asyncio.run(main())
+    assert isinstance(got, Err)
+    assert got.error.code == "not_found"
+
+
 def test_a_record_that_does_not_parse_is_a_typed_failure() -> None:
     """Records are container output: one that isn't a record is unavailable, never a raise."""
 

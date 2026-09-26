@@ -201,8 +201,9 @@ class DockerDriver:
 
 
 def _is_version_refusal(error: EngineError) -> bool:
-    """A daemon below the pinned version answers 400 naming the API version."""
-    return error.status == BAD_REQUEST and "version" in error.message.lower()
+    """A daemon below the pinned version answers 400 with "client version 1.30 is too old.
+    Minimum supported API version is 1.40, ..." (measured on Docker 29.8.0)."""
+    return error.status == BAD_REQUEST and "too old" in error.message.lower()
 
 
 def _is_denied(error: BaseException) -> bool:

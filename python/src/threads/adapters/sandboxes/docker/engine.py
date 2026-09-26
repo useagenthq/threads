@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Final
 
 import httpx
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
 
 from threads.adapters.loop_resources import close_all, drain
 from threads.adapters.sandboxes.docker import wire
@@ -160,12 +160,12 @@ class NameTakenError(Exception):
 
 
 def _refused(sent: httpx.Response, body: bytes) -> EngineError:
-    """The daemon's own message, and its version refusal named as such."""
-    text = body.decode("utf-8", "replace")[:512]
+    """The daemon's own message. Every error body is `{"message": "..."}`; anything else is
+    carried as the bytes it was, so a failure is never hidden behind a parse failure."""
     try:
-        message = str(json.loads(text).get("message", text))
-    except (ValueError, AttributeError):
-        message = text
+        message = wire.Failure.model_validate_json(body).message
+    except ValidationError:
+        message = body.decode("utf-8", "replace")[:512]
     return EngineError(sent.status_code, message)
 
 

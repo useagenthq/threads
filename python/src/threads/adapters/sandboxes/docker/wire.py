@@ -13,6 +13,12 @@ from pydantic import Field, TypeAdapter
 from threads.adapters.sandboxes.wire import Wire
 
 
+class Failure(Wire):
+    """Every error body the daemon sends: `{"message": "..."}` and nothing else."""
+
+    message: str
+
+
 class Created(Wire):
     """POST /containers/create."""
 

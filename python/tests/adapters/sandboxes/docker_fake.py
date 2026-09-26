@@ -92,11 +92,21 @@ class DockerEngine:
         self.check_stdout: bytes | None = None
         self.bad_record: bytes | None = None
         self.corrupt_archive = False
+        self.too_old = False
         self.started: list[tuple[str, tuple[str, ...]]] = []
         self._execs: dict[str, Exec] = {}
         self._next = 0
 
     def handle(self, request: httpx.Request) -> httpx.Response:  # noqa: PLR0911 - one per route
+        if self.too_old:
+            # Measured on Docker 29.8.0 (MinAPIVersion 1.40).
+            return _json(
+                400,
+                {
+                    "message": "client version 1.30 is too old. Minimum supported API version "
+                    "is 1.40, please upgrade your client to a newer version"
+                },
+            )
         parts = request.url.path.removeprefix("/v1.44").strip("/").split("/")
         match [request.method, *parts]:
             case ["POST", "containers", "create"]:
