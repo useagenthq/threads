@@ -1,5 +1,6 @@
 import type { AskId, MemberRef } from "../../log";
 import { askRoom } from "../../loop/ledger";
+import { isPosInt } from "../../pos-int";
 import { openAsk } from "../../team/ask";
 import { requestCancel } from "../../team/cancel";
 import { TEAM_CONSTANTS } from "../../team/constants";
@@ -30,6 +31,9 @@ import { BUSY } from "./team-log";
 // are operator requests decided by the model tools' ops; ask and wait then return the outcome the
 // team log records, driving the team until it does (drive.ts). askStatus is a pure read.
 
+/** A public option spec/api.json declares PosInt that is not one. Refused before any writer. */
+const INVALID = "invalid_request";
+
 export async function askMember(
   env: HandleEnv,
   to: MemberRef,
@@ -37,6 +41,9 @@ export async function askMember(
   options: TeamAskOptions,
 ): Promise<TeamAskResult> {
   const { idempotencyKey, timeoutMs } = options;
+  // Refused before any writer, so, like busy, it records nothing.
+  if (timeoutMs !== undefined && !isPosInt(timeoutMs))
+    return { status: "refused", code: INVALID };
   const recipient = recipientOf(env.log, env.artifacts);
   const done = await operator(
     env,
@@ -68,8 +75,11 @@ export async function waitFor(
   const { idempotencyKey, mode, timeoutMs } = options;
   const distinct = waitMembers(members, mode);
   // Refused before any writer, so, like busy, it records nothing.
-  if (distinct === "invalid_request")
-    return { status: "refused", code: distinct };
+  if (
+    distinct === "invalid_request" ||
+    (timeoutMs !== undefined && !isPosInt(timeoutMs))
+  )
+    return { status: "refused", code: INVALID };
   // The wait's id is its request's mail id; a replay re-attaches with the first request's.
   let opened = "";
   const done = await operator(

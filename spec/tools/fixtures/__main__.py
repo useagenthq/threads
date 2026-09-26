@@ -54,6 +54,7 @@ from . import (
     outputs,
     policy,
     policy_shell,
+    pos_int_vector,
     prompt_cache,
     questions,
     recovery,
@@ -288,6 +289,7 @@ def _write_all(
     tar_vectors.write()
     questions.write()
     ui_vectors.write()
+    pos_int_vector.write()
     eval_vectors.write()
     otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
     staged_all = ((staged, STAGED), (phase2, STAGED_PHASE_2_DIR))
@@ -321,7 +323,7 @@ def main() -> int:
             problems += agent_pins.check()
             problems += anthropic_requests.check() + dynamic.check()
             problems += tool_search_vectors.check() + e2b_wire.check()
-            problems += ui_vectors.check() + tar_vectors.check()
+            problems += ui_vectors.check() + tar_vectors.check() + pos_int_vector.check()
         for p in problems:
             print(f"coverage.json: {p}")
         if problems:

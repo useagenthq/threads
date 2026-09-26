@@ -1,0 +1,74 @@
+[
+  {
+    "name": "one",
+    "value": 1,
+    "pos_int": true
+  },
+  {
+    "name": "the ask and wait default",
+    "value": 120000,
+    "pos_int": true
+  },
+  {
+    "name": "a large timeout",
+    "value": 86400000,
+    "pos_int": true
+  },
+  {
+    "name": "MAX_SAFE_INTEGER, the largest the wire holds exactly",
+    "value": 9007199254740991,
+    "pos_int": true
+  },
+  {
+    "name": "one past MAX_SAFE_INTEGER",
+    "value": 9007199254740992,
+    "pos_int": false
+  },
+  {
+    "name": "zero: not positive, so never the default and never immediate",
+    "value": 0,
+    "pos_int": false
+  },
+  {
+    "name": "a negative",
+    "value": -1,
+    "pos_int": false
+  },
+  {
+    "name": "a fraction",
+    "value": 1.5,
+    "pos_int": false
+  },
+  {
+    "name": "a negative fraction",
+    "value": -0.5,
+    "pos_int": false
+  },
+  {
+    "name": "true, which is an int subclass in Python",
+    "value": true,
+    "pos_int": false
+  },
+  {
+    "name": "false",
+    "value": false,
+    "pos_int": false
+  },
+  {
+    "name": "a numeric string",
+    "value": "1",
+    "pos_int": false
+  },
+  {
+    "name": "null",
+    "value": null,
+    "pos_int": false
+  },
+  {
+    "name": "a list",
+    "value": [
+      1
+    ],
+    "pos_int": false
+  }
+]

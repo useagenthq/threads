@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from threads.agents.team_tools import SendRefusal
-from threads.log import BudgetExceededData, MemberErrorCode, MemberRef, ParkReason
+from threads.log import AskId, BudgetExceededData, MemberErrorCode, MemberRef, ParkReason
 
 type AskRefusal = SendRefusal | Literal["budget_exceeded", "lead"]
 """Why an ask was refused: a send's refusals, no headroom for one request of its model, or lead
@@ -71,7 +71,7 @@ type MemberResult = (
 
 @dataclass(frozen=True, slots=True)
 class Answered:
-    ask_id: str
+    ask_id: AskId
     text: str
     member: MemberRef
     status: Literal["answered"] = "answered"
@@ -79,13 +79,13 @@ class Answered:
 
 @dataclass(frozen=True, slots=True)
 class AskTimedOut:
-    ask_id: str
+    ask_id: AskId
     status: Literal["timed_out"] = "timed_out"
 
 
 @dataclass(frozen=True, slots=True)
 class AskMemberEnded:
-    ask_id: str
+    ask_id: AskId
     result: MemberResult
     status: Literal["member_ended"] = "member_ended"
 
@@ -94,7 +94,7 @@ class AskMemberEnded:
 class AskCancelled:
     """The asker's turn or the whole team was cancelled."""
 
-    ask_id: str
+    ask_id: AskId
     status: Literal["cancelled"] = "cancelled"
 
 
@@ -102,7 +102,7 @@ class AskCancelled:
 class AskNeedsInput:
     """A remote member needs input (Phase 4)."""
 
-    ask_id: str
+    ask_id: AskId
     prompt: str
     status: Literal["needs_input"] = "needs_input"
 
@@ -111,7 +111,7 @@ class AskNeedsInput:
 class AskUncertain:
     """A remote member's outcome is unknown, and the ask parks (Phase 4)."""
 
-    ask_id: str
+    ask_id: AskId
     status: Literal["uncertain"] = "uncertain"
 
 

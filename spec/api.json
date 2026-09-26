@@ -5288,7 +5288,7 @@
                 "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
               },
               "required": false,
-              "doc": "How long to wait. Omitted: the host policy, initially 120 s, and never more than it."
+              "doc": "How long to wait, a positive integer. Omitted: the host policy, initially 120 s, and never more than it. Zero, a negative, a fraction or a non-finite value is refused invalid_request before anything is recorded."
             },
             {
               "name": "idempotency_key",
@@ -5342,7 +5342,7 @@
               },
               "required": false,
               "default": "all",
-              "doc": "all, any, or how many must settle. any never cancels the others. A number below 1 or above the count of distinct members is refused invalid_request before anything is recorded."
+              "doc": "all, any, or how many must settle. any never cancels the others. Anything else is refused invalid_request before anything is recorded: another string, or a number that is not a positive integer or is above the count of distinct members."
             },
             {
               "name": "timeout_ms",
@@ -5351,7 +5351,7 @@
                 "$ref": "urn:threads:schema:events:v1#/$defs/PosInt"
               },
               "required": false,
-              "doc": "How long to wait. Omitted: the host policy, initially 120 s, and never more than it."
+              "doc": "How long to wait, a positive integer. Omitted: the host policy, initially 120 s, and never more than it. Zero, a negative, a fraction or a non-finite value is refused invalid_request before anything is recorded."
             },
             {
               "name": "idempotency_key",
@@ -6437,11 +6437,16 @@
                   },
                   {
                     "$ref": "#/types/OperatorRefusal"
+                  },
+                  {
+                    "enum": [
+                      "invalid_request"
+                    ]
                   }
                 ]
               },
               "required": true,
-              "doc": "Why it was refused."
+              "doc": "Why it was refused. invalid_request (a timeout_ms that is not a positive integer) is returned before any writer, so, like busy, it is never logged."
             }
           },
           "casing": "api"
@@ -6483,7 +6488,7 @@
                 ]
               },
               "required": true,
-              "doc": "Why it was refused. invalid_request (no members, or a mode below 1 or above the member count) is returned before any writer, so, like busy, it is never logged."
+              "doc": "Why it was refused. invalid_request (no members, a mode that is neither all, any nor a positive integer no greater than the member count, or a timeout_ms that is not a positive integer) is returned before any writer, so, like busy, it is never logged."
             }
           },
           "casing": "api"

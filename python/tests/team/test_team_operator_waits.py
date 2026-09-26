@@ -151,6 +151,80 @@ def test_no_members_or_a_mode_below_one_is_invalid_request_and_records_nothing()
     asyncio.run(main())
 
 
+# spec/api.json declares mode and both timeouts PosInt. A public value that is not one is a
+# refusal before the writer, never a raise inside the append (AGENTS.md, "Trust boundaries").
+# bool is an int subclass, so True and False are listed here too.
+# 2**53 is past MAX_SAFE_INTEGER: Python's unbounded ints once let it reach the writer, where
+# TypeScript's Number.isSafeInteger already refused it.
+_NOT_POS_INT: list[object] = [0, 1.5, -1, float("nan"), float("inf"), True, False, 2**53]
+
+
+def test_team_wait_refuses_every_mode_that_is_not_a_positive_integer() -> None:
+    async def main() -> None:
+        # Two members, so 1.5 sits inside [1, count] and the old range check let it through.
+        store, team = await _ran(
+            answers([lambda _r: say("Drafted.")]), answers([lambda _r: say("Read.")])
+        )
+        await team.start("writer", "Draft.")
+        await team.start("reader", "Read.")
+        both = [_ref(team, "writer-1"), _ref(team, "reader-1")]
+        before = len(await _team_log(store, team))
+        for mode in _NOT_POS_INT:
+            got = await team.wait(both, mode=mode)  # pyright: ignore[reportArgumentType] - the boundary takes what a caller really passes
+            assert got == TeamWaitRefused("invalid_request"), mode
+        assert len(await _team_log(store, team)) == before
+
+    asyncio.run(main())
+
+
+def test_team_wait_refuses_every_timeout_ms_that_is_not_a_positive_integer() -> None:
+    async def main() -> None:
+        store, team = await _ran(answers([lambda _r: say("Drafted.")]))
+        await team.start("writer", "Draft.")
+        ref = _ref(team, "writer-1")
+        before = len(await _team_log(store, team))
+        for timeout in _NOT_POS_INT:
+            got = await team.wait([ref], timeout_ms=timeout)  # pyright: ignore[reportArgumentType] - the boundary takes what a caller really passes
+            assert got == TeamWaitRefused("invalid_request"), timeout
+        assert len(await _team_log(store, team)) == before
+
+    asyncio.run(main())
+
+
+def test_team_wait_refuses_a_mode_that_is_neither_all_any_nor_a_count() -> None:
+    """A mode is "all", "any" or a count, and nothing else: any other string used to reach
+    wait_started and raise there."""
+
+    async def main() -> None:
+        store, team = await _ran(answers([lambda _r: say("Drafted.")]))
+        await team.start("writer", "Draft.")
+        ref = _ref(team, "writer-1")
+        before = len(await _team_log(store, team))
+        for mode in ("bogus", "ALL", "", "1"):
+            got = await team.wait([ref], mode=mode)  # pyright: ignore[reportArgumentType] - a caller can pass a string the contract never allowed
+            assert got == TeamWaitRefused("invalid_request"), mode
+        assert len(await _team_log(store, team)) == before
+        # all and any still work.
+        assert isinstance(await team.wait([ref], mode="any"), Waited)
+        assert isinstance(await team.wait([ref], mode="all"), Waited)
+
+    asyncio.run(main())
+
+
+def test_team_ask_refuses_every_timeout_ms_that_is_not_a_positive_integer() -> None:
+    async def main() -> None:
+        store, team = await _ran(answers([lambda _r: say("Drafted.")]))
+        await team.start("writer", "Draft.")
+        ref = _ref(team, "writer-1")
+        before = len(await _team_log(store, team))
+        for timeout in _NOT_POS_INT:
+            got = await team.ask(ref, "Which topic?", timeout_ms=timeout)  # pyright: ignore[reportArgumentType] - the boundary takes what a caller really passes
+            assert got == TeamAskRefused("invalid_request"), timeout
+        assert len(await _team_log(store, team)) == before
+
+    asyncio.run(main())
+
+
 def test_a_ref_carrying_another_tenant_names_no_member_of_this_team() -> None:
     async def main() -> None:
         _store, team = await _ran(answers([lambda _r: say("Drafted.")]))
