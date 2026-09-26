@@ -146,7 +146,7 @@ class _FileSink:
             _place(self._temp, path, sha)
         finally:
             self.discard()
-        _fsync_dir(path.parent)
+        fsync_dir(path.parent)
         return sha
 
     def discard(self) -> None:
@@ -217,7 +217,8 @@ def _missing(sha256: str) -> Err[ParseError]:
     return Err(ParseError("artifact_missing", f"no artifact {sha256}"))
 
 
-def _fsync_dir(path: Path) -> None:
+def fsync_dir(path: Path) -> None:
+    """Makes a directory's entries durable, so a file published in it survives a crash."""
     fd = os.open(path, os.O_RDONLY)
     try:
         os.fsync(fd)
