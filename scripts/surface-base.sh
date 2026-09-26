@@ -23,9 +23,16 @@ sha=""
 if [[ "$event" == "pull_request" && -n "$base_ref" ]]; then
   git fetch --no-tags --quiet origin "$base_ref" >&2 || true
   sha=$(git merge-base HEAD "origin/$base_ref" 2>/dev/null || true)
-elif [[ "$event" == "push" && -n "$before" && ! "$before" =~ ^0+$ ]] \
-  && git cat-file -e "$before^{commit}" 2>/dev/null; then
-  sha="$before"
+elif [[ "$event" == "push" && -n "$before" && ! "$before" =~ ^0+$ ]]; then
+  if git cat-file -e "$before^{commit}" 2>/dev/null; then
+    sha="$before"
+  else
+    # A force-push leaves github.event.before pointing at a dropped commit. The merge base with
+    # main is the right answer then, unless it is HEAD itself — which is what a shallow clone
+    # yields, and comparing a commit with itself would pass the gate without looking.
+    sha=$(git merge-base HEAD origin/main 2>/dev/null || true)
+    [[ -n "$sha" && "$sha" == "$(git rev-parse HEAD 2>/dev/null)" ]] && sha=""
+  fi
 else
   sha=$(git merge-base HEAD origin/main 2>/dev/null || true)
 fi
