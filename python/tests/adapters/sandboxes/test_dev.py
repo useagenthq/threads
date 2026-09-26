@@ -183,6 +183,21 @@ def test_a_stale_owner_creates_nothing_and_writes_nothing(tmp_path: Path) -> Non
     asyncio.run(main())
 
 
+def test_a_stale_writer_spawns_nothing(tmp_path: Path) -> None:
+    async def main() -> None:
+        # /usr/bin/true stands in for the confinement: the fence is refused before any spawn, so
+        # this runs wherever the tests do and nothing is ever confined.
+        sandbox = dev_sandbox(root=str(tmp_path), tool="/usr/bin/true")
+        session = await _opened(sandbox)
+        spawned = await session.exec(
+            ["/bin/sh", "-c", "echo x > spawned.txt"], STALE, process_key="k-stale"
+        )
+        assert _failed(spawned) == "stale_epoch"
+        assert list((tmp_path / session.id).iterdir()) == []
+
+    asyncio.run(main())
+
+
 def test_a_symlink_chain_never_reaches_a_file_outside_the_root(tmp_path: Path) -> None:
     async def main() -> None:
         (tmp_path / "outside.txt").write_text("a credential")

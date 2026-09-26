@@ -193,6 +193,21 @@ describe("a stale owner touches nothing", () => {
       "stale_epoch",
     );
   });
+
+  test("a stale writer spawns nothing", async () => {
+    const at = root();
+    // /usr/bin/true stands in for the confinement: the fence is refused before any spawn, so
+    // this runs wherever the tests do and nothing is ever confined.
+    const sandbox = devSandbox({ root: at, tool: "/usr/bin/true" });
+    const session = unwrap(await sandbox.create("op-1", CTX));
+    const spawned = await session.exec(
+      ["/bin/sh", "-c", "echo x > spawned.txt"],
+      STALE,
+      { processKey: "k-stale" },
+    );
+    expect(code(spawned)).toBe("stale_epoch");
+    expect(readdirSync(join(at, session.id))).toEqual([]);
+  });
 });
 
 describe("a symlink is never followed on the host", () => {
