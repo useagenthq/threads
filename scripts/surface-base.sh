@@ -5,7 +5,8 @@
 #   scripts/surface-base.sh --event pull_request --base-ref main   # merge base with origin/main
 #   scripts/surface-base.sh --event push --before <sha>            # the pushed-over commit
 # An empty --base-ref or --before is ignored; an all-zero --before (a new branch) falls back to
-# the merge base with origin/main.
+# the merge base with origin/main, as does a --before that no longer exists (a force-push leaves
+# github.event.before pointing at a commit that has been dropped).
 set -euo pipefail
 
 event="" base_ref="" before=""
@@ -22,7 +23,8 @@ sha=""
 if [[ "$event" == "pull_request" && -n "$base_ref" ]]; then
   git fetch --no-tags --quiet origin "$base_ref" >&2 || true
   sha=$(git merge-base HEAD "origin/$base_ref" 2>/dev/null || true)
-elif [[ "$event" == "push" && -n "$before" && ! "$before" =~ ^0+$ ]]; then
+elif [[ "$event" == "push" && -n "$before" && ! "$before" =~ ^0+$ ]] \
+  && git cat-file -e "$before^{commit}" 2>/dev/null; then
   sha="$before"
 else
   sha=$(git merge-base HEAD origin/main 2>/dev/null || true)
