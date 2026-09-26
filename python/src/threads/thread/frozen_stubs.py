@@ -28,11 +28,9 @@ def stub_fork_ref(chain: Sequence[Event]) -> ArtifactRef | None:
     return found
 
 
-def frozen_stubs(chain: Sequence[Event], data: bytes) -> Ok[tuple[Stub, ...]] | Err[ParseError]:
-    """The stubs a stub branch runs behind, parsed from the fork event's artifact bytes."""
-    ref = stub_fork_ref(chain)
-    if ref is None:
-        raise AssertionError("the caller checked the chain has a stub fork")
+def frozen_stubs(ref: ArtifactRef, data: bytes) -> Ok[tuple[Stub, ...]] | Err[ParseError]:
+    """The stubs a stub branch runs behind, parsed from the fork event's artifact bytes and
+    checked against the length the fork recorded (the store checked the hash on the read)."""
     if len(data) != ref.bytes:
         why = f"the frozen stub script {ref.sha256} is {len(data)} bytes, not {ref.bytes}"
         return Err(ParseError("artifact_corrupt", why))
