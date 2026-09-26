@@ -19,11 +19,14 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { CodeSample } from "@/components/home/code-sample";
 import { CopyCommand } from "@/components/home/copy-command";
+import { Evals } from "@/components/home/evals";
 import { EventLog } from "@/components/home/event-log";
 import { GitHubIcon } from "@/components/home/github-icon";
 import { HeroThreads } from "@/components/home/hero-threads";
 import { Providers } from "@/components/home/providers";
-import { QUICKSTART } from "@/components/home/samples";
+import { QUICKSTART, TELEMETRY } from "@/components/home/samples";
+import { Timeline } from "@/components/home/timeline";
+import { Backends, Trace } from "@/components/home/trace";
 import { UseCases } from "@/components/home/use-cases";
 import { LogoMark } from "@/components/logo";
 import { githubUrl, tagline } from "@/lib/shared";
@@ -136,6 +139,9 @@ export default function HomePage() {
       <Hero />
       <Providers />
       <BuiltFor />
+      <TheRecord />
+      <Observability />
+      <EvalsSection />
       <Features />
       <Reasons />
       <CallToAction />
@@ -234,6 +240,83 @@ function BuiltFor() {
         the whole program.
       </SectionHeading>
       <UseCases />
+    </section>
+  );
+}
+
+function TheRecord() {
+  return (
+    <section id="timeline" className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
+      <SectionHeading eyebrow="The record" title="Every run reads back, step by step">
+        There is nothing to instrument. A thread already holds every input, the exact bytes of every model
+        request, every tool call, every approval and every result. <Code>timeline()</Code> reads it back in
+        order, from production, months later, with only the store and the thread id.
+      </SectionHeading>
+      <Timeline />
+      <p className="mt-6 max-w-3xl text-sm leading-6 text-fd-muted-foreground">
+        Pick any entry to see the stored event. This run parked on an approval and finished six minutes later
+        in a different process, and the log reads as one story either way. From the command line it is{" "}
+        <Code>threads timeline &lt;thread_id&gt;</Code>.
+      </p>
+    </section>
+  );
+}
+
+function Observability() {
+  return (
+    <section id="observability" className="border-y border-fd-border bg-fd-card/60">
+      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
+        <SectionHeading eyebrow="Observability" title="The same log, as OpenTelemetry spans">
+          One line on your host sends every turn, model call and tool call to the tracing tool you already
+          run. Spans are computed from the log rather than recorded beside it, so a run that crashed and was
+          recovered still traces, and an approval a person gave hours later lands in the same trace as the
+          turn that asked for it.
+        </SectionHeading>
+        <div className="mt-12 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-10">
+          <div className="flex min-w-0 flex-col gap-6">
+            <div className="overflow-hidden rounded-2xl border border-fd-border bg-fd-card">
+              <CodeSample sample={TELEMETRY} />
+            </div>
+            <div>
+              <p className="text-sm leading-6 text-fd-muted-foreground">
+                The exporter speaks OTLP/HTTP JSON and the standard <Code>OTEL_*</Code> variables, so the
+                endpoint is the only thing that changes:
+              </p>
+              <div className="mt-4">
+                <Backends />
+              </div>
+              <dl className="mt-6 space-y-3 text-sm leading-6">
+                <div>
+                  <dt className="font-medium text-fd-foreground">Content is off by default</dt>
+                  <dd className="text-fd-muted-foreground">
+                    Names, timings, token counts and outcomes leave the process. The conversation does not,
+                    and prompts are never exported.
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-fd-foreground">Sent once, when a span closes</dt>
+                  <dd className="text-fd-muted-foreground">
+                    A slow collector never holds up a run, and nothing is dropped while it is down.
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+          <Trace />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EvalsSection() {
+  return (
+    <section id="evals" className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
+      <SectionHeading eyebrow="Evals" title="Save a real run. Rerun it forever.">
+        <Code>saveCase</Code> keeps a turn you liked as a regression case: the recorded replies, the tool
+        results and the exact request bytes. <Code>threads eval</Code> then checks it on every commit.
+      </SectionHeading>
+      <Evals />
     </section>
   );
 }

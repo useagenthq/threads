@@ -69,6 +69,57 @@ async def main() -> None:
 asyncio.run(main())`,
 };
 
+// Turning on OpenTelemetry export, from the Observability guide.
+export const TELEMETRY: Sample = {
+  ts: `import { host } from "@threads/host";
+import { otel } from "@threads/otel";
+
+// OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
+// OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=<your key>
+// OTEL_SERVICE_NAME=support-bot
+export default host({
+  store,
+  agents: { support },
+  telemetry: otel(),
+});`,
+  py: `from threads.host import host
+from threads.otel import otel
+
+# OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
+# OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=<your key>
+# OTEL_SERVICE_NAME=support-bot
+app = host(
+    store=store,
+    agents={"support": support},
+    telemetry=otel(),
+)`,
+};
+
+// Saving a real turn and checking it, from the Running evals guide.
+export const EVALS: Sample = {
+  ts: `// Once, from a real thread you liked.
+await thread.saveCase("refund-policy", {
+  externalEffects: "stub",
+});
+
+// In CI: no model calls, no API keys, no network.
+const report = await runEvals({
+  cases: "cases",
+  agents: [support],
+});
+console.log(report.summary); // "12 passed, 0 failed"`,
+  py: `# Once, from a real thread you liked.
+await thread.save_case(
+    "refund-policy", external_effects="stub"
+)
+
+# In CI: no model calls, no API keys, no network.
+report = await run_evals(
+    cases="cases", agents=(support,)
+)
+print(report.summary)  # "12 passed, 0 failed"`,
+};
+
 export type UseCase = Sample & { id: string; title: string; body: string; href: string };
 
 export const USE_CASES: UseCase[] = [
