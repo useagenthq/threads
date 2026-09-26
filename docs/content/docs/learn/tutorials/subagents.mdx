@@ -1,0 +1,203 @@
+---
+title: "3. Delegate to a subagent"
+description: "Hand one job to a second agent that works in its own thread and reports back."
+icon: Network
+---
+
+import { GitFork, Users } from "lucide-react";
+
+The support agent is doing two jobs: talking to the customer, and digging through orders. Splitting
+them keeps each one's context short, and lets the digging run on a cheaper model later.
+
+A subagent is an ordinary agent that another agent may start with a task. It gets its own thread and
+its own log; its final answer comes back to the parent as a tool result.
+
+## Two agents
+
+List the agents the parent may start in `subagents`. The parent's model gets a `spawn_agent` tool
+and sees the names in its instructions.
+
+The scripted responses repeat, so both programs below build them with two small helpers: `say` for a
+plain answer, `call` for a tool call.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts title="support.ts"
+import { agent, scriptedModel, sqlite, tool } from "@threads/core";
+import { z } from "zod";
+
+const usage = { input_tokens: 10, output_tokens: 2 };
+const say = (text: string) => ({
+  content: [{ type: "text", text }],
+  stop_reason: "end_turn",
+  usage,
+});
+const call = (id: string, name: string, input: unknown) => ({
+  content: [{ type: "tool_use", call_id: id, name, input }],
+  stop_reason: "tool_use",
+  usage,
+});
+
+const lookupOrder = tool({
+  name: "lookup_order",
+  description: "Look up an order by id.",
+  input: z.object({ id: z.string() }),
+  effect: "read_only",
+  execute: async ({ id }) => `order ${id}: delivered 12 days ago`,
+});
+
+const orderDesk = agent({
+  name: "order_desk",
+  instructions: "Look the order up and answer in one sentence.",
+  model: scriptedModel({
+    responses: [
+      call("o1", "lookup_order", { id: "42" }),
+      say("Order 42 was delivered 12 days ago."),
+    ],
+  }),
+  tools: [lookupOrder],
+});
+
+const support = agent({
+  name: "support",
+  instructions: "Send order questions to the order desk, then answer the customer.",
+  model: scriptedModel({
+    responses: [
+      call("s1", "spawn_agent", { agent: "order_desk", prompt: "When was order 42 delivered?" }),
+      say("Order 42 arrived 12 days ago, inside the 30-day refund window."),
+    ],
+  }),
+  tools: [lookupOrder], // a subagent only gets tools its parent also has
+  subagents: [orderDesk],
+});
+
+const result = await support.run("Can I still return order 42?", { store: sqlite(":memory:") });
+if (result.status === "completed") console.log(result.output);
+else console.log(result.status);
+
+for (const child of await result.thread.children()) {
+  console.log(child.child_thread_id, child.status);
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python title="support.py"
+import asyncio
+
+from pydantic import BaseModel, JsonValue
+
+from threads import RunContext, agent, scripted_model, sqlite, tool
+from threads.result import Err
+
+USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
+
+
+def say(text: str) -> JsonValue:
+    return {"content": [{"type": "text", "text": text}], "stop_reason": "end_turn", "usage": USAGE}
+
+
+def call(call_id: str, name: str, args: JsonValue) -> JsonValue:
+    part: JsonValue = {"type": "tool_use", "call_id": call_id, "name": name, "input": args}
+    return {"content": [part], "stop_reason": "tool_use", "usage": USAGE}
+
+
+class Order(BaseModel):
+    id: str
+
+
+async def lookup(args: Order, ctx: RunContext[None]) -> str:
+    return f"order {args.id}: delivered 12 days ago"
+
+
+lookup_order = tool(
+    name="lookup_order",
+    description="Look up an order by id.",
+    input=Order,
+    effect="read_only",
+    execute=lookup,
+)
+
+order_desk = agent(
+    name="order_desk",
+    instructions="Look the order up and answer in one sentence.",
+    model=scripted_model({
+        "responses": [
+            call("o1", "lookup_order", {"id": "42"}),
+            say("Order 42 was delivered 12 days ago."),
+        ]
+    }),
+    tools=[lookup_order],
+)
+
+support = agent(
+    name="support",
+    instructions="Send order questions to the order desk, then answer the customer.",
+    model=scripted_model({
+        "responses": [
+            call("s1", "spawn_agent", {"agent": "order_desk", "prompt": "When was order 42 delivered?"}),
+            say("Order 42 arrived 12 days ago, inside the 30-day refund window."),
+        ]
+    }),
+    tools=[lookup_order],  # a subagent only gets tools its parent also has
+    subagents=[order_desk],
+)
+
+
+async def main() -> None:
+    result = await support.run("Can I still return order 42?", store=sqlite(":memory:"))
+    print(result.output if result.status == "completed" else result.status)
+
+    children = await result.thread.children()
+    if isinstance(children, Err):
+        raise SystemExit(children.error.message)
+    for child in children.value:
+        print(child.child_thread_id, child.status)
+
+
+asyncio.run(main())
+```
+
+</Tab>
+</Tabs>
+
+It prints the customer's answer and then the desk's own thread:
+
+```text
+Order 42 arrived 12 days ago, inside the 30-day refund window.
+01a0ddb0-9f74-7c34-855c-b90a57b6d0b8 completed
+```
+
+The id changes every run. What matters is that there is one: the order desk's work is a thread of
+its own, which you can read with `timeline()`, replay or fork exactly like the parent's.
+
+## What a subagent may do
+
+A subagent can only narrow what its parent may do, never widen it. That is why `lookupOrder` is
+passed to both agents above: a subagent's tools are filtered to the names its parent also has, so a
+tool the parent lacks is simply not there.
+
+The same goes for permissions — each call is decided under the subagent's rules and again under its
+parent's, and the stricter answer wins — and for budgets, which the parent's covers.
+
+<Callout>
+  `spawn_agent` also takes `background: true`, which returns at once and delivers the answer to the
+  parent later. [Subagents](/docs/multi-agent/subagents#background-subagents) covers what that does
+  to a run's status.
+</Callout>
+
+## Next
+
+A subagent answers once and is gone. When you want members that keep working, message each other and
+report back as they finish, that's a team.
+
+<Cards>
+  <Card title="4. Run a team" icon={<Users />} href="/docs/learn/tutorials/teams">
+    Two desks working in parallel, and a lead that waits for both.
+  </Card>
+  <Card title="Fork" icon={<GitFork />} href="/docs/evals/fork">
+    Take any step of either thread and try it again.
+  </Card>
+</Cards>

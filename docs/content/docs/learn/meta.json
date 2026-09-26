@@ -1,0 +1,15 @@
+{
+  "title": "Learn",
+  "description": "A tutorial path and runnable examples",
+  "icon": "GraduationCap",
+  "root": true,
+  "pages": [
+    "index",
+    "tutorials/first-agent",
+    "tutorials/tools-and-approvals",
+    "tutorials/subagents",
+    "tutorials/teams",
+    "---[FlaskConical]Examples---",
+    "examples"
+  ]
+}

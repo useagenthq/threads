@@ -1,0 +1,251 @@
+---
+title: "4. Run a team"
+description: "Two members working in parallel, a lead that waits for both, and one log per thread."
+icon: Users
+---
+
+import { FlaskConical, History, Users, Wallet } from "lucide-react";
+
+Two questions come in at once: when did order 42 arrive, and how long is the return window? A
+subagent would answer them one after the other. A team answers them at the same time.
+
+Give an agent a `team` and it becomes a lead. Its model can start members from the agents the team
+lists, send them messages, ask them questions, wait for them and cancel them. Each member runs in
+its own thread. When a member finishes, the lead wakes up with the result.
+
+## Two desks, one lead
+
+The lead below starts both desks, calls `wait` until they are done, and answers. `start`, `wait` and
+the other team tools are given to the lead automatically — you don't define them.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts title="support.ts"
+import { agent, scriptedModel, sqlite, tool } from "@threads/core";
+import { z } from "zod";
+
+const usage = { input_tokens: 10, output_tokens: 2 };
+const say = (text: string) => ({
+  content: [{ type: "text", text }],
+  stop_reason: "end_turn",
+  usage,
+});
+const call = (id: string, name: string, input: unknown) => ({
+  content: [{ type: "tool_use", call_id: id, name, input }],
+  stop_reason: "tool_use",
+  usage,
+});
+
+const lookupOrder = tool({
+  name: "lookup_order",
+  description: "Look up an order by id.",
+  input: z.object({ id: z.string() }),
+  effect: "read_only",
+  execute: async ({ id }) => `order ${id}: delivered 12 days ago`,
+});
+
+const orderDesk = agent({
+  name: "order_desk",
+  instructions: "Look the order up and answer in one sentence.",
+  model: scriptedModel({
+    responses: [
+      call("o1", "lookup_order", { id: "42" }),
+      say("Order 42 was delivered 12 days ago."),
+    ],
+  }),
+  tools: [lookupOrder],
+});
+
+const policyDesk = agent({
+  name: "policy_desk",
+  instructions: "Answer policy questions in one sentence.",
+  model: scriptedModel({
+    responses: [say("Returns are accepted within 30 days of delivery.")],
+  }),
+});
+
+const support = agent({
+  name: "support",
+  instructions: "Start the order desk and the policy desk, wait for both, then answer.",
+  model: scriptedModel({
+    responses: [
+      call("c1", "start", { agent: "order_desk", task: "When was order 42 delivered?" }),
+      call("c2", "start", { agent: "policy_desk", task: "How long is the return window?" }),
+      call("c3", "wait", { members: ["order_desk-1", "policy_desk-1"] }),
+      say("Order 42 arrived 12 days ago, inside the 30-day return window."),
+      say("Both desks replied: order 42 arrived 12 days ago, inside the 30-day return window."),
+    ],
+  }),
+  team: [orderDesk, policyDesk],
+});
+
+const r = await support.run("Can I still return order 42?", { store: sqlite(":memory:") });
+if (r.status === "completed") console.log(r.output);
+else console.log(r.status);
+
+for (const m of await r.team.members()) console.log(m.name, m.state);
+```
+
+</Tab>
+<Tab value="Python">
+
+```python title="support.py"
+import asyncio
+
+from pydantic import BaseModel, JsonValue
+
+from threads import RunContext, agent, scripted_model, sqlite, tool
+
+USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
+
+
+def say(text: str) -> JsonValue:
+    return {"content": [{"type": "text", "text": text}], "stop_reason": "end_turn", "usage": USAGE}
+
+
+def call(call_id: str, name: str, args: JsonValue) -> JsonValue:
+    part: JsonValue = {"type": "tool_use", "call_id": call_id, "name": name, "input": args}
+    return {"content": [part], "stop_reason": "tool_use", "usage": USAGE}
+
+
+class Order(BaseModel):
+    id: str
+
+
+async def lookup(args: Order, ctx: RunContext[None]) -> str:
+    return f"order {args.id}: delivered 12 days ago"
+
+
+lookup_order = tool(
+    name="lookup_order",
+    description="Look up an order by id.",
+    input=Order,
+    effect="read_only",
+    execute=lookup,
+)
+
+order_desk = agent(
+    name="order_desk",
+    instructions="Look the order up and answer in one sentence.",
+    model=scripted_model({
+        "responses": [
+            call("o1", "lookup_order", {"id": "42"}),
+            say("Order 42 was delivered 12 days ago."),
+        ]
+    }),
+    tools=[lookup_order],
+)
+
+policy_desk = agent(
+    name="policy_desk",
+    instructions="Answer policy questions in one sentence.",
+    model=scripted_model({
+        "responses": [say("Returns are accepted within 30 days of delivery.")]
+    }),
+)
+
+support = agent(
+    name="support",
+    instructions="Start the order desk and the policy desk, wait for both, then answer.",
+    model=scripted_model({
+        "responses": [
+            call("c1", "start", {"agent": "order_desk", "task": "When was order 42 delivered?"}),
+            call("c2", "start", {"agent": "policy_desk", "task": "How long is the return window?"}),
+            call("c3", "wait", {"members": ["order_desk-1", "policy_desk-1"]}),
+            say("Order 42 arrived 12 days ago, inside the 30-day return window."),
+            say("Both desks replied: order 42 arrived 12 days ago, inside the 30-day return window."),
+        ]
+    }),
+    team=[order_desk, policy_desk],
+)
+
+
+async def main() -> None:
+    r = await support.run("Can I still return order 42?", store=sqlite(":memory:"))
+    print(r.output if r.status == "completed" else r.status)
+
+    for m in await r.team.members():
+        print(m.name, m.state)
+
+
+asyncio.run(main())
+```
+
+</Tab>
+</Tabs>
+
+It prints:
+
+```text
+Both desks replied: order 42 arrived 12 days ago, inside the 30-day return window.
+order_desk-1 idle
+policy_desk-1 idle
+support idle
+```
+
+Three things in that output are worth reading twice.
+
+- **The member names are `order_desk-1` and `policy_desk-1`.** A member's name is the agent's name
+  plus a count, so one definition can be started several times. That is the name the lead passes to
+  `wait`, `send` or `cancel`.
+- **The lead answered twice.** `Order 42 arrived…` was its answer after `wait` returned; the line
+  that got printed is its last one, given after both members' results had reported in. Every answer
+  before it is still in the lead's [timeline](/docs/evals/timeline).
+- **`members()` lists the lead too.** `support` is in the team alongside the desks it started.
+
+## The team handle
+
+`r.team` is on every result, whatever the status. Your own code can drive the team the same way the
+lead's model does — start a member, ask it something, wait for it:
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const started = await r.team.start("order_desk", "Find every order from last week.");
+if (started.status === "started") {
+  const answer = await r.team.ask(started.member, "Which one is oldest?", { timeoutMs: 60_000 });
+  if (answer.status === "answered") console.log(answer.text);
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+started = await r.team.start("order_desk", "Find every order from last week.")
+if started.status == "started":
+    answer = await r.team.ask(started.member, "Which one is oldest?", timeout_ms=60_000)
+    if answer.status == "answered":
+        print(answer.text)
+```
+
+</Tab>
+</Tabs>
+
+Nothing here raises. A call that can't go ahead comes back as `{ status: "refused", code }` — an
+unknown member, a member that has ended, a full mailbox, a closed team — and the model reads the
+same refusals as text it can act on.
+
+## What you have now
+
+Four steps ago this was one agent repeating its instructions. It now has a tool, an approval rule, a
+subagent and a team, and every one of those steps wrote to an append-only log: the lead's thread, one
+thread per member, and a team log. You can replay any of them, fork any step, or turn a run you liked
+into a test.
+
+<Cards>
+  <Card title="Teams" icon={<Users />} href="/docs/multi-agent/teams">
+    All seven team tools, dynamic specialists, and what happens when a member fails.
+  </Card>
+  <Card title="Budgets" icon={<Wallet />} href="/docs/control/budgets">
+    Cap what a run, a thread and everything under it may spend.
+  </Card>
+  <Card title="Saved cases" icon={<History />} href="/docs/evals/saved-cases">
+    Save a run you liked and check it in CI, for free.
+  </Card>
+  <Card title="Examples" icon={<FlaskConical />} href="/docs/learn/examples">
+    Programs that ship in the repository, including the eval loop end to end.
+  </Card>
+</Cards>

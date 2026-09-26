@@ -1,0 +1,151 @@
+---
+title: "1. Your first agent"
+description: "An agent is a model, instructions and a store. Run one offline, then point it at a real model."
+icon: Bot
+---
+
+import { Cpu, ShieldCheck } from "lucide-react";
+
+You're building support for a small shop. This first step is the smallest thing that works: an agent
+with instructions, no tools yet, answering one question.
+
+## Write the agent
+
+An agent needs a name, instructions and a model. `scriptedModel` (`scripted_model` in Python) plays
+back fixed responses in order, so the program runs with no API key and no network — the same model
+the framework's own tests use.
+
+`sqlite(":memory:")` is the store: the append-only log this run is written to. In memory it lasts
+for the process; give it a path and it lasts on disk.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts title="support.ts"
+import { agent, scriptedModel, sqlite } from "@threads/core";
+
+const support = agent({
+  name: "support",
+  instructions: "You answer refund questions. Quote the 30-day refund window.",
+  model: scriptedModel({
+    responses: [
+      {
+        content: [{ type: "text", text: "Orders can be returned within 30 days of delivery." }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 10, output_tokens: 2 },
+      },
+    ],
+  }),
+});
+
+const result = await support.run("What is your refund policy?", { store: sqlite(":memory:") });
+if (result.status === "completed") console.log(result.output);
+else console.log(result.status);
+```
+
+</Tab>
+<Tab value="Python">
+
+```python title="support.py"
+import asyncio
+
+from pydantic import JsonValue
+
+from threads import agent, scripted_model, sqlite
+
+REPLY: JsonValue = {
+    "content": [{"type": "text", "text": "Orders can be returned within 30 days of delivery."}],
+    "stop_reason": "end_turn",
+    "usage": {"input_tokens": 10, "output_tokens": 2},
+}
+
+support = agent(
+    name="support",
+    instructions="You answer refund questions. Quote the 30-day refund window.",
+    model=scripted_model({"responses": [REPLY]}),
+)
+
+
+async def main() -> None:
+    result = await support.run("What is your refund policy?", store=sqlite(":memory:"))
+    print(result.output if result.status == "completed" else result.status)
+
+
+asyncio.run(main())
+```
+
+</Tab>
+</Tabs>
+
+Run it with `bun support.ts` or `uv run python support.py`:
+
+```text
+Orders can be returned within 30 days of delivery.
+```
+
+## Check the status, not an exception
+
+`run()` doesn't throw when a run ends early. It returns a result keyed on `status`, and
+`completed` is only one of the answers — a run can also park for an approval, run out of budget, be
+cancelled, fail, or hand off. That's why the program above prints `result.status` when it isn't
+`completed`, and it is the reason the next tutorial has something to check.
+
+The full list is in [Quickstart](/docs/quickstart#results-are-values).
+
+## Point it at a real model
+
+Swap the scripted model for a provider and nothing else changes. The key is read from
+`ANTHROPIC_API_KEY`, and a store with a path keeps the log on disk so you can read, resume and fork
+the run later.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { anthropic } from "@threads/anthropic";
+
+const support = agent({
+  name: "support",
+  instructions: "You answer refund questions. Quote the 30-day refund window.",
+  model: anthropic("claude-sonnet-5"),
+});
+
+const result = await support.run("What is your refund policy?", { store: sqlite(".threads") });
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads.anthropic import anthropic
+
+support = agent(
+    name="support",
+    instructions="You answer refund questions. Quote the 30-day refund window.",
+    model=anthropic("claude-sonnet-5"),
+)
+
+result = await support.run("What is your refund policy?", store=sqlite(".threads"))
+```
+
+</Tab>
+</Tabs>
+
+Keep the scripted version around. Every tutorial after this one uses it, because a scripted run is
+free, fast and gives the same answer every time — which is what makes the outputs on these pages
+checkable.
+
+<Callout type="idea">
+  OpenAI, the AI SDK and LiteLLM are drop-in replacements for `anthropic()` here. See [Models](/docs/agents/models).
+</Callout>
+
+## Next
+
+<Cards>
+  <Card title="2. Tools and approvals" icon={<ShieldCheck />} href="/docs/learn/tutorials/tools-and-approvals">
+    The agent can't look anything up yet. Give it a function.
+  </Card>
+  <Card title="Models" icon={<Cpu />} href="/docs/agents/models">
+    Providers, fallbacks, and what each one costs.
+  </Card>
+</Cards>

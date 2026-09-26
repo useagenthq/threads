@@ -1,0 +1,280 @@
+---
+title: "2. Tools and approvals"
+description: "Give the agent a function to call, watch the log record the call, and decide what it may do without asking."
+icon: ShieldCheck
+---
+
+import { History, Network, Wrench } from "lucide-react";
+
+The agent from [step 1](/docs/learn/tutorials/first-agent) can only repeat its instructions. Now it
+gets a function: looking an order up. A tool is a name, a description, an input schema and your
+code. The schema is what the model is shown and what checks the model's arguments, so the two never
+drift apart.
+
+## Add the tool
+
+`effect: "read_only"` is a promise about the outside world: this call changes nothing, so it is safe
+to run again after a crash — and, as the last section shows, it is what lets the call run without
+asking anyone.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts title="support.ts"
+import { agent, scriptedModel, sqlite, tool } from "@threads/core";
+import { z } from "zod";
+
+const usage = { input_tokens: 10, output_tokens: 2 };
+
+const lookupOrder = tool({
+  name: "lookup_order",
+  description: "Look up an order by id.",
+  input: z.object({ id: z.string() }),
+  effect: "read_only",
+  execute: async ({ id }) => `order ${id}: delivered 12 days ago`,
+});
+
+const support = agent({
+  name: "support",
+  instructions: "You answer refund questions. Quote the 30-day refund window.",
+  model: scriptedModel({
+    responses: [
+      {
+        content: [{ type: "tool_use", call_id: "c1", name: "lookup_order", input: { id: "42" } }],
+        stop_reason: "tool_use",
+        usage,
+      },
+      {
+        content: [
+          { type: "text", text: "Order 42 arrived 12 days ago, inside the 30-day refund window." },
+        ],
+        stop_reason: "end_turn",
+        usage,
+      },
+    ],
+  }),
+  tools: [lookupOrder],
+});
+
+const result = await support.run("Can I still return order 42?", { store: sqlite(":memory:") });
+if (result.status === "completed") console.log(result.output);
+else console.log(result.status);
+```
+
+</Tab>
+<Tab value="Python">
+
+```python title="support.py"
+import asyncio
+
+from pydantic import BaseModel, JsonValue
+
+from threads import RunContext, agent, scripted_model, sqlite, tool
+
+USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
+
+
+class Order(BaseModel):
+    id: str
+
+
+async def lookup(args: Order, ctx: RunContext[None]) -> str:
+    return f"order {args.id}: delivered 12 days ago"
+
+
+lookup_order = tool(
+    name="lookup_order",
+    description="Look up an order by id.",
+    input=Order,
+    effect="read_only",
+    execute=lookup,
+)
+
+use: JsonValue = {"type": "tool_use", "call_id": "c1", "name": "lookup_order", "input": {"id": "42"}}
+answer: JsonValue = {
+    "type": "text",
+    "text": "Order 42 arrived 12 days ago, inside the 30-day refund window.",
+}
+
+support = agent(
+    name="support",
+    instructions="You answer refund questions. Quote the 30-day refund window.",
+    model=scripted_model({
+        "responses": [
+            {"content": [use], "stop_reason": "tool_use", "usage": USAGE},
+            {"content": [answer], "stop_reason": "end_turn", "usage": USAGE},
+        ]
+    }),
+    tools=[lookup_order],
+)
+
+
+async def main() -> None:
+    result = await support.run("Can I still return order 42?", store=sqlite(":memory:"))
+    print(result.output if result.status == "completed" else result.status)
+
+
+asyncio.run(main())
+```
+
+</Tab>
+</Tabs>
+
+It prints:
+
+```text
+Order 42 arrived 12 days ago, inside the 30-day refund window.
+```
+
+The scripted model takes two turns here: the first is the tool call, the second is the answer it
+gives once the tool result comes back. A real model decides that for itself.
+
+## Read what happened
+
+Nothing above logged anything by hand, and yet the whole run is on disk. `timeline()` reads the
+thread's log back in order.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const timeline = await result.thread.timeline();
+if (!timeline.ok) throw new Error(timeline.error.message);
+for (const { event } of timeline.value.entries) console.log(event.seq, event.type);
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads.result import Err
+
+timeline = await result.thread.timeline()
+if isinstance(timeline, Err):
+    raise SystemExit(timeline.error.message)
+for entry in timeline.value.entries:
+    print(entry.event.seq, entry.event.type)
+```
+
+</Tab>
+</Tabs>
+
+```text
+1 thread_started
+2 user_input
+3 model_request
+4 model_response
+5 tool_call
+6 permission_decision
+7 tool_result
+8 model_request
+9 model_response
+10 turn_completed
+```
+
+Note event 6. Every tool call is decided before it runs, and the decision is recorded next to the
+call. This run's call was allowed on its own because the tool said it was read-only.
+
+## A tool that changes something
+
+Refunding money is not read-only. Drop the `effect` and the same program stops before the call:
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const startRefund = tool({
+  name: "start_refund",
+  description: "Refund an order by id.",
+  input: z.object({ id: z.string() }),
+  execute: async ({ id }) => `refunded order ${id}`,
+});
+
+// ...with start_refund in tools, and the model scripted to call it:
+const result = await support.run("Refund order 42.", { store: sqlite(":memory:") });
+if (result.status === "parked") console.log(result.reason, result.pending[0]?.kind);
+else console.log(result.status);
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+start_refund = tool(
+    name="start_refund",
+    description="Refund an order by id.",
+    input=Order,
+    execute=refund,
+)
+
+# ...with start_refund in tools, and the model scripted to call it:
+result = await support.run("Refund order 42.", store=sqlite(":memory:"))
+if result.status == "parked":
+    print(result.reason, result.pending[0].kind)
+else:
+    print(result.status)
+```
+
+</Tab>
+</Tabs>
+
+```text
+awaiting_approval approval
+```
+
+The run parked. It did not fail, and nothing was refunded: the call is waiting for a person, and the
+thread holds everything it needs to carry on once someone decides. That is the default for any tool
+you have not declared read-only.
+
+## Let it through
+
+If the agent really is allowed to refund on its own, say so with a permission rule.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const support = agent({
+  name: "support",
+  instructions: "You answer refund questions. Quote the 30-day refund window.",
+  model,
+  tools: [startRefund],
+  permissions: { allow: ["start_refund"] },
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+support = agent(
+    name="support",
+    instructions="You answer refund questions. Quote the 30-day refund window.",
+    model=model,
+    tools=[start_refund],
+    permissions={"allow": ["start_refund"]},
+)
+```
+
+</Tab>
+</Tabs>
+
+Now the run completes and prints `Order 42 is refunded.` Rules can be narrower than a whole tool —
+`bash(git status)` or `web_fetch(domain:docs.example.com)` — and there are `ask` and `deny` lists
+too. [Permissions & approvals](/docs/control/permissions) has the decision order, and
+[Human-in-the-loop](/docs/control/human-in-the-loop) shows how to answer a parked approval instead of
+allowing it up front.
+
+## Next
+
+<Cards>
+  <Card title="3. Delegate to a subagent" icon={<Network />} href="/docs/learn/tutorials/subagents">
+    One agent, one job. Hand the order lookup to a second agent.
+  </Card>
+  <Card title="Tools" icon={<Wrench />} href="/docs/agents/tools">
+    Every field, the effect levels, and what happens to a call that was interrupted.
+  </Card>
+  <Card title="Timeline" icon={<History />} href="/docs/evals/timeline">
+    What each event type means, and how to open a thread you no longer have a result for.
+  </Card>
+</Cards>

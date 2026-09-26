@@ -1,0 +1,87 @@
+---
+title: "Examples"
+description: "The programs that ship in the repository, and the complete programs inside the guides."
+icon: FlaskConical
+---
+
+import { Bot, Network, Rocket, ShieldCheck, Users } from "lucide-react";
+
+Every program on this page is in the repository and runs as printed. Clone it first —
+[Installation](/docs/installation) — then run each one from the directory named in its command.
+
+## In the repository
+
+Two examples ship as files of their own, in both languages. Each one is run by the test suite, so
+they keep working as the framework changes.
+
+### Save a case, then check it the way CI does
+
+A support agent answers a refund question, that one turn is saved as a case, and `runEvals`
+(`run_evals`) replays it, reruns it against the agent as it is now, and reports drift. It needs no
+API key and no network: a [scripted model](/docs/evals/testing) stands in for a real one.
+
+| | File | Command |
+|---|---|---|
+| TypeScript | `typescript/examples/evals.ts` | `cd typescript && bun examples/evals.ts` |
+| Python | `python/examples/evals.py` | `cd python && uv run python examples/evals.py` |
+
+Both print:
+
+```text
+1 passed, 0 failed
+```
+
+It is the shortest end-to-end tour of the eval loop: [Saved cases](/docs/evals/saved-cases) for what
+a case holds, [Run evals](/docs/evals/run-evals) for the report and the `threads eval` command.
+
+### Export a run's spans to an OTLP collector
+
+A one-turn run, then `otel(...).sync()` ships the thread's log to whatever
+`OTEL_EXPORTER_OTLP_ENDPOINT` points at, and prints how many spans it sent. This one needs a
+collector listening; everything else is offline.
+
+| | File | Command |
+|---|---|---|
+| TypeScript | `typescript/packages/otel/examples/telemetry.ts` | `cd typescript/packages/otel && OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 bun examples/telemetry.ts` |
+| Python | `python/examples/telemetry.py` | `cd python && OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 uv run python examples/telemetry.py` |
+
+The same file is printed on [Observability](/docs/production/observability), and a test asserts the
+page and the file match, so what you read there is what you run.
+
+## In the tutorials
+
+The [tutorial path](/docs/learn) is four programs that build on each other. They all run offline.
+
+<Cards>
+  <Card title="An agent and a run" icon={<Bot />} href="/docs/learn/tutorials/first-agent">
+    The smallest program: instructions, a model, a store.
+  </Card>
+  <Card title="A tool, and an approval" icon={<ShieldCheck />} href="/docs/learn/tutorials/tools-and-approvals">
+    A tool call, the log it leaves, and a run that parks for a person.
+  </Card>
+  <Card title="A subagent" icon={<Network />} href="/docs/learn/tutorials/subagents">
+    A second agent in its own thread, reporting back as a tool result.
+  </Card>
+  <Card title="A team" icon={<Users />} href="/docs/learn/tutorials/teams">
+    Two members in parallel, and a lead that waits for both.
+  </Card>
+</Cards>
+
+## Complete programs in the guides
+
+These pages carry a whole program rather than a fragment, with the output it prints.
+
+<Cards>
+  <Card title="A weather agent, offline then live" icon={<Rocket />} href="/docs/quickstart">
+    One tool, a scripted model, then the same agent on Anthropic.
+  </Card>
+  <Card title="A lead and a researcher" icon={<Users />} href="/docs/multi-agent/teams">
+    The Teams page's example, which both languages run as a test.
+  </Card>
+  <Card title="A host with channels" icon={<Network />} href="/docs/host/overview">
+    `threads dev`, and the webhook URL it prints for each channel.
+  </Card>
+  <Card title="The eval report" icon={<ShieldCheck />} href="/docs/evals/run-evals">
+    What `threads eval` prints, line by line.
+  </Card>
+</Cards>

@@ -1,0 +1,42 @@
+---
+title: "Tutorials"
+description: "Four steps, one program: a support agent that grows from a single model call into a team."
+icon: GraduationCap
+---
+
+import { Bot, FlaskConical, Network, ShieldCheck, Users } from "lucide-react";
+
+The guides explain one feature at a time. These four tutorials build one program instead. You start
+with a support agent that answers from its instructions, and finish with the same agent running a
+team of two. Each step adds one idea and leaves you with a file you can run.
+
+Every program here runs offline on the [scripted model](/docs/evals/testing), so you need no API key
+and no network to follow along, and the output in each page is what it printed when it was written.
+Both languages are in every step.
+
+Before you start, set up threads from a clone: [Installation](/docs/installation).
+
+## The path
+
+<Cards>
+  <Card title="1. Your first agent" icon={<Bot />} href="/docs/learn/tutorials/first-agent">
+    An agent, a run, and the five ways a run can end.
+  </Card>
+  <Card title="2. Tools and approvals" icon={<ShieldCheck />} href="/docs/learn/tutorials/tools-and-approvals">
+    Give it a function to call, and decide what it may do without asking.
+  </Card>
+  <Card title="3. Delegate to a subagent" icon={<Network />} href="/docs/learn/tutorials/subagents">
+    Hand one job to a second agent that works in its own thread.
+  </Card>
+  <Card title="4. Run a team" icon={<Users />} href="/docs/learn/tutorials/teams">
+    Two members working in parallel, and a lead that waits for both.
+  </Card>
+</Cards>
+
+## Or read code
+
+<Cards>
+  <Card title="Examples" icon={<FlaskConical />} href="/docs/learn/examples">
+    The programs that ship in the repository, with the command that runs each one.
+  </Card>
+</Cards>

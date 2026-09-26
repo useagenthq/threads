@@ -1,0 +1,103 @@
+---
+title: "Integrations"
+description: "Every provider threads ships an adapter for, what to import it from, and where it is documented."
+icon: Plug
+---
+
+Each integration is a factory function that returns an adapter: a model, a sandbox, a channel, a
+memory provider, a search backend, a store or an exporter. You pass it to an agent or a host; the
+framework never talks to a provider any other way.
+
+Adapters live in their own package (TypeScript) or behind their own extra (Python), so the core
+depends on nothing but `zod` and `pydantic`. [Installation](/docs/installation) lists the packages
+and extras. Which of these each language has today is in
+[Python and TypeScript](/docs/python-and-typescript).
+
+## Models
+
+| | TypeScript | Python | Guide |
+|---|---|---|---|
+| Anthropic | `anthropic()` from `@threads/anthropic` | `anthropic()` from `threads.anthropic` | [Models](/docs/agents/models) |
+| OpenAI | `openai()` from `@threads/openai` | `openai()` from `threads.openai` | [Models](/docs/agents/models) |
+| Everything else | `aiSdk()` from `@threads/ai-sdk`, for any AI SDK provider | `litellm()` from `threads.litellm`, over LiteLLM's OpenAI-compatible route | [Models](/docs/agents/models) |
+| Scripted model, for tests | `scriptedModel()` from `@threads/core` | `scripted_model()` from `threads` | [Testing](/docs/evals/testing) |
+
+## Sandboxes
+
+| | TypeScript | Python | Guide |
+|---|---|---|---|
+| E2B | `e2b()` from `@threads/e2b` | `e2b()` from `threads.e2b` | [E2B](/docs/sandboxes/e2b) |
+| Daytona | `daytona()` from `@threads/daytona` | `daytona()` from `threads.daytona` | [Daytona](/docs/sandboxes/daytona) |
+| Modal | — | `modal()` from `threads.modal` | [Modal](/docs/sandboxes/modal) |
+| Fake sandbox, for tests | `fakeSandbox()` from `@threads/core` | `fake_sandbox()` from `threads` | [Testing](/docs/evals/testing) |
+
+Modal is Python only for now: `modal()` from `@threads/modal` throws `ConfigError`
+`transport_fence_unsupported`, because Modal's JavaScript SDK sends commands over a connection
+threads can't safely wrap.
+
+Credentials stay on the host. A sandbox never receives a key, and has no internet unless you give it
+one. See [Sandboxes](/docs/sandboxes/overview).
+
+## Channels
+
+| | TypeScript | Python | Guide |
+|---|---|---|---|
+| Slack | `slack()` from `@threads/slack` | `slack()` from `threads.slack` | [Slack](/docs/host/slack) |
+| WhatsApp | `whatsapp()` from `@threads/whatsapp` | `whatsapp()` from `threads.whatsapp` | [WhatsApp](/docs/host/whatsapp) |
+| GitHub | `github()` from `@threads/github` | `github()` from `threads.github` | [GitHub](/docs/host/github) |
+
+Channels run under the [host](/docs/host/overview), which also serves the
+[HTTP API](/docs/host/http-api) and [cron schedules](/docs/host/schedules).
+
+## Tools from other servers
+
+| | TypeScript | Python | Guide |
+|---|---|---|---|
+| Any MCP server | `mcp()` from `@threads/mcp` | `mcp()` from `threads.mcp` | [MCP servers](/docs/agents/mcp) |
+
+## Web search
+
+The `web_search` tool needs a backend. All three come from the core package.
+
+| | TypeScript | Python | Guide |
+|---|---|---|---|
+| Exa | `exa()` from `@threads/core` | `exa()` from `threads.search` | [Built-in tools](/docs/agents/built-in-tools) |
+| Tavily | `tavily()` from `@threads/core` | `tavily()` from `threads.search` | [Built-in tools](/docs/agents/built-in-tools) |
+| Brave | `brave()` from `@threads/core` | `brave()` from `threads.search` | [Built-in tools](/docs/agents/built-in-tools) |
+
+## Memory and knowledge
+
+| | TypeScript | Python | Guide |
+|---|---|---|---|
+| Local memory | `localMemory()` from `@threads/core` | `local_memory()` from `threads` | [Memory](/docs/memory/memory) |
+| Supermemory | `supermemory()` from `@threads/supermemory` | `supermemory()` from `threads.supermemory` | [Memory](/docs/memory/memory) |
+| Zep | `zep()` from `@threads/zep` | `zep()` from `threads.zep` | [Memory](/docs/memory/memory) |
+| Local knowledge base | `localKnowledge()` from `@threads/core` | `local_knowledge()` from `threads` | [Knowledge](/docs/memory/knowledge) |
+
+<Callout>
+  There is a `mem0()` factory, but it refuses: the `mem0ai` SDK sends requests outside any transport
+  threads can fence, so a call could not be recorded or replayed. Use `supermemory()` or `zep()`.
+  See [`mem0`](/docs/reference/functions/mem0).
+</Callout>
+
+## Stores
+
+The store is where the event log lives. Everything else is built on it.
+
+| | TypeScript | Python | Guide |
+|---|---|---|---|
+| SQLite | `sqlite()` from `@threads/core` | `sqlite()` from `threads` | [Durability](/docs/production/durability) |
+| Postgres | `postgres()` from `@threads/postgres` | `postgres()` from `threads.postgres` | [Deploying](/docs/production/deploying) |
+
+## Telemetry
+
+| | TypeScript | Python | Guide |
+|---|---|---|---|
+| OpenTelemetry (OTLP) | `otel()` from `@threads/otel` | `otel()` from `threads.otel` | [Observability](/docs/production/observability) |
+
+## Writing your own
+
+Every one of these is an ordinary implementation of a public protocol — `Model`, `Sandbox`,
+`ChannelAdapter`, `MemoryProvider`, `KnowledgeProvider`, `SearchBackend`, `Store`, `Exporter` —
+documented in the [API reference](/docs/reference/overview). Nothing above uses a private hook, so a
+provider we don't ship is an adapter you can write yourself.
