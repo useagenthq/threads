@@ -12,6 +12,10 @@ other processes' info denied, and a fixed list of Mach lookups. macOS has no mou
 the directory keeps its host path there and `guest()` rewrites /workspace to it (Linux returns
 the path unchanged), /tmp is denied outright instead of being made private, and the profile
 carries the call's environment as the spawn's.
+
+The two contain a write outside /workspace differently, and neither reaches the host. bwrap
+replaces the root with a private tmpfs, so such a write can succeed inside and is thrown away
+with the sandbox; sandbox-exec has no root to replace and refuses it.
 """
 
 import re
@@ -172,6 +176,9 @@ class Confinement:
             spec.cwd,
             "--clearenv",
             *env,
+            # bwrap sets PWD from --chdir. The contract is exactly the call's environment, and
+            # sandbox-exec adds nothing, so drop it to keep the two platforms telling one story.
+            *([] if "PWD" in spec.env else ["--unsetenv", "PWD"]),
             "--die-with-parent",
             "--new-session",
             "--cap-drop",

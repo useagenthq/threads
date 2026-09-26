@@ -97,22 +97,34 @@ def test_a_confined_command_runs_with_exactly_the_calls_environment() -> None:
             )
         )
         text = await _text(output.stdout)
+        lines = text.strip().split("\n") if text.strip() else []
         assert await output.exit_code == 0
-        assert sorted(text.strip().split("\n")) == ["GREETING=hello"]
+        # Names, not values: a CI log masks a value that matches one of its own secrets, so a
+        # leak has to be named to be readable at all.
+        assert sorted(line.split("=")[0] for line in lines) == ["GREETING"]
+        assert "GREETING=hello" in lines
 
     asyncio.run(main())
 
 
 @confined
-def test_a_confined_command_writes_only_inside_its_own_workspace() -> None:
+def test_a_confined_command_writes_only_inside_its_workspace_and_the_host_is_unchanged() -> None:
     async def main() -> None:
         session = await _box()
         code, _, _said = await _ran(session, "echo made > made.txt")
         assert code == 0
         assert _ok(await session.download("/workspace/made.txt", OPEN)) == b"made\n"
-        # The sandbox's directory is the only writable place the host shares with it.
-        elsewhere, _, _out = await _ran(session, "echo x > /threads-escape.txt 2>&1")
-        assert elsewhere != 0
+
+        # The promise is that the host is unchanged, not that every write fails. bwrap gives the
+        # command a private tmpfs root, so a write outside /workspace can succeed inside and go
+        # away with the sandbox; sandbox-exec has no root to replace and refuses it instead.
+        # This asserts the part that has to hold on either platform: the dev root is writable by
+        # this user on the host, so a file appearing there would be a real escape.
+        outside = Path(_ROOT) / "threads-escape.txt"
+        _code, out, _said = await _ran(session, f'echo x > "{outside}" 2>&1; echo done')
+        assert "done" in out
+        assert not outside.exists()
+        assert not Path("/threads-escape.txt").exists()
 
     asyncio.run(main())
 

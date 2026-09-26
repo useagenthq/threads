@@ -14,6 +14,11 @@ import { err, ok, type Result } from "../../result";
 // denied, other processes' info denied, and a fixed list of Mach lookups. macOS has no mount
 // namespace, so the directory keeps its host path there and `guest()` rewrites /workspace to
 // it (Linux returns the path unchanged).
+//
+// The two contain a write outside /workspace differently, and neither reaches the host. bwrap
+// replaces the root with a private tmpfs, so such a write can succeed inside and is thrown away
+// with the sandbox; sandbox-exec has no root to replace and refuses it. macOS also has no
+// private /tmp for the same reason: it is denied outright instead.
 
 export type ConfinedSpec = {
   /** The sandbox's host directory, which becomes its /workspace. */
@@ -97,6 +102,9 @@ function bwrapArgs(spec: ConfinedSpec, allowInternet: boolean): string[] {
       name,
       value,
     ]),
+    // bwrap sets PWD from --chdir. The contract is exactly the call's environment, and
+    // sandbox-exec adds nothing, so drop it to keep the two platforms telling one story.
+    ...("PWD" in spec.env ? [] : ["--unsetenv", "PWD"]),
     "--die-with-parent",
     "--new-session",
     "--cap-drop",
