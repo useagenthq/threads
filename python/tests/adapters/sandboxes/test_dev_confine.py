@@ -100,9 +100,33 @@ def test_a_confined_command_runs_with_exactly_the_calls_environment() -> None:
         lines = text.strip().split("\n") if text.strip() else []
         assert await output.exit_code == 0
         # Names, not values: a CI log masks a value that matches one of its own secrets, so a
-        # leak has to be named to be readable at all.
-        assert sorted(line.split("=")[0] for line in lines) == ["GREETING"]
+        # leak has to be named to be readable at all. bwrap sets PWD from the directory it chdirs
+        # into, after the env options, so no flag takes it back; that one name is pinned here
+        # rather than waved through, and anything else still fails.
+        extra: list[str] = ["PWD"] if sys.platform == "linux" else []
+        assert sorted(line.split("=")[0] for line in lines) == sorted(["GREETING", *extra])
         assert "GREETING=hello" in lines
+        if sys.platform == "linux":
+            assert "PWD=/workspace" in lines
+
+    asyncio.run(main())
+
+
+@confined
+def test_a_confined_command_sees_no_variable_of_the_hosts_own_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """What invariant 4 needs: a value the host holds cannot reach a command, whatever the
+    platform does about PWD. bwrap spawns with an empty env and --clearenv; sandbox-exec spawns
+    with exactly the call's env, which is the same promise by a different route."""
+    monkeypatch.setenv("THREADS_DEV_HOST_SECRET", "a credential")
+
+    async def main() -> None:
+        session = await _box()
+        _code, out, said = await _ran(session, "env; echo done")
+        assert "done" in out
+        assert "THREADS_DEV_HOST_SECRET" not in said
+        assert "a credential" not in said
 
     asyncio.run(main())
 

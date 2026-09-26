@@ -97,11 +97,31 @@ withConfinement("a confined command", () => {
     const lines = text.trim() === "" ? [] : text.trim().split("\n");
     expect(await output.exit_code).toBe(0);
     // Names, not values: a CI log masks a value that matches one of its own secrets, so a leak
-    // has to be named to be readable at all.
-    expect(lines.map((line) => line.split("=")[0]).toSorted()).toEqual([
-      "GREETING",
-    ]);
+    // has to be named to be readable at all. bwrap sets PWD from the directory it chdirs into,
+    // after the env options, so no flag takes it back; that one name is pinned here rather than
+    // waved through, and anything else still fails.
+    const extra = process.platform === "linux" ? ["PWD"] : [];
+    expect(lines.map((line) => line.split("=")[0]).toSorted()).toEqual(
+      ["GREETING", ...extra].toSorted(),
+    );
     expect(lines).toContain("GREETING=hello");
+    if (process.platform === "linux") expect(lines).toContain("PWD=/workspace");
+  });
+
+  test("sees no variable of the host's own environment", async () => {
+    // What invariant 4 needs: a value the host holds cannot reach a command, whatever the
+    // platform does about PWD. bwrap spawns with an empty env and --clearenv; sandbox-exec
+    // spawns with exactly the call's env, which is the same promise by a different route.
+    process.env["THREADS_DEV_HOST_SECRET"] = "a credential";
+    try {
+      const session = await box();
+      const read = await ran(session, "env; echo done");
+      expect(read.out).toContain("done");
+      expect(`${read.out}${read.err}`).not.toContain("THREADS_DEV_HOST_SECRET");
+      expect(`${read.out}${read.err}`).not.toContain("a credential");
+    } finally {
+      delete process.env["THREADS_DEV_HOST_SECRET"];
+    }
   });
 
   test("writes only inside its own workspace, and the host is unchanged", async () => {

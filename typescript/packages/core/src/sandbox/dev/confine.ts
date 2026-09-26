@@ -19,6 +19,11 @@ import { err, ok, type Result } from "../../result";
 // replaces the root with a private tmpfs, so such a write can succeed inside and is thrown away
 // with the sandbox; sandbox-exec has no root to replace and refuses it. macOS also has no
 // private /tmp for the same reason: it is denied outright instead.
+//
+// One name differs too: bwrap sets PWD to the directory it chdirs into, after it has processed
+// the env options, so --unsetenv cannot take it back and a Linux command sees the call's
+// environment plus PWD=/workspace. That is the sandbox's own working directory, never host
+// state, and no host variable reaches the command on either platform (confine.test.ts).
 
 export type ConfinedSpec = {
   /** The sandbox's host directory, which becomes its /workspace. */
@@ -102,9 +107,6 @@ function bwrapArgs(spec: ConfinedSpec, allowInternet: boolean): string[] {
       name,
       value,
     ]),
-    // bwrap sets PWD from --chdir. The contract is exactly the call's environment, and
-    // sandbox-exec adds nothing, so drop it to keep the two platforms telling one story.
-    ...("PWD" in spec.env ? [] : ["--unsetenv", "PWD"]),
     "--die-with-parent",
     "--new-session",
     "--cap-drop",
