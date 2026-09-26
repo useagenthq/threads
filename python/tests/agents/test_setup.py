@@ -94,6 +94,21 @@ def test_check_returns_a_failure_and_the_run_raises_it() -> None:
     asyncio.run(main())
 
 
+def test_a_malformed_permission_rule_fails_check_and_run() -> None:
+    bot = agent(model=scripted_model({"responses": []}), permissions={"deny": ["b*(*)"]})
+    parent = agent(model=scripted_model({"responses": []}), subagents=[bot])
+
+    async def main() -> None:
+        failure = Failure("permission_rule_invalid", "'b*(*)': a tool pattern takes no specifier")
+        assert await bot.check() == Err(failure)
+        assert await parent.check() == Err(failure)
+        with pytest.raises(ConfigError) as raised:
+            await bot.run("hi", store=sqlite(":memory:"))
+        assert (raised.value.code, raised.value.message) == (failure.code, failure.message)
+
+    asyncio.run(main())
+
+
 def test_a_failed_setup_is_retried_and_a_successful_one_is_not_repeated() -> None:
     model = Counted([say("one"), say("two")], failing=True)
     bot = agent(model=model)
