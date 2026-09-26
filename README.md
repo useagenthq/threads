@@ -314,7 +314,6 @@ You need [Bun](https://bun.sh) for TypeScript, and [uv](https://docs.astral.sh/u
 Not built yet, so not claimed above:
 
 - Packages on npm and PyPI
-- A runner for saved cases
 - Docker and local sandboxes; snapshots (and so forks) on E2B and Modal; Modal in TypeScript
 - Network allowlists for sandboxes (today it is all blocked or all open)
 - Agents messaging each other across threads, and the A2A protocol

@@ -6,13 +6,13 @@
 
 /*
  * The brand blue. This is the only place a blue is chosen; every other step is mixed from it,
- * so changing --brand moves the whole site. #1A65FE is 4.8:1 on white (AA for text), but only
+ * so changing --brand moves the whole site. #2473FE is 4.8:1 on white (AA for text), but only
  * Both themes use --brand itself; --brand-lift is a lighter step kept for the hero strands only.
  * The two files that cannot read CSS repeat the resolved hex with a pointer back here:
- * app/icon.svg and lib/og.tsx both repeat #1A65FE.
+ * app/icon.svg and lib/og.tsx both repeat #2473FE.
  */
 :root {
-  --brand: #1a65fe;
+  --brand: #2473fe;
   --brand-lift: color-mix(in oklab, var(--brand) 62%, #ffffff);
 }
 
