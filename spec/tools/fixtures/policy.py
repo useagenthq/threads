@@ -48,6 +48,20 @@ def write_policy_case(  # noqa: PLR0913 - one argument per case field
 
 
 def build(root: pathlib.Path) -> None:
+    invalid: Obj = {**permissions("default"), "deny": ["b*(*)"]}
+    write_case(
+        root,
+        case(
+            "permission-rule-invalid-setup",
+            FAM,
+            "policy",
+            "A malformed permission rule is rejected during agent setup in both runtimes.",
+            input={"workspace": WS, "permissions": invalid, "calls": []},
+        ),
+        None,
+        {"outcome": "error", "error": {"code": "permission_rule_invalid"}},
+    )
+
     status, rm, npm = "bash(git status:*)", "bash(rm:*)", "bash(npm test)"
     perms: Obj = {**permissions("default"), "allow": [status, npm], "deny": [rm]}
     d = "default"

@@ -5,15 +5,18 @@ Builds the engine from `input.permissions`, decides each call under its own mode
 only. Unknown keys in any fixture file fail the case.
 """
 
+import asyncio
 import json
 from pathlib import Path
 from typing import ClassVar, Literal
 
 import pytest
-from pydantic import BaseModel, ConfigDict, JsonValue
+from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter
 
+from threads import agent, scripted_model
 from threads.log import PermissionMode, PermissionRuleAddedData, Permissions
 from threads.permissions import Call, Category, Decision, Source, Verdict, decide, decide_capped
+from threads.result import Err
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 MIN_POLICY_CASES = 4
@@ -60,9 +63,22 @@ class ExpectedDecision(_Model):
     rule: str | None = None
 
 
-class PolicyExpected(_Model):
+class PolicyOk(_Model):
     outcome: Literal["ok"]
     decisions: list[ExpectedDecision]
+
+
+class PolicyErrorBody(_Model):
+    code: Literal["permission_rule_invalid"]
+
+
+class PolicyError(_Model):
+    outcome: Literal["error"]
+    error: PolicyErrorBody
+
+
+type PolicyExpected = PolicyOk | PolicyError
+EXPECTED: TypeAdapter[PolicyExpected] = TypeAdapter(PolicyExpected)
 
 
 def _kind(case: Path) -> JsonValue:
@@ -94,7 +110,13 @@ def _decide(given: PolicyInput, call: PolicyCall) -> Decision:
 def test_policy_case(name: str) -> None:
     case = CASES / name
     meta = PolicyCase.model_validate_json((case / "case.json").read_bytes())
-    expected = PolicyExpected.model_validate_json((case / "expected.json").read_bytes())
+    expected = EXPECTED.validate_json((case / "expected.json").read_bytes())
+    if isinstance(expected, PolicyError):
+        bot = agent(model=scripted_model({"responses": []}), permissions=meta.input.permissions)
+        checked = asyncio.run(bot.check())
+        assert isinstance(checked, Err)
+        assert checked.error.code == expected.error.code
+        return
     calls = meta.input.calls
     assert len(calls) == len(expected.decisions)
     for index, (call, want) in enumerate(zip(calls, expected.decisions, strict=True)):

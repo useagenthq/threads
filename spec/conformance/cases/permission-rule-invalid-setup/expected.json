@@ -1,0 +1,6 @@
+{
+  "outcome": "error",
+  "error": {
+    "code": "permission_rule_invalid"
+  }
+}
