@@ -5,6 +5,10 @@ The thread's own `cancel_requested` is the barrier. Then every child its log spa
 `agent_finished` gets `cancel_requested{scope: tree, reason: "ancestor cancelled"}` (actor host,
 principal the canceller), recursively. A child whose thread doesn't exist yet gets nothing: it is
 never started. A child whose turn is closed, or already barred, is left as it is.
+
+A thread another process runs gets a durable control item instead of an append (lane 29F), so
+its holder bars it at its own next step. The parent's end waits for that, which keeps each
+child's `agent_finished{cancelled}` before the parent's own `cancelled`.
 """
 
 from collections.abc import Sequence
@@ -12,6 +16,7 @@ from typing import TYPE_CHECKING, Final
 
 from pydantic.experimental.missing_sentinel import MISSING
 
+from threads._generated.host_api_v1 import CancelAccepted
 from threads.agents.store import Store, now_ms, open_store
 from threads.log import (
     BranchId,
@@ -28,7 +33,8 @@ from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 from threads.store import Draft
 from threads.store.companion import Companion
-from threads.thread.control import Controlled, append, barred, cancel, first
+from threads.thread import control_items
+from threads.thread.control import Accepted, append, barred, cancel, first
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
@@ -36,14 +42,30 @@ if TYPE_CHECKING:
 REASON: Final = "ancestor cancelled"
 
 
+async def accept(store: Store, thread_id: ThreadId, principal: Principal) -> CancelAccepted:
+    """The durable control item for a branch another process holds, by its key."""
+    sq = await open_store(store)
+    now = now_ms()
+    item = control_items.item_of(thread_id, principal, "cancel", now)
+    return await sq.run(lambda c: control_items.write(c, store.tenant, item, now))
+
+
 async def cancel_tree(
-    store: Store, branch: BranchId, principal: Principal, companion: Companion | None = None
-) -> Controlled:
-    """Thread.cancel: the thread's barrier, then its unfinished descendants'."""
+    store: Store,
+    thread_id: ThreadId,
+    branch: BranchId,
+    principal: Principal,
+    companion: Companion | None = None,
+) -> Accepted:
+    """Thread.cancel: the thread's barrier, or a durable control item when another process holds
+    the branch, then its unfinished descendants'. Authority is checked before either is written,
+    because applying an item never checks again."""
     done = await cancel(store, branch, principal, companion=companion)
-    if isinstance(done, Ok):
-        await cancel_children(store, branch, principal)
-    return done
+    if isinstance(done, Err) and done.error.code != "branch_busy":
+        return done
+    accepted = None if isinstance(done, Ok) else await accept(store, thread_id, principal)
+    await cancel_children(store, branch, principal)
+    return done if accepted is None else Ok(accepted)
 
 
 async def cancel_children(store: Store, branch: BranchId, principal: Principal) -> None:
@@ -87,6 +109,10 @@ async def bar_child(
         return Ok(barred(fold, barrier))
 
     done = await append(store, root.value, build)
+    # Another process runs it: the barrier becomes a durable item its holder applies. A repeated
+    # ask finds that item still pending and queues no second one.
+    if not stopped and isinstance(done, Err) and done.error.code == "branch_busy":
+        await accept(store, child, principal)
     await cancel_children(store, root.value, principal)
     return stopped or isinstance(done, Ok)
 

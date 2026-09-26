@@ -36,6 +36,7 @@ from threads.log import (
     TurnCompletedEvent,
 )
 from threads.loop import calls, gates, output, parallel, questions, record, retries, tool_gates
+from threads.loop.controls import take_control_items
 from threads.loop.defaults import context, max_pauses
 from threads.loop.drafts import draft
 from threads.loop.history import (
@@ -82,7 +83,7 @@ async def drive(rt: Runtime) -> Halt:
     while True:
         seen = len(rt.events)
         flushed = None if rt.framework is None else await rt.framework.flush(rt)
-        halt = flushed or await _step(rt)
+        halt = flushed or await take_control_items(rt) or await _step(rt)
         halt = halt or await _notify_new(rt, seen)
         if halt is not None:
             if isinstance(halt, Parked):

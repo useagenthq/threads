@@ -3,11 +3,15 @@ import { type KnownEvent, type Principal, ThreadId } from "../log";
 import { ok } from "../result";
 import type { LogStore } from "../store";
 import { control } from "./control";
+import { writeControlItem } from "./control-items";
 
 // Tree-wide cancellation (spec/schema/README.md, "Subagent cancellation and parking"; brief
 // F7.6): every child a cancelled thread started and hasn't finished gets its own barrier,
 // recursively, so each running descendant stops at its next step. A child whose turn is closed
-// or already has a barrier gets nothing new; one with no thread yet is never started.
+// or already has a barrier gets nothing new; one with no thread yet is never started. A
+// descendant another process runs gets a durable control item instead of an append (lane 29F),
+// so its holder bars it at its own next step; the parent's end waits for that, which keeps each
+// child's agent_finished{cancelled} before the parent's own cancelled.
 
 /** Barriers for every running child of `threadId`'s main branch, recursively. */
 export async function cancelChildren(
@@ -51,8 +55,19 @@ export async function cancelTree(
       },
     });
   });
+  // Another process runs it: the barrier becomes a durable item its holder applies.
+  if (!stopped && !done.ok && done.error.code === "branch_busy")
+    await writeControlItem(
+      log.driver,
+      log.tenant,
+      threadId,
+      principal,
+      "cancel",
+      log.now(),
+    );
   await cancelChildren(log, threadId, principal);
-  // Barred only once its cancel is appended (or nothing was left to stop).
+  // Barred only once its cancel is appended (or nothing was left to stop): an item is a promise
+  // of a barrier, not one, so the parent waits for the holder to apply it.
   return stopped || done.ok;
 }
 

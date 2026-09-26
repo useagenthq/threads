@@ -105,6 +105,7 @@ export { checkMessagePolicy, rulesFrom } from "./team/policy";
 export { bindTelemetry } from "./telemetry";
 export { cancelChildren } from "./thread/cancel";
 export { type Alongside, control, resumed } from "./thread/control";
+export { API_CHANNEL, type CancelAccepted } from "./thread/control-items";
 export { decide } from "./thread/decide";
 export { type Thread, threadHandle } from "./thread/handle";
 export { type OpenQuestion, openQuestions } from "./thread/questions";

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Final, Literal
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads._generated.host_api_v1 import Appended, SettingsChange
+from threads._generated.host_api_v1 import Appended, CancelAccepted, SettingsChange
 from threads._generated.tools_v1 import AskUserInput
 from threads.agents.store import LIVE, Store, now_ms, open_store
 from threads.log import (
@@ -43,6 +43,9 @@ LOCAL_OPERATOR: Final = Principal(issuer="api", tenant="local", subject="operato
 """The default principal of a local run, and its default approver."""
 
 type Controlled = Ok[Appended] | Err[ParseError]
+type Accepted = Ok[Appended | CancelAccepted] | Err[ParseError]
+"""Thread.cancel's result: the barrier it appended, or the durable item another process's holder
+will apply (lane 29F). Never branch_busy."""
 type Build = Callable[[Fold], Ok[Sequence[Draft]] | Err[ParseError]]
 
 
@@ -123,11 +126,22 @@ async def cancel(
     if principal.tenant != store.tenant:
         return forbidden("another tenant's thread")
     if kind == "stop_when_idle":
-        data: dict[str, JsonValue] = {"reason": "requested by the thread's principal"}
-        soft = Draft(kind, data, actor("user", principal))
+        soft = soft_stop(principal)
         return await append(store, branch, lambda _: Ok((soft,)), companion)
-    barrier = first(kind, {"scope": "thread"}, actor("user", principal))
+    barrier = thread_barrier(principal)
     return await append(store, branch, lambda fold: Ok(barred(fold, barrier)), companion)
+
+
+def thread_barrier(principal: Principal) -> Draft:
+    """cancel_requested{scope: thread} by the principal asking for it, with its id preset so the
+    resumed `barred` adds can name it."""
+    return first("cancel_requested", {"scope": "thread"}, actor("user", principal))
+
+
+def soft_stop(principal: Principal) -> Draft:
+    """The reserved stop_when_idle event: the run finishes what is in flight and starts nothing."""
+    data: dict[str, JsonValue] = {"reason": "requested by the thread's principal"}
+    return Draft("stop_when_idle", data, actor("user", principal))
 
 
 def barred(fold: Fold, barrier: Draft) -> tuple[Draft, ...]:

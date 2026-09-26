@@ -1,5 +1,5 @@
-import type { ChannelAdapter } from "@threads/core";
 import {
+  API_CHANNEL,
   assertNever,
   BranchId,
   cancel,
@@ -76,7 +76,6 @@ async function step(
 }
 
 type Target = {
-  readonly adapter: ChannelAdapter;
   readonly hosted: HostedAgent;
   readonly conversation: Conversation;
   readonly threadId: ThreadId;
@@ -89,8 +88,13 @@ async function target(
   threadId: ThreadId,
   next: InboxItem,
 ): Promise<Target | undefined> {
-  const adapter = ctx.channels.get(next.channel);
-  if (adapter === undefined) return undefined;
+  // An api item is Thread.cancel's durable control (lane 29F): no channel adapter, its address
+  // is the thread id, nothing is delivered, and its agent comes from the thread's own log.
+  const api = next.channel === API_CHANNEL;
+  if (api && next.item.kind !== "control")
+    throw new Error("an api inbox item is a control item");
+  const adapter = api ? undefined : ctx.channels.get(next.channel);
+  if (!api && adapter === undefined) return undefined;
   const { log } = await ctx.open(tenant);
   const main = await log.mainBranch(threadId);
   const read = main.ok ? await log.read(main.value) : undefined;
@@ -98,7 +102,9 @@ async function target(
   // A root another host just made has no thread_started yet: it pins no agent, like no root.
   // Read as "no host agent", the item would be discarded and the message lost (F9.6 drill).
   const started = events.some((e) => e.type === "thread_started");
-  const hosted = started ? ctx.agentOf(events) : ctx.agents.get(adapter.agent);
+  const channelAgent =
+    adapter === undefined ? undefined : ctx.agents.get(adapter.agent);
+  const hosted = started ? ctx.agentOf(events) : channelAgent;
   // An agent of the pinned name but another config can't continue the thread: another host may.
   if (hosted === undefined || (started && !(await samePin(events, hosted))))
     return undefined;
@@ -108,7 +114,7 @@ async function target(
     installation: next.installation_id,
     address: next.item.address,
   };
-  return { adapter, hosted, conversation, threadId };
+  return { hosted, conversation, threadId };
 }
 
 async function item(

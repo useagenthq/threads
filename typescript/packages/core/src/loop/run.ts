@@ -5,6 +5,7 @@ import { takeCancels } from "./agents/members";
 import { parkOn } from "./agents/park";
 import { finish as record, runChild, spawnedFor } from "./agents/spawn";
 import { closeUnrecorded } from "./calls";
+import { takeControlItems } from "./controls";
 import { draft } from "./drafts";
 import { afterStep, finish } from "./lifecycle";
 import { runCalls } from "./parallel";
@@ -24,7 +25,10 @@ export type LoopEnd =
 
 export async function runLoop(s: Session): Promise<LoopEnd> {
   for (;;) {
-    const settled = (await settleBackground(s)) ?? (await takeCancels(s));
+    const settled =
+      (await settleBackground(s)) ??
+      (await takeCancels(s)) ??
+      (await takeControlItems(s));
     if (settled !== undefined) return { kind: "halted", halt: settled };
     const seq = s.fold.seq;
     const step = nextStep(s.events, s.fold);

@@ -8,10 +8,11 @@ icon: ScrollText
 
 Not in this release: these change code you may already have, so they are listed ahead of time.
 
-- **`Thread.cancel` across processes.** When another process holds the thread's branch, `Thread.cancel` / `thread.cancel` will record a durable cancel request that the holder applies at its next step, and return `CancelAccepted` with that request's `item_key` (HTTP 202 on `POST /v1/threads/{thread_id}/cancel`) instead of failing with `branch_busy` (HTTP 409). In TypeScript the return type becomes `Appended | CancelAccepted`, so code that reads `event_id` from the result must check which one it got.
 - **`AskOutcome.failed`.** An ask of a host member whose turn failed will close `failed`, with the error. A `switch` / `match` over `AskOutcome` needs a new case, and `assertNever` / `assert_never` will point at it.
 
 ## Unreleased (v0.1)
+
+**`Thread.cancel` no longer fails when another process holds the branch.** It records a durable cancel request that the branch's holder applies at its next step, and returns `CancelAccepted` with that request's `item_key` (HTTP 202 on `POST /v1/threads/{thread_id}/cancel`) where it used to fail with `branch_busy` (HTTP 409). In TypeScript the return type is now `Appended | CancelAccepted`, so code that reads `event_id` from the result must check which one it got. Cancelling a tree works the same way: a descendant another process runs gets the durable request, and the parent records that child's `agent_finished{cancelled}` before its own `cancelled`, as before.
 
 **Threads started before this release can't be continued** when their agent has extension tools or deferred tools. Start a new thread; the old one stays readable (timeline, export, fork points, saved cases).
 

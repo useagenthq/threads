@@ -182,6 +182,12 @@ export type LoopConfig = {
   readonly agents?: Agents;
   /** A team's lead or member (agent({team})); absent for any other thread. */
   readonly team?: TeamRuntime;
+  /**
+   * Whether a durable control item waits for this thread (lane 29F): a cancel another process
+   * asked for while this run held the lease. The loop applies it at its next step boundary,
+   * before any further dispatch. Absent: no store to read, so nothing is applied.
+   */
+  readonly controlItems?: () => Promise<boolean>;
   /** The tree-wide budget ledger; absent: no cost, token or request budget. */
   readonly budgets?: {
     readonly ledger: BudgetLedger;

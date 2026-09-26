@@ -1,4 +1,5 @@
 export type { Appended, ControlError, SettingsChange } from "./control";
+export type { CancelAccepted } from "./control-items";
 export type { ThreadControl } from "./controls";
 export type { CostError } from "./cost-tree";
 export { type KnowledgePolicy, recoverFork, recoverForks } from "./fork";

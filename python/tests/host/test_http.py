@@ -265,7 +265,8 @@ def test_thread_routes_are_scoped_parsed_and_recorded() -> None:
 
 def test_a_control_on_a_branch_another_process_holds_is_branch_busy() -> None:
     """The branch's lease is held elsewhere (another host process): every control route that
-    appends answers 409 branch_busy and records nothing; the challenge stays open."""
+    appends answers 409 branch_busy and records nothing; the challenge stays open. cancel alone
+    answers 202 with a durable item, which records nothing here either."""
 
     async def main() -> None:
         store = sqlite(":memory:")
@@ -284,8 +285,12 @@ def test_a_control_on_a_branch_another_process_holds_is_branch_busy() -> None:
                 held = await sq.acquire(BranchId(receipt["branch_id"]), "elsewhere", now_ms)
                 assert isinstance(held, Ok)
                 before = len(held.value.fold.events)
+                # cancel is the exception (lane 29F): a lease elsewhere makes it 202 with the
+                # durable item's key, and it still records nothing here.
+                accepted = await client.post(f"{base}/cancel", headers=as_("alice"))
+                assert accepted.status_code == HTTPStatus.ACCEPTED
+                assert accepted.json()["item_key"]
                 routes: list[tuple[str, JsonValue]] = [
-                    ("/cancel", None),
                     ("/mode", {"mode": "plan"}),
                     ("/settings", {"model": {"provider": "scripted", "name": "other"}}),
                     (f"/approvals/{challenge['challenge_id']}", {"decision": "grant"}),

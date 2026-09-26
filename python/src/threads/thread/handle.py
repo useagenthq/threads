@@ -51,7 +51,7 @@ from threads.thread.case import (
     recorded_stubs,
     save_case,
 )
-from threads.thread.control import Controlled
+from threads.thread.control import Accepted, Controlled
 from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch, fork_point
 from threads.thread.member_view import member_of, with_member
 from threads.thread.read import read_error, read_log
@@ -315,10 +315,11 @@ class Thread:
             self.store, self.branch, effect_key, resolution, principal
         )
 
-    async def cancel(self, principal: Principal) -> Controlled:
+    async def cancel(self, principal: Principal) -> Accepted:
         """Durable cancel_requested; unsettled effects park. Tree-wide: every unfinished
-        descendant subagent is barred too."""
-        return await tree.cancel_tree(self.store, self.branch, principal)
+        descendant subagent is barred too. When another process holds a branch, its barrier is a
+        durable inbox control item that holder applies at its next step (CancelAccepted)."""
+        return await tree.cancel_tree(self.store, self.id, self.branch, principal)
 
     async def set_model(self, settings: SettingsChange, principal: Principal) -> Controlled:
         """settings_changed{reason: user}."""

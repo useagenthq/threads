@@ -29,6 +29,7 @@ HOST_SHAPES = (
     "SettingsChange",
     "ModeChange",
     "Appended",
+    "CancelAccepted",
     "ChatKey",
     "ClientMessageId",
     "AiSdkChatRequest",

@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { agent, scriptedModel, tool } from "@threads/core";
-import { openStore, tenantStore } from "@threads/core/host";
+import {
+  openStore,
+  reading,
+  storeConnection,
+  tenantStore,
+} from "@threads/core/host";
 import { z } from "zod";
+import { hostTicked } from "../src/host";
 import {
   alice,
   eventsOf,
@@ -170,9 +176,12 @@ describe("controls and run authority", () => {
     if (!held.ok) throw new Error(held.error.message);
     try {
       const at = `/v1/threads/${accepted.thread_id}`;
+      // cancel is the exception (lane 29F): 202 with the durable item's key, nothing appended.
+      const durable = await call("POST", `${at}/cancel`, { as: alice });
+      expect(durable.status).toBe(202);
+      expect(typeof (await durable.json()).item_key).toBe("string");
       for (const [path, sent] of [
         [`${at}/approvals/${list[0].challenge_id}`, { decision: "grant" }],
-        [`${at}/cancel`, undefined],
         [`${at}/mode`, { mode: "accept_edits" }],
         [`${at}/parked/k/resolve`, { resolution: "assume_done" }],
         [`${at}/questions/c9/answer`, { answer: "yes" }],
@@ -187,5 +196,53 @@ describe("controls and run authority", () => {
     } finally {
       await held.value.release();
     }
+  });
+
+  test("the host's sweep applies a pending api control item once no one holds the branch", async () => {
+    h = harness({
+      agents: {
+        support: mailer({
+          responses: [use("send_email", { to: "bob" }, "c1"), say("Sent.")],
+        }),
+      },
+    });
+    const { call, store } = h;
+    const accepted = await (
+      await call("POST", "/v1/runs", { as: alice, body, headers: key })
+    ).json();
+    await sseMessages(
+      await call(
+        "GET",
+        `/v1/threads/${accepted.thread_id}/runs/${accepted.run_id}/events`,
+        { as: alice },
+      ),
+    );
+    const { log } = await openStore(tenantStore(store, alice.tenant));
+    const held = await log.acquire(accepted.branch_id, "another-process");
+    if (!held.ok) throw new Error(held.error.message);
+    const durable = await call(
+      "POST",
+      `/v1/threads/${accepted.thread_id}/cancel`,
+      {
+        as: alice,
+      },
+    );
+    expect(durable.status).toBe(202);
+    await held.value.release();
+    // channel "api" has no adapter: the sweep still finds the row and the consumer applies it.
+    const swept = hostTicked(h.host);
+    await h.host.ready();
+    await swept;
+    const kinds = (await eventsOf(store, alice.tenant, accepted.branch_id)).map(
+      (e) => e.type,
+    );
+    expect(kinds.filter((t) => t === "cancel_requested")).toHaveLength(1);
+    const { db } = await storeConnection(store);
+    const rows = await reading(db, (tx) =>
+      tx.all("SELECT channel, consumed_seq FROM inbox", []),
+    );
+    expect(rows).toEqual([
+      { channel: "api", consumed_seq: expect.any(Number) },
+    ]);
   });
 });
