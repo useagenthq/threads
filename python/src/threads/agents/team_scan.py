@@ -1,10 +1,11 @@
-"""What the team worker reads between passes: a member run's one principal, whether a team is
-closed, and every member of a team tree. Mirrors TypeScript's agent/team/scan.ts."""
+"""What the team worker reads between passes: a member run's one principal, whether a branch's
+lease is free, whether a team is closed, and every member of a team tree. Mirrors TypeScript's
+agent/team/scan.ts."""
 
 from threads.log import Principal, Provenance
 from threads.reduce import Fold
 from threads.store.conn import Conn
-from threads.store.sql import text_of
+from threads.store.sql import int_of, text_of
 from threads.team.provenance import turn_provenance
 from threads.team.rows import MemberRow, member_rows, own_rows, pending_for, team_row
 
@@ -18,6 +19,12 @@ def principal_of(conn: Conn, fold: Fold, row: MemberRow) -> Principal | None:
         return None if opened is None else Provenance.model_validate(opened).principal
     first = next(iter(pending_for(conn, own_rows(conn, row.thread_id))), None)
     return None if first is None else first.provenance.principal
+
+
+def lease_free(conn: Conn, branch: str, now: int) -> bool:
+    """The branch's lease is free: expired or released."""
+    row = conn.execute("SELECT expires_at FROM leases WHERE branch_id = ?", (branch,)).fetchone()
+    return row is None or int_of(row[0]) <= now
 
 
 def closed(conn: Conn, team: str) -> bool:

@@ -29,7 +29,17 @@ export type {
   TeamItem,
   TeamSource,
 } from "./agent/team/handle-types";
+export {
+  type HostedTeam,
+  hostedTeams,
+  type TeamLead,
+  teamLeadOf,
+  teamWorkerFor,
+} from "./agent/team/hosted";
 export { renewTeam } from "./agent/team/runtime";
+export { leaseFree } from "./agent/team/scan";
+export { takeMail } from "./agent/team/units";
+export type { TeamWorker } from "./agent/team/worker";
 export { assertNever } from "./assert-never";
 export { caseNames } from "./evals/case-dir";
 export { caseLine } from "./evals/report";
@@ -101,7 +111,10 @@ export { sweepArtifacts } from "./store/retention";
 export { parseRows } from "./store/tables";
 export { inputText, UI_RECEIPT, uiBodyHash } from "./store/ui-receipts";
 export { pendingWakes, wakeBranches } from "./store/wakes";
+export { claimMail } from "./team/claim";
+export { TEAM_CONSTANTS } from "./team/constants";
 export { checkMessagePolicy, rulesFrom } from "./team/policy";
+export { pendingHere } from "./team/rows";
 export { bindTelemetry } from "./telemetry";
 export { cancelChildren } from "./thread/cancel";
 export { type Alongside, control, resumed } from "./thread/control";

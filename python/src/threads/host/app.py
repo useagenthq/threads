@@ -27,6 +27,7 @@ from threads.host.reopen import Reopening
 from threads.host.runs import Runner, RunTask
 from threads.host.schedules import Schedule, Scheduler
 from threads.host.stream import Message
+from threads.host.teams import Teams
 from threads.host.telemetry import Telemetry
 from threads.log import BranchId, EventId, ParseError, Permissions, Principal, ThreadId
 from threads.result import Err, Ok
@@ -73,8 +74,12 @@ class Host:
         self.authenticate: Authenticate | None = authenticate
         self._runner: Runner = Runner(store, agents, channels, ceiling, message_policy)
         self._intake: ChannelIntake = ChannelIntake(self._runner, channels)
-        self._runner.on_end = self._intake.consume
+        self._runner.on_end = self._after_run
+        self._after: set[asyncio.Task[RunTask | None]] = set()
+        """The reply sweeps after the runs that ended here, until each has looked."""
         self._scheduler = Scheduler(self._runner, schedules)
+        self._teams: Teams = Teams(self._runner)
+        """The host as a team worker: it drives every team of the store between their runs."""
         self._ticking: asyncio.Task[None] | None = None
         self._held: contextlib.AsyncExitStack | None = None
         """The host's hold on its loop's adapter connections, from ready() to stop(), so they
@@ -139,6 +144,16 @@ class Host:
             _RECOVERY[self][1].clear()
             self._ticking = asyncio.get_running_loop().create_task(self._tick())
 
+    def _after_run(self, store: Store, thread: ThreadId) -> None:
+        """After every run of a thread (spec/schema/README.md, "Channel replies"): what its intake
+        queued, then the replies its log still owes. A run's own delivery pass runs at its idle
+        halt, so a turn it appends after that (a woken turn, once a background child reports)
+        leaves its answer for this sweep, which resumes the thread only when one is missing."""
+        self._intake.consume(store, thread)
+        sweep = asyncio.get_running_loop().create_task(self._runner.redeliver(store, thread))
+        self._after.add(sweep)
+        sweep.add_done_callback(self._after.discard)
+
     async def _tick(self) -> None:
         reopening = Reopening(self._runner)
         self._runner.on_store_error = reopening.watch
@@ -160,7 +175,12 @@ class Host:
             _RECOVERY[self][1].extend(await reopening.first((*open_runs, *waking)))
         finally:
             _RECOVERY[self][0].set()
-        loops = [self._scheduler.run(), reopening.run(), expiry.run(self._runner)]
+        loops = [
+            self._scheduler.run(),
+            reopening.run(),
+            expiry.run(self._runner),
+            self._teams.run(),
+        ]
         if self._telemetry is not None:
             loops.append(self._telemetry.run())
         await asyncio.gather(*loops)
@@ -179,6 +199,11 @@ class Host:
                 with contextlib.suppress(asyncio.CancelledError):
                     await ticking
         finally:
+            for sweep in self._after:
+                sweep.cancel()
+            # The team workers stop claiming and let their member runs finish; every row stays
+            # durable for the next host.
+            await self._teams.stop()
             # A tick that failed (a store error in its first pass) is raised only after the
             # runs are ended and intake is drained.
             await self._runner.stop()

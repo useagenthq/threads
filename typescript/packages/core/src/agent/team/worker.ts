@@ -29,7 +29,7 @@ import {
   teamsUnder,
 } from "./scan";
 import { materializeOrLater, rebindMember } from "./setup";
-import { endUnbound, refuseEnded } from "./units";
+import { endUnbound, takeMail } from "./units";
 
 // The in-process team worker (spec/schema/README.md, "Teams"; decision 17): while a lead's run
 // is open, it materializes every starting member of the lead's team (and of each nested team),
@@ -232,7 +232,7 @@ export class TeamWorker {
     pending: readonly MailEnvelope[],
   ): Promise<Unit | undefined> {
     return pending.length > 0 && (await leaseFree(this.#env.log, branch))
-      ? () => refuseEnded(this.#env, branch)
+      ? async () => (await takeMail(this.#env, branch)) !== undefined
       : undefined;
   }
 

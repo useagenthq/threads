@@ -19,7 +19,7 @@ export async function drive<T>(
 ): Promise<T> {
   const first = await outcome();
   if (first !== undefined) return first;
-  const { deferTools } = await leadOf(env);
+  const { deferTools } = await leadOf(env.log, env.ref.id);
   const worker = new TeamWorker({
     store: env.store,
     log: env.log,

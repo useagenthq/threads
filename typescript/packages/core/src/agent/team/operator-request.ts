@@ -1,5 +1,5 @@
 import type { EventOf } from "../../fold/state";
-import type { Json, Principal } from "../../log";
+import type { Json, Principal, TeamId } from "../../log";
 import { redactSecrets } from "../../redact/text";
 import { knownEvents } from "../../reduce";
 import type { LogStore } from "../../store";
@@ -130,19 +130,22 @@ function putText(env: HandleEnv): Request["put"] {
 export const limitsOf = (env: HandleEnv): TeamLimits => env.lead.teamLimits;
 
 /** The lead as a member's parent, and the defer_tools its members inherit. */
-export async function leadOf(env: HandleEnv): Promise<{
+export async function leadOf(
+  log: LogStore,
+  team: TeamId,
+): Promise<{
   readonly parent: NonNullable<EventOf<"thread_started">["data"]["parent"]>;
   readonly deferTools: DeferTools | undefined;
 }> {
-  const row = (
-    await reading(env.log.driver, (tx) => memberRows(tx, env.ref.id))
-  ).find((r) => r.role === "lead");
+  const row = (await reading(log.driver, (tx) => memberRows(tx, team))).find(
+    (r) => r.role === "lead",
+  );
   const read =
     row?.branch_id === undefined || row.branch_id === null
       ? undefined
-      : await env.log.read(row.branch_id);
+      : await log.read(row.branch_id);
   if (row === undefined || read === undefined || !read.ok)
-    throw new Error(`team ${env.ref.id} has no readable lead log`);
+    throw new Error(`team ${team} has no readable lead log`);
   const started = knownEvents(read.value).find(
     (e) => e.type === "thread_started",
   );
