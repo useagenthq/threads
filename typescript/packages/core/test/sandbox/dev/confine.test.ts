@@ -28,6 +28,25 @@ const missing = (() => {
 
 const withConfinement = missing === undefined ? describe : describe.skip;
 
+/**
+ * Set to 1 on a host that must be able to confine (CI's Linux runners, once they install
+ * bubblewrap). Then an unavailable confinement fails instead of skipping: a lane whose denials
+ * quietly stop being asserted looks proven when only half of it ran.
+ */
+const REQUIRED = "THREADS_REQUIRE_CONFINEMENT";
+
+const WHY = `the dev sandbox has no working OS confinement (bubblewrap on Linux, sandbox-exec on macOS): ${missing}. Install bubblewrap to run these on Linux.`;
+
+describe("the dev sandbox's confinement", () => {
+  // The loud half of the skip: bun prints a skipped suite without a reason, so this always
+  // runs, names what is missing, and fails where a confinement is required.
+  test("is available, or says by name why not", () => {
+    if (missing === undefined) return;
+    console.warn(`threads: ${WHY}`);
+    expect(process.env[REQUIRED]).not.toBe("1");
+  });
+});
+
 type Ran = {
   readonly code: number;
   readonly out: string;

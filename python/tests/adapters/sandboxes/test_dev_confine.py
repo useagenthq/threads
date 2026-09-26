@@ -36,9 +36,31 @@ def _missing() -> str | None:
 
 
 MISSING = _missing()
-confined = pytest.mark.skipif(MISSING is not None, reason=f"no OS confinement: {MISSING}")
-on_linux = pytest.mark.skipif(sys.platform != "linux", reason="bubblewrap's own mounts")
-on_macos = pytest.mark.skipif(sys.platform != "darwin", reason="sandbox-exec's own denials")
+REQUIRED = "THREADS_REQUIRE_CONFINEMENT"
+"""Set to 1 on a host that must be able to confine (CI's Linux runners, once they install
+bubblewrap). Then an unavailable confinement fails instead of skipping: a lane whose denials
+quietly stop being asserted looks proven when only half of it ran."""
+
+_WHY = (
+    "the dev sandbox has no working OS confinement (bubblewrap on Linux, sandbox-exec on macOS): "
+    f"{MISSING}. Install bubblewrap to run these on Linux."
+)
+
+confined = pytest.mark.skipif(MISSING is not None, reason=_WHY)
+on_linux = pytest.mark.skipif(sys.platform != "linux", reason="bubblewrap's own mounts: Linux only")
+on_macos = pytest.mark.skipif(
+    sys.platform != "darwin", reason="sandbox-exec's own denials: macOS only"
+)
+
+
+def test_the_confinement_is_available_or_says_by_name_why_not() -> None:
+    """The loud half of the skip. It always runs: on a host without a confinement it names what
+    is missing in the log, and where one is required it fails rather than letting the suite
+    report a quietly smaller test count."""
+    if MISSING is None:
+        return
+    print(f"threads: {_WHY}")
+    assert os.environ.get(REQUIRED) != "1", _WHY
 
 
 def _ok[T](result: Ok[T] | Err[SandboxError]) -> T:
