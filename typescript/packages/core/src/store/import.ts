@@ -7,6 +7,7 @@ import { type LogError, logError } from "../verify/error";
 import { projectApprovals } from "./approvals";
 import type { ArtifactStore } from "./artifacts";
 import type { Tx } from "./driver";
+import { claimSchedules, deleted, tombstoned } from "./import-rows";
 import { knownOf } from "./indexing";
 import { projectQuestions } from "./questions";
 import {
@@ -43,6 +44,8 @@ export async function verifiedImport(
 export type ImportTarget = {
   readonly tenantId: string;
   readonly droppedRef: string | null;
+  /** When the claimed schedule rows say they were claimed. */
+  readonly now: number;
 };
 
 /**
@@ -57,11 +60,22 @@ export async function importSegments(
   log: VerifiedLog,
   target: ImportTarget,
 ): Promise<Result<void, LogError>> {
+  // A deletion can commit between the caller's early check and here, so the tombstones are read
+  // again inside this transaction: on a hit nothing is stored.
+  const threads = log.segments.map((s) => s.header.thread_id);
+  const gone = await tombstoned(tx, target.tenantId, threads);
+  if (!gone.ok) return gone;
+  if (gone.value !== undefined) return err(deleted(gone.value));
   for (const index of log.segments.keys()) {
     const stored = await importSegment(tx, log, target, index);
     if (!stored.ok) return stored;
   }
-  return ok(undefined);
+  return await claimSchedules(
+    tx,
+    target.tenantId,
+    knownOf(log.segments.flatMap((s) => s.events)),
+    target.now,
+  );
 }
 
 /**

@@ -18,6 +18,7 @@ import {
   reclaimFork,
 } from "./fork-writes";
 import { importSegments, verifiedImport } from "./import";
+import { tombstoned } from "./import-rows";
 import { LEASE_TTL_MS, type StoreAccess } from "./lease";
 import { ResourceLedger } from "./ledger";
 import { exportBytes } from "./lines";
@@ -243,6 +244,13 @@ export class LogStore {
     return this.#reading((tx) => this.#export(tx, branchId));
   }
 
+  /** The first of `ids` this tenant deleted: what import checks before it writes anything. */
+  deletedThread(
+    ids: readonly ThreadId[],
+  ): Promise<Result<ThreadId | undefined, LogError>> {
+    return this.#reading((tx) => tombstoned(tx, this.tenant, ids));
+  }
+
   async #export(
     tx: Tx,
     branchId: BranchId,
@@ -267,6 +275,7 @@ export class LogStore {
       tenantId: this.tenant,
       droppedRef:
         torn === undefined ? null : await this.#artifacts.put(torn.bytes),
+      now: this.#now(),
     };
     const stored = await atomically(this.#db, async (tx) => {
       const imported = await importSegments(tx, log.value, target);

@@ -13,6 +13,7 @@ from typing import Final
 from threads.log import BranchId, ForkEvent, ParseError, ThreadId
 from threads.log.digest import sha256_hex
 from threads.store.conn import Conn, transaction
+from threads.store.import_rows import claim_schedules, deleted, tombstoned
 from threads.store.lines import head_line
 from threads.store.project_rows import project_rows, write_rows
 from threads.store.verify import Segment, StoredEvent, VerifiedLog
@@ -181,6 +182,11 @@ def insert_segments(
     already in the store must hold the same lines (an idempotent re-import). A leaf whose head
     didn't verify keeps that evidence (and the dropped bytes' artifact) and is inspection-only
     until recovery records log_repaired."""
+    # A deletion can commit between the caller's early check and here, so the tombstones are read
+    # again inside this transaction: on a hit nothing is stored.
+    gone = tombstoned(conn, tenant_id, [s.header.thread_id for s in log.segments])
+    if gone is not None:
+        return deleted(gone)
     new: list[Segment] = []
     for segment in log.segments:
         existing = branch(conn, segment.header.branch_id)
@@ -206,7 +212,7 @@ def insert_segments(
         insert_events(conn, segment.events, sha256_hex(segment.last_line))
         # The index rows its settlements imply, never judged against today's clock.
         write_rows(conn, tenant_id, project_rows([e for e, _ in segment.events]))
-    return None
+    return claim_schedules(conn, tenant_id, [e for s in log.segments for e, _ in s.events])
 
 
 def import_segments(

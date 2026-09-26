@@ -107,7 +107,7 @@ function checkRequest(
 }
 
 /** Every artifact ref anywhere in a value. */
-function refsIn(value: unknown, into: Set<string>): void {
+export function refsIn(value: unknown, into: Set<string>): void {
   if (Array.isArray(value)) for (const v of value) refsIn(v, into);
   else if (typeof value === "object" && value !== null) {
     const ref = ArtifactRef.safeParse(value);

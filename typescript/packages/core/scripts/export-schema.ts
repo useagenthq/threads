@@ -4,6 +4,7 @@ import { z } from "zod";
 import { canonicalize } from "../src/log";
 import { ModelCatalog } from "../src/model/catalog";
 import { Tree } from "../src/sandbox/tree/tree";
+import { Bundle } from "../src/thread/bundle";
 import { evalSchema } from "./eval-schema";
 import { specSchema } from "./spec-schema";
 import { toolCatalog, toolSchema } from "./tool-catalog";
@@ -125,6 +126,24 @@ function treeSchema(): Json {
   };
 }
 
+const BUNDLE = join(
+  import.meta.dir,
+  "../../../../spec/schema/bundle.v1.schema.json",
+);
+
+/** A portable bundle's manifest (spec/schema/README.md, Portable bundles). */
+function bundleSchema(): Json {
+  const exported = z.toJSONSchema(Bundle, {
+    target: "draft-2020-12",
+    io: "input",
+    unrepresentable: "throw",
+  });
+  return {
+    ...JSON.parse(JSON.stringify(exported)),
+    $id: "urn:threads:schema:bundle:v1",
+  };
+}
+
 const [flag, file = SPEC] = process.argv.slice(2);
 const schema = specSchema();
 if (flag === "--check") {
@@ -135,7 +154,8 @@ if (flag === "--check") {
         checkBytes(toolCatalog(), CATALOG) +
         check(catalogSchema(), MODEL_CATALOG) +
         check(evalSchema(schema), EVAL) +
-        check(treeSchema(), TREE)
+        check(treeSchema(), TREE) +
+        check(bundleSchema(), BUNDLE)
       : 0);
 } else {
   writeFileSync(SPEC, format(schema));
@@ -144,7 +164,8 @@ if (flag === "--check") {
   writeFileSync(MODEL_CATALOG, format(catalogSchema()));
   writeFileSync(EVAL, format(evalSchema(schema)));
   writeFileSync(TREE, format(treeSchema()));
+  writeFileSync(BUNDLE, format(bundleSchema()));
   console.log(
-    `wrote ${SPEC}, ${TOOLS}, ${CATALOG}, ${MODEL_CATALOG}, ${EVAL} and ${TREE}`,
+    `wrote ${SPEC}, ${TOOLS}, ${CATALOG}, ${MODEL_CATALOG}, ${EVAL}, ${TREE} and ${BUNDLE}`,
   );
 }

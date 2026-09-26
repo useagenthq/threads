@@ -34,12 +34,18 @@ type ApiCode = Literal[
     "unverified",
     "invalid",
     "cost_overflow",
+    "path_exists",
+    "bundle_incomplete",
+    "schedule_conflict",
+    "io_error",
 ]
 """branch_not_found: a branch that is absent or another tenant's. branch_exists: a thread
 another tenant owns. sandbox_required: a fork with no sandbox adapter for its snapshot's
 provider. invalid_request: a malformed call. invalid_cursor: a stream cursor that names no
-readable position. not_found: a thread with no such branch. The rest are the thread controls'
-and the host's typed failures (spec/api.json)."""
+readable position. not_found: a thread with no such branch. path_exists, bundle_incomplete,
+schedule_conflict and io_error are export and import's (spec/api.json Thread.export,
+importThread). The rest are the thread controls' and the host's typed failures
+(spec/api.json)."""
 
 
 @dataclass(frozen=True, slots=True)

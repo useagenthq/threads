@@ -149,6 +149,7 @@ export async function storeLogs(
         importSegments(tx, log, {
           tenantId: store.tenant,
           droppedRef: null,
+          now: store.now(),
         }),
       ),
     );

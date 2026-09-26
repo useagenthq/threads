@@ -123,8 +123,10 @@ from threads.secrets import Secret, secret  # noqa: E402
 from threads.team.dynamic import InvalidDefinition  # noqa: E402
 from threads.team.policy import MessagePolicyRule  # noqa: E402
 from threads.telemetry import Exporter, SkippedBranch, SyncReport  # noqa: E402
+from threads.thread.bundle import ExportedBundle  # noqa: E402
 from threads.thread.case import CaseExpectation, SavedCase  # noqa: E402
 from threads.thread.handle import open_thread  # noqa: E402
+from threads.thread.importing import import_thread  # noqa: E402
 from threads.web.search import SearchBackend, SearchHit  # noqa: E402
 from threads.workspace import Workspace, WorkspaceGit  # noqa: E402
 
@@ -154,6 +156,7 @@ __all__ = [
     "EventItem",
     "ExecOutput",
     "ExecResult",
+    "ExportedBundle",
     "Exporter",
     "Extension",
     "Failed",
@@ -246,6 +249,7 @@ __all__ = [
     "dynamic_agent",
     "extension",
     "fake_sandbox",
+    "import_thread",
     "local_knowledge",
     "local_memory",
     "open_team",
