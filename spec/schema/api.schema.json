@@ -110,7 +110,7 @@
     "PyName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
     "FieldName": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
     "TypeName": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
-    "TypePackage": { "description": "The package entry that exports the type in each language; other public entries may re-export it. Absent: core.", "enum": ["core", "host", "mcp"] },
+    "TypePackage": { "description": "The package entry that exports the type in each language; other public entries may re-export it. Absent: core.", "enum": ["core", "host", "mcp", "a2a"] },
     "Doc": { "type": "string", "minLength": 1 },
     "PackageName": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
     "Package": {

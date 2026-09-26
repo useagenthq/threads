@@ -31,6 +31,12 @@
       "py": "threads.host",
       "doc": "Channels, schedules, the HTTP API (spec/schema/host-api/) and the CLI."
     },
+    "a2a": {
+      "kind": "core",
+      "ts": "@threads/a2a",
+      "py": "threads.a2a",
+      "doc": "A2A 1.0, both directions: remote() names a partner's agent, and the exposed side serves a host agent from the same schemas. Runtime dependency: core only. The protocol is small and the adapter has to own the message id, the attempt record and the exact request bytes so that a resend is byte-identical, which an SDK hides; the official SDKs are dev dependencies for interop tests. The pinned protocol is spec/schema/a2a/."
+    },
     "mcp": {
       "kind": "core",
       "ts": "@threads/mcp",
@@ -970,6 +976,113 @@
         }
       ],
       "returns": {"$ref": "#/types/McpServer"}
+    },
+    "remote": {
+      "ts": "remote",
+      "py": "remote",
+      "package": "a2a",
+      "doc": "A partner's A2A agent, named like a local one. It does no I/O: the agent card is fetched and pinned later, when a thread first calls the remote, so a host whose partner is unreachable still starts and a card that changes never moves a conversation already under way. The name shares the host's agent-name space, so a clash with a local agent is a setup error.",
+      "async": false,
+      "params": [
+        {
+          "name": "name",
+          "kind": "positional",
+          "type": {
+            "prim": "string"
+          },
+          "required": true,
+          "doc": "What this remote is called, in the host's agent-name space ([a-z][a-z0-9_]*, else invalid_config)."
+        },
+        {
+          "name": "card_url",
+          "kind": "positional",
+          "type": {
+            "prim": "string"
+          },
+          "required": true,
+          "doc": "The agent card's URL, usually .well-known/agent-card.json. https only, else invalid_config: a card is pinned by hash after an https fetch, and is never read in the clear."
+        },
+        {
+          "name": "auth",
+          "kind": "option",
+          "type": {
+            "$ref": "#/types/A2aAuth"
+          },
+          "required": false,
+          "doc": "How we authenticate to the partner. Omitted: nothing is sent, which suits a card that declares no security scheme; a card that asks for one is then remote_auth_unsupported when it is pinned."
+        },
+        {
+          "name": "cost_per_message",
+          "kind": "option",
+          "type": {
+            "prim": "integer"
+          },
+          "required": false,
+          "default": 0,
+          "doc": "What one message to this remote costs us, in nanos as usd() gives, reserved against every covering budget before it is sent. Recorded as declared and marked as such, never as measured: nothing here observes a partner's spend. A negative value is invalid_config."
+        },
+        {
+          "name": "provenance",
+          "kind": "option",
+          "type": {
+            "$ref": "#/types/Provenance"
+          },
+          "required": false,
+          "default": "opaque",
+          "doc": "What we tell the partner about where a call came from. No principal, tenant or subject is ever sent: to the partner every call is from our service."
+        },
+        {
+          "name": "timeout_ms",
+          "kind": "option",
+          "type": {
+            "prim": "integer"
+          },
+          "required": false,
+          "default": 120000,
+          "doc": "How long one exchange may take. A timeout before the partner's task id is known leaves the outcome uncertain, so the call parks and nothing is re-sent; after the task id is known it means the task is still working, and the caller checks later. A value that is not a positive integer is invalid_config."
+        }
+      ],
+      "returns": {
+        "$ref": "#/types/Remote"
+      },
+      "config_errors": [
+        {
+          "code": "invalid_config"
+        }
+      ]
+    },
+    "bearer": {
+      "ts": "bearer",
+      "py": "bearer",
+      "package": "a2a",
+      "doc": "Sends Authorization: Bearer <secret> to a remote. The only auth helper: a card that asks for OAuth2, OpenID Connect, an API key or mTLS is remote_auth_unsupported, naming what it asked for. The value is resolved on the host at setup and sent only in the header, only to the pinned interface's origin; it never enters the log, a prompt or a sandbox. To rotate the token, change the variable its secret names and restart the host.",
+      "async": false,
+      "params": [
+        {
+          "name": "secret",
+          "kind": "positional",
+          "type": {
+            "union": [
+              {
+                "$ref": "#/types/Secret"
+              },
+              {
+                "prim": "string"
+              }
+            ]
+          },
+          "required": true,
+          "doc": "The token, as a secret() naming a host environment variable, or the literal string. An unset or empty variable is missing_secret naming it, never an empty header."
+        }
+      ],
+      "returns": {
+        "$ref": "#/types/A2aAuth"
+      },
+      "config_errors": [
+        {
+          "code": "missing_secret"
+        }
+      ]
     },
     "secret": {
       "ts": "secret",
@@ -4006,6 +4119,29 @@
         "subject": {"type": {"prim": "string"}, "required": true, "doc": "Who it is within the issuer, such as a user id. Non-empty."}
       },
       "doc": "Who acts: a verified sender, approver or operator. Every Thread method that appends takes one, for example the local operator {issuer: \"api\", tenant: \"local\", subject: \"operator\"}. In TypeScript, Principal is also the schema that parses one."
+    },
+    "Remote": {
+      "kind": "interface",
+      "package": "a2a",
+      "role": "opaque",
+      "doc": "A partner's A2A agent, from remote(). Config only: it holds no connection and did no I/O, so the card it will be pinned against is fetched later."
+    },
+    "A2aAuth": {
+      "kind": "interface",
+      "package": "a2a",
+      "role": "opaque",
+      "doc": "A credential for a remote, from bearer(). Resolved on the host at setup and sent only in the Authorization header of requests to the pinned interface's origin; it never enters the log, a prompt, a stored request body or a sandbox."
+    },
+    "Provenance": {
+      "kind": "alias",
+      "package": "a2a",
+      "type": {
+        "enum": [
+          "opaque",
+          "none"
+        ]
+      },
+      "doc": "What a remote call tells the partner about where it came from. opaque sends metadata[\"https://threadsai.dev/a2a/provenance/v1\"] with a request id derived from the tenant and the root request, and a hop count, so the partner can link the calls of one request without learning who asked. none sends nothing. Either way no principal, tenant or subject leaves this host."
     },
     "Secret": {
       "kind": "interface",

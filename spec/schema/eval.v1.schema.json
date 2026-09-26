@@ -665,7 +665,10 @@
         "message_policy_decided",
         "answer_rejected",
         "tools_loaded",
-        "supervisor_decided"
+        "supervisor_decided",
+        "remote_card",
+        "remote_call",
+        "remote_task_state"
       ]
     },
     "FrameworkSource": {

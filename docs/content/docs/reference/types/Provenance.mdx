@@ -1,0 +1,24 @@
+---
+title: "Provenance"
+description: "What a remote call tells the partner about where it came from."
+icon: "Braces"
+---
+
+opaque sends metadata["https://threadsai.dev/a2a/provenance/v1"] with a request id derived from the tenant and the root request, and a hop count, so the partner can link the calls of one request without learning who asked. none sends nothing. Either way no principal, tenant or subject leaves this host.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+type Provenance = "opaque" | "none";
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+type Provenance = Literal["opaque", "none"]
+```
+
+</Tab>
+</Tabs>

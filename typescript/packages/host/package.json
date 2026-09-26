@@ -7,6 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@threads/a2a": "workspace:*",
     "@threads/core": "workspace:*",
     "zod": "^4.6.5"
   },

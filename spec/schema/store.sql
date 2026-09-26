@@ -329,6 +329,12 @@ CREATE TABLE IF NOT EXISTS run_receipts (
   PRIMARY KEY (tenant_id, operation, idempotency_key)
 ) STRICT;
 
+-- A principal's receipts for one operation, in time order. The primary key is keyed by
+-- idempotency_key, so a lookup that starts from the caller instead of the key (an A2A partner's
+-- runs of an operation) needs its own index.
+CREATE INDEX IF NOT EXISTS run_receipts_principal
+  ON run_receipts (tenant_id, operation, principal_key, created_at);
+
 -- Deleted threads (threads delete): one transaction removes a thread's log rows
 -- and projections, moves its live resources to releasing, and writes this tombstone, which
 -- outlives them as the audit of the deletion.
@@ -551,4 +557,6 @@ CREATE INDEX IF NOT EXISTS observer_losses_unreported
 -- run_receipts.operation is checked against its two wire names. A version 8 store may hold rows
 -- under the Python spelling startRun, which no reader looks for now; refusing that store (as
 -- every older version is refused) is what keeps it from honouring fewer receipts than it did.
+-- Version 9 also adds lane 30's run_receipts_principal index, the caller-side lookup of
+-- run receipts; an added index changes no stored bytes, so it needs no version of its own.
 PRAGMA user_version = 9;

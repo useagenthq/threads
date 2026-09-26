@@ -1,0 +1,9 @@
+{
+  "name": "remote-call-without-effect-begin-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A remote_call not directly followed by the effect_begin of its call: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

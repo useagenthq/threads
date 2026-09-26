@@ -1,0 +1,40 @@
+---
+title: "bearer"
+description: "Sends Authorization: Bearer <secret> to a remote."
+icon: "SquareFunction"
+---
+
+The only auth helper: a card that asks for OAuth2, OpenID Connect, an API key or mTLS is remote_auth_unsupported, naming what it asked for. The value is resolved on the host at setup and sent only in the header, only to the pinned interface's origin; it never enters the log, a prompt or a sandbox. To rotate the token, change the variable its secret names and restart the host.
+
+Import from `@threads/a2a` (TypeScript) or `threads.a2a` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function bearer(secret: Secret | string): A2aAuth
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def bearer(
+    secret: Secret | str,
+) -> A2aAuth
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="secret" type={"Secret | string"} required>
+  The token, as a secret() naming a host environment variable, or the literal string. An unset or empty variable is missing_secret naming it, never an empty header.
+</Field>
+
+## Returns
+
+[`A2aAuth`](/docs/reference/types/A2aAuth)
+
+**Throws** `ConfigError` with one of these codes: `missing_secret`.

@@ -3,7 +3,7 @@ import { ActorWithPrincipal, ArtifactRef, Budget } from "../common";
 import { InputPart } from "../content";
 import { type EventDef, event, eventWithActor } from "../envelope";
 import { CallId, EventId, MailId, OccurrenceId } from "../ids";
-import { Name, NonEmpty, TimeMs } from "../primitives";
+import { JsonObject, Name, NonEmpty, TimeMs } from "../primitives";
 import { type Ruled, withRule } from "../rules";
 import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
 import {
@@ -41,7 +41,8 @@ export const INJECTED_SOURCES = [
 const TRUST_LEVELS = ["untrusted_reference", "trusted_instruction"] as const;
 const SKIP_REASONS = ["missed", "overlap", "removed"] as const;
 
-// A team member's task arrives as its user_input; mail_id names the task mail it consumes.
+// A team member's task arrives as its user_input; mail_id names the task mail it consumes. A2A
+// provenance arrives over the host API, so a2a goes only with source api.
 const USER_INPUT_RULE: {
   readonly allOf: readonly [
     { readonly $ref: typeof TextOrContent },
@@ -56,6 +57,12 @@ const USER_INPUT_RULE: {
         readonly not: { readonly required: readonly ["mail_id"] };
       };
     },
+    {
+      readonly if: {
+        readonly properties: { readonly source: { readonly const: "api" } };
+      };
+      readonly else: { readonly not: { readonly required: readonly ["a2a"] } };
+    },
   ];
 } = {
   allOf: [
@@ -64,6 +71,10 @@ const USER_INPUT_RULE: {
       if: { properties: { source: { const: "team_task" } } },
       then: { required: ["mail_id"] },
       else: { not: { required: ["mail_id"] } },
+    },
+    {
+      if: { properties: { source: { const: "api" } } },
+      else: { not: { required: ["a2a"] } },
     },
   ],
 };
@@ -76,6 +87,14 @@ export const UserInputData: Ruled<
     budget: Opt<typeof Budget>;
     mail_id: Opt<typeof MailId>;
     client_message_id: Opt<z.ZodString>;
+    a2a: Opt<
+      Strict<{
+        message_id: typeof NonEmpty;
+        context_id: typeof NonEmpty;
+        task_id: Opt<typeof NonEmpty>;
+        claims: Opt<typeof JsonObject>;
+      }>
+    >;
   }>,
   typeof USER_INPUT_RULE
 > = withRule(
@@ -97,6 +116,17 @@ export const UserInputData: Ruled<
       .regex(/^[A-Za-z0-9_.-]{1,128}$/)
       .describe(
         "The id a web UI gave this message (the AI SDK UIMessage id or the AG-UI message id), recorded by the UI routes so a retry finds its run and a snapshot names the message as the client does. Not rendered.",
+      )
+      .optional(),
+    a2a: z
+      .strictObject({
+        message_id: NonEmpty,
+        context_id: NonEmpty,
+        task_id: NonEmpty.optional(),
+        claims: JsonObject.optional(),
+      })
+      .describe(
+        "Only with source api: the A2A message this input arrived as, recorded so a resend of the same messageId finds its run. claims is what the calling partner asserted about provenance and is untrusted: it never grants authority, never picks a budget and never becomes provenance.principal, which is always the authenticated principal of the call.",
       )
       .optional(),
   }),

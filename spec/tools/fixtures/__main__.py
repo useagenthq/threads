@@ -12,6 +12,7 @@ import tempfile
 from typing import TYPE_CHECKING
 
 from . import (
+    a2a_vectors,
     agent_pins,
     agents,
     anthropic_requests,
@@ -63,6 +64,7 @@ from . import (
     questions,
     recovery,
     ref_team,
+    remote_rules,
     renders,
     rules,
     run_cases,
@@ -114,6 +116,7 @@ FAMILIES = (
     open_turn,
     forks,
     rules,
+    remote_rules,
     renders,
     host,
     channels,
@@ -310,6 +313,7 @@ def _write_all(
     ui_vectors.write()
     pos_int_vector.write()
     web_fetch_cap.write()
+    a2a_vectors.write()
     coding_preset.write()
     eval_vectors.write()
     eval_simulate_vectors.write()
@@ -347,6 +351,7 @@ def main() -> int:
             problems += tool_search_vectors.check() + e2b_wire.check()
             problems += ui_vectors.check() + tar_vectors.check() + pos_int_vector.check()
             problems += web_fetch_cap.check()
+            problems += a2a_vectors.check()
             problems += workspace_exclude.check() + coding_preset.check()
         for p in problems:
             print(f"coverage.json: {p}")

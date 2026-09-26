@@ -16,6 +16,8 @@ import { z } from "zod";
 // tenant and operation; its principal and body hash are the binding it is checked against.
 
 export const START_RUN = "start_run";
+/** An exposed A2A agent's SendMessage, keyed by principal, agent and messageId (a2a/keys.ts). */
+export const A2A_SEND = "a2a_send";
 /** A UI route's run, keyed `<thread_id>:<client message id>` (spec/schema/ui/README.md). */
 export const UI_RUN: typeof UI_RECEIPT = UI_RECEIPT;
 
@@ -37,7 +39,7 @@ const Row: z.ZodType<Receipt> = z.strictObject({
 
 export type Keyed = {
   readonly tenant: string;
-  readonly operation: typeof START_RUN | typeof UI_RUN;
+  readonly operation: typeof START_RUN | typeof UI_RUN | typeof A2A_SEND;
   readonly key: string;
 };
 
@@ -165,4 +167,67 @@ export async function unfinishedRuns(sql: Sql): Promise<readonly RunBranch[]> {
     );
     return [];
   });
+}
+
+export type TaskReceipt = {
+  readonly idempotency_key: string;
+  readonly thread_id: ThreadId;
+  readonly branch_id: BranchId;
+  readonly run_id: EventId;
+  readonly created_at: number;
+};
+
+const TaskRow: z.ZodType<TaskReceipt> = z.strictObject({
+  idempotency_key: z.string(),
+  thread_id: ThreadId,
+  branch_id: BranchId,
+  run_id: EventId,
+  created_at: z.number(),
+});
+
+/**
+ * A principal's `a2a_send` receipts, newest first: what ListTasks pages over and what GetTask,
+ * SubscribeToTask and CancelTask resolve a task through. The principal is in the WHERE clause,
+ * not checked afterwards, so another caller's task is indistinguishable from one that never
+ * existed. Served by the run_receipts (tenant_id, operation, principal_key, created_at) index.
+ */
+export async function a2aTasks(
+  sql: Sql,
+  tenant: string,
+  principal: string,
+): Promise<Result<readonly TaskReceipt[], LogError>> {
+  return parseRows(
+    TaskRow,
+    await reading(sql, (tx) =>
+      tx.all(
+        `SELECT idempotency_key, thread_id, branch_id, run_id, created_at FROM run_receipts
+          WHERE tenant_id = ? AND operation = ? AND principal_key = ?
+          ORDER BY created_at DESC, run_id DESC`,
+        [tenant, A2A_SEND, principal],
+      ),
+    ),
+  );
+}
+
+/**
+ * One of the principal's `a2a_send` receipts by run id. Separate from `a2aTasks` because a stream
+ * resolves its task on every poll, and reading a whole history to do that would not scale.
+ */
+export async function a2aTask(
+  sql: Sql,
+  tenant: string,
+  principal: string,
+  runId: string,
+): Promise<Result<TaskReceipt | undefined, LogError>> {
+  const rows = parseRows(
+    TaskRow,
+    await reading(sql, (tx) =>
+      tx.all(
+        `SELECT idempotency_key, thread_id, branch_id, run_id, created_at FROM run_receipts
+          WHERE tenant_id = ? AND operation = ? AND principal_key = ? AND run_id = ?`,
+        [tenant, A2A_SEND, principal, runId],
+      ),
+    ),
+  );
+  return rows.ok ? { ok: true, value: rows.value[0] } : rows;
 }

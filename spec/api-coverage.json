@@ -1762,5 +1762,21 @@
     "py": [
       "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[zep]"
     ]
+  },
+  "remote": {
+    "ts": [
+      "packages/a2a/test/remote.test.ts > remote() > does no I/O, so a partner that is down does not stop a host starting"
+    ],
+    "py": [
+      "tests/a2a/test_remote.py::TestRemote::test_it_does_no_io_so_a_partner_that_is_down_does_not_stop_a_host_starting"
+    ]
+  },
+  "bearer": {
+    "ts": [
+      "packages/a2a/test/remote.test.ts > bearer() > resolves its secret from the host at use time, not at construction"
+    ],
+    "py": [
+      "tests/a2a/test_remote.py::TestBearer::test_it_resolves_its_secret_from_the_host_at_use_time"
+    ]
   }
 }

@@ -18,6 +18,8 @@ import {
   ThreadId,
   wakeBranches,
 } from "@threads/core/host";
+import { type A2aOptions, type Exposed, exposeA2a } from "./a2a/config";
+import { a2aRoute } from "./a2a/route";
 import { consume } from "./consume";
 import { type HostCeiling, HostContext } from "./context";
 import { failure } from "./errors";
@@ -75,6 +77,11 @@ export type HostOptions = {
    * Every thread of the tenant may address one by its name, as messagePolicy allows. Default {}.
    */
   readonly members?: Readonly<Record<string, HostMemberOptions>>;
+  /**
+   * Serves host agents as A2A 1.0 agents: their cards at /a2a/{agent}/.well-known/agent-card.json
+   * and both bindings under /a2a/{agent}. Checked at ready(); nothing is served without it.
+   */
+  readonly a2a?: A2aOptions;
 };
 
 export type Host = {
@@ -166,6 +173,8 @@ export function host(options: HostOptions): Host {
     new Set(members.map((m) => m.agent)),
   );
   const watch = new Watch();
+  /** Set by ready(): the A2A routes answer nothing before the config has been checked. */
+  let exposed: Exposed | undefined;
   const recovery = new Recovery(ctx);
   const teams = new Teams(ctx, members);
   // A caller's first turn may already address a host member, so the tenant's host team opens
@@ -276,6 +285,13 @@ export function host(options: HostOptions): Host {
     team: ({ principal }) => hostTeamOf(ctx, members, principal),
     fetch: async (request) => {
       const { pathname } = new URL(request.url);
+      const served = await a2aRoute(
+        ctx,
+        exposed,
+        options.authenticate,
+        request,
+      );
+      if (served !== undefined) return served;
       const channel = /^\/channels\/([^/]+)\/events$/.exec(pathname);
       if (channel === null)
         return pathname.startsWith("/v1/")
@@ -295,6 +311,10 @@ export function host(options: HostOptions): Host {
       subscribe(ctx, threadId, runId, principal, afterSeq),
     ready: async () => {
       checkBindings(ctx);
+      exposed =
+        options.a2a === undefined
+          ? undefined
+          : await exposeA2a(ctx, options.a2a);
       const bound = bindSchedules(ctx, options.schedules ?? []);
       if (typeof bound === "string")
         throw new ConfigError("invalid_config", bound);

@@ -295,6 +295,10 @@ function visible(e: KnownEvent): VisibleEvent | undefined {
     case "message_policy_decided":
     case "answer_rejected":
     case "supervisor_decided":
+    // A remote's text reaches a model as a tool result, never as a rendered event.
+    case "remote_card":
+    case "remote_call":
+    case "remote_task_state":
       return undefined;
     default:
       return assertNever(e);

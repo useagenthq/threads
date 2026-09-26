@@ -5933,6 +5933,15 @@
               },
               {
                 "$ref": "#/components/schemas/events_ev_supervisor_decided"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_remote_card"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_remote_call"
+              },
+              {
+                "$ref": "#/components/schemas/events_ev_remote_task_state"
               }
             ]
           }
@@ -11082,6 +11091,181 @@
         ],
         "type": "object"
       },
+      "events_ev_remote_call": {
+        "description": "Appended in the same append as its effect_begin (rule 56), before any byte leaves. request_ref holds the exact bytes, so a resend after safe_to_retry is byte-identical and carries the same messageId. message_id is derived from (branch_id, call_id) alone and never includes the attempt, so every attempt of one call is one message to any peer that deduplicates. One remote_call per call_id (rule 58): every effect_begin for it names those same stored bytes.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "call_id": {
+                "$ref": "#/components/schemas/events_CallId"
+              },
+              "context_id": {
+                "$ref": "#/components/schemas/events_NonEmpty",
+                "description": "The A2A conversation this call continues."
+              },
+              "message_id": {
+                "$ref": "#/components/schemas/events_NonEmpty",
+                "description": "Derived from (branch_id, call_id) alone, never from the attempt."
+              },
+              "operation": {
+                "enum": [
+                  "send_message"
+                ]
+              },
+              "remote": {
+                "$ref": "#/components/schemas/events_Name",
+                "description": "The partner whose card this thread pinned."
+              },
+              "request_ref": {
+                "$ref": "#/components/schemas/events_ArtifactRef",
+                "description": "The exact request body, stored after redaction."
+              },
+              "task_id": {
+                "$ref": "#/components/schemas/events_NonEmpty",
+                "description": "The partner's task this call adds to; absent when the call opens one."
+              }
+            },
+            "required": [
+              "call_id",
+              "remote",
+              "operation",
+              "message_id",
+              "context_id",
+              "request_ref"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "remote_call"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_remote_card": {
+        "description": "Pins a partner's card by hash for one thread. A card that changes later never moves a conversation already under way: the thread keeps calling the pinned interface_url with the pinned binding, and a new card is a new thread's pin.",
+        "properties": {
+          "critical": {
+            "const": true
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "binding": {
+                "description": "The transport that entry declares.",
+                "enum": [
+                  "JSONRPC",
+                  "HTTP+JSON"
+                ]
+              },
+              "card_ref": {
+                "$ref": "#/components/schemas/events_ArtifactRef",
+                "description": "The agent card's exact fetched bytes."
+              },
+              "interface_url": {
+                "$ref": "#/components/schemas/events_NonEmpty",
+                "description": "The supportedInterfaces entry this thread pinned: the only endpoint it calls."
+              },
+              "remote": {
+                "$ref": "#/components/schemas/events_Name",
+                "description": "The partner, as this thread's config names it."
+              }
+            },
+            "required": [
+              "remote",
+              "card_ref",
+              "interface_url",
+              "binding"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "remote_card"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
+      "events_ev_remote_task_state": {
+        "description": "An observation of a partner's task, deduplicated by state and content hash: a repeat of the same state with the same bytes is not appended twice. Not critical, because it records what we saw and never what we decided: a reader that does not know it can skip it and still reduce the log.",
+        "properties": {
+          "critical": {
+            "const": false
+          },
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "artifacts_ref": {
+                "$ref": "#/components/schemas/events_ArtifactRef",
+                "description": "The artifacts of this observation, as one canonical JSON body."
+              },
+              "call_id": {
+                "$ref": "#/components/schemas/events_CallId",
+                "description": "The remote_call whose effect committed (rule 57)."
+              },
+              "state": {
+                "description": "The partner's state name, verbatim.",
+                "enum": [
+                  "TASK_STATE_SUBMITTED",
+                  "TASK_STATE_WORKING",
+                  "TASK_STATE_COMPLETED",
+                  "TASK_STATE_FAILED",
+                  "TASK_STATE_CANCELED",
+                  "TASK_STATE_INPUT_REQUIRED",
+                  "TASK_STATE_REJECTED",
+                  "TASK_STATE_AUTH_REQUIRED"
+                ]
+              },
+              "status_ref": {
+                "$ref": "#/components/schemas/events_ArtifactRef",
+                "description": "The status update's exact bytes, when the partner sent one."
+              },
+              "task_id": {
+                "$ref": "#/components/schemas/events_NonEmpty"
+              }
+            },
+            "required": [
+              "call_id",
+              "task_id",
+              "state"
+            ],
+            "type": "object"
+          },
+          "type": {
+            "const": "remote_task_state"
+          },
+          "type_version": {
+            "const": 1
+          }
+        },
+        "required": [
+          "type",
+          "type_version",
+          "critical",
+          "data"
+        ],
+        "type": "object"
+      },
       "events_ev_resumed": {
         "properties": {
           "critical": {
@@ -12643,9 +12827,48 @@
                     "mail_id"
                   ]
                 }
+              },
+              {
+                "else": {
+                  "not": {
+                    "required": [
+                      "a2a"
+                    ]
+                  }
+                },
+                "if": {
+                  "properties": {
+                    "source": {
+                      "const": "api"
+                    }
+                  }
+                }
               }
             ],
             "properties": {
+              "a2a": {
+                "additionalProperties": false,
+                "description": "Only with source api: the A2A message this input arrived as, recorded so a resend of the same messageId finds its run. claims is what the calling partner asserted about provenance and is untrusted: it never grants authority, never picks a budget and never becomes provenance.principal, which is always the authenticated principal of the call.",
+                "properties": {
+                  "claims": {
+                    "$ref": "#/components/schemas/events_JsonObject"
+                  },
+                  "context_id": {
+                    "$ref": "#/components/schemas/events_NonEmpty"
+                  },
+                  "message_id": {
+                    "$ref": "#/components/schemas/events_NonEmpty"
+                  },
+                  "task_id": {
+                    "$ref": "#/components/schemas/events_NonEmpty"
+                  }
+                },
+                "required": [
+                  "message_id",
+                  "context_id"
+                ],
+                "type": "object"
+              },
               "budget": {
                 "$ref": "#/components/schemas/events_Budget",
                 "description": "The budget of the run this input starts."

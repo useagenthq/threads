@@ -1,0 +1,14 @@
+{
+  "name": "@threads/a2a",
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./protocol": "./src/protocol/index.ts"
+  },
+  "dependencies": {
+    "@threads/core": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

@@ -73,5 +73,8 @@ export const EVENT_TYPES = [
   "tools_loaded",
   "answer_rejected",
   "supervisor_decided",
+  "remote_card",
+  "remote_call",
+  "remote_task_state",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];

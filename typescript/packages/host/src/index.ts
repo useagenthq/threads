@@ -1,3 +1,5 @@
+export type { A2aExposure, A2aOptions } from "./a2a/config";
+export { DEFAULT_BUDGET } from "./a2a/config";
 export { type Host, type HostOptions, host, hostSandboxes } from "./host";
 export type { Authenticate } from "./http";
 export type { HostMemberOptions } from "./members";

@@ -63,6 +63,8 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
       applyCall(fold, e);
       return;
     case "effect_begin":
+      // Rule 56: this is the begin the remote_call was waiting for.
+      fold.remoteBegin = undefined;
       applyEffect(fold, e, "begun");
       return;
     case "effect_commit":
@@ -130,6 +132,12 @@ function applyKnown(fold: Fold, e: KnownEvent): void {
     case "message_policy_decided":
     case "answer_rejected":
     case "supervisor_decided":
+    case "remote_card":
+    case "remote_task_state":
+      return;
+    case "remote_call":
+      fold.remoteCalls.add(e.data.call_id);
+      fold.remoteBegin = e.data.call_id;
       return;
     case "tools_loaded":
       for (const t of e.data.tools) fold.loaded.set(t.name, t.spec_ref);

@@ -25,6 +25,7 @@ import {
   checkHostStarted,
   checkWhileFailing,
 } from "./host";
+import { checkRemoteBegin, checkRemoteCall, checkRemoteState } from "./remote";
 import {
   checkCause,
   checkCompactionRequested,
@@ -57,9 +58,9 @@ import type { Violation } from "./violation";
 import { checkWoken } from "./wake";
 
 /**
- * The semantic rules that need earlier events (spec/schema/README.md, "Semantic rules" 6-13
- * and 17-49, but 43), checked against the fold before `line` is applied. Rules 1-4 are the chain's,
- * 5 is the parser's, and 14-16 need rendering or a fork request.
+ * The semantic rules that need earlier events (spec/schema/README.md, "Semantic rules" 6-13,
+ * 17-49 (but 43) and 56-58), checked against the fold before `line` is applied. Rules 1-4 are the
+ * chain's, 5 is the parser's, and 14-16 need rendering or a fork request.
  */
 export function validateNext(
   fold: Fold,
@@ -70,6 +71,10 @@ export function validateNext(
     return fail(`epoch ${event.epoch} is below ${fold.epoch}`, event.seq);
   if (fold.eventIds.has(event.event_id))
     return fail(`event_id ${event.event_id} repeats on the chain`, event.seq);
+  // Rule 56 is about the event before this one, whatever this one is, known or not.
+  const follows = checkRemoteBegin(fold, line);
+  if (follows !== undefined)
+    return err(logError(follows.code, follows.message, event.seq));
   if (line.kind === "unknown_event") return ok(undefined);
   const violation =
     checkTeamLog(fold, line.event) ??
@@ -205,6 +210,12 @@ function check(fold: Fold, e: KnownEvent): Violation {
       return checkOperator(fold, e);
     case "supervisor_decided":
       return checkDecided(fold, e);
+    case "remote_card":
+      return undefined;
+    case "remote_call":
+      return checkRemoteCall(fold, e);
+    case "remote_task_state":
+      return checkRemoteState(fold, e);
     default:
       return assertNever(e);
   }

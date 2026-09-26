@@ -1,0 +1,71 @@
+---
+title: "remote"
+description: "A partner's A2A agent, named like a local one."
+icon: "SquareFunction"
+---
+
+It does no I/O: the agent card is fetched and pinned later, when a thread first calls the remote, so a host whose partner is unreachable still starts and a card that changes never moves a conversation already under way. The name shares the host's agent-name space, so a clash with a local agent is a setup error.
+
+Import from `@threads/a2a` (TypeScript) or `threads.a2a` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function remote(name: string, cardUrl: string, options?: {
+  auth?: A2aAuth;
+  costPerMessage?: number;
+  provenance?: Provenance;
+  timeoutMs?: number;
+}): Remote
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def remote(
+    name: str,
+    card_url: str,
+    *,
+    auth: A2aAuth | None = None,
+    cost_per_message: int = 0,
+    provenance: Provenance = "opaque",
+    timeout_ms: int = 120000,
+) -> Remote
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="name" type={"string"} required>
+  What this remote is called, in the host's agent-name space ([a-z][a-z0-9_]*, else invalid_config).
+</Field>
+
+<Field name="cardUrl / card_url" type={"string"} required>
+  The agent card's URL, usually .well-known/agent-card.json. https only, else invalid_config: a card is pinned by hash after an https fetch, and is never read in the clear.
+</Field>
+
+<Field name="auth" type={"A2aAuth"}>
+  How we authenticate to the partner. Omitted: nothing is sent, which suits a card that declares no security scheme; a card that asks for one is then remote_auth_unsupported when it is pinned. See [A2aAuth](/docs/reference/types/A2aAuth).
+</Field>
+
+<Field name="costPerMessage / cost_per_message" type={"number"} default={"0"}>
+  What one message to this remote costs us, in nanos as usd() gives, reserved against every covering budget before it is sent. Recorded as declared and marked as such, never as measured: nothing here observes a partner's spend. A negative value is invalid_config.
+</Field>
+
+<Field name="provenance" type={"Provenance"} default={"opaque"}>
+  What we tell the partner about where a call came from. No principal, tenant or subject is ever sent: to the partner every call is from our service. See [Provenance](/docs/reference/types/Provenance).
+</Field>
+
+<Field name="timeoutMs / timeout_ms" type={"number"} default={"120000"}>
+  How long one exchange may take. A timeout before the partner's task id is known leaves the outcome uncertain, so the call parks and nothing is re-sent; after the task id is known it means the task is still working, and the caller checks later. A value that is not a positive integer is invalid_config.
+</Field>
+
+## Returns
+
+[`Remote`](/docs/reference/types/Remote)
+
+**Throws** `ConfigError` with one of these codes: `invalid_config`.

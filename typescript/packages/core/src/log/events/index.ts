@@ -63,6 +63,7 @@ import {
   ModelResponseRecovered,
   RetryScheduled,
 } from "./model";
+import { RemoteCall, RemoteCard, RemoteTaskState } from "./remote";
 import { SupervisorDecided } from "./supervision";
 import {
   MemberEnded,
@@ -169,6 +170,9 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
     typeof ToolsLoaded.schema,
     typeof AnswerRejected.schema,
     typeof SupervisorDecided.schema,
+    typeof RemoteCard.schema,
+    typeof RemoteCall.schema,
+    typeof RemoteTaskState.schema,
   ],
   "type"
 > = z.discriminatedUnion("type", [
@@ -245,6 +249,9 @@ export const KnownEvent: z.ZodDiscriminatedUnion<
   ToolsLoaded.schema,
   AnswerRejected.schema,
   SupervisorDecided.schema,
+  RemoteCard.schema,
+  RemoteCall.schema,
+  RemoteTaskState.schema,
 ]);
 export type KnownEvent = z.infer<typeof KnownEvent>;
 
@@ -323,6 +330,9 @@ export const EVENT_FRAGMENTS: readonly z.ZodType[] = [
   ToolsLoaded.fragment,
   AnswerRejected.fragment,
   SupervisorDecided.fragment,
+  RemoteCard.fragment,
+  RemoteCall.fragment,
+  RemoteTaskState.fragment,
 ];
 
 export * from "./agents";
@@ -333,6 +343,7 @@ export * from "./input";
 export * from "./mail";
 export * from "./model";
 export * from "./one-of";
+export * from "./remote";
 export * from "./supervision";
 export * from "./team";
 export * from "./thread";
