@@ -7,7 +7,8 @@ icon: Users
 import { FlaskConical, History, Users, Wallet } from "lucide-react";
 
 Two questions come in at once: when did order 42 arrive, and how long is the return window? A
-subagent would answer them one after the other. A team answers them at the same time.
+foreground subagent call answers one before the next starts. Background subagents can overlap, but
+a team also gives them names, messaging and a shared lifecycle.
 
 Give an agent a `team` and it becomes a lead. Its model can start members from the agents the team
 lists, send them messages, ask them questions, wait for them and cancel them. Each member runs in
@@ -232,8 +233,8 @@ same refusals as text it can act on.
 
 Four steps ago this was one agent repeating its instructions. It now has a tool, an approval rule, a
 subagent and a team, and every one of those steps wrote to an append-only log: the lead's thread, one
-thread per member, and a team log. You can replay any of them, fork any step, or turn a run you liked
-into a test.
+thread per member, and a team log. You can replay any of them, fork from any eligible snapshot, or
+turn a run you liked into a test.
 
 <Cards>
   <Card title="Teams" icon={<Users />} href="/docs/multi-agent/teams">
