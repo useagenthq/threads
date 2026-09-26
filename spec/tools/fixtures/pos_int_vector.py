@@ -24,6 +24,8 @@ ROWS: tuple[tuple[str, JsonValue, bool], ...] = (
     ("one", 1, True),
     ("the ask and wait default", 120000, True),
     ("a large timeout", 86400000, True),
+    ("the largest safe integer", 9007199254740991, True),
+    ("one above the safe integer range", 9007199254740992, False),
     ("zero: not positive, so never the default and never immediate", 0, False),
     ("a negative", -1, False),
     ("a fraction", 1.5, False),

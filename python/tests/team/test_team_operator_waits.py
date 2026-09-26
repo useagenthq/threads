@@ -6,6 +6,7 @@ as TypeScript's test/team/operator-waits.test.ts."""
 import asyncio
 from collections.abc import Sequence
 
+import pytest
 from pydantic import JsonValue
 from team.run_kit import answers, reply_to, say, sq_of, types
 from team.team_kit import assert_team_replays
@@ -198,6 +199,26 @@ def test_team_ask_refuses_every_timeout_ms_that_is_not_a_positive_integer() -> N
         for timeout in _NOT_POS_INT:
             got = await team.ask(ref, "Which topic?", timeout_ms=timeout)  # pyright: ignore[reportArgumentType] - the boundary takes what a caller really passes
             assert got == TeamAskRefused("invalid_request"), timeout
+        assert len(await _team_log(store, team)) == before
+
+    asyncio.run(main())
+
+
+@pytest.mark.parametrize("operation", ["ask", "wait"])
+def test_team_ask_and_wait_refuse_a_timeout_above_the_safe_integer_range(
+    operation: str,
+) -> None:
+    async def main() -> None:
+        store, team = await _ran(answers([lambda _r: say("Drafted.")]))
+        await team.start("writer", "Draft.")
+        ref = _ref(team, "writer-1")
+        before = len(await _team_log(store, team))
+        if operation == "ask":
+            got = await team.ask(ref, "Which topic?", timeout_ms=2**53)
+            assert got == TeamAskRefused("invalid_request")
+        else:
+            got = await team.wait([ref], timeout_ms=2**53)
+            assert got == TeamWaitRefused("invalid_request")
         assert len(await _team_log(store, team)) == before
 
     asyncio.run(main())

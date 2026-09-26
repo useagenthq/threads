@@ -15,6 +15,16 @@
     "pos_int": true
   },
   {
+    "name": "the largest safe integer",
+    "value": 9007199254740991,
+    "pos_int": true
+  },
+  {
+    "name": "one above the safe integer range",
+    "value": 9007199254740992,
+    "pos_int": false
+  },
+  {
     "name": "zero: not positive, so never the default and never immediate",
     "value": 0,
     "pos_int": false
