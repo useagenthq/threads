@@ -1,7 +1,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { rmSync, statSync } from "node:fs";
 import { SandboxId } from "../../log";
-import { err, ok } from "../../result";
+import { err, ok, type Result } from "../../result";
 import { admitExec } from "../admit";
 import type {
   ExecOutput,
@@ -11,6 +11,7 @@ import type {
   SandboxContext,
   SandboxSession,
   SnapshotData,
+  Stale,
   Trees,
 } from "../protocol";
 import { byteStream } from "../remote/bytes";
@@ -105,13 +106,12 @@ export function devSession(
   const id = SandboxId.parse(ident);
   const running = new Map<string, ChildProcess>();
 
+  /** One host file operation: the path checked, then the fence, then the syscall. */
   const fileOp = <T>(
     context: SandboxContext,
     path: string,
-    body: (
-      parts: readonly string[],
-    ) => ReturnType<typeof ok<T>> | ReturnType<typeof err<FileFailure>>,
-  ) =>
+    body: (parts: readonly string[]) => Result<T, FileFailure>,
+  ): Promise<Result<T, FileFailure | Stale>> =>
     guarded<T, FileFailure>(
       context,
       async () => {
