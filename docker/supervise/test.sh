@@ -44,7 +44,7 @@ start_container() {
   cp "$binary" "$stage/bin/supervise"
   chmod 0700 "$stage/bin/supervise" "$stage/bin" "$stage/state"
   xattr -rc "$stage" 2>/dev/null
-  COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata --uid 0 --gid 0 --uname root \
+  COPYFILE_DISABLE=1 tar --no-xattrs --uid 0 --gid 0 --uname root \
     --gname root -cf - -C "$stage" bin state | "$docker" cp - "$name:/run/threads/"
   rm -rf "$stage"
   "$docker" start "$name" >/dev/null
@@ -97,7 +97,7 @@ stdin_stage=$(mktemp -d)
 mkdir -p "$stdin_stage/state/stdin"
 printf 'payload' > "$stdin_stage/state/stdin/ae01"
 xattr -rc "$stdin_stage" 2>/dev/null
-COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata --uid 0 --gid 0 --uname root --gname root \
+COPYFILE_DISABLE=1 tar --no-xattrs --uid 0 --gid 0 --uname root --gname root \
   -cf - -C "$stdin_stage" state | "$docker" cp - "$name:/run/threads/"
 rm -rf "$stdin_stage"
 is "the staged stdin is the command's fd 0" "payload" "$(in_box $supervise ae01 5000 --stdin cat)"

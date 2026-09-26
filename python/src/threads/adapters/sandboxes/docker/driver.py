@@ -29,7 +29,7 @@ from typing import Final, Literal, Self
 import httpx
 from pydantic import ValidationError
 
-from threads.adapters.sandboxes.docker import archive, create, records
+from threads.adapters.sandboxes.docker import archive, create, records, terminate
 from threads.adapters.sandboxes.docker import exec as docker_exec
 from threads.adapters.sandboxes.docker.create import CreateFailedError, Settings
 from threads.adapters.sandboxes.docker.engine import (
@@ -63,6 +63,7 @@ _UNAVAILABLE = (
     CreateFailedError,
     archive.ArchiveError,
     docker_exec.FrameError,
+    records.SupervisorError,
     ValidationError,
     StreamLostError,
 )
@@ -78,7 +79,7 @@ class DockerDriver:
         self,
         engine: Callable[[], Engine],
         settings: Settings,
-        pacing: records.Pacing,
+        pacing: terminate.Pacing,
         socket: Callable[[], str],
     ) -> None:
         self._engine, self._settings, self._pacing, self._socket = engine, settings, pacing, socket
@@ -122,10 +123,11 @@ class DockerDriver:
         they run as uid 1000 directly and take no lock."""
         if process_key is None:
             spec = docker_exec.body(argv, env, cwd, COMMAND_UID)
-        else:
-            supervised = (records.SUPERVISE, key_hash(process_key), str(DEADLINE_CAP_MS), *argv)
-            spec = docker_exec.body(supervised, env, cwd, "0")
-        return await docker_exec.start(self._engine(), sandbox_id, spec)
+            return await docker_exec.start(self._engine(), sandbox_id, spec)
+        key = key_hash(process_key)
+        cmd = (records.SUPERVISE, key, str(DEADLINE_CAP_MS), *argv)
+        spec = docker_exec.body(cmd, env, cwd, "0")
+        return await docker_exec.start(self._engine(), sandbox_id, spec, key)
 
     async def write(self, sandbox_id: str, path: str, data: bytes) -> None:
         """One archive PUT, owned by the command uid: the kit's wrapper (uid 1000) opens the
@@ -174,7 +176,7 @@ class DockerDriver:
                 return LookupUnknown(f"{len(many)} containers carry {operation_key}")
 
     async def _terminate(self, sandbox_id: str, process_key: str) -> Termination:
-        return await records.terminate(
+        return await terminate.terminate(
             self._engine(), sandbox_id, key_hash(process_key), self._pacing
         )
 

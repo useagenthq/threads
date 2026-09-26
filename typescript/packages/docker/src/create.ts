@@ -3,7 +3,7 @@ import { z } from "zod";
 import { type Engine, failure } from "./engine";
 import { startExec } from "./exec";
 import { containerName, OPERATION_KEY, volumesOf } from "./names";
-import { type Arch, supervisorBinary } from "./pins";
+import type { Arch, Supervisor } from "./pins";
 import { tarOf } from "./tar";
 import { parsed, unavailable } from "./wire";
 
@@ -190,7 +190,10 @@ async function enforced(
 }
 
 /** The archive injected into /run/threads: the supervisor, and the state directory it owns. */
-export function supervisorArchive(arch: Arch): Uint8Array {
+export function supervisorArchive(
+  arch: Arch,
+  supervisor: Supervisor,
+): Uint8Array {
   return tarOf([
     { name: "bin", mode: 0o700, uid: 0, gid: 0 },
     {
@@ -198,7 +201,7 @@ export function supervisorArchive(arch: Arch): Uint8Array {
       mode: 0o700,
       uid: 0,
       gid: 0,
-      bytes: supervisorBinary(arch),
+      bytes: supervisor.binary(arch),
     },
     { name: "state", mode: 0o700, uid: 0, gid: 0 },
   ]);
@@ -248,6 +251,7 @@ export async function createContainer(
   engine: Engine,
   operationKey: string,
   limits: Limits,
+  supervisor: Supervisor,
 ): Promise<string> {
   const arch = await architecture(engine, limits.image);
   const name = containerName(operationKey);
@@ -265,7 +269,7 @@ export async function createContainer(
   const put = await engine.send(
     "PUT",
     `/containers/${encodeURIComponent(name)}/archive?path=${encodeURIComponent("/run/threads")}`,
-    { tar: supervisorArchive(arch) },
+    { tar: supervisorArchive(arch, supervisor) },
   );
   if (!put.ok) throw await failure(put, "the supervisor injection");
   await put.text();

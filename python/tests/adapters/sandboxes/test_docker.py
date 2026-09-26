@@ -4,6 +4,7 @@ the socket, the create sequence, the injected supervisor, and everything a conta
 
 import asyncio
 import json
+import pathlib
 
 import pytest
 from corpus import CASES, cases
@@ -16,12 +17,19 @@ from sandbox_kit import OPEN, KitContext
 from sandbox_ledger_kit import LEDGER, Body, run_ledger
 
 from threads.adapters.loop_resources import holding
-from threads.adapters.sandboxes.docker import create, records, transport
-from threads.adapters.sandboxes.docker.exec import FRAME_MAX, FrameError, Frames
+from threads.adapters.sandboxes.docker import create, transport
 from threads.adapters.sandboxes.docker.sandbox import IMAGE
 from threads.agents.config import ConfigError
 from threads.result import Err, Ok
-from threads.sandbox import SandboxError, SandboxSession, Trees
+from threads.sandbox import SandboxError, SandboxSession
+
+pytestmark = pytest.mark.usefixtures("stub_supervisor")
+"""Every test here injects a stub supervisor: the shipped binaries are build output, and a
+mocked daemon never runs what it is given (conftest.py)."""
+
+SHIPPED_PINS = dict(create.BINARIES)
+"""Read at import, before any fixture replaces them: the sha256 values this package ships."""
+REPO = pathlib.Path(__file__).resolve().parents[4]
 
 
 @pytest.mark.parametrize("check", [*CHECKS, *DEADLINE], ids=lambda c: c.__name__)
@@ -156,10 +164,26 @@ def test_the_injected_supervisor_is_hashed_against_its_pin(
     assert made.error.message == "the injected supervisor does not match its pinned sha256"
 
 
-def test_the_pinned_hashes_are_the_ones_the_build_wrote() -> None:
-    """docker/supervise/binaries.json is the contract; these constants follow it."""
-    pinned = create.BIN_DIR.parents[6] / "docker/supervise/binaries.json"
-    assert dict(create.BINARIES) == json.loads(pinned.read_text())
+def test_a_supervisor_that_was_never_built_is_a_typed_failure(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A checkout that never ran the build says so, rather than injecting nothing."""
+    monkeypatch.setattr(create, "BIN_DIR", tmp_path)
+    made = asyncio.run(_created())
+    assert isinstance(made, Err)
+    assert made.error.message == (
+        "the linux-arm64 supervisor is missing: run scripts/build-supervisor.sh"
+    )
+
+
+def test_the_pinned_sha256_values_are_the_ones_the_build_wrote() -> None:
+    """docker/supervise/binaries.json is committed and is the contract; the source pins follow
+    it. Neither package ships that file, so each pins the values in its own source and this is
+    what catches a rebuild that left one behind."""
+    pinned = REPO / "docker/supervise/binaries.json"
+    if not pinned.is_file():
+        pytest.skip(f"no {pinned}: the supervisor build writes it")
+    assert json.loads(pinned.read_text()) == SHIPPED_PINS
 
 
 def test_a_check_that_is_not_the_expected_json_fails_the_create() -> None:
@@ -251,67 +275,6 @@ def test_an_archive_that_is_not_a_tar_is_a_typed_failure() -> None:
         assert got.error.code == "unavailable"
 
     asyncio.run(main())
-
-
-def test_the_supervisor_runs_a_keyed_command_and_the_kit_s_own_scripts_do_not() -> None:
-    """A keyed command goes through the supervisor as uid 0, which drops its child to 1000.
-    The kit's fixed tree scripts carry no key: they run as uid 1000 and take no lock."""
-
-    async def main() -> list[tuple[str, tuple[str, ...]]]:
-        backend = FakeBackend.scripted()
-        engine = DockerEngine(backend)
-        async with holding():
-            made = await adapter(backend, "docker", engine).create("k", OPEN)
-            assert isinstance(made, Ok), made
-            session: SandboxSession = made.value
-            assert isinstance(session, Trees)
-            assert isinstance(await session.exec(["echo", "hi"], OPEN, process_key="p"), Ok)
-            assert isinstance(await session.export_tree(OPEN), Ok)
-        return engine.started
-
-    started = asyncio.run(main())
-    supervised = [(user, cmd) for user, cmd in started if cmd[0] == records.SUPERVISE]
-    assert [user for user, _ in supervised] == ["0", "0"]  # --check, then the keyed command
-    assert [cmd[:1] for user, cmd in started if user == "1000"] == [("/bin/sh",)]
-
-
-@pytest.mark.parametrize(
-    "wire",
-    [
-        b"\x09\x00\x00\x00\x00\x00\x00\x01x",
-        b"\x01\x01\x00\x00\x00\x00\x00\x01x",
-        b"\x01\x00\x00\x00\xff\xff\xff\xffx",
-    ],
-    ids=["unknown_stream", "dirty_header", "over_long"],
-)
-def test_a_malformed_frame_is_refused(wire: bytes) -> None:
-    with pytest.raises(FrameError):
-        Frames().feed(wire)
-
-
-def test_a_frame_split_anywhere_reaches_its_own_stream() -> None:
-    payload = bytes(range(256))
-    head = len(payload).to_bytes(4, "big")
-    wire = b"\x01\x00\x00\x00" + head + payload + b"\x02\x00\x00\x00" + head + payload[::-1]
-    for size in (1, 3, 7, 64, 4096):
-        frames = Frames()
-        got: dict[str, bytes] = {"stdout": b"", "stderr": b""}
-        for chunk in [wire[i : i + size] for i in range(0, len(wire), size)]:
-            for stream, data in frames.feed(chunk):
-                got[stream] += data
-        frames.end()
-        assert got == {"stdout": payload, "stderr": payload[::-1]}, size
-
-
-def test_a_stream_that_ends_inside_a_frame_is_refused() -> None:
-    frames = Frames()
-    assert frames.feed(b"\x01\x00\x00\x00\x00\x00\x00\x04ab") == []
-    with pytest.raises(FrameError):
-        frames.end()
-
-
-def test_the_frame_cap_is_64_mib() -> None:
-    assert FRAME_MAX == 64 * 1024 * 1024
 
 
 async def _created(

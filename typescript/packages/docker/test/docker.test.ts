@@ -1,8 +1,12 @@
-import { describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { sha256Hex } from "../../core/src/hash";
 import { CTX } from "../../core/test/sandbox/context";
 import { contractSuite } from "../../core/test/sandbox/remote/contract";
-import { losesAfter } from "../../core/test/sandbox/remote/kit";
+import { losesAfter, run } from "../../core/test/sandbox/remote/kit";
 import { treesSuite } from "../../core/test/sandbox/remote/trees";
 import { World } from "../../core/test/sandbox/remote/world";
 import { code, unwrap } from "../../core/test/store/helpers";
@@ -10,7 +14,8 @@ import { docker } from "../src";
 import { PIDS_LIMIT } from "../src/create";
 import { demux } from "../src/exec";
 import { containerName, shortHash } from "../src/names";
-import { type Arch, SUPERVISOR_SHA256, supervisorBinary } from "../src/pins";
+import { SUPERVISOR_SHA256, supervisorIn } from "../src/pins";
+import { dockerSandbox } from "../src/sandbox";
 import { resolveSocket, UNREACHABLE } from "../src/socket";
 import { untar } from "../src/tar";
 import { dockerBackend } from "./engine";
@@ -20,39 +25,42 @@ import { dockerBackend } from "./engine";
 // create, a dropped limit that fails the create, the pinned supervisor, and container output
 // as a trust boundary. No daemon, no network.
 
-/** The binaries are build output (scripts/build-supervisor.sh), so a create needs them. */
-const ARCHES: readonly Arch[] = ["arm64", "amd64"];
-const ARCH = ARCHES.find((a) =>
-  existsSync(new URL(`../bin/supervise-linux-${a}`, import.meta.url)),
-);
+// The shipped binaries are build output, so nothing here reads them: the tests write their
+// own two-line "supervisor" and pin it by its own sha256. The read, the hash and the refusal
+// are the adapter's real ones (pins.ts) — only the bytes are the test's.
+const STUB = new TextEncoder().encode("#!/bin/false\nnot the supervisor\n");
+const BIN = mkdtempSync(join(tmpdir(), "threads-docker-"));
+for (const arch of ["amd64", "arm64"])
+  writeFileSync(join(BIN, `supervise-linux-${arch}`), STUB);
+const DIR = pathToFileURL(`${BIN}/`);
+const STUB_SHA = sha256Hex(STUB);
+const stubbed = supervisorIn(DIR, { amd64: STUB_SHA, arm64: STUB_SHA });
+afterAll(() => rmSync(BIN, { recursive: true, force: true }));
 
 function adapter(world: World, allowInternet = false) {
   const backend = dockerBackend(world);
-  backend.architecture = ARCH ?? "arm64";
-  const sandbox = docker({
-    ...(allowInternet ? { allowInternet } : {}),
-    fetch: backend.fetch,
-  });
+  const sandbox = dockerSandbox(
+    { ...(allowInternet ? { allowInternet } : {}), fetch: backend.fetch },
+    stubbed,
+  );
   return { sandbox, backend };
 }
 
-if (ARCH !== undefined) {
-  contractSuite("docker", () => {
-    const world = new World();
-    const { sandbox, backend } = adapter(world);
-    return {
-      sandbox,
-      world,
-      sandboxTraffic: backend.traffic,
-      processName: shortHash,
-      snapshots: false,
-    };
-  });
-  treesSuite("docker", () => {
-    const world = new World();
-    return { sandbox: adapter(world).sandbox, world };
-  });
-}
+contractSuite("docker", () => {
+  const world = new World();
+  const { sandbox, backend } = adapter(world);
+  return {
+    sandbox,
+    world,
+    sandboxTraffic: backend.traffic,
+    processName: shortHash,
+    snapshots: false,
+  };
+});
+treesSuite("docker", () => {
+  const world = new World();
+  return { sandbox: adapter(world).sandbox, world };
+});
 
 // The fork cases and the ledger suite both drive Sandbox.restore, which docker answers
 // snapshot_missing until 16C's host trees land; they join this file with them.
@@ -60,7 +68,7 @@ if (ARCH !== undefined) {
 const only = (traffic: string, needle: string) =>
   traffic.split("\n").filter((line) => line.includes(needle));
 
-describe.skipIf(ARCH === undefined)("docker transport", () => {
+describe("docker transport", () => {
   test("every request is fenced: a lease lost after the create sends nothing more", async () => {
     const world = new World();
     const { sandbox, backend } = adapter(world);
@@ -85,9 +93,8 @@ describe.skipIf(ARCH === undefined)("docker transport", () => {
   test("a create whose Warnings name a dropped limit fails, and leaves nothing behind", async () => {
     const world = new World();
     const backend = dockerBackend(world);
-    backend.architecture = ARCH ?? "arm64";
     backend.warnings = ["Your kernel does not support CPU cfs quota"];
-    const sandbox = docker({ cpus: 2, fetch: backend.fetch });
+    const sandbox = dockerSandbox({ cpus: 2, fetch: backend.fetch }, stubbed);
     const made = await sandbox.create("op", CTX);
     expect(code(made)).toBe("unavailable");
     expect(made.ok ? "" : made.error.message).toBe(
@@ -99,9 +106,11 @@ describe.skipIf(ARCH === undefined)("docker transport", () => {
 
   test("an inspect that shows a requested limit unset fails the create the same way", async () => {
     const backend = dockerBackend(new World());
-    backend.architecture = ARCH ?? "arm64";
     backend.dropsMemory = true;
-    const sandbox = docker({ memoryMb: 64, fetch: backend.fetch });
+    const sandbox = dockerSandbox(
+      { memoryMb: 64, fetch: backend.fetch },
+      stubbed,
+    );
     const made = await sandbox.create("op", CTX);
     expect(made.ok ? "" : made.error.message).toBe(
       "Docker can't enforce the memory limit here (rootless Docker needs cgroup v2 delegation)",
@@ -113,56 +122,87 @@ describe.skipIf(ARCH === undefined)("docker transport", () => {
     const world = new World();
     const { sandbox, backend } = adapter(world);
     const box = unwrap(await sandbox.create("op", CTX));
-    expect(backend.boxes.get(box.id)?.supervisor).toBe(
-      SUPERVISOR_SHA256[ARCH ?? "arm64"],
+    // What reached /run/threads/bin/supervise is the binary its pin names, byte for byte.
+    expect(backend.boxes.get(box.id)?.supervisor).toBe(STUB_SHA);
+
+    // A binary that does not hash to its pin is refused, and no byte of it is injected.
+    const wrong = dockerBackend(new World());
+    const made = await dockerSandbox(
+      { fetch: wrong.fetch },
+      supervisorIn(DIR, { amd64: "0".repeat(64), arm64: "0".repeat(64) }),
+    ).create("op", CTX);
+    expect(code(made)).toBe("unavailable");
+    expect(made.ok ? "" : made.error.message).toBe(
+      "the injected supervisor does not match its pinned sha256",
     );
-    // The check is the pin itself: an architecture this package ships nothing for is refused
-    // before any byte is injected.
-    // @ts-expect-error: only the two architectures this package ships are Arch
-    expect(() => supervisorBinary("riscv")).toThrow("ships no supervisor");
+    expect(wrong.traffic()).not.toContain("/archive");
+
+    // An architecture nothing was built for is refused the same way.
+    const none = supervisorIn(pathToFileURL(`${BIN}/none/`), SUPERVISOR_SHA256);
+    expect(() => none.binary("arm64")).toThrow("ships no supervisor");
   });
 });
 
-describe.skipIf(ARCH === undefined)(
-  "container output is a trust boundary",
-  () => {
-    const sinks = { stdout: () => undefined, stderr: () => undefined };
+describe("container output is a trust boundary", () => {
+  const sinks = { stdout: () => undefined, stderr: () => undefined };
 
-    test("a frame header that isn't Docker's is a typed failure, not a guess", () => {
-      const frames = demux(sinks);
-      expect(() =>
-        frames.push(new Uint8Array([7, 0, 0, 0, 0, 0, 0, 1, 65])),
-      ).toThrow("unknown frame type 7");
-      expect(() =>
-        demux(sinks).push(new Uint8Array([1, 0, 0, 0, 255, 255, 255, 255])),
-      ).toThrow("claims a frame of 4294967295 bytes");
-      const held = demux(sinks);
-      held.push(new Uint8Array([1, 0, 0, 0, 0, 0, 0, 4, 65]));
-      expect(() => held.end()).toThrow("ends inside a frame");
-    });
+  test("a frame header that isn't Docker's is a typed failure, not a guess", () => {
+    const frames = demux(sinks);
+    expect(() =>
+      frames.push(new Uint8Array([7, 0, 0, 0, 0, 0, 0, 1, 65])),
+    ).toThrow("unknown frame type 7");
+    expect(() =>
+      demux(sinks).push(new Uint8Array([1, 0, 0, 0, 255, 255, 255, 255])),
+    ).toThrow("claims a frame of 4294967295 bytes");
+    const held = demux(sinks);
+    held.push(new Uint8Array([1, 0, 0, 0, 0, 0, 0, 4, 65]));
+    expect(() => held.end()).toThrow("ends inside a frame");
+  });
 
-    test("a record the supervisor didn't write fails the terminate, typed", async () => {
-      const world = new World();
-      const { sandbox, backend } = adapter(world);
-      const box = unwrap(await sandbox.create("op", CTX));
-      unwrap(await box.exec(["sleep"], CTX, { processKey: "k" }));
-      const records = backend.boxes.get(box.id)?.records;
-      const record = records?.get(shortHash("k"));
-      if (records === undefined || record === undefined)
-        throw new Error("the supervised run wrote a record");
-      // state is a closed set: "wedged" is not one of the four the supervisor writes.
-      records.set(shortHash("k"), { ...record, state: "running", key: "" });
-      const answer = await box.terminate("k", CTX);
-      expect(code(answer)).toBe("unavailable");
-      expect(answer.ok ? "" : answer.error.message).toContain("malformed");
-    });
+  test("a record the supervisor didn't write fails the terminate, typed", async () => {
+    const world = new World();
+    const { sandbox, backend } = adapter(world);
+    const box = unwrap(await sandbox.create("op", CTX));
+    unwrap(await box.exec(["sleep"], CTX, { processKey: "k" }));
+    const records = backend.boxes.get(box.id)?.records;
+    const record = records?.get(shortHash("k"));
+    if (records === undefined || record === undefined)
+      throw new Error("the supervised run wrote a record");
+    // state is a closed set: "wedged" is not one of the four the supervisor writes.
+    records.set(shortHash("k"), { ...record, state: "running", key: "" });
+    const answer = await box.terminate("k", CTX);
+    expect(code(answer)).toBe("unavailable");
+    expect(answer.ok ? "" : answer.error.message).toContain("malformed");
+  });
 
-    test("an archive that isn't a tar, and a --check that isn't its JSON, are unavailable", async () => {
-      expect(() => untar(new Uint8Array(512).fill(0x41))).toThrow("bad size");
-      const world = new World();
-      const backend = dockerBackend(world);
-      backend.architecture = ARCH ?? "arm64";
-      const broken = docker({
+  test("a key's earlier record never answers for an attempt that did not run", async () => {
+    const world = new World();
+    const { sandbox, backend } = adapter(world);
+    const box = unwrap(await sandbox.create("op", CTX));
+    // Nothing ever unlinks a record, so this one outlives its run in the same generation.
+    expect(await run(box, ["fail"])).toMatchObject({ exit: 3 });
+
+    // A supervisor that dies before recording: the answer is the failure, not the 3.
+    backend.supervisorDies = 1;
+    const died = unwrap(
+      await box.exec(["echo", "again"], CTX, { processKey: "b:call-1" }),
+    );
+    await expect(died.exit_code).rejects.toThrow("the supervisor exited 1");
+
+    // Admission refused: same key, same stale record, and again not the 3.
+    unwrap(await box.exec(["sleep"], CTX, { processKey: "holds-it" }));
+    const refused = unwrap(
+      await box.exec(["echo", "again"], CTX, { processKey: "b:call-1" }),
+    );
+    await expect(refused.exit_code).rejects.toThrow("nothing ran");
+  });
+
+  test("an archive that isn't a tar, and a --check that isn't its JSON, are unavailable", async () => {
+    expect(() => untar(new Uint8Array(512).fill(0x41))).toThrow("bad size");
+    const world = new World();
+    const backend = dockerBackend(world);
+    const broken = dockerSandbox(
+      {
         fetch: async (input, init) => {
           const res = await backend.fetch(input, init);
           // The --check exec's output stream, with one frame of something else.
@@ -179,13 +219,14 @@ describe.skipIf(ARCH === undefined)(
           frame.set(body, 8);
           return new Response(frame);
         },
-      });
-      const made = await broken.create("op", CTX);
-      expect(code(made)).toBe("unavailable");
-      expect(made.ok ? "" : made.error.message).toContain("isn't JSON");
-    });
-  },
-);
+      },
+      stubbed,
+    );
+    const made = await broken.create("op", CTX);
+    expect(code(made)).toBe("unavailable");
+    expect(made.ok ? "" : made.error.message).toContain("isn't JSON");
+  });
+});
 
 describe("docker declarations", () => {
   test("egress, termination, snapshots and lookup are declared as Docker enforces them", () => {
@@ -225,21 +266,19 @@ describe("docker declarations", () => {
       '"Env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"]',
     );
     const limited = dockerBackend(new World());
-    limited.architecture = ARCH ?? "arm64";
-    await docker({ cpus: 2, memoryMb: 4096, fetch: limited.fetch }).create(
-      "op-l",
-      CTX,
-    );
+    await dockerSandbox(
+      { cpus: 2, memoryMb: 4096, fetch: limited.fetch },
+      stubbed,
+    ).create("op-l", CTX);
     const withLimits = only(limited.traffic(), "/containers/create?")[0] ?? "";
     expect(withLimits).toContain('"NanoCpus":2000000000');
     expect(withLimits).toContain('"Memory":4294967296');
     expect(withLimits).toContain('"MemorySwap":4294967296');
     const open = dockerBackend(new World());
-    open.architecture = ARCH ?? "arm64";
-    await docker({ allowInternet: true, fetch: open.fetch }).create(
-      "op-i",
-      CTX,
-    );
+    await dockerSandbox(
+      { allowInternet: true, fetch: open.fetch },
+      stubbed,
+    ).create("op-i", CTX);
     expect(only(open.traffic(), "/containers/create?")[0]).not.toContain(
       "NetworkMode",
     );

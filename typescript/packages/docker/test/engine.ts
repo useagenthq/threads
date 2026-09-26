@@ -72,6 +72,8 @@ export type DockerBackend = {
   architecture: string;
   /** A daemon that accepted the create and then applied no memory limit. */
   dropsMemory: boolean;
+  /** Supervised runs that die before they record anything, as every `die()` path does. */
+  supervisorDies: number;
 };
 
 function running(key: string, generation: string): Written {
@@ -130,6 +132,12 @@ export function dockerBackend(world: World): DockerBackend {
   const supervised =
     (box: Box, hash: string, script: string) =>
     async (sinks: Sinks): Promise<number> => {
+      if (back.supervisorDies > 0) {
+        back.supervisorDies -= 1;
+        // Every die() in mode_run is before the record: the key's earlier one is untouched.
+        sinks.stderr(utf8.encode("threads: the container is not ready\n"));
+        return 1;
+      }
       const generation = generationOf(box);
       const live = [...box.records.values()].some(
         (r) =>
@@ -147,7 +155,10 @@ export function dockerBackend(world: World): DockerBackend {
       // writes the exit.
       if (box.records.get(hash)?.state === "running")
         box.records.set(hash, { ...record, state: "exited", exit_code: code });
-      return code;
+      // `mode_run` returns EX_OK once it has recorded: the command's code is in the record,
+      // never in the exec's status. Answering `code` here would hide a host that read the
+      // wrong one.
+      return 0;
     };
 
   /** The D-2 probe: the supervisor's one sweep takes every command process with it. */
@@ -349,6 +360,7 @@ export function dockerBackend(world: World): DockerBackend {
     warnings: [],
     architecture: "arm64",
     dropsMemory: false,
+    supervisorDies: 0,
   };
   return back;
 }

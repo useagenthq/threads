@@ -224,9 +224,20 @@ export async function commandExit(
   status: number,
   stderr: string,
 ): Promise<number> {
+  // Nothing ever unlinks a record, so a key's earlier run leaves one behind in this same
+  // generation. The supervisor's own status is therefore read first: every nonzero one is
+  // written before any record is, so the record on disk would be the wrong attempt's.
   if (status === 125 || stderr.includes("threads: admission refused"))
-    throw unavailable("another command is still running in this sandbox");
-  const record = (await readState(engine, name))?.records.get(key);
+    throw unavailable(
+      "another command is still running in this sandbox; nothing ran",
+    );
+  if (status !== 0)
+    throw unavailable(`the supervisor exited ${status}: ${stderr.trim()}`);
+  const state = await readState(engine, name);
+  // A record of an earlier generation says nothing about this run either: the container
+  // restarted, so this command died without recording anything of its own.
+  const seen = state?.records.get(key);
+  const record = seen?.generation === state?.generation ? seen : undefined;
   if (record?.state === "exited") return record.exit_code;
   // The sweep proved every process of the group was killed.
   if (record?.state === "terminated") return 137;
@@ -234,9 +245,5 @@ export async function commandExit(
     throw unavailable(
       `a process of the command in ${name} could not be killed`,
     );
-  throw unavailable(
-    status === 0
-      ? `the command left no final record in ${name}`
-      : `the supervisor exited ${status}: ${stderr.trim()}`,
-  );
+  throw unavailable(`the command left no final record in ${name}`);
 }

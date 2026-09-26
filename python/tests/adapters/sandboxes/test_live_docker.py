@@ -67,6 +67,17 @@ async def _exec(session: SandboxSession) -> None:
     whoami = await session.exec(["id", "-u"], OPEN, process_key="p3")
     assert isinstance(whoami, Ok), whoami
     assert await collect(whoami.value) == (0, b"1000\n", b"")
+    # `supervise` exits 0 whatever the command did, so a nonzero code only reaches the host
+    # through the record. Against the mocked daemon every code looked like 0.
+    failed = await session.exec(
+        ["sh", "-c", "echo out; echo err >&2; exit 42"], OPEN, process_key="p4"
+    )
+    assert isinstance(failed, Ok), failed
+    assert await collect(failed.value) == (42, b"out\n", b"err\n")
+    missing = await session.exec(["definitely-not-a-command"], OPEN, process_key="p5")
+    assert isinstance(missing, Ok), missing
+    code, _, why = await collect(missing.value)
+    assert (code, b"not found" in why) == (127, True)
 
 
 async def _files(session: SandboxSession) -> None:

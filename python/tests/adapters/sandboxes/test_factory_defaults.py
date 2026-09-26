@@ -119,7 +119,7 @@ def test_modal_defaults() -> None:
     assert named.info.provider == "modal"
 
 
-def test_docker_defaults() -> None:
+def test_docker_defaults(stub_supervisor: object) -> None:
     """The pinned node:22-bookworm image, no internet, provider name "docker", and a container
     with no network, a fixed PidsLimit and no limit it wasn't given."""
     backend = FakeBackend.scripted()

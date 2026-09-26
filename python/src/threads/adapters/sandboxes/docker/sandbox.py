@@ -16,7 +16,7 @@ from typing import Final
 import httpx
 
 from threads.adapters.loop_resources import LoopResources
-from threads.adapters.sandboxes.docker import records
+from threads.adapters.sandboxes.docker import terminate
 from threads.adapters.sandboxes.docker.create import Settings
 from threads.adapters.sandboxes.docker.driver import DockerDriver
 from threads.adapters.sandboxes.docker.engine import Engine, close_engine, open_engine
@@ -53,7 +53,7 @@ class DockerSandbox(RemoteSandbox):
         self._engines = LoopResources(name, close_engine)
         settings = Settings(image, allow_internet, cpus, memory_mb)
         driver = DockerDriver(
-            self._loop_engine, settings, records.Pacing(poll_s, wait_s), self._socket_or_blank
+            self._loop_engine, settings, terminate.Pacing(poll_s, wait_s), self._socket_or_blank
         )
         super().__init__(driver, RemoteInfo(name, "unenforced" if allow_internet else "enforced"))
 

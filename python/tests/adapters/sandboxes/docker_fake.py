@@ -17,14 +17,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
+from docker_bytes import GENERATION, frame, tar_of, tools
 from sandbox_backend import Box, FakeBackend, LostAnswerError, Proc, UnavailableError
 
 from threads.adapters.loop_resources import holding
 from threads.adapters.sandboxes.docker import records
 from threads.adapters.sandboxes.docker.sandbox import DockerSandbox
 
-GENERATION = "boot-0000 4242"
-TOOLS = {"sh": True, "env": True, "bash": True, "tar": True, "git": True, "python3": True}
 ARCH = "arm64"
 KILLED = 137
 _JSON = {"content-type": "application/json"}
@@ -41,6 +40,9 @@ class Exec:
     proc: Proc | None = None
     code: int | None = None
     frames: bytes = b""
+    supervised: bool = False
+    """`supervise` always exits 0 itself, so a supervised exec's status is never the
+    command's: the command's code reaches the host through its record."""
 
 
 @dataclass
@@ -93,6 +95,9 @@ class DockerEngine:
         self.bad_record: bytes | None = None
         self.corrupt_archive = False
         self.too_old = False
+        self.refuse_admission = False
+        self.supervisor_dies = False
+        self.drop_records = False
         self.started: list[tuple[str, tuple[str, ...]]] = []
         self._execs: dict[str, Exec] = {}
         self._next = 0
@@ -176,7 +181,7 @@ class DockerEngine:
             return _json(404, {"message": f"no container {name}"})
         match [method, *rest]:
             case ["GET", "json"]:
-                return _json(200, _described(found))
+                return _json(200, described(found))
             case ["POST", "start"]:
                 found.running = True
                 return httpx.Response(204)
@@ -211,15 +216,17 @@ class DockerEngine:
 
     def _get(self, container: Container, at: str) -> httpx.Response:
         if at == "/run/threads/state":
-            return httpx.Response(200, content=_state_tar(container, self.bad_record))
+            if self.drop_records:
+                return httpx.Response(200, content=tar_of({"state/generation": b"boot-0000 4242"}))
+            return httpx.Response(200, content=state_tar(container, self.bad_record))
         if self.corrupt_archive:
             return httpx.Response(200, content=b"not a tar at all")
         data = self.backend.read(container.box, at)
         if data is None:
             if self.backend.is_directory(container.box, at) or at in container.dirs:
-                return httpx.Response(200, content=_tar({}, dirs=(posixpath.basename(at),)))
+                return httpx.Response(200, content=tar_of({}, dirs=(posixpath.basename(at),)))
             return _json(404, {"message": f"no {at}"})
-        return httpx.Response(200, content=_tar({posixpath.basename(at): data}))
+        return httpx.Response(200, content=tar_of({posixpath.basename(at): data}))
 
     # Execs.
 
@@ -236,16 +243,43 @@ class DockerEngine:
         made = self._execs[ident]
         match made.cmd:
             case (records.SUPERVISE, "--check"):
-                made.code, made.frames = 0, _frame(1, self.check_stdout or _tools())
+                made.code, made.frames = 0, frame(1, self.check_stdout or tools())
             case (records.SUPERVISE, "--terminate", key):
                 made.code = _terminate(made.container, key)
+            case (records.SUPERVISE, _key, _deadline, *_argv) if self.refuse_admission:
+                # What the supervisor does when a live command already holds the container.
+                made.code = 125
+                made.frames = frame(2, b"threads: admission refused\n")
+            case (records.SUPERVISE, _key, _deadline, *_argv) if self.supervisor_dies:
+                # Every `die()` in mode_run exits 1, and every one of them is pre-record.
+                made.code = 1
+                made.frames = frame(2, b"threads: the container is not ready\n")
             case (records.SUPERVISE, key, deadline, *argv):
                 made.container.deadlines[key] = int(deadline)
                 made.proc = self.backend.run(made.container.box, argv, made.env, key)
                 made.container.keys[key] = made.proc
+                made.supervised = True
             case argv:
                 made.proc = self.backend.run(made.container.box, argv, made.env)
         return httpx.Response(200, content=_stream(made))
+
+
+def described(container: Container) -> Mapping[str, object]:
+    return {
+        "Id": container.box.id,
+        "Name": f"/{container.name}",
+        "State": {"Running": container.running, "Status": "running"},
+        "HostConfig": {"NanoCpus": 0, "Memory": 0, "PidsLimit": 1024},
+    }
+
+
+def state_tar(container: Container, bad: bytes | None = None) -> bytes:
+    files = {"state/generation": container.generation.encode()}
+    for key in container.keys:
+        record = container.record(key)
+        if record is not None:
+            files[f"state/records/{key}.json"] = bad or json.dumps(record).encode()
+    return tar_of(files, dirs=("state", "state/records"))
 
 
 def _renamed(backend: FakeBackend, ident: str, name: str) -> Box:
@@ -276,50 +310,11 @@ async def _stream(made: Exec) -> AsyncIterator[bytes]:
     if made.proc is None:
         return
     if made.proc.stdout:
-        yield _frame(1, made.proc.stdout)
+        yield frame(1, made.proc.stdout)
     if made.proc.stderr:
-        yield _frame(2, made.proc.stderr)
-    made.code = await made.proc.exit
-
-
-def _frame(stream: int, data: bytes) -> bytes:
-    return bytes([stream, 0, 0, 0]) + len(data).to_bytes(4, "big") + data
-
-
-def _tools() -> bytes:
-    return json.dumps(TOOLS).encode() + b"\n"
-
-
-def _described(container: Container) -> Mapping[str, object]:
-    return {
-        "Id": container.box.id,
-        "Name": f"/{container.name}",
-        "State": {"Running": container.running, "Status": "running"},
-        "HostConfig": {"NanoCpus": 0, "Memory": 0, "PidsLimit": 1024},
-    }
-
-
-def _state_tar(container: Container, bad: bytes | None = None) -> bytes:
-    files = {"state/generation": container.generation.encode()}
-    for key in container.keys:
-        record = container.record(key)
-        if record is not None:
-            files[f"state/records/{key}.json"] = bad or json.dumps(record).encode()
-    return _tar(files, dirs=("state", "state/records"))
-
-
-def _tar(files: Mapping[str, bytes], dirs: Sequence[str] = ()) -> bytes:
-    out = io.BytesIO()
-    with tarfile.open(fileobj=out, mode="w") as tar:
-        for name in dirs:
-            info = tarfile.TarInfo(name)
-            info.type, info.mode = tarfile.DIRTYPE, 0o700
-            tar.addfile(info)
-        for name, data in files.items():
-            info = tarfile.TarInfo(name)
-            info.size, info.mode = len(data), 0o600
-            tar.addfile(info, io.BytesIO(data))
-    return out.getvalue()
+        yield frame(2, made.proc.stderr)
+    ended = await made.proc.exit
+    made.code = 0 if made.supervised else ended
 
 
 def _end(proc: Proc) -> None:

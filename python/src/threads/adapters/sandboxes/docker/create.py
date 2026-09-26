@@ -32,6 +32,18 @@ from threads.log.digest import sha256_hex
 ROOT: Final = "/run/threads"
 WORKSPACE: Final = "/workspace"
 TMP: Final = "/tmp"  # noqa: S108 - a mount inside the container, not on the host
+TMPFS: Final[JsonValue] = {
+    # /tmp is a volume because an archive PUT outside one is refused under ReadonlyRootfs
+    # ("container rootfs is marked read-only"), and the kit stages a command's stdin and a tree
+    # import under /tmp/threads. The local driver still backs it with tmpfs, so it stays in
+    # memory, noexec, and owned by the command uid, which a plain volume would not be.
+    "Name": "local",
+    "Options": {
+        "type": "tmpfs",
+        "device": "tmpfs",
+        "o": "uid=1000,gid=1000,mode=1777,nosuid,nodev,noexec",
+    },
+}
 PIDS_LIMIT: Final = 1024
 PATH_ENV: Final = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 ARCHES: Final[Mapping[str, str]] = {"amd64": "linux-amd64", "arm64": "linux-arm64"}
@@ -77,15 +89,30 @@ def volumes_of(container: str) -> tuple[str, str, str]:
     """The container's three named volumes, by its name: the exec volume (/run/threads), the
     workspace, and /tmp.
 
-    /tmp is a volume, not a tmpfs: with ReadonlyRootfs the daemon refuses an archive PUT to any
-    path that isn't inside a volume ("container rootfs is marked read-only"), and the kit puts
-    a command's stdin and a tree import's archive under /tmp/threads (posix.RUN_DIR)."""
+    /tmp is a tmpfs-backed named volume rather than a `HostConfig.Tmpfs` mount: the daemon
+    refuses an archive PUT to any path outside a volume while ReadonlyRootfs holds, and the kit
+    puts a command's stdin and a tree import's archive under /tmp/threads (posix.RUN_DIR)."""
     suffix = container.removeprefix("threads-")
     return f"threads-exec-{suffix}", f"threads-ws-{suffix}", f"threads-tmp-{suffix}"
 
 
 def request_body(name: str, operation_key: str, settings: Settings) -> Mapping[str, JsonValue]:
     exec_volume, workspace, tmp = volumes_of(name)
+    mounts: list[JsonValue] = [
+        {"Type": "volume", "Source": exec_volume, "Target": ROOT},
+        {
+            "Type": "volume",
+            "Source": workspace,
+            "Target": WORKSPACE,
+            "VolumeOptions": {"NoCopy": True},
+        },
+        {
+            "Type": "volume",
+            "Source": tmp,
+            "Target": TMP,
+            "VolumeOptions": {"NoCopy": True, "DriverConfig": TMPFS},
+        },
+    ]
     host: dict[str, JsonValue] = {
         "Init": True,
         "ReadonlyRootfs": True,
@@ -95,16 +122,7 @@ def request_body(name: str, operation_key: str, settings: Settings) -> Mapping[s
         # be admitted. Commands run as uid 1000, where the permitted set is empty.
         "CapAdd": ["SETUID", "SETGID", "KILL", "CHOWN"],
         "SecurityOpt": ["no-new-privileges"],
-        "Mounts": [
-            {"Type": "volume", "Source": exec_volume, "Target": ROOT},
-            {
-                "Type": "volume",
-                "Source": workspace,
-                "Target": WORKSPACE,
-                "VolumeOptions": {"NoCopy": True},
-            },
-            {"Type": "volume", "Source": tmp, "Target": TMP, "VolumeOptions": {"NoCopy": True}},
-        ],
+        "Mounts": mounts,
     }
     if not settings.allow_internet:
         host["NetworkMode"] = "none"

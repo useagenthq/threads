@@ -278,7 +278,7 @@ def test_a_daytona_stop_in_flight_is_drained_before_the_session_closes(kill_s: f
     gc.collect()
 
 
-def test_one_docker_adapter_on_two_loops() -> None:
+def test_one_docker_adapter_on_two_loops(stub_supervisor: object) -> None:
     """Each loop opens its own Engine client, and closing it stops the exec stream still
     reading it: the next loop starts on nothing the first left behind."""
     made: list[DockerTransport] = []

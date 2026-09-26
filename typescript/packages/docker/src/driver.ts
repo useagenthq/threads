@@ -9,6 +9,7 @@ import { createContainer, type Limits } from "./create";
 import { type Engine, failure } from "./engine";
 import { type ExecSpec, startExec } from "./exec";
 import { OPERATION_KEY, shortHash, volumesOf } from "./names";
+import type { Supervisor } from "./pins";
 import { commandExit, terminate } from "./records";
 import { onlyFile, tarOf } from "./tar";
 import { DockerError, unavailable } from "./wire";
@@ -25,7 +26,11 @@ const DEADLINE_CAP_MS = 3_600_000;
 /** Enough of stderr to recognise the supervisor's admission refusal. */
 const MARKER_BYTES = 200;
 
-export function dockerDriver(engine: Engine, limits: Limits): SandboxDriver {
+export function dockerDriver(
+  engine: Engine,
+  limits: Limits,
+  supervisor: Supervisor,
+): SandboxDriver {
   const path = (name: string) => `/containers/${encodeURIComponent(name)}`;
 
   /** An archive PUT of one file into the volume that holds it. */
@@ -101,7 +106,7 @@ export function dockerDriver(engine: Engine, limits: Limits): SandboxDriver {
         };
       return {
         kind: "created",
-        id: await createContainer(engine, operationKey, limits),
+        id: await createContainer(engine, operationKey, limits, supervisor),
       };
     },
     find: async (operationKey) => {

@@ -11,6 +11,7 @@ from typing import Final, Literal
 
 from pydantic import JsonValue
 
+from threads.adapters.sandboxes.docker import records
 from threads.adapters.sandboxes.docker.engine import Engine, argv_env
 from threads.adapters.sandboxes.streams import Pipe, pump
 from threads.sandbox.protocol import ExecOutput
@@ -75,9 +76,17 @@ def body(
     }
 
 
-async def start(engine: Engine, container: str, spec: Mapping[str, JsonValue]) -> ExecOutput:
+async def start(
+    engine: Engine,
+    container: str,
+    spec: Mapping[str, JsonValue],
+    supervised: str | None = None,
+) -> ExecOutput:
     """Starts the exec and returns once the daemon accepted it; its output is pumped from the
-    stream, which the pump closes."""
+    stream, which the pump closes.
+
+    `supervised` is the key hash of a command running through the supervisor, whose own exit
+    code is in its record rather than in the exec's status (records.py `exit_code`)."""
     made = await engine.exec_create(container, spec)
     stream = await engine.exec_start(made.id)
     pipe = Pipe()
@@ -91,7 +100,11 @@ async def start(engine: Engine, container: str, spec: Mapping[str, JsonValue]) -
             frames.end()
         finally:
             await stream.aclose()
-        return await _exit_code(engine, made.id)
+        status = await _exit_code(engine, made.id)
+        if supervised is None:
+            return status
+        state = await records.read_state(engine, container)
+        return records.exit_code(state, supervised, status)
 
     engine.pumps.add(task := pump(pipe, feed))
     task.add_done_callback(engine.pumps.discard)
