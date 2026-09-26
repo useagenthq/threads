@@ -121,7 +121,11 @@ def test_start_refuses_a_host_whose_agent_uses_dev_sandbox(
     )
     served: list[str] = []
     usage_error = 2
-    monkeypatch.setattr(serve, "serve", lambda *_: served.append("served"))
+
+    def record(_host: Host, _bind: str, _port: int) -> None:
+        served.append("served")
+
+    monkeypatch.setattr(serve, "serve", record)
     # dev is what the dev sandbox is for; start is production and refuses it.
     assert main(["start", str(module)]) == usage_error
     assert "development only" in capsys.readouterr().err
