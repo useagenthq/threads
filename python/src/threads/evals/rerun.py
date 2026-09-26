@@ -17,13 +17,13 @@ from threads.evals.answers import Answers
 from threads.evals.case_dir import CaseSandbox
 from threads.evals.replayed import Replayed, recorded_authorizer, scripted_policy
 from threads.evals.stand_in import stand_ins
+from threads.evals.stub_queue import stub_gateway
 from threads.log import Event, ModelRef, ParseError, ToolCallData, ToolSpec, UserInputEvent
 from threads.loop import gates
 from threads.loop.drive import drive
 from threads.loop.model import Model
 from threads.loop.recovery import recover
 from threads.loop.runtime import Failed, Halt, Idle, Runtime
-from threads.loop.stubs import StubGateway, parse_stubs
 from threads.permissions import Decision
 from threads.reduce import Fold
 from threads.reduce.fold import policy
@@ -193,7 +193,9 @@ async def _ran(  # noqa: PLR0913, PLR0917 - the run and what it compares after
     def models(ref: ModelRef) -> Model:
         return replay.as_pinned(ref) if as_recorded else replay
 
-    stubs = None if not isinstance(given.stubs, dict) else StubGateway(parse_stubs(given.stubs))
+    # Offline the rerun answers only from the saved turn's entries: a simulated case's prefix
+    # stubs are the live re-drive's, and lane 22's "no stub left over" rule is unchanged.
+    stubs = None if not isinstance(given.stubs, dict) else stub_gateway(given.stubs, "turn")
     tools = Answers(
         given.sandbox,
         [] if given.extensions is None else list(given.extensions.recall),

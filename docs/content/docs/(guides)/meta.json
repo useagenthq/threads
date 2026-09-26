@@ -59,6 +59,7 @@
     "evals/fork",
     "evals/saved-cases",
     "evals/run-evals",
+    "evals/simulated-users",
     "evals/testing"
   ]
 }

@@ -22,9 +22,17 @@ def bounded(s: str) -> str:
     return s if len(s) <= LIMIT else f"{s[:LIMIT]}…[truncated {len(s) - LIMIT}]"
 
 
-def _input(value: JsonValue) -> JsonValue:
+def call_input(value: JsonValue) -> JsonValue:
+    """A call's input as the judge sees it: the value, or its canonical text cut when long."""
     t = canonical(value).decode()
     return value if len(t) <= LIMIT else bounded(t)
+
+
+def cut(items: list[JsonValue]) -> list[JsonValue]:
+    """Over 100 items keep the first and last 50, with what was dropped counted."""
+    if len(items) <= 2 * KEEP:
+        return items
+    return [*items[:KEEP], {"kind": "omitted", "count": len(items) - 2 * KEEP}, *items[-KEEP:]]
 
 
 def transcript(events: list[Obj]) -> list[JsonValue]:
@@ -36,7 +44,7 @@ def transcript(events: list[Obj]) -> list[JsonValue]:
         d = obj(e["data"])
         if e["type"] == "tool_call":
             names[text(d["call_id"])] = text(d["name"])
-            items.append({"kind": "tool_call", "name": d["name"], "input": _input(d["input"])})
+            items.append({"kind": "tool_call", "name": d["name"], "input": call_input(d["input"])})
         elif e["type"] == "tool_result":
             items.append(
                 {
@@ -52,9 +60,7 @@ def transcript(events: list[Obj]) -> list[JsonValue]:
                 p = obj(part)
                 if p["type"] == "text":
                     items.append({"kind": "assistant", "text": bounded(text(p["text"]))})
-    if len(items) <= 2 * KEEP:
-        return items
-    return [*items[:KEEP], {"kind": "omitted", "count": len(items) - 2 * KEEP}, *items[-KEEP:]]
+    return cut(items)
 
 
 def judge_input(task: str, events: list[Obj], answer: JsonValue, rubric: list[JsonValue]) -> str:

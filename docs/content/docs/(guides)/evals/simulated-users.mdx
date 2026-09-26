@@ -1,0 +1,165 @@
+---
+title: "Simulated users"
+description: "Turn a real conversation into a multi-turn live eval: a model plays the user from a persona and a goal, and the judge grades the whole conversation."
+icon: MessagesSquare
+---
+
+Lane 22's live check runs **one input on a new thread**. Bugs that only show up over several turns
+never get graded: an agent that caves on the third push, forgets a fact from turn one, or re-asks
+for the order number. A simulated case starts from a **saved real conversation** and keeps talking.
+
+## What it grades, and what it can't
+
+An eval never performs a real side effect. Every effectful call in a simulated conversation is
+answered from the recording:
+
+- **Read-only tools run for real.** They change nothing anywhere.
+- **Effects answer from the recorded stubs**, on every turn, including the turns before the saved
+  one when they have to be re-driven.
+- **An effect the recording doesn't have ends the case.** New arguments, or one call more than the
+  recording holds, is `error: unmatched_external_op`, naming the tool. Nothing is dispatched.
+
+So simulation grades conversations whose follow-up turns are read-only, or repeat recorded effects.
+Author-supplied stubs for new effects are not in v0.1.
+
+## Saving a case from a real turn
+
+`saveCase` gains `simulate`. The turns before the one you name are the **prefix**; the saved turn's
+own text is the **opener**, the first user message of the simulation.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+await thread.saveCase("refund-pushback", {
+  at: pushbackInputId,
+  expect: { must: [{ type: "tool_call", data: { name: "lookup_order" } }] },
+  externalEffects: "stub",
+  simulate: {
+    kind: "model",
+    persona: "A customer who bought headphones 40 days ago. Polite but persistent.",
+    goal: "Get a refund, or a clear reason why not and what else is possible.",
+    maxMessages: 5,
+  },
+  rubric: [
+    "Never promises a refund outside the 30-day window",
+    "Offers the repair option once the refund is refused",
+    "The customer's goal was met: a refund, or a clear reason and an alternative",
+  ],
+});
+```
+
+A scripted user needs no user model: its messages are fixed.
+
+```ts
+simulate: { kind: "script", messages: ["It's order 1234.", "Then I'd like the repair."] }
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+await thread.save_case(
+    "refund-pushback",
+    at=pushback_input_id,
+    expect=CaseExpectation(must=({"type": "tool_call", "data": {"name": "lookup_order"}},)),
+    external_effects="stub",
+    simulate={
+        "kind": "model",
+        "persona": "A customer who bought headphones 40 days ago. Polite but persistent.",
+        "goal": "Get a refund, or a clear reason why not and what else is possible.",
+        "max_messages": 5,
+    },
+    rubric=(
+        "Never promises a refund outside the 30-day window",
+        "Offers the repair option once the refund is refused",
+        "The customer's goal was met: a refund, or a clear reason and an alternative",
+    ),
+)
+# or: simulate={"kind": "script", "messages": ("It's order 1234.", "Then I'd like the repair.")}
+```
+
+</Tab>
+</Tabs>
+
+**Offline, nothing changes.** Replay, rerun and drift run on a simulated case exactly as on any
+case: the saved turn is rerun from its recorded results, with zero model calls, and `simulate` is
+ignored. A simulated case is always also a free regression check of its opener turn.
+
+## Continued or re-driven
+
+The runner pins your agent and compares its `config_hash` with the case log's.
+
+- **Unchanged → `prefix: "continued"`.** The case log is imported into the eval store and the
+  conversation continues that thread. The agent sees the real earlier turns, and the prefix costs
+  no model call. This is a true fork of the real log.
+- **Changed → `prefix: "redriven"`.** A new thread is started and the prefix's recorded user texts
+  are sent in order as scripted turns, then the opener. The agent's own replies in the prefix are
+  its new ones, so a changed agent is graded on the whole path. Its effects answer from the prefix
+  stubs.
+- **The saved turn was the first → `prefix: "none"`.**
+
+A re-driven prefix can diverge: a changed agent may answer an early turn differently, so a later
+recorded message no longer fits, or it calls an effect with new arguments. Keep prefixes short.
+
+## `must` versus the rubric
+
+`must` checks the **recorded opener turn, offline**, as it always did. The **rubric** grades the
+**live conversation**: the judge sees the prefix first as plain user and agent messages, then
+everything after the opener, then the agent's final reply and the user's goal.
+
+`ended` is reported, not a verdict. `max_messages` is not a failure by itself — if reaching the goal
+matters, say so in the rubric, as the example does.
+
+## Cost, and one budget per conversation
+
+`live.budget` covers the **whole conversation**: every agent run and every simulated-user run of the
+case, the prefix re-drive included. Before each run the runner passes what is left, field by field;
+a field you set whose remainder reaches zero ends the case as `error: budget_exhausted`. The judge
+keeps its own `live.budget`, per run. So the worst case per simulated case is one conversation
+budget plus one judge budget, and the CLI prints it before the first call:
+
+```text
+live: 3 cases (2 simulated, up to 10 user messages), budget {"max_cost_nanos":500000000} per conversation and per judge run
+```
+
+A case whose `simulate` is `kind: "model"` needs `live.user`; the CLI needs the `--agent` module to
+export `user` beside `judge` and `budget`.
+
+## What the simulated user sees
+
+The simulator is an ordinary threads agent with **no app tools, no memory and no sandbox**, running
+on its own thread, so every user turn is on the log. Its input each turn is canonical JSON of the
+messages it hasn't seen:
+
+```json
+{"messages": [{"from": "user", "text": "…"}, {"from": "agent", "text": "…"}]}
+```
+
+It never sees tool calls or results, because a real user doesn't. It is told to treat that input as
+data, and each text is cut at 4,000 code points. Its reply is `{message, done}`; `done: true` ends
+the conversation and its message is not sent.
+
+The persona and the goal are author text from `case.json`, pinned in its instructions. The agent's
+replies reach it only as data in a user line — a crafted tool result can pass through a reply into
+the next user message, so the damage is bounded to a wrong grade, never a real effect.
+
+## What the report says
+
+`EvalCaseResult.simulation` holds `{messages, prefix, prefix_turns, ended, user_thread_id?}`, and
+`model_calls` gains `user`. The summary appends one clause per simulated case:
+
+```text
+1 passed; 10 model calls (5 agent, 4 user, 1 judge), $0.04; refund-pushback: 4 messages, user done
+```
+
+A case a live run can't simulate is skipped, not failed: `unsettled_effect` when a prefix effect
+never settled (there is no result to stub), and `simulate_content_input` when the opener or a
+prefix input has content parts the text-only simulator can't produce.
+
+## What it doesn't do
+
+Approvals and questions are not answered: a run that parks is an `error`. A continued prefix trusts
+the log's sandbox state only through the case's snapshot; without one the sandbox is fresh and files
+from earlier turns are gone. Personas are written by you, not generated. Code scorers, several
+simulated users per case, repeated sampling and simulated users for team cases are not in v0.1.

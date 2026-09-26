@@ -11,7 +11,7 @@ run inside the provider and can't be stubbed.
 from threads.agents.config import ConfigError
 from threads.log import JsonObject, ToolSpec
 from threads.loop.model import LookupResult, ModelInfo
-from threads.loop.stubs import Stub, StubGateway
+from threads.loop.stubs import StubGateway, Stubs
 from threads.loop.tools import Dispatched, Invocation, Termination, ToolRunner
 from threads.tools import HOST, SANDBOX_TOOLS
 
@@ -22,9 +22,10 @@ TEST_KIT = "scripted"
 class Stubbed:
     """Routes sandbox built-ins and host reads to the run's runner, everything else to stubs."""
 
-    def __init__(self, inner: ToolRunner, stubs: tuple[Stub, ...], *, sealed: bool) -> None:
+    def __init__(self, inner: ToolRunner, stubs: Stubs, *, sealed: bool) -> None:
         self._inner = inner
-        self._stubs = StubGateway(stubs)
+        # A simulated conversation shares one gateway, so its queue spans every turn.
+        self._stubs = stubs if isinstance(stubs, StubGateway) else StubGateway(stubs)
         self._sealed = sealed
 
     def _for(self, name: str) -> ToolRunner:
@@ -51,7 +52,7 @@ class Stubbed:
 
 
 def stub_mode(
-    tools: ToolRunner, stubs: tuple[Stub, ...] | None, model: ModelInfo, *, sealed: bool
+    tools: ToolRunner, stubs: Stubs | None, model: ModelInfo, *, sealed: bool
 ) -> ToolRunner:
     """The run's tool runner: as given when live; stubbed in stub mode, where a live model with
     hosted tools raises ConfigError hosted_tool_unsupported. `sealed`: the run's sandbox denies

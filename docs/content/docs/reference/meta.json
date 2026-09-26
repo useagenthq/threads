@@ -115,6 +115,8 @@
     "types/TeamRunStream",
     "types/ExportedBundle",
     "types/Live",
+    "types/Simulate",
+    "types/UserTurn",
     "types/EvalReport",
     "types/EvalCaseResult",
     "types/Verdict",

@@ -79,7 +79,9 @@ def test_a_scripted_judge_grades_the_whole_turn_from_the_canonical_transcript(
     asked = next(e for e in judged if isinstance(e, UserInputEvent))
     answer = "Refunded order 42; it is inside the 30-day window."
     assert asked.data.text == judge_input("Please refund order 42.", lead, answer, RUBRIC)
-    assert report.summary.startswith("1 passed, 0 failed; 4 model calls (3 agent, 1 judge), ")
+    assert report.summary.startswith(
+        "1 passed, 0 failed; 4 model calls (3 agent, 0 user, 1 judge), "
+    )
 
 
 def test_one_failing_criterion_fails_and_the_default_store_keeps_no_ids(tmp_path: Path) -> None:

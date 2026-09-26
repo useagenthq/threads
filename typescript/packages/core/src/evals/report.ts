@@ -6,7 +6,11 @@ import type { CaseStatus, EvalCaseResult, EvalReport } from "./schema";
 // and the same in both languages.
 
 export type Totals = {
-  readonly calls: { readonly agent: number; readonly judge: number };
+  readonly calls: {
+    readonly agent: number;
+    readonly user: number;
+    readonly judge: number;
+  };
   readonly cost: Cost | null;
   readonly live: boolean;
   /** Drift ran: agents were given. */
@@ -51,11 +55,14 @@ function summaryOf(r: Omit<EvalReport, "summary" | "ok">, t: Totals): string {
   if (r.not_run > 0) parts.push(`${r.not_run} not run`);
   let line = parts.join(", ");
   if (t.live) {
-    const { agent, judge } = t.calls;
-    line += `; ${agent + judge} model calls (${agent} agent, ${judge} judge), ${
+    const { agent, user, judge } = t.calls;
+    line += `; ${agent + user + judge} model calls (${agent} agent, ${user} user, ${judge} judge), ${
       t.cost === null ? "cost unknown" : dollars(t.cost.known_nanos)
     }`;
   }
+  for (const c of r.cases)
+    if (c.simulation !== undefined)
+      line += `; ${c.name}: ${c.simulation.messages} messages, ${c.simulation.ended.replace("_", " ")}`;
   if (t.aborted !== undefined)
     line += `; aborted: ${t.aborted.code} (${t.aborted.model})`;
   return t.agents ? line : line + FRAMEWORK_ONLY;

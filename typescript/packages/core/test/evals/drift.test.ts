@@ -54,7 +54,7 @@ describe("drift", () => {
       { ok: true, kinds: [] },
     ]);
     expect(report.summary).toBe("1 passed, 0 failed");
-    expect(report.model_calls).toEqual({ agent: 0, judge: 0 });
+    expect(report.model_calls).toEqual({ agent: 0, user: 0, judge: 0 });
   });
 
   test("changed instructions are prompt drift: stale, which fails only under strict", async () => {

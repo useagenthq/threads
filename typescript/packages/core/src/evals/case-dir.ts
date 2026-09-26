@@ -10,9 +10,11 @@ import type { EventDraft } from "../store";
 import {
   CaseLine0,
   CaseOffline,
+  CaseSimulate,
   CaseSnapshot,
   ExtensionScript,
   SandboxResults,
+  SimulateBlocked,
 } from "./files";
 import { EventMatcher, Rubric } from "./schema";
 
@@ -36,6 +38,8 @@ const CaseFile: Strict<{
   input: Opt<Strict<{ text: Opt<z.ZodString> }>>;
   expect: Strict<{ must: Matchers; expect: Opt<Matchers> }>;
   rubric: Opt<typeof Rubric>;
+  simulate: Opt<typeof CaseSimulate>;
+  simulate_blocked: Opt<typeof SimulateBlocked>;
   snapshot: Opt<typeof CaseSnapshot>;
   offline: Opt<typeof CaseOffline>;
   line0: Opt<typeof CaseLine0>;
@@ -55,6 +59,8 @@ const CaseFile: Strict<{
     expect: z.array(EventMatcher).optional(),
   }),
   rubric: Rubric.optional(),
+  simulate: CaseSimulate.optional(),
+  simulate_blocked: SimulateBlocked.optional(),
   snapshot: CaseSnapshot.optional(),
   offline: CaseOffline.optional(),
   line0: CaseLine0.optional(),

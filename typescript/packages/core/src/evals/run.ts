@@ -82,14 +82,16 @@ const result = (
   status: EvalCaseResult["status"],
   checks: Checks,
   reason?: string,
+  simulation?: EvalCaseResult["simulation"],
 ): EvalCaseResult => ({
   name,
   status,
   ...(reason === undefined ? {} : { reason }),
+  ...(simulation === undefined ? {} : { simulation }),
   checks,
 });
 
-/** The live check's part of a case: its status, reason and judge result. */
+/** The live check's part of a case: its status, reason, simulation and judge result. */
 function judgedStatus(
   name: string,
   checks: Checks,
@@ -97,24 +99,26 @@ function judgedStatus(
 ): EvalCaseResult {
   if (live.kind === "blocked")
     return result(name, "error", checks, "model_blocked");
+  const sim = live.simulation;
   if (live.kind !== "graded")
-    return result(name, live.kind, checks, live.reason);
+    return result(name, live.kind, checks, live.reason, sim);
   const all = { ...checks, judge: live.check };
   const failing = live.check.verdicts.find((v) => !v.pass);
   return failing === undefined
-    ? result(name, "passed", all)
+    ? result(name, "passed", all, undefined, sim)
     : result(
         name,
         "failed",
         all,
         `judge: criterion ${failing.criterion} failed`,
+        sim,
       );
 }
 
 const TEAM_LEAD: LiveOutcome = {
   kind: "skipped",
   reason: "live_not_runnable:team_calls",
-  calls: { agent: 0, judge: 0 },
+  calls: { agent: 0, user: 0, judge: 0 },
   cost: null,
 };
 
@@ -132,7 +136,7 @@ async function liveOf(
   // A lead's members run in the team worker, where the case's stubs can't reach: never live.
   if (pinned.leadsTeam) return TEAM_LEAD;
   const fresh = pinned.started.sandbox_provider !== undefined;
-  return liveCheck(c, target, {
+  return liveCheck(c, log, target, {
     live: plan.live,
     store: plan.store,
     kept: plan.kept,
@@ -183,7 +187,16 @@ async function evaluate(plan: Plan, name: string): Promise<Evaluated> {
   if (live !== undefined) {
     const judged = judgedStatus(name, checks, live);
     return judged.status === "passed" && stale !== undefined
-      ? { result: result(name, "stale", judged.checks, stale), live }
+      ? {
+          result: result(
+            name,
+            "stale",
+            judged.checks,
+            stale,
+            judged.simulation,
+          ),
+          live,
+        }
       : { result: judged, live };
   }
   if (skip !== undefined)
@@ -212,7 +225,25 @@ export async function runEvals(
   const names = caseNames(root).filter(
     (n) => options.only === undefined || options.only.includes(n),
   );
+  checkUser(root, names, options.live);
   return evalsOf(plan, names, options);
+}
+
+/** A model-kind simulated case needs live.user, checked before the first model call (32 E). */
+function checkUser(
+  root: string,
+  names: readonly string[],
+  live: Live | undefined,
+): void {
+  if (live === undefined || live.user !== undefined) return;
+  for (const name of names) {
+    const read = readCase(root, name);
+    if (read.ok && read.value.meta.simulate?.kind === "model")
+      throw new ConfigError(
+        "invalid_config",
+        `case ${name} simulates a user with a model: set live.user`,
+      );
+  }
 }
 
 /** The cases in order; a guard block stops the run and leaves the rest not_run. */
@@ -222,7 +253,7 @@ export async function evalsOf(
   options: Pick<RunEvalsOptions, "strict">,
 ): Promise<EvalReport> {
   const cases: EvalCaseResult[] = [];
-  const calls = { agent: 0, judge: 0 };
+  const calls = { agent: 0, user: 0, judge: 0 };
   let cost: Cost | null | undefined;
   let aborted: NonNullable<EvalReport["aborted"]> | undefined;
   for (const name of names) {
@@ -236,6 +267,7 @@ export async function evalsOf(
       aborted = { code: "model_blocked", case: name, model: live.model };
     else if (live !== undefined) {
       calls.agent += live.calls.agent;
+      calls.user += live.calls.user;
       calls.judge += live.calls.judge;
       cost = addCost(cost, live.cost);
     }

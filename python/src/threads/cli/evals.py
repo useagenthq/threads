@@ -5,10 +5,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import TypeGuard
+from typing import Annotated, ClassVar, TypeGuard
 
-from pydantic import TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
+from threads._generated.eval_v1 import CaseSimulate
 from threads.agents.agent import Agent
 from threads.agents.config import ConfigError
 from threads.agents.store import sqlite
@@ -24,6 +25,13 @@ from threads.reduce.handlers import to_json
 
 _RUBRIC = TypeAdapter[list[str]](list[str])
 _OBJECTS = TypeAdapter[list[object]](list[object])
+
+
+class _Simulated(BaseModel):
+    """Only the `simulate` of a case.json, for the preflight line."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="ignore", frozen=True)
+    simulate: Annotated[CaseSimulate, Field(discriminator="kind")] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +79,10 @@ def _live(module: ModuleType, path: str, agents: tuple[EvalAgent, ...]) -> _Load
         criteria = _RUBRIC.validate_python(rubric)
     except ValidationError:
         return f"rubric in {path} must be a list of criteria"
-    return _Loaded(agents, Live(judge, budget, tuple(criteria)))
+    user: object = getattr(module, "user", None)
+    if user is not None and not _is_model(user):
+        return f"user in {path} must be a model"
+    return _Loaded(agents, Live(judge, budget, tuple(criteria), user))
 
 
 def _load(args: EvalArgs) -> _Loaded | str:
@@ -87,6 +98,49 @@ def _load(args: EvalArgs) -> _Loaded | str:
     return _live(module, args.agent, agents) if args.live else _Loaded(agents)
 
 
+_SIMULATE: TypeAdapter[_Simulated] = TypeAdapter(_Simulated)
+
+
+def _simulations(args: EvalArgs) -> list[CaseSimulate]:
+    """The `simulate` of each case, read off case.json: what the preflight line counts."""
+    root = Path(args.cases)
+    out: list[CaseSimulate] = []
+    for name in case_names(root):
+        if args.only and name not in args.only:
+            continue
+        try:
+            got = _SIMULATE.validate_json((root / name / "case.json").read_bytes())
+        except (ValidationError, OSError):
+            continue
+        if got.simulate is not None:
+            out.append(got.simulate)
+    return out
+
+
+def _preflight(args: EvalArgs, live: Live) -> int | None:
+    """What a live run will cost, printed before the first model call; 2 when a model is missing."""
+    n = len([c for c in case_names(Path(args.cases)) if not args.only or c in args.only])
+    sims = _simulations(args)
+    if any(s.kind == "model" for s in sims) and live.user is None:
+        print(f"export user from {args.agent or './agents.py'}", file=sys.stderr)
+        return 2
+    budget = canonical(to_json(live.budget))
+    if not sims:
+        print(f"live: {n} cases, up to {2 * n} model runs (agent + judge), budget {budget} per run")
+        return None
+    messages = sum(
+        (s.max_messages if isinstance(s.max_messages, int) else 5)
+        if s.kind == "model"
+        else len(s.messages) + 1
+        for s in sims
+    )
+    print(
+        f"live: {n} cases ({len(sims)} simulated, up to {messages} user messages), "
+        f"budget {budget} per conversation and per judge run"
+    )
+    return None
+
+
 async def evals(args: EvalArgs) -> int:
     loaded = _load(args)
     if isinstance(loaded, str):
@@ -94,9 +148,9 @@ async def evals(args: EvalArgs) -> int:
         return 2
     live = loaded.live
     if live is not None and Path(args.cases).is_dir():
-        n = len([c for c in case_names(Path(args.cases)) if not args.only or c in args.only])
-        budget = canonical(to_json(live.budget))
-        print(f"live: {n} cases, up to {2 * n} model runs (agent + judge), budget {budget} per run")
+        stop = _preflight(args, live)
+        if stop is not None:
+            return stop
     try:
         report = await run_evals(
             cases=args.cases,

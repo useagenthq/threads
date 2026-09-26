@@ -27,11 +27,13 @@ from . import (
     dynamic,
     e2b_wire,
     effects,
+    eval_simulate_vectors,
     eval_vectors,
     evals,
     evals_drift,
     evals_formats,
     evals_hooks,
+    evals_simulate,
     extras,
     fallbacks,
     forks,
@@ -218,7 +220,13 @@ EVALS = CASES.parent / "evals"
 def _build_evals(out: pathlib.Path) -> None:
     """spec/conformance/evals: saved cases and the offline report runEvals gives for them."""
     out.mkdir()
-    for build in (evals.build, evals_drift.build, evals_hooks.build, evals_formats.build):
+    for build in (
+        evals.build,
+        evals_drift.build,
+        evals_hooks.build,
+        evals_formats.build,
+        evals_simulate.build,
+    ):
         build(out)
 
 
@@ -293,6 +301,7 @@ def _write_all(
     ui_vectors.write()
     pos_int_vector.write()
     eval_vectors.write()
+    eval_simulate_vectors.write()
     otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
     staged_all = ((staged, STAGED), (phase2, STAGED_PHASE_2_DIR))
     for built, dest in ((out, CASES), *staged_all, (built_evals, EVALS), *otel_parts):
@@ -337,6 +346,7 @@ def main() -> int:
             for part in otel.PARTS:
                 diffs += [f"otel/{part}/{d}" for d in _diff(traces / part, otel.OTEL / part)]
             diffs += [f"evals/{d}" for d in _diff(built_evals, EVALS)] + eval_vectors.check()
+            diffs += eval_simulate_vectors.check()
             for d in diffs:
                 print(d)
             print("fixtures up to date" if not diffs else f"{len(diffs)} difference(s)")

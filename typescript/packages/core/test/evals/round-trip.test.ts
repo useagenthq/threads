@@ -51,7 +51,7 @@ describe("saveCase then runEvals", () => {
     expect(report.summary).toBe(
       "1 passed, 0 failed (framework checks only; pass --agent to detect changes to your agents)",
     );
-    expect(report.model_calls).toEqual({ agent: 0, judge: 0 });
+    expect(report.model_calls).toEqual({ agent: 0, user: 0, judge: 0 });
   });
 
   test("a changed read-only result in sandbox.json fails the rerun: it really re-executes", async () => {
@@ -69,5 +69,22 @@ describe("saveCase then runEvals", () => {
       got: "tool_result",
     });
     expect(report.ok).toBe(false);
+  });
+
+  test("a simulated case saved elsewhere reruns offline here, with no prefix stub left over", async () => {
+    // Cross-language (spec lane 32, test 11): the corpus's bytes are the shared contract.
+    const evals = join(
+      import.meta.dir,
+      "../../../../../spec/conformance/evals",
+    );
+    for (const name of [
+      "eval-simulate-offline",
+      "eval-simulate-prefix-stubs",
+    ]) {
+      const report = await runEvals({ cases: join(evals, name, "cases") });
+      expect(report.cases.map((c) => c.status)).toEqual(
+        report.cases.map(() => "passed"),
+      );
+    }
   });
 });

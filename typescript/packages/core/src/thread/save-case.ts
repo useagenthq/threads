@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { firstLine, matches } from "../evals/compare";
 import type { OfflineReason } from "../evals/files";
 import { Rubric } from "../evals/schema";
-import { sha256Hex } from "../hash";
 import {
   ArtifactRef,
   type BranchId,
@@ -16,9 +15,11 @@ import type { Sandbox } from "../sandbox/protocol";
 import type { ArtifactStore, LogStore } from "../store";
 import { type VerifiedLog, verifyExport } from "../verify";
 import { type LogError, logError } from "../verify/error";
-import { modelScript, sandboxResults, stubScript } from "./case-files";
+import { modelScript, sandboxResults, stubsOf } from "./case-files";
 import { extensionScript } from "./case-hooks";
 import { caseLog, type Impl } from "./case-log";
+import { caseMeta } from "./case-meta";
+import { prefixStubs, type SimulateUser, simulateField } from "./case-simulate";
 import { findTurn, offlineReason, type Turn } from "./case-turn";
 import type { ForkPoint } from "./handle";
 
@@ -59,6 +60,11 @@ export type SaveCaseOptions = {
    * fails, and the case passes only when all do.
    */
   readonly rubric?: readonly string[];
+  /**
+   * Turn the case into a multi-turn live eval: the saved turn's text is the first user message,
+   * and this plays the user after it (spec lane 32). Offline nothing changes.
+   */
+  readonly simulate?: SimulateUser;
   /** Default: cases. The case is <dir>/<name>/. */
   readonly dir?: string;
 };
@@ -83,6 +89,11 @@ function invalid(message: string): Result<never, LogError> {
   return err(logError("invalid_request", message));
 }
 
+/** A recorded output the case can't carry: as unreplayable as a missing chain artifact. */
+function missing(error: LogError): Result<never, LogError> {
+  return err(logError("case_missing_dependency", error.message, error.seq));
+}
+
 function checkRequest(
   options: SaveCaseOptions,
   name: string,
@@ -96,6 +107,10 @@ function checkRequest(
     return invalid(
       "rubric: 1 to 20 criteria, each 1 to 500 characters; pass rubric: undefined for none",
     );
+  if (options.simulate !== undefined) {
+    const checked = simulateField(options.simulate);
+    if (!checked.ok) return checked;
+  }
   return sandbox !== undefined && sandbox.info.egress !== "enforced"
     ? err(
         logError(
@@ -204,22 +219,33 @@ async function caseFiles(saving: Saving): Promise<
 > {
   const { read, turn, name, options, context } = saving;
   const files: Files = new Map();
-  const built = await stubScript(turn.events, context.artifacts);
+  const all = knownEvents(read);
+  const before = all.filter((e) => e.seq <= turn.restoreSeq);
+  const built = await stubsOf(turn.events, context.artifacts);
   // A mediated call whose committed output is gone makes the case unreplayable, the same way a
   // missing chain artifact does.
-  if (!built.ok)
-    return err(
-      logError("case_missing_dependency", built.error.message, built.error.seq),
-    );
-  const stubs = built.value;
-  const logged = await logFiles(saving, files, stubs.stubs.length);
+  if (!built.ok) return missing(built.error);
+  const turnStubs = built.value;
+  const earlier =
+    options.simulate === undefined
+      ? undefined
+      : await prefixStubs(before, turnStubs, all, context.artifacts);
+  if (earlier !== undefined && !earlier.ok) return missing(earlier.error);
+  const stubs = { stubs: earlier?.value.stubs ?? turnStubs };
+  const blocked = earlier?.value.blocked;
+  const logged = await logFiles(saving, files, turnStubs.length);
   if (!logged.ok) return logged;
   const turnRefs = new Set<string>();
   refsIn(
     turn.events.filter((e) => e.type !== "model_request"),
     turnRefs,
   );
-  const later = knownEvents(read).filter((e) => e.seq > turn.restoreSeq);
+  const later = all.filter((e) => e.seq > turn.restoreSeq);
+  const checked =
+    options.simulate === undefined
+      ? undefined
+      : simulateField(options.simulate);
+  const simulate = checked?.ok === true ? checked.value : undefined;
   const offline =
     (await copy(files, turnRefs, context.artifacts)).length > 0
       ? { reason: "artifact_missing" as const }
@@ -232,36 +258,23 @@ async function caseFiles(saving: Saving): Promise<
   if (prefix !== undefined) files.set("line0.json", prefix);
   files.set("model.json", modelScript(turn.events));
   files.set("stubs.json", stubs);
-  const snapshot = context.points.find((p) => p.seq === turn.restoreSeq);
-  files.set("case.json", {
-    name,
-    family: "log_fork_test",
-    kind: "stub",
-    description: `Saved from branch ${turn.input.branch_id}: replays the turn of input ${turn.input.event_id} with every mediated operation stubbed.`,
-    clock: { now: context.now },
-    model_script: "model.json",
-    ...(sandbox === undefined ? {} : { sandbox_script: "sandbox.json" }),
-    stub_script: "stubs.json",
-    ...(extensions === undefined
-      ? {}
-      : { extension_script: "extensions.json" }),
-    input:
-      turn.input.data.text === undefined ? {} : { text: turn.input.data.text },
-    expect: { must: options.expect.must, expect: options.expect.expect ?? [] },
-    ...(options.rubric === undefined ? {} : { rubric: options.rubric }),
-    ...(snapshot === undefined
-      ? {}
-      : {
-          snapshot: {
-            event_id: snapshot.event_id,
-            provider: snapshot.snapshot.provider,
-          },
-        }),
-    ...(offline === undefined
-      ? {}
-      : { offline: { runnable: false, ...offline } }),
-    ...(prefix === undefined ? {} : { line0: { sha256: sha256Hex(prefix) } }),
-  });
+  files.set(
+    "case.json",
+    caseMeta({
+      name,
+      turn,
+      now: context.now,
+      expect: options.expect,
+      rubric: options.rubric,
+      simulate,
+      blocked,
+      sandbox,
+      extensions,
+      line0: prefix,
+      snapshot: context.points.find((p) => p.seq === turn.restoreSeq),
+      offline,
+    }),
+  );
   return ok({ files, offline });
 }
 

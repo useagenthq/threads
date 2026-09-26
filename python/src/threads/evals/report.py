@@ -18,6 +18,7 @@ _FRAMEWORK_ONLY: Final = " (framework checks only; pass --agent to detect change
 @dataclass(frozen=True, slots=True)
 class Totals:
     agent_calls: int
+    user_calls: int
     judge_calls: int
     cost: Cost | None
     live: bool
@@ -52,7 +53,19 @@ def _count(cases: Sequence[Mapping[str, JsonValue]], status: str) -> int:
     return sum(1 for c in cases if c.get("status") == status)
 
 
-def _summary(counts: Mapping[str, int], t: Totals) -> str:
+def _simulations(cases: Sequence[Mapping[str, JsonValue]]) -> str:
+    """`<name>: <messages> messages, <ended>` for each simulated case (lane 32, E)."""
+    out = ""
+    for c in cases:
+        sim = c.get("simulation")
+        if not isinstance(sim, dict):
+            continue
+        ended = str(sim.get("ended", "")).replace("_", " ", 1)
+        out += f"; {c.get('name')}: {sim.get('messages')} messages, {ended}"
+    return out
+
+
+def _summary(counts: Mapping[str, int], t: Totals, cases: Sequence[Mapping[str, JsonValue]]) -> str:
     parts = [f"{counts['passed']} passed", f"{counts['failed']} failed"]
     if counts["stale"]:
         parts.append(f"{counts['stale']} stale")
@@ -65,8 +78,12 @@ def _summary(counts: Mapping[str, int], t: Totals) -> str:
     line = ", ".join(parts)
     if t.live:
         spent = "cost unknown" if t.cost is None else dollars(t.cost.known_nanos)
-        calls = t.agent_calls + t.judge_calls
-        line += f"; {calls} model calls ({t.agent_calls} agent, {t.judge_calls} judge), {spent}"
+        calls = t.agent_calls + t.user_calls + t.judge_calls
+        line += (
+            f"; {calls} model calls ({t.agent_calls} agent, "
+            f"{t.user_calls} user, {t.judge_calls} judge), {spent}"
+        )
+    line += _simulations(cases)
     if t.aborted is not None:
         line += f"; aborted: {t.aborted.get('code')} ({t.aborted.get('model')})"
     return line if t.agents else line + _FRAMEWORK_ONLY
@@ -86,10 +103,14 @@ def report(cases: Sequence[Mapping[str, JsonValue]], t: Totals) -> EvalReport:
     body: dict[str, JsonValue] = {
         "format": "threads-eval",
         "format_version": 1,
-        "summary": _summary(counts, t),
+        "summary": _summary(counts, t, cases),
         "ok": not failed and not strictly and t.aborted is None,
         **counts,
-        "model_calls": {"agent": t.agent_calls, "judge": t.judge_calls},
+        "model_calls": {
+            "agent": t.agent_calls,
+            "user": t.user_calls,
+            "judge": t.judge_calls,
+        },
         "cost": None if t.cost is None else t.cost.model_dump(mode="json"),
         "cases": [dict(c) for c in cases],
     }

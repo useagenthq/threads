@@ -2,9 +2,11 @@ import { z } from "zod";
 import {
   CaseLine0,
   CaseOffline,
+  CaseSimulate,
   CaseSnapshot,
   ExtensionScript,
   SandboxResults,
+  SimulateBlocked,
 } from "../src/evals/files";
 import {
   ChildThreadSource,
@@ -15,7 +17,13 @@ import {
   ScriptableEvent,
   ScriptableSource,
 } from "../src/evals/kinds";
-import { EvalReport, JudgeInput, Rubric, Verdicts } from "../src/evals/schema";
+import {
+  EvalReport,
+  JudgeInput,
+  Rubric,
+  UserTurn,
+  Verdicts,
+} from "../src/evals/schema";
 import { type Node, tidy } from "./spec-schema";
 
 // Builds spec/schema/eval.v1.schema.json from the Zod eval shapes. A def the event schema
@@ -52,7 +60,10 @@ export function evalSchema(events: Node): Node {
       Rubric,
       SandboxResults,
       ExtensionScript,
+      UserTurn,
       CaseOffline,
+      CaseSimulate,
+      SimulateBlocked,
       CaseSnapshot,
       CaseLine0,
       RecordedHook,

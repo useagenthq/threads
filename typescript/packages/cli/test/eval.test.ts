@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { sqlite } from "@threads/core";
 import { run } from "../src";
 import { connects, support } from "./fixtures/eval-agents";
+import { support as simulated } from "./fixtures/eval-simulated";
 
 // `threads eval`, in process, so the test preload's model-request guard covers it (spec lane 22,
 // test 10). No test starts a `threads` subprocess.
@@ -33,6 +34,29 @@ async function casesWith(...names: readonly string[]): Promise<string> {
     });
     if (!saved.ok) throw new Error(saved.error.message);
   }
+  return dir;
+}
+
+/** One saved case whose live run is a conversation with a model playing the user. */
+async function simulatedCase(): Promise<string> {
+  const dir = mkdtempSync(join(tmpdir(), "threads-eval-cli-"));
+  dirs.push(dir);
+  const ran = await simulated().run("Where is order 42?", {
+    store: sqlite(":memory:"),
+  });
+  const saved = await ran.thread.saveCase("a-case", {
+    expect: { must: [{ type: "tool_call", data: { name: "lookup_order" } }] },
+    externalEffects: "stub",
+    rubric: ["Quotes the 30-day window"],
+    simulate: {
+      kind: "model",
+      persona: "A polite but persistent customer.",
+      goal: "Get a refund, or a clear reason why not.",
+      maxMessages: 3,
+    },
+    dir,
+  });
+  if (!saved.ok) throw new Error(saved.error.message);
   return dir;
 }
 
@@ -141,6 +165,35 @@ describe("threads eval", () => {
     expect((await cli(["eval", "--cases", join(dir, "nope")])).code).toBe(2);
   });
 
+  test("a simulated case needs the module to export user, and the preflight says so", async () => {
+    const dir = await simulatedCase();
+    const noUser = await cli([
+      "eval",
+      "--cases",
+      dir,
+      "--live",
+      "--agent",
+      join(FIXTURES, "eval-agents.ts"),
+    ]);
+    expect([noUser.code, noUser.err.trim()]).toEqual([
+      2,
+      `export user from ${join(FIXTURES, "eval-agents.ts")}`,
+    ]);
+    const got = await cli([
+      "eval",
+      "--cases",
+      dir,
+      "--live",
+      "--agent",
+      join(FIXTURES, "eval-simulated.ts"),
+    ]);
+    expect(got.out.split("\n")[0]).toBe(
+      'live: 1 cases (1 simulated, up to 3 user messages), budget {"max_model_requests":20} per conversation and per judge run',
+    );
+    expect(got.code).toBe(0);
+    expect(got.out).toContain("a-case: 2 messages, user done");
+  });
+
   test("--live grades with the module's judge; without --store its threads are not kept", async () => {
     const dir = await casesWith("a-case");
     const got = await cli([
@@ -156,7 +209,7 @@ describe("threads eval", () => {
       'live: 1 cases, up to 2 model runs (agent + judge), budget {"max_model_requests":10} per run',
       "PASS a-case",
       "judge threads were not kept; pass --store to keep them",
-      "1 passed, 0 failed; 3 model calls (2 agent, 1 judge), cost unknown",
+      "1 passed, 0 failed; 3 model calls (2 agent, 0 user, 1 judge), cost unknown",
       "",
     ]);
   });

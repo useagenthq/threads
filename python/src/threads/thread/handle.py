@@ -48,6 +48,7 @@ from threads.thread.authority import Checked, refused
 from threads.thread.branch_list import listed
 from threads.thread.bundle import ExportedBundle, export_bundle
 from threads.thread.case import CaseExpectation, CaseRequest, SavedCase, save_case
+from threads.thread.case_simulate import Simulate
 from threads.thread.control import Accepted, Controlled
 from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch
 from threads.thread.frozen_stubs import freeze_after
@@ -166,16 +167,18 @@ class Thread:
         external_effects: Literal["stub"],
         at: EventId | None = None,
         rubric: Sequence[str] | None = None,
+        simulate: Simulate | None = None,
         dir: str = "cases",
     ) -> Ok[SavedCase] | Err[ParseError]:
         """Writes `<dir>/<name>/`: any completed turn (the last by default; `at` names its
         user_input, or a snapshot before it) as a case the eval runner reruns offline, with the
-        assertion and the rubric a live eval's judge grades against. No snapshot is needed."""
+        assertion and the rubric a live eval's judge grades against. With `simulate` the live run
+        is a whole conversation from that turn (spec lane 32). No snapshot is needed."""
         read = await self._read()
         if isinstance(read, Err):
             return read
         criteria = None if rubric is None else tuple(rubric)
-        request = CaseRequest(name, expect, external_effects, at, dir, criteria)
+        request = CaseRequest(name, expect, external_effects, at, dir, criteria, simulate)
         return await save_case(await open_store(self.store), read.value, self.sandbox, request)
 
     async def export(self, path: str) -> "Ok[ExportedBundle] | Err[ParseError]":

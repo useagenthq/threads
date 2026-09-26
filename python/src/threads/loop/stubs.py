@@ -65,6 +65,8 @@ class StubGateway:
         self._seen: Counter[tuple[str, str]] = Counter()
         self.consumed: int = 0
         self.unmatched: int = 0
+        self.first_unmatched: str | None = None
+        """The tool of the first call no stub answered, for `unmatched_external_op`."""
 
     @property
     def left(self) -> int:
@@ -87,6 +89,8 @@ class StubGateway:
                 self.consumed += 1
                 return Output(stub.output, stub.is_error)
         self.unmatched += 1
+        if self.first_unmatched is None:
+            self.first_unmatched = call.spec.name
         return NotSent(unmatched=True)
 
     async def lookup(self, call: Invocation) -> LookupResult[str]:
@@ -97,3 +101,7 @@ class StubGateway:
 
     def provider_now(self) -> int | None:
         return None
+
+
+type Stubs = tuple[Stub, ...] | StubGateway
+"""Stub mode's recorded answers: fresh entries, or one gateway several runs share (lane 32)."""

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from cli.eval_modules.eval_agents import CONNECTS, support
+from cli.eval_modules.eval_simulated import support as simulated
 
 from threads import CaseExpectation, sqlite
 from threads.cli import main
@@ -114,6 +115,49 @@ def test_live_grades_with_the_modules_judge_and_keeps_no_threads(
         'budget {"max_model_requests":10} per run',
         "PASS a-case",
         "judge threads were not kept; pass --store to keep them",
-        "1 passed, 0 failed; 3 model calls (2 agent, 1 judge), cost unknown",
+        "1 passed, 0 failed; 3 model calls (2 agent, 0 user, 1 judge), cost unknown",
         "",
     ]
+
+
+def simulated_case(folder: Path) -> str:
+    """One saved case whose live run is a conversation with a model playing the user."""
+
+    async def body() -> None:
+        ran = await simulated().run("Where is order 42?", store=sqlite(":memory:"))
+        must = CaseExpectation(must=({"type": "tool_call", "data": {"name": "lookup_order"}},))
+        saved = await ran.thread.save_case(
+            "a-case",
+            expect=must,
+            external_effects="stub",
+            rubric=("Quotes the 30-day window",),
+            simulate={
+                "kind": "model",
+                "persona": "A polite but persistent customer.",
+                "goal": "Get a refund, or a clear reason why not.",
+                "max_messages": 3,
+            },
+            dir=str(folder),
+        )
+        assert isinstance(saved, Ok), saved
+
+    asyncio.run(body())
+    return str(folder)
+
+
+def test_a_simulated_case_needs_the_module_to_export_user(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    folder = simulated_case(tmp_path)
+    plain = str(MODULES / "eval_agents.py")
+    missing = cli(["eval", "--cases", folder, "--live", "--agent", plain], capsys)
+    assert missing[0] == 2  # noqa: PLR2004 - a usage error
+    assert missing[2] == f"export user from {plain}\n"
+    agents = str(MODULES / "eval_simulated.py")
+    code, printed, _ = cli(["eval", "--cases", folder, "--live", "--agent", agents], capsys)
+    assert printed.split("\n")[0] == (
+        "live: 1 cases (1 simulated, up to 3 user messages), "
+        'budget {"max_model_requests":20} per conversation and per judge run'
+    )
+    assert code == 0
+    assert "a-case: 2 messages, user done" in printed

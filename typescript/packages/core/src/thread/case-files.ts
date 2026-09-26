@@ -19,15 +19,17 @@ export type ModelScriptFile = {
   >[];
 };
 
-export type StubScriptFile = {
-  readonly stubs: readonly {
-    readonly tool: string;
-    readonly args_hash: string;
-    readonly occurrence: number;
-    readonly output: string;
-    readonly is_error: boolean;
-  }[];
+export type StubEntry = {
+  readonly tool: string;
+  readonly args_hash: string;
+  readonly occurrence: number;
+  readonly output: string;
+  readonly is_error: boolean;
+  /** A simulated case's prefix effect: offline reruns skip it (spec lane 32, A.3). */
+  readonly scope?: "prefix";
 };
+
+export type StubScriptFile = { readonly stubs: readonly StubEntry[] };
 
 /** The recorded model responses, in order: the case's model.json. */
 export function modelScript(turn: readonly KnownEvent[]): ModelScriptFile {
@@ -98,33 +100,51 @@ export function argsHash(input: Of<"tool_call">["data"]["input"]): string {
 }
 
 /**
- * Every mediated call (one with effect events) as a stub, by (tool, args_hash, occurrence), each
- * holding its complete verified output. A stub fork freezes this as an artifact and a saved case
- * writes it as stubs.json, so both carry the same guarantee.
+ * Every mediated call (one with effect events) of a slice of the log, by (tool, args_hash), each
+ * holding its complete verified output. Occurrences count within the slice; a caller that joins
+ * two slices renumbers them (spec lane 32, A.3).
+ */
+export async function stubsOf(
+  events: readonly KnownEvent[],
+  artifacts: ArtifactStore,
+): Promise<Result<readonly StubEntry[], LogError>> {
+  const stubs: StubEntry[] = [];
+  for (const e of events) {
+    if (e.type !== "tool_call" || !begun(events, e.data.call_id)) continue;
+    const output = await outputOf(events, e.data.call_id, artifacts);
+    if (!output.ok) return output;
+    stubs.push({
+      tool: e.data.name,
+      args_hash: argsHash(e.data.input),
+      occurrence: 0,
+      output: output.value,
+      is_error: resultOf(events, e.data.call_id)?.data.is_error ?? false,
+    });
+  }
+  return ok(numbered(stubs));
+}
+
+/** occurrence counts earlier entries with the same (tool, args_hash), in log order. */
+export function numbered(stubs: readonly StubEntry[]): readonly StubEntry[] {
+  const seen = new Map<string, number>();
+  return stubs.map((s) => {
+    const key = `${s.tool}\n${s.args_hash}`;
+    const occurrence = seen.get(key) ?? 0;
+    seen.set(key, occurrence + 1);
+    return { ...s, occurrence };
+  });
+}
+
+/**
+ * The turn's stubs as one script. A stub fork freezes this as an artifact and a saved case writes
+ * it as stubs.json, so both carry the same guarantee.
  */
 export async function stubScript(
   turn: readonly KnownEvent[],
   artifacts: ArtifactStore,
 ): Promise<Result<StubScriptFile, LogError>> {
-  const seen = new Map<string, number>();
-  const stubs: StubScriptFile["stubs"][number][] = [];
-  for (const e of turn) {
-    if (e.type !== "tool_call" || !begun(turn, e.data.call_id)) continue;
-    const hash = argsHash(e.data.input);
-    const key = `${e.data.name}\n${hash}`;
-    const occurrence = seen.get(key) ?? 0;
-    seen.set(key, occurrence + 1);
-    const output = await outputOf(turn, e.data.call_id, artifacts);
-    if (!output.ok) return output;
-    stubs.push({
-      tool: e.data.name,
-      args_hash: hash,
-      occurrence,
-      output: output.value,
-      is_error: resultOf(turn, e.data.call_id)?.data.is_error ?? false,
-    });
-  }
-  return ok({ stubs });
+  const built = await stubsOf(turn, artifacts);
+  return built.ok ? ok({ stubs: built.value }) : built;
 }
 
 /** The script's artifact bytes: RFC 8785 canonical JSON, the same bytes in both languages. */

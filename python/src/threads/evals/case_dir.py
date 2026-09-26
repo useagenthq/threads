@@ -13,12 +13,14 @@ from pydantic import Field, JsonValue, StrictInt, StrictStr, TypeAdapter, Valida
 from threads._generated.eval_v1 import (
     CaseLine0,
     CaseOffline,
+    CaseSimulate,
     CaseSnapshot,
     EventMatcher,
     ExtensionScript,
     Rubric,
     SandboxResult,
     SandboxResults,
+    SimulateBlocked,
 )
 from threads._strict_model import StrictModel
 from threads.evals.compare import Wire
@@ -58,6 +60,8 @@ class CaseFile(StrictModel):
     input: _Input | None = None
     expect: _Expect
     rubric: Rubric | None = None
+    simulate: Annotated[CaseSimulate, Field(discriminator="kind")] | None = None
+    simulate_blocked: SimulateBlocked | None = None
     snapshot: CaseSnapshot | None = None
     offline: CaseOffline | None = None
     line0: CaseLine0 | None = None

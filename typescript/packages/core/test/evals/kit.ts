@@ -5,11 +5,14 @@ import { z } from "zod";
 import {
   type Agent,
   agent,
+  type EventMatcher,
   type Extension,
   type Model,
+  type SaveCaseOptions,
   type Store,
   scriptedModel,
   sqlite,
+  type Thread,
   type Tool,
   tool,
 } from "../../src";
@@ -143,6 +146,67 @@ export async function saveRefund(
     externalEffects: "stub",
     ...(rubric === undefined ? {} : { rubric }),
     dir,
+  });
+  if (!saved.ok) throw new Error(saved.error.message);
+  return saved.value.path;
+}
+
+/**
+ * The simulated user's replies, in order: each is one structured UserTurn output. A string is a
+ * message it sends; `{done: true}` is the user stopping. Call ids are unique per thread.
+ */
+export function userReplies(
+  replies: readonly (
+    | string
+    | { readonly message?: string; readonly done: true }
+    | { readonly raw: Record<string, unknown> }
+  )[],
+): readonly Reply[] {
+  return replies.map((r, i) => {
+    const output =
+      typeof r === "string"
+        ? { message: r, done: false }
+        : "raw" in r
+          ? r.raw
+          : { message: r.message ?? "", done: true };
+    return use("final_output", output, `u${i + 1}`);
+  });
+}
+
+export type SaveOptions = Omit<
+  SaveCaseOptions,
+  "expect" | "externalEffects" | "dir"
+> & { readonly must?: EventMatcher };
+
+/**
+ * Runs `inputs` in order on one thread and saves the last turn as <dir>/<name>. Earlier inputs
+ * become the case's prefix, which is what a simulated live run continues or re-drives.
+ */
+export async function saveTurns(
+  dir: string,
+  name: string,
+  target: Agent,
+  inputs: readonly string[],
+  options: SaveOptions = {},
+): Promise<string> {
+  const store = memory();
+  let thread: Thread | undefined;
+  for (const text of inputs) {
+    const run = await target.run(
+      text,
+      thread === undefined ? { store } : { store, thread },
+    );
+    if (run.status !== "completed")
+      throw new Error(`a saved turn completes: ${run.status}`);
+    thread = run.thread;
+  }
+  if (thread === undefined) throw new Error("saveTurns needs an input");
+  const { must, ...rest } = options;
+  const saved = await thread.saveCase(name, {
+    expect: { must: [must ?? { type: "turn_completed" }] },
+    externalEffects: "stub",
+    dir,
+    ...rest,
   });
   if (!saved.ok) throw new Error(saved.error.message);
   return saved.value.path;

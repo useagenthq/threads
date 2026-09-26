@@ -32,12 +32,21 @@ def block_model_requests(*, blocked: bool = True) -> None:
     _blocked = blocked
 
 
+def blocked_model(model: Model) -> str | None:
+    """The model as the block would name it, or None when it is allowed. Counts no request, so a
+    caller can refuse a model before it ever runs (the eval runner's simulated user)."""
+    if isinstance(model, ScriptedModel) or not _blocked:
+        return None
+    ref = model.info.model
+    return f"{ref.provider}/{ref.name}"
+
+
 def check(model: Model) -> None:
     """Raises before dispatch when the guard is on and the model is not scripted: a test that
     reaches for a real provider is a bug, never a skipped request."""
     if isinstance(model, ScriptedModel):
         return
     _seen[0] += 1
-    if _blocked:
-        ref = model.info.model
-        raise ModelBlockedError(f"{ref.provider}/{ref.name}")
+    named = blocked_model(model)
+    if named is not None:
+        raise ModelBlockedError(named)
