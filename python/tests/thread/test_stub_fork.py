@@ -276,6 +276,7 @@ def test_a_stub_fork_whose_parent_artifact_is_gone_fails_and_creates_no_child(
 
     asyncio.run(main())
 
+
 ARGS_HASH = "fcd1ccec08db6f78a81fee6c26da9e6b8d0d3ba58b4403713fffebcfaa6cf119"
 """sha256 of the canonical {"text":"x"} the recorded send was called with."""
 
