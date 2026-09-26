@@ -17,6 +17,7 @@ from threads.log import Event, JsonObject, ParseError, Principal
 from threads.loop.model import LookupResult
 from threads.result import Err, Ok
 from threads.secrets import Secret
+from threads.thread.control_items import Control
 
 type LookupCapability = Literal["none", "nonfinal", "final"]
 
@@ -77,20 +78,14 @@ class Decision(StrictModel):
     decision: Literal["grant", "deny"]
 
 
-class Control(StrictModel):
-    kind: Literal["control"]
-    principal: Principal
-    address: str = Field(min_length=1)
-    item_key: str = Field(min_length=1)
-    command: Literal["cancel", "stop_when_idle"]
-
-
 class Ignore(StrictModel):
     """Delivered but not for the agent: the bot's own message, a reaction, a status update."""
 
     kind: Literal["ignore"]
 
 
+# Control is core's (threads.thread.control_items): the `api` channel's own control item has the
+# same shape, and the loop that applies one never imports the host.
 type Inbound = Annotated[Message | Decision | Control | Ignore, Field(discriminator="kind")]
 """An item of a verified batch. Every item but ignore carries the sender as a principal, the
 conversation, and an item key: the provider's per-item id, else `<delivery_id>#<index>`."""

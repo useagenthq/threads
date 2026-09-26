@@ -12,6 +12,7 @@ from threads._generated.host_api_v1 import (
     Answer,
     ApprovalDecision,
     BranchRef,
+    CancelAccepted,
     ForkRequest,
     ModeChange,
     ParkedResolution,
@@ -150,7 +151,11 @@ def _cancel(host: Host) -> OnThread:
     async def handle(_request: Request, principal: Principal, thread: Thread) -> Response:
         done = await thread.cancel(principal)
         await host.resume(thread)
-        return appended(done)
+        if isinstance(done, Err):
+            return failed(done.error)
+        # 202: another process holds the branch and applies the durable item at its next step.
+        code = 202 if isinstance(done.value, CancelAccepted) else 200
+        return JSONResponse(to_json(done.value), status_code=code)
 
     return handle
 

@@ -3,6 +3,7 @@ import { ObserverPump } from "../hooks/observers";
 import { type LoopConfig, type LoopEnd, resume } from "../loop";
 import { knownEvents } from "../reduce";
 import { type EventDraft, keepLease, type Writer } from "../store";
+import { controlItemsPending } from "../thread/control-items";
 import { type Thread, threadHandle } from "../thread/handle";
 import { bindBuiltins } from "../tools";
 import type { LogError } from "../verify";
@@ -125,6 +126,7 @@ export async function execute<Deps, Output>(
       ...scopeOf(plan),
       ledger: log.budgets,
       inherited: inheritedOf(plan),
+      controlItems: () => controlItemsPending(log.driver, thread.id),
       ...(builtin.readFile === undefined ? {} : { readFile: builtin.readFile }),
       ...(child === undefined ? {} : { child }),
       ...(team === undefined ? {} : { team: team.runtime }),

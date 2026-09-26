@@ -45,6 +45,8 @@ export type RunEnv<Deps> = {
   readonly inherited: readonly Covering[];
   /** A team's lead or member: what its team tools and settlements need. */
   readonly team?: TeamRuntime;
+  /** Whether a durable control item waits for this thread (lane 29F, Thread.cancel). */
+  readonly controlItems?: () => Promise<boolean>;
   /** A live eval's recorded stubs: every mediated call answers from them, this tree's too. */
   readonly stub?: StubGateway;
 };
@@ -110,6 +112,9 @@ export function loopConfig<Deps, Output>(
     budgets: { ledger: env.ledger, inherited: env.inherited },
     ...(readFile === undefined ? {} : { readFile }),
     ...(env.team === undefined ? {} : { team: env.team }),
+    ...(env.controlItems === undefined
+      ? {}
+      : { controlItems: env.controlItems }),
     ...(env.stub === undefined ? {} : { stub: env.stub }),
     ...(def.output === undefined ? {} : { output: def.output }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),

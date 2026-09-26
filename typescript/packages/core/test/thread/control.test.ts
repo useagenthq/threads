@@ -308,7 +308,6 @@ describe("cancel, mode, model, questions and parked effects", () => {
       const [pending] = unwrap(await thread.pendingApprovals());
       if (pending === undefined) throw new Error("one open challenge");
       for (const done of [
-        await thread.cancel(alice),
         await thread.approve(pending.challenge_id, alice),
         await thread.setMode("accept_edits", alice),
         await thread.resolveParked("k", "assume_done", alice),
@@ -317,6 +316,12 @@ describe("cancel, mode, model, questions and parked effects", () => {
           ok: false,
           error: { code: "branch_busy" },
         });
+      // cancel is the exception (lane 29F): a lease elsewhere makes it a durable inbox item the
+      // holder applies, so it is accepted and still appends nothing here.
+      expect(await thread.cancel(alice)).toMatchObject({
+        ok: true,
+        value: { item_key: expect.any(String) },
+      });
       expect((await events(store, thread)).length).toBe(before);
     } finally {
       await other.release();

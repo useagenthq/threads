@@ -17,7 +17,7 @@ from threads import (
     scripted_model,
     tool,
 )
-from threads._generated.host_api_v1 import SettingsChange
+from threads._generated.host_api_v1 import CancelAccepted, SettingsChange
 from threads.agents.run import execute
 from threads.agents.store import LIVE, now_ms, open_store, scoped, sqlite
 from threads.log import (
@@ -178,7 +178,8 @@ def test_a_control_reaches_a_run_in_flight_through_its_writer() -> None:
 
 def test_a_control_through_a_writer_that_lost_its_lease_is_branch_busy() -> None:
     """The run in flight here lost the branch to another holder: the control is refused as
-    branch_busy, the same answer as a lease held elsewhere, never a writer's internal code."""
+    branch_busy, the same answer as a lease held elsewhere, never a writer's internal code.
+    cancel is the exception (lane 29F): it becomes a durable item the branch's holder applies."""
 
     async def main() -> None:
         store = sqlite(":memory:")
@@ -189,11 +190,14 @@ def test_a_control_through_a_writer_that_lost_its_lease_is_branch_busy() -> None
         await taken.value.release()
         LIVE[done.thread.branch] = taken.value
         try:
-            refused = await done.thread.cancel(LOCAL_OPERATOR)
+            refused = await done.thread.set_mode("plan", LOCAL_OPERATOR)
+            accepted = await done.thread.cancel(LOCAL_OPERATOR)
         finally:
             LIVE.pop(done.thread.branch)
         assert isinstance(refused, Err)
         assert refused.error.code == "branch_busy"
+        assert isinstance(accepted, Ok)
+        assert isinstance(accepted.value, CancelAccepted)
 
     asyncio.run(main())
 

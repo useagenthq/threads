@@ -403,7 +403,7 @@ async def resolve_parked(
 
 ### cancel
 
-**Phase 2, not yet available** (lane 29-teams-phase2-29f): Until then a lease another process holds is branch_busy (HTTP 409), not CancelAccepted (HTTP 202). Durable cancel_requested; unsettled effects park. Tree-wide: every descendant subagent without agent_finished gets cancel_requested&#123;scope: tree&#125; too, recursively, and the parent records each child's agent_finished&#123;cancelled&#125; before its own cancelled. A control appends through the run's own writer when this process runs the branch, or takes the branch lease for the one append (Appended). When another process holds the lease it writes a durable inbox control item instead, which the holder applies at its next step boundary or dispatch fence (CancelAccepted, with the item's key). Authority is checked before either is written.
+Durable cancel_requested; unsettled effects park. Tree-wide: every descendant subagent without agent_finished gets cancel_requested&#123;scope: tree&#125; too, recursively, and the parent records each child's agent_finished&#123;cancelled&#125; before its own cancelled. A control appends through the run's own writer when this process runs the branch, or takes the branch lease for the one append (Appended). When another process holds the lease it writes a durable inbox control item instead, which the holder applies at its next step boundary or dispatch fence (CancelAccepted, with the item's key). Authority is checked before either is written.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">

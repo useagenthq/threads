@@ -18,6 +18,7 @@ import {
   resolveParked,
   type SettingsChange,
 } from "./control";
+import { type CancelAccepted, writeControlItem } from "./control-items";
 import { decide } from "./decide";
 import {
   type BranchInfo,
@@ -58,7 +59,14 @@ export type ThreadControl = {
     resolution: "assume_done" | "assume_not_done",
     principal: Principal,
   ) => Controlled;
-  readonly cancel: (principal: Principal) => Controlled;
+  /**
+   * The durable barrier, tree-wide. Appended here when this process may take the branch
+   * (`Appended`); when another process holds it, a durable control item its holder applies at
+   * its next step boundary (`CancelAccepted`), never `branch_busy`.
+   */
+  readonly cancel: (
+    principal: Principal,
+  ) => Promise<Result<Appended | CancelAccepted, ControlError>>;
   readonly setModel: (
     settings: SettingsChange,
     principal: Principal,
@@ -139,8 +147,21 @@ export function controls(
       ),
     cancel: async (principal) => {
       const done = await control(log, branchId, principal, cancel(principal));
-      if (done.ok) await cancelChildren(log, threadId, principal);
-      return done;
+      // Authority is checked here, before either is written: applying an item never checks
+      // again. control() refuses a principal of another tenant before it touches the branch.
+      if (!done.ok && done.error.code !== "branch_busy") return done;
+      const accepted = done.ok
+        ? undefined
+        : await writeControlItem(
+            log.driver,
+            log.tenant,
+            threadId,
+            principal,
+            "cancel",
+            log.now(),
+          );
+      await cancelChildren(log, threadId, principal);
+      return accepted === undefined ? done : ok(accepted);
     },
     setModel: (settings, principal) =>
       control(log, branchId, principal, setModel(settings, principal)),

@@ -13274,8 +13274,7 @@
             "$ref": "#/components/responses/CancelError"
           }
         },
-        "summary": "Cancel a thread",
-        "description": "**Phase 2, not yet available** (lane 29-teams-phase2-29f): Until then a lease another process holds is branch_busy (HTTP 409), not CancelAccepted (HTTP 202)."
+        "summary": "Cancel a thread"
       }
     },
     "/v1/threads/{thread_id}/settings": {

@@ -19,8 +19,6 @@
   {"name": "RawResponse", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
   {"name": "SandboxAuthority", "lang": "py", "kind": "missing", "lane": "01-api-surface-gate"},
   {"name": "SandboxContext", "lang": "py", "kind": "missing", "lane": "01-api-surface-gate"},
-  {"name": "Thread.cancel", "lang": "py", "kind": "changed", "lane": "29-teams-phase2-29f"},
-  {"name": "Thread.cancel", "lang": "ts", "kind": "changed", "lane": "29-teams-phase2-29f"},
   {"name": "VerifiedDelivery", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
   {"name": "assertNever", "lang": "py", "kind": "missing", "lane": "90-ma-p1"},
   {"name": "host.members", "lang": "py", "kind": "missing", "lane": "91-ma-p2"},

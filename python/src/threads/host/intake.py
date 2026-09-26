@@ -230,16 +230,20 @@ class ChannelIntake:
                 installation=row.installation_id,
                 companion=consume,
             )
-        elif item.command == "cancel":
-            done = await tree.cancel_tree(thread.store, thread.branch, item.principal, consume)
         else:
+            # The barrier itself, not Thread.cancel's durable path: an item this host can't apply
+            # stays queued (branch_busy below), so applying one never queues a second.
+            hard = item.command == "cancel"
             done = await control.cancel(
                 thread.store,
                 thread.branch,
                 item.principal,
-                kind="stop_when_idle",
+                kind="cancel_requested" if hard else "stop_when_idle",
                 companion=consume,
             )
+            # Only a hard cancel reaches the tree; a soft stop lets running children finish.
+            if hard and isinstance(done, Ok):
+                await tree.cancel_children(thread.store, thread.branch, item.principal)
         if isinstance(done, Err) and done.error.code == "branch_busy":
             return None
         if isinstance(done, Err):

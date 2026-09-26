@@ -255,10 +255,12 @@ export async function cancel(call: Call): Promise<Response> {
   const o = await opened(call);
   if (o instanceof Response) return o;
   const done = await o.thread.cancel(call.principal);
-  if (!done.ok)
-    return routeFailure(["forbidden", "not_found", "branch_busy"], done.error);
+  if (!done.ok) return routeFailure(["forbidden", "not_found"], done.error);
   await resumeThread(call.ctx, call.principal, o.thread);
-  return json(200, done.value);
+  // 202: another process holds the branch and applies the durable item at its next step.
+  return "item_key" in done.value
+    ? json(202, done.value)
+    : json(200, done.value);
 }
 
 const SETTING_CODES = [
