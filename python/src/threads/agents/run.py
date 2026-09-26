@@ -364,7 +364,7 @@ async def _stubs(
     ref = stub_fork_ref(chain)
     if ref is not None:
         data = await sq.get_artifact(ref.sha256)
-        return data if isinstance(data, Err) else frozen_stubs(chain, data.value)
+        return data if isinstance(data, Err) else frozen_stubs(ref, data.value)
     if launch is not None and launch.stubs is not None:
         return Ok(launch.stubs)
     return Ok(given)
