@@ -187,6 +187,20 @@ describe("the declared prefix is byte-equal within a settings epoch (invariant 5
 });
 
 describe("permissions, parking and setup errors", () => {
+  test("a malformed permission rule is a setup error", async () => {
+    const bot = agent({
+      model: scriptedModel({ responses: [] }),
+      permissions: { allow: ["b*(*)"] },
+    });
+    expect(await bot.check()).toEqual({
+      ok: false,
+      error: {
+        code: "permission_rule_invalid",
+        message: "'b*(*)': a tool pattern takes no specifier",
+      },
+    });
+  });
+
   test("an undeclared tool is unguarded: in default mode it asks and the run parks", async () => {
     const send = tool({
       name: "send_email",

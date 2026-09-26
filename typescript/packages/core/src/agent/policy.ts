@@ -4,6 +4,7 @@ import { canonicalize, type Policy, type ToolSpec } from "../log";
 import { FINAL_OUTPUT, RETRY_DEFAULTS } from "../loop";
 import { CONTEXT_DEFAULTS } from "../loop/policy";
 import { DEFAULT_PERMISSIONS } from "../permissions";
+import { permissionRuleError } from "../permissions/match";
 import { unchecked } from "../validate/json-schema";
 import { agreedCacheTtl } from "./cache-ttl";
 import { ConfigError } from "./errors";
@@ -30,6 +31,16 @@ export function finalOutput(
 }
 
 export function policy(o: PinOptions): Policy {
+  for (const rules of [
+    o.permissions.allow,
+    o.permissions.ask,
+    o.permissions.deny,
+  ])
+    for (const rule of rules ?? []) {
+      const error = permissionRuleError(rule);
+      if (error !== undefined)
+        throw new ConfigError("permission_rule_invalid", error);
+    }
   const models = [o.model, ...o.fallback].map((m) => m.info.limits);
   return {
     models: models.filter(
