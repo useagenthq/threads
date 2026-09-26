@@ -1,12 +1,6 @@
 {
-  "doc": "The hook_decision events each language's per-hook test produces (typescript/packages/core/test/hooks/each-hook.test.ts, python/tests/hooks/test_each_hook.py), normalized so the two can be compared. Whole events are not comparable: their ids and timestamps differ legitimately. A decision is normalized to its hook (the WIRE name, so on_stop_failure appears as stop_failure), decision, extension and reason, with every id field (call_id, request_event_id, input_event_id) replaced by the 0-based position, in that branch's log, of the event it names: for call_id, the tool_call event carrying it. A failed decision's reason is the host's own error text, worded differently in each language, so it is replaced by \"<failure>\"; its presence still says the failure was recorded with a reason. Keys are the hook names spec/api.json types.Hooks lists, one per case, in that order; the list is a case's whole branch, in log order, so a case spanning two runs carries both. known_divergences names the fields the two languages do not yet agree on: both tests drop exactly those before comparing, and each entry is a bug to close, not a rule.",
-  "known_divergences": [
-    {
-      "hook": "after_tool_batch",
-      "field": "request_event_id",
-      "note": "Python records the response the batch answers (loop/tool_gates.py after_batch, which reads it back to know the hook already ran); TypeScript records no id (loop/gates.ts batchGate, which uses the step window instead). The pinned log spec/conformance/cases/hooks-full-set-recorded holds the TypeScript shape. One of the two has to change; until it does, neither language's after_tool_batch decision is compared on this field."
-    }
-  ],
+  "doc": "The hook_decision events each language's per-hook test produces (typescript/packages/core/test/hooks/each-hook.test.ts, python/tests/hooks/test_each_hook.py), normalized so the two can be compared. Whole events are not comparable: their ids and timestamps differ legitimately. A decision is normalized to its hook (the WIRE name, so on_stop_failure appears as stop_failure), decision, extension and reason, with every id field (call_id, request_event_id, input_event_id) replaced by the 0-based position, in that branch's log, of the event it names: for call_id, the tool_call event carrying it. A failed decision's reason is the host's own error text, worded differently in each language, so it is replaced by \"<failure>\"; its presence still says the failure was recorded with a reason. Keys are the hook names spec/api.json types.Hooks lists, one per case, in that order; the list is a case's whole branch, in log order, so a case spanning two runs carries both. known_divergences names the fields the two languages do not yet agree on: both tests drop exactly those before comparing, and each entry is a bug to close, not a rule. It is empty: every hook's decision is compared on every field.",
+  "known_divergences": [],
   "decisions": {
     "session_start": [
       {
@@ -96,7 +90,8 @@
       {
         "hook": "after_tool_batch",
         "decision": "proceed",
-        "extension": "ops"
+        "extension": "ops",
+        "request_event_id": 2
       }
     ],
     "before_compact": [
