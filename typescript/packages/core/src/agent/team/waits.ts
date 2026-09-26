@@ -94,6 +94,7 @@ export async function waitFor(
       `a wait recorded ${done.status}${done.status === "refused" ? `{${done.code}}` : ""}`,
     );
   const waitId = done.status === "waiting" ? done.wait_id : opened;
+  if (waitId === "") throw new Error("a wait finished without opening");
   return drive(env, () => waitOutcome(env, env.ref.id, waitId));
 }
 

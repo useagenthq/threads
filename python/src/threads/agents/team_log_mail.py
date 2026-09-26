@@ -27,6 +27,8 @@ async def take_team_log_mail(sq: SqliteStore, team: str, mint: Mint | None) -> N
     if row is None:
         return
     branch = BranchId(row.team_log_branch_id)
+    # Read before the writer: a team that closes in between only means this pass dates the
+    # deadline step by the clock instead of closing every open ask, which the next pass does.
     closed = row.closed_at is not None
     if not await _work(sq, team, branch, closed=closed):
         return

@@ -60,11 +60,12 @@ async def operator(  # noqa: PLR0913 - the request and what it decides
     big: JsonValue = None,
 ) -> dict[str, JsonValue] | Literal["busy"]:
     """One operator request under the team-log writer: its key looked up, then `decide` with
-    the op. Returns what the op or the key's replay recorded, or busy."""
+    the op. The body is the method's parameters, an omitted option left out. Returns what the op
+    or the key's replay recorded, or busy."""
     team = await env.sq.run(lambda c: team_row(c, env.ref.id))
     if team is None:
         raise AssertionError(f"no team {env.ref.id}")
-    request = OperatorInput(uuid7(now_ms()), op, env.principal, body, key)
+    request = OperatorInput(uuid7(now_ms()), op, env.principal, present(body), key)
     branch = BranchId(team.team_log_branch_id)
 
     def run(tx: DecideTx, batch: Batch) -> dict[str, JsonValue]:

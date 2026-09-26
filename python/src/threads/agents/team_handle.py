@@ -32,7 +32,6 @@ from threads.agents.team_operator import (
     HandleEnv,
     code_in,
     operator,
-    present,
     stored_text,
 )
 from threads.agents.team_outcomes import ask_status
@@ -140,7 +139,7 @@ async def _start(
     )
     listed = {} if pinned is None else {agent: pinned.config_hash}
     plan = StartPlan(listed, env.limits, lambda _a: room, uuid7(now_ms()), got.resolved)
-    body = present({"agent": agent, "task": task, **_fields(chosen)})
+    body: dict[str, JsonValue] = {"agent": agent, "task": task, **_fields(chosen)}
     done = await operator(
         env, "start", body, key, lambda req, _t, _c: start(req, agent, task, plan)
     )

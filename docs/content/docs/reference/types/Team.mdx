@@ -166,7 +166,7 @@ async def ask(
   Makes a retry safe: the same key, principal and body return (or re-attach to) the first request's outcome. Scoped to this team and operation. Omitted: every call is a new request.
 </Field>
 
-**Throws** `StoreCorruptError` for a definition that can't run.
+**Throws** `StoreCorruptError` when the stored log doesn't verify.
 
 ### wait
 
@@ -215,7 +215,7 @@ async def wait(
   Makes a retry safe: the same key, principal and body return (or re-attach to) the first request's outcome. Scoped to this team and operation. Omitted: every call is a new request.
 </Field>
 
-**Throws** `StoreCorruptError` for a definition that can't run.
+**Throws** `StoreCorruptError` when the stored log doesn't verify.
 
 ### cancel
 
@@ -273,7 +273,7 @@ async def members() -> Sequence[TeamMember]
 </Tab>
 </Tabs>
 
-**Throws** `StoreCorruptError` for a definition that can't run.
+**Throws** `StoreCorruptError` when the stored log doesn't verify.
 
 ### events
 
@@ -334,4 +334,4 @@ async def ask_status(
   The ask, as team.ask or its outcome names it.
 </Field>
 
-**Throws** `StoreCorruptError` for a definition that can't run.
+**Throws** `StoreCorruptError` when the stored log doesn't verify.

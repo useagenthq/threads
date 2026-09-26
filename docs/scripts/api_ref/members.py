@@ -164,6 +164,12 @@ def fields_section(explain: Explain, container: str, fields: Obj, casing: str, k
     return "\n\n".join(items)
 
 
+_THROWN = {
+    "ConfigError": " for a definition that can't run",
+    "StoreCorruptError": " when the stored log doesn't verify",
+}
+
+
 def errors_line(spec: Obj) -> str:
     errors = obj(spec.get("returns") or {}).get("errors")
     lines: list[str] = []
@@ -172,8 +178,10 @@ def errors_line(spec: Obj) -> str:
         lines.append(f"**Returns an error value** with one of these codes: {codes}.")
     throws = spec.get("throws")
     if throws:
-        names = ", ".join(f"`{t}`" for t in array(throws))
-        lines.append(f"**Throws** {names} for a definition that can't run.")
+        thrown = [str(t) for t in array(throws)]
+        names = ", ".join(f"`{t}`" for t in thrown)
+        why = _THROWN.get(thrown[0], "") if len(thrown) == 1 else ""
+        lines.append(f"**Throws** {names}{why}.")
     return "\n\n".join(lines)
 
 

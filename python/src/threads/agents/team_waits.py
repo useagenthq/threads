@@ -50,9 +50,11 @@ async def ask_member(
 ) -> TeamAskResult:
     room = await _room(env, to)
     plan = AskPlan(env.limits, lambda _row: room, timeout_ms or TEAM_CONSTANTS.ask_wait_default_ms)
-    body: dict[str, JsonValue] = {"to": to.model_dump(mode="json"), "question": question}
-    if timeout_ms is not None:
-        body["timeout_ms"] = timeout_ms
+    body: dict[str, JsonValue] = {
+        "to": to.model_dump(mode="json"),
+        "question": question,
+        "timeout_ms": timeout_ms,
+    }
     done = await operator(
         env,
         "ask",
@@ -90,11 +92,11 @@ async def wait_for(
     # Refused before any writer, so, like busy, it records nothing.
     if distinct == "invalid_request":
         return TeamWaitRefused("invalid_request")
-    body: dict[str, JsonValue] = {"members": [to_json(m) for m in members]}
-    if mode is not None:
-        body["mode"] = mode
-    if timeout_ms is not None:
-        body["timeout_ms"] = timeout_ms
+    body: dict[str, JsonValue] = {
+        "members": [to_json(m) for m in members],
+        "mode": mode,
+        "timeout_ms": timeout_ms,
+    }
     # The wait's id is its request's mail id; a replay re-attaches with the first request's.
     opened: list[str] = []
 

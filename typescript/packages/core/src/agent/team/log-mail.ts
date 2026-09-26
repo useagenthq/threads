@@ -25,6 +25,8 @@ export async function takeTeamLogMail(
   const row = await reading(log.driver, (tx) => teamRow(tx, team));
   if (row === undefined) return;
   const branch = row.team_log_branch_id;
+  // Read before the writer: a team that closes in between only means this pass dates the
+  // deadline step by the clock instead of closing every open ask, which the next pass does.
   const closed = row.closed_at !== null;
   const [pending, open] = await reading(log.driver, async (tx) => [
     await pendingTo(tx, team, null),
