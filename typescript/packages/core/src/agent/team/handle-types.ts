@@ -1,5 +1,7 @@
+import type { z } from "zod";
 import type {
   AskId,
+  Budget,
   KnownEvent,
   MailId,
   MemberName,
@@ -147,8 +149,10 @@ export type TeamWaitOptions = Keyed & {
   readonly timeoutMs?: number;
 };
 
-/** team.start's options: a label on any start; the rest for a dynamic agent only. */
+/** team.start's options: a budget and a label on any start; the rest for a dynamic agent only. */
 export type TeamStartOptions = Keyed & {
+  /** The member's own budget, capped by policy. Omitted: the agent's own budget. */
+  readonly budget?: z.infer<typeof Budget>;
   readonly label?: string;
   readonly instructions?: string;
   readonly tools?: readonly string[];

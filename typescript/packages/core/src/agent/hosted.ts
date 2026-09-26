@@ -1,6 +1,8 @@
 import type { Principal } from "../log";
 import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
+import { type MessagePolicyRule, ruleStarts } from "../team/policy";
+import type { Agent } from "./agent";
 import { execute } from "./execute";
 import type { RunResult, ThreadRef } from "./result";
 import type { Hooks, RunOptions } from "./run";
@@ -53,6 +55,20 @@ export type HostRunner = {
   readonly sandbox: Sandbox | undefined;
   /** agent({handoffs}): a channel conversation continues with the target after a handoff. */
   readonly targets: readonly { readonly name: string }[];
+  /**
+   * The same runner under the host's messagePolicy: its rules decide this agent's team calls,
+   * give it its team tools and, with a start rule, make it a lead (lane 29C). One runner per
+   * host, so a thread's pin and its continuations see the same rules.
+   */
+  readonly withPolicy: (policy: AgentPolicy) => HostRunner;
+};
+
+/** One agent's side of host({messagePolicy}). */
+export type AgentPolicy = {
+  /** The rules with this agent as `from`, in configured order. */
+  readonly rules: readonly MessagePolicyRule[];
+  /** Every host agent, for a rule-only lead to start and rebind the ones its rules name. */
+  readonly agents: readonly Agent<never, unknown>[];
 };
 
 export function hosted<Deps, Output>(
@@ -74,5 +90,23 @@ export function hosted<Deps, Output>(
     approvers,
     sandbox: def.sandbox,
     targets: def.targets,
+    withPolicy: (policy) => hosted(ruled(def, policy), approvers),
   };
+}
+
+/**
+ * The definition under one host's rules: the rules themselves, and the agents a start rule names
+ * added to what start may pin, since a rule-only lead's own team is empty.
+ */
+function ruled<Deps, Output>(
+  def: Resolved<Deps, Output>,
+  policy: AgentPolicy,
+): Resolved<Deps, Output> {
+  if (policy.rules.length === 0) return def;
+  const starts = ruleStarts(policy.rules);
+  const added = policy.agents.filter(
+    (a) =>
+      starts.includes(a.name) && !def.members.some((m) => m.name === a.name),
+  );
+  return { ...def, rules: policy.rules, members: [...def.members, ...added] };
 }

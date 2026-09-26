@@ -24,6 +24,31 @@ type Parent = Pick<
   "thread_id" | "branch_id"
 >;
 
+/** The member_started a member's thread_started.parent names. */
+type Starter = Parent & { readonly event_id: string };
+
+/**
+ * The cap a start put on the member (Team.start's budget, capped by the messagePolicy rule's):
+ * member_started.budget, a budget of the member's own thread beside the one its pin carries. The
+ * pin is hashed, so a per-start cap can only live here.
+ */
+export async function startedCap(
+  log: LogStore,
+  parent: Starter | undefined,
+): Promise<readonly Covering[]> {
+  if (parent === undefined) return [];
+  const read = await log.read(parent.branch_id);
+  if (!read.ok) return [];
+  const started = knownEvents(read.value).find(
+    (e) => e.type === "member_started" && e.event_id === parent.event_id,
+  );
+  if (started?.type !== "member_started") return [];
+  const budget = started.data.budget;
+  return budget === undefined
+    ? []
+    : [{ budgetId: `start:${started.event_id}`, budget, scope: "thread" }];
+}
+
 /** Every ancestor thread's own budget, from the member's parent up to the root. */
 export async function ancestorsOf(
   log: LogStore,
@@ -88,6 +113,7 @@ export function recipientOf(
                 scope: "thread" as const,
               },
             ]),
+        ...got.cap,
         ...(await ancestorsOf(log, got.parent)),
       ],
     };
@@ -97,6 +123,8 @@ export function recipientOf(
 type Recipient = {
   readonly pinned: Pinned;
   readonly parent: Parent | undefined;
+  /** The member's start cap; empty while it is still starting (its start checked it already). */
+  readonly cap: readonly Covering[];
 };
 
 async function started(
@@ -108,7 +136,11 @@ async function started(
     ? knownEvents(read.value).find((x) => x.type === "thread_started")
     : undefined;
   if (e?.type !== "thread_started") return undefined;
-  return { pinned: e.data, parent: e.data.parent };
+  return {
+    pinned: e.data,
+    parent: e.data.parent,
+    cap: await startedCap(log, e.data.parent),
+  };
 }
 
 async function configured(
@@ -129,6 +161,7 @@ async function configured(
   return {
     pinned,
     parent: { thread_id: team.lead_thread_id, branch_id: lead.value },
+    cap: [],
   };
 }
 

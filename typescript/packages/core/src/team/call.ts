@@ -13,6 +13,7 @@ import type { Batch } from "./batch";
 import type { ReadText } from "./close";
 import type { InvalidDefinition } from "./dynamic";
 import type { PutText } from "./mail";
+import { type MessagePolicyRule, ruleFor } from "./policy";
 import { turnProvenance } from "./provenance";
 import type { PolicyOp, Request, Target } from "./request";
 import {
@@ -38,6 +39,8 @@ export type CallContext = {
   readonly call: EventOf<"tool_call">;
   readonly put: PutText;
   readonly read: ReadText;
+  /** The host's messagePolicy rules with the calling agent as `from`; none outside a host. */
+  readonly rules: readonly MessagePolicyRule[];
 };
 
 /** The caller as one team's member: its row there, its ref, its turn's provenance. */
@@ -106,16 +109,38 @@ export function causalOf(ctx: CallContext): {
   return { thread_id: ctx.call.thread_id, event_id: ctx.call.event_id };
 }
 
+/** What decided an op: the team's grant, a host rule that adds to it, or default deny. */
+export type Decision =
+  | { readonly source: "team" | "default" }
+  | {
+      readonly source: "message_policy";
+      readonly rule: { readonly from: string; readonly to: string };
+    };
+
 /**
- * Phase 1 policy: the team's grant (source team), else default deny, which refuses forbidden.
- * The decision is recorded either way.
+ * The decision order (spec/api.json host.message_policy): the team's grant, then the host's
+ * rules, which only add, then default deny.
  */
+export function decision(
+  ctx: CallContext,
+  caller: Caller,
+  op: PolicyOp,
+  target: string,
+): Decision {
+  if (granted(ctx, caller, op, target)) return { source: "team" };
+  const rule = ruleFor(ctx.rules, caller.row.agent, target, op);
+  if (rule === undefined) return { source: "default" };
+  return { source: "message_policy", rule: { from: rule.from, to: rule.to } };
+}
+
+/** Records the decision; default deny refuses forbidden. */
 export function decide(
   ctx: CallContext,
   op: PolicyOp,
   target: string,
-  allow: boolean,
+  decided: Decision,
 ): Refusal | undefined {
+  const allow = decided.source !== "default";
   ctx.batch.add({
     type: "message_policy_decided",
     type_version: 1,
@@ -124,9 +149,10 @@ export function decide(
     data: {
       op,
       decision: allow ? "allow" : "deny",
-      source: allow ? "team" : "default",
+      source: decided.source,
       target,
       call_id: ctx.call.data.call_id,
+      ...(decided.source === "message_policy" ? { rule: decided.rule } : {}),
     },
   });
   return allow ? undefined : refusal("forbidden");
@@ -195,7 +221,7 @@ export async function callRequest(ctx: CallContext): Promise<Request> {
     mailId: callMailId(ctx),
     self: caller.row,
     decide: (op, target) =>
-      decide(ctx, op, target, granted(ctx, caller, op, target)),
+      decide(ctx, op, target, decision(ctx, caller, op, target)),
     parent: async (startedId) => ({
       thread_id: ctx.call.thread_id,
       branch_id: ctx.call.branch_id,

@@ -84,7 +84,7 @@ HOST: Final = frozenset({"read_tool_result"})
 """Built-ins that run on the host: offered with or without a sandbox."""
 SKILL: Final = "load_skill"
 """Host-side over the pinned skills; pinned only when the agent has skills."""
-MEMBERS: Final = frozenset({"ask", "cancel", "monitor", "reply", "send", "start", "wait"})
+MEMBERS: Final = PINNED_MEMBERS
 """A team's model tools (spec/schema/README.md, Teams): pinned for a lead and its members, so no
 tool of a team's agent may take one of these names."""
 WEB: Final = frozenset({"web_fetch", "web_search"})
@@ -135,15 +135,19 @@ def search_tool_spec(deferred_names: Sequence[str]) -> ToolSpec:
 
 
 def agent_tools(
-    *, spawn: bool, team: bool, handoffs: bool, members: bool = False, answerer: bool = False
+    *,
+    spawn: bool,
+    team: bool,
+    handoffs: bool,
+    members: frozenset[str] = frozenset(),
+    answerer: bool = False,
 ) -> frozenset[str]:
     """spawn_agent with subagents, the task-board tools in a subagent team, handoff with handoff
-    targets, the team tools for a lead (agent(team=...)) and its members, and ask_user when a
-    host answers for the run (a channel conversation or an HTTP API call)."""
+    targets, the team tools `members` names (all of PINNED_MEMBERS for a lead and its members, and
+    what a host rule allows otherwise: Definition.team_tools), and ask_user when a host answers for
+    the run (a channel conversation or an HTTP API call)."""
     wanted = (("spawn_agent", spawn), ("handoff", handoffs), ("ask_user", answerer))
-    chosen = frozenset(n for n, on in wanted if on) | (
-        PINNED_MEMBERS if members else frozenset[str]()
-    )
+    chosen = frozenset(n for n, on in wanted if on) | members
     return chosen | TEAM if team else chosen
 
 

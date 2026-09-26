@@ -38,8 +38,9 @@ from threads.agents.team_outcomes import ask_status
 from threads.agents.team_roster import roster
 from threads.agents.team_tools import SendRefusal, Sent, Started, StartRefusal
 from threads.agents.team_waits import ask_member, cancel_member, wait_for
-from threads.log import BranchId, MemberRef, Parent, ThreadId, ThreadStartedEvent
+from threads.log import BranchId, Budget, MemberRef, Parent, ThreadId, ThreadStartedEvent
 from threads.loop.budget import start_room
+from threads.reduce.handlers import to_json
 from threads.result import Err
 from threads.store.lines import uuid7
 from threads.team.close import CloseContext
@@ -70,15 +71,17 @@ class Team:
         agent: str,
         task: str,
         *,
+        budget: Budget | None = None,
         label: str | None = None,
         instructions: str | None = None,
         tools: Sequence[str] | None = None,
         model: str | None = None,
         idempotency_key: str | None = None,
     ) -> TeamStartResult:
-        """Starts a member from an agent the team lists, with task as its first input."""
+        """Starts a member from an agent the team lists, with task as its first input. budget is
+        the member's own, capped by policy; omitted, the agent's own budget."""
         chosen = Chosen(label, instructions, tools, model)
-        return await _start(self._env, agent, task, chosen, idempotency_key)
+        return await _start(self._env, agent, task, chosen, budget, idempotency_key)
 
     async def send(
         self, to: MemberRef, text: str, *, idempotency_key: str | None = None
@@ -128,18 +131,25 @@ class Team:
         return team_events(self._env.sq, self.ref.id, after)
 
 
-async def _start(
-    env: HandleEnv, agent: str, task: str, chosen: Chosen, key: str | None
+async def _start(  # noqa: PLR0913, PLR0917 - the start's own fields, each optional
+    env: HandleEnv,
+    agent: str,
+    task: str,
+    chosen: Chosen,
+    budget: Budget | None,
+    key: str | None,
 ) -> TeamStartResult:
     parent = await _lead_parent(env)
     got = await start_pin(env.pin, env.sq.put_artifact, agent, chosen, "operator")
     pinned = got.pinned
     room = pinned is not None and await start_room(
-        env.sq.budgets, await ancestors_of(env.sq, parent), pinned
+        env.sq.budgets, await ancestors_of(env.sq, parent), pinned, budget
     )
     listed = {} if pinned is None else {agent: pinned.config_hash}
-    plan = StartPlan(listed, env.limits, lambda _a: room, uuid7(now_ms()), got.resolved)
+    plan = StartPlan(listed, env.limits, lambda _a: room, uuid7(now_ms()), got.resolved, budget)
     body: dict[str, JsonValue] = {"agent": agent, "task": task, **_fields(chosen)}
+    if budget is not None:
+        body["budget"] = to_json(budget)
     done = await operator(
         env, "start", body, key, lambda req, _t, _c: start(req, agent, task, plan)
     )

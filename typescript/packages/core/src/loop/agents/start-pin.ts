@@ -1,3 +1,5 @@
+import type { z } from "zod";
+import type { Budget } from "../../log";
 import type { Result } from "../../result";
 import type { ArtifactStore } from "../../store/artifacts";
 import {
@@ -42,13 +44,27 @@ export async function startPin(
   return { pinned, resolved };
 }
 
-/** The start plan's listing: the one agent it pinned. */
+/**
+ * The start plan's listing: the one agent it pinned, with the member's own budget (the minimum
+ * of the start's and the matching messagePolicy rule's, which member_started records).
+ */
 export function listedOf(
   agent: string,
   pinned: TeamAgentPin | undefined,
+  budget?: z.infer<typeof Budget>,
 ): ReadonlyMap<string, Listed> {
   return new Map(
-    pinned === undefined ? [] : [[agent, { configHash: pinned.configHash }]],
+    pinned === undefined
+      ? []
+      : [
+          [
+            agent,
+            {
+              configHash: pinned.configHash,
+              ...(budget === undefined ? {} : { budget }),
+            },
+          ],
+        ],
   );
 }
 

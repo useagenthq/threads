@@ -31,6 +31,7 @@ from threads.log import BranchId, EventId, ParseError, Permissions, Principal, T
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import LOCAL_TENANT
+from threads.team.policy import MessagePolicyRule
 from threads.telemetry import Exporter, bind_telemetry
 from threads.thread import tree
 from threads.thread.handle import Thread, open_thread
@@ -63,12 +64,13 @@ class Host:
         *,
         ceiling: Permissions | None = None,
         telemetry: Exporter | None = None,
+        message_policy: Sequence[MessagePolicyRule] = (),
     ) -> None:
         self._store = store
         self._agents = agents
         self._channels = channels
         self.authenticate: Authenticate | None = authenticate
-        self._runner: Runner = Runner(store, agents, channels, ceiling)
+        self._runner: Runner = Runner(store, agents, channels, ceiling, message_policy)
         self._intake: ChannelIntake = ChannelIntake(self._runner, channels)
         self._runner.on_end = self._intake.consume
         self._scheduler = Scheduler(self._runner, schedules)
@@ -261,12 +263,18 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
     authenticate: Authenticate | None = None,
     ceiling: Permissions | None = None,
     telemetry: Exporter | None = None,
+    message_policy: Sequence[MessagePolicyRule] = (),
 ) -> Host:
     """spec/api.json `host`. Starts nothing until `ready()`. Without `authenticate` every /v1
     route answers 401; channel webhooks still work. `ceiling` caps every run this host starts
     or resumes (Agent.run `ceiling`). `telemetry` (such as `otel()`) syncs every second beside
     the scheduler and once more on `stop()`, bounded by 5 s; a slow or unreachable collector
-    never holds up a run."""
+    never holds up a run. `message_policy` rules let one host agent start, send to, ask, monitor or
+    cancel another beyond what a team grants: they decide after a team's grant and before default
+    deny, and only add. An agent gets the team tools only for the ops some rule with it as `from`
+    allows, and a rule that allows start makes its `from` a lead. Default (): everything else is
+    denied. A rule that names no host agent, an empty allow or a repeated (from, to) pair is
+    refused here (ConfigError)."""
     return Host(
         store,
         agents,
@@ -275,6 +283,7 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
         authenticate,
         ceiling=ceiling,
         telemetry=telemetry,
+        message_policy=message_policy,
     )
 
 

@@ -1,4 +1,5 @@
 import { block } from "../team/dynamic";
+import { type MessagePolicyRule, startable } from "../team/policy";
 import type { Extension } from "./extension";
 import { memberEntry } from "./registry";
 import { type Skill, skillListing } from "./skills";
@@ -17,6 +18,8 @@ export type InstructionParts = {
   readonly handoffs: readonly string[];
   /** agent({team}): the agents start may name. */
   readonly team: readonly string[] | undefined;
+  /** The host's messagePolicy rules with this agent as `from`: one allowing start adds its to. */
+  readonly rules?: readonly MessagePolicyRule[];
   /** The agents behind team: a dynamic agent adds its line to the listing. */
   readonly members: readonly { readonly name: string }[];
   /** A dynamic agent's member: the block its starter wrote comes last. */
@@ -41,7 +44,7 @@ export function instructions(o: InstructionParts): string {
     ...skillListing(o.skills),
     ...listed("Subagents you can start with spawn_agent", o.subagents),
     ...listed("Agents you can hand the conversation to", o.handoffs),
-    ...teamListing(o.team ?? [], o.members),
+    ...teamListing(startable(o.team, o.rules ?? []), o.members),
     ...(written === undefined || o.dynamic === undefined
       ? []
       : [block(o.dynamic.starter, written)]),

@@ -26,14 +26,16 @@ from threads.loop.teams import settled
 from threads.store import SqliteStore, Writer
 from threads.store.lines import uuid7
 from threads.team.dynamic import KEPT, Choice, Template
+from threads.team.policy import leads, startable
 from threads.team.rows import cancel_pending_for
 
 
 def lead_started[D](
     definition: Definition[D], started: Mapping[str, JsonValue], now: int
 ) -> dict[str, JsonValue]:
-    """A lead's thread_started names a new team, whose log its first append opens."""
-    if definition.team is None:
+    """A lead's thread_started names a new team, whose log its first append opens. A host rule
+    that allows start makes its from a lead too, with no team of its own (lane 29C)."""
+    if not leads(definition.team, definition.rules):
         return dict(started)
     team: JsonValue = {"id": uuid7(now), "log_thread_id": uuid7(now), "log_branch_id": uuid7(now)}
     return {**started, "team": team}
@@ -88,8 +90,10 @@ def pins[D](
     with its start's choice, each time."""
     made: dict[str, TeamAgentPin | None] = {}
 
+    listed = startable(definition.team, definition.rules, definition.rule_agents)
+
     async def pin(agent: str, choice: Choice | None) -> TeamAgentPin | None:
-        found = next((a for a in definition.team or () if a.name == agent), None)
+        found = next((a for a in listed if a.name == agent), None)
         if found is not None and choice is not None:
             return await member_pin(member_definition(found, choice.define, choice.starter))
         if agent not in made:
@@ -121,7 +125,7 @@ def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs 
     """A team thread's runtime and what stops it; None for any other thread. One run, one
     authority (design §2.6): its ordinary mail is its own principal's; mail of another waits for
     a run under that one."""
-    if definition.team is None and member is None:
+    if not leads(definition.team, definition.rules) and member is None:
         return None
     pin, limits = pins(definition), definition.team_limits
     thread = writer.fold.thread_id
@@ -142,16 +146,16 @@ def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs 
             recipient=recipient_of(sq),
             cancel_pending=cancel_pending,
             abort=member.abort,
+            rules=definition.rules,
         )
         return TeamSide(runtime, _nothing)
-    if definition.team is None:
-        return None
 
     def team() -> str | None:
         started = next((e for e in writer.fold.events if isinstance(e, ThreadStartedEvent)), None)
         return None if started is None or started.data.team is MISSING else started.data.team.id
 
-    env = WorkerEnv(store, sq, team, agents_of(definition.team), member_pin, run)
+    listed = startable(definition.team, definition.rules, definition.rule_agents)
+    env = WorkerEnv(store, sq, team, agents_of(listed), member_pin, run)
     worker = TeamWorker(env)
     worker.start()
     runtime = TeamRuntime(
@@ -164,5 +168,6 @@ def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs 
         busy=worker.busy,
         recipient=recipient_of(sq),
         cancel_pending=cancel_pending,
+        rules=definition.rules,
     )
     return TeamSide(runtime, worker.stop)

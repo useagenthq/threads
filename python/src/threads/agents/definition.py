@@ -1,7 +1,7 @@
 """An agent's definition and what it pins at thread start: `thread_started`."""
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Literal
 
 from pydantic import BaseModel, JsonValue
@@ -12,7 +12,8 @@ from threads.agents.builtins import Egress, egress_denied
 from threads.agents.cache_ttl import agreed_cache_ttl
 from threads.agents.catalog import NO_CATALOG, Catalog
 from threads.agents.deferral import DeferTools, Pinned, pinned_tools
-from threads.agents.skills import Skill, listing, pinned
+from threads.agents.instructions import full_instructions
+from threads.agents.skills import Skill, pinned
 from threads.agents.tool import Tool, json_schema
 from threads.hooks.extension import Extension, extension_tools
 from threads.log import Budget, Context, MemberDefine, Permissions, Principal, Retry, ToolSpec
@@ -27,8 +28,8 @@ from threads.memory.setup import writes
 from threads.reduce.handlers import to_json
 from threads.result import Ok
 from threads.sandbox.protocol import Sandbox
-from threads.team.dynamic import KEPT, block
 from threads.team.ops import TeamLimits
+from threads.team.policy import MessagePolicyRule, team_tools
 from threads.tools import specs
 from threads.tools.specs import agent_tools
 
@@ -69,6 +70,11 @@ class Definition[D]:
     """Started as a subagent: a task-board member, offered its tools."""
     team: "tuple[Definition[None], ...] | None" = None
     """agent(team=...): the agents start may name. None: no team."""
+    rules: tuple[MessagePolicyRule, ...] = ()
+    """The host message_policy rules with this agent as `from` (lane 29C): they add the agents it
+    may start and, without a team of its own, the only team tools it is offered."""
+    rule_agents: "tuple[Definition[None], ...]" = ()
+    """The host agents `rules` name, since a rule-only lead's own team is empty."""
     team_limits: TeamLimits = field(default_factory=TeamLimits)
     in_team: bool = False
     """Pinned as a team's member: offered the team tools."""
@@ -180,7 +186,7 @@ class Definition[D]:
                 spawn=bool(self.subagents),
                 team=bool(self.subagents) or self.member,
                 handoffs=bool(self.handoffs),
-                members=self.team is not None or self.in_team,
+                members=team_tools(self.team, self.in_team, self.rules),
                 answerer=self.answerer and not self.member,
             ),
             gated=self.catalog.gated(),
@@ -207,26 +213,8 @@ class Definition[D]:
 
     @property
     def full_instructions(self) -> str:
-        """Base instructions, then each extension's, in declaration order, then the skill listing,
-        then the agents this one may start, hand off to and start as team members: all line 0,
-        so pinned per thread (C7)."""
-        parts = [self.instructions, *(e.instructions for e in self.extensions)]
-        parts.append(listing(self.skills))
-        if self.subagents:
-            names = ", ".join(a.name for a in self.subagents)
-            parts.append(f"Subagents you can start with spawn_agent: {names}.")
-        if self.handoffs:
-            names = ", ".join(a.name for a in self.handoffs)
-            parts.append(f"Agents you can hand the conversation to: {names}.")
-        if self.team:
-            names = ", ".join(a.name for a in self.team)
-            listed = [f"Agents you can start as team members with start: {names}."]
-            listed += [_template_line(a) for a in self.team if a.models]
-            parts.append("\n".join(listed))
-        written = None if self.dynamic is None else self.dynamic.define.instructions
-        if self.dynamic is not None and isinstance(written, str):
-            parts.append(block(self.dynamic.starter, written))
-        return "\n\n".join(p for p in parts if p)
+        """Line 0's instructions (agents/instructions.py)."""
+        return full_instructions(self)
 
     def pin(self) -> tuple[dict[str, JsonValue], bytes]:
         """`thread_started` and the canonical bytes of the resolved, secret-free config its
@@ -290,20 +278,6 @@ class Definition[D]:
     def thread_started(self) -> dict[str, JsonValue]:
         """The pinned, secret-free config. Everything model-visible in it is line 0."""
         return self.pin()[0]
-
-
-def choosable[D](template: Definition[D]) -> tuple[str, ...]:
-    """A template's tools a start may choose: its member pin's names but F, in pinned order."""
-    specs = replace(template, in_team=True).specs()
-    return tuple(s.name for s in specs if s.name not in KEPT)
-
-
-def _template_line[D](template: Definition[D]) -> str:
-    """The lead's listing line for a dynamic agent (spec/schema/README.md, Dynamic members)."""
-    tools = ", ".join(choosable(template)) or "none"
-    keys = [k for k, _ in template.models]
-    models = ", ".join([f"{keys[0]} (default)", *keys[1:]])
-    return f"{template.name} (you write its instructions; tools: {tools}; models: {models})"
 
 
 def _with_search(

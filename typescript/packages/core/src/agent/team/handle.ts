@@ -54,8 +54,13 @@ async function startMember(
   task: string,
   options: TeamStartOptions,
 ): Promise<TeamStartResult> {
-  const { idempotencyKey, ...chosen } = options;
-  const args = { agent, task, ...chosen };
+  const { idempotencyKey, budget, ...chosen } = options;
+  const args = {
+    agent,
+    task,
+    ...chosen,
+    ...(budget === undefined ? {} : { budget }),
+  };
   const lead = await leadOf(env);
   // Read before the append: the lead's and its ancestors' budgets cover the new member.
   const starter = await ancestorsOf(env.log, lead.parent);
@@ -67,12 +72,12 @@ async function startMember(
     "operator",
   );
   const plan: StartPlan = {
-    agents: listedOf(agent, pinned),
+    agents: listedOf(agent, pinned, budget),
     resolved,
     limits: limitsOf(env),
     // The lead is the new member's parent: its budgets and its ancestors' cover the member.
     headroom: async (_agent, tx) =>
-      pinned !== undefined && (await startRoom(starter, pinned, tx)),
+      pinned !== undefined && (await startRoom(starter, pinned, tx, budget)),
     threadId: ThreadId.parse(uuidv7(env.log.now())),
   };
   const done = await operator(env, "start", args, idempotencyKey, (req) =>

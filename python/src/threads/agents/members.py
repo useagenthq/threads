@@ -38,6 +38,7 @@ from threads.team.cancel import cancel
 from threads.team.close import reader_of
 from threads.team.constants import TEAM_CONSTANTS
 from threads.team.ops import StartPlan, send, start
+from threads.team.policy import rule_for
 from threads.team.rows import MemberRow, member_named, own_rows
 from threads.team.watch import monitor, wait
 
@@ -56,7 +57,11 @@ async def _decided(
 
     def decide(tx: DecideTx) -> Sequence[Draft] | Refusal[None]:
         batch = Batch(tx.fold.seq, tx.now, team.mint)
-        op(CallContext(tx.conn, tx.fold, batch, call, lambda _text: big, reader_of(tx.read)))
+        op(
+            CallContext(
+                tx.conn, tx.fold, batch, call, lambda _text: big, reader_of(tx.read), team.rules
+            )
+        )
         return batch.drafts
 
     done = await rt.append_decided(decide)
@@ -76,12 +81,16 @@ async def start_call(rt: Runtime, state: CallState) -> Halt | None:
     team = _team(rt)
     call = state.call
     args = StartInput.model_validate(dict(call.data.input))
-    got = await start_pin(team.pin, rt.store.put_artifact, args.agent, _chosen(args), _name(rt))
+    starter = _name(rt)
+    got = await start_pin(team.pin, rt.store.put_artifact, args.agent, _chosen(args), starter)
     pinned = got.pinned
     agents = {} if pinned is None else {args.agent: pinned.config_hash}
-    room = pinned is not None and await room_for(rt, pinned)
+    # A model start has no budget of its own, so the member's is the rule's alone (lane 29C).
+    rule = rule_for(team.rules, starter, args.agent, "start")
+    cap = None if rule is None else rule.get("budget")
+    room = pinned is not None and await room_for(rt, pinned, cap)
     thread = uuid7(rt.clock())
-    plan = StartPlan(agents, team.limits, lambda _agent: room, thread, got.resolved)
+    plan = StartPlan(agents, team.limits, lambda _agent: room, thread, got.resolved, cap)
     big = await _big(rt, args.task)
     return await _decided(
         rt, call, big, lambda ctx: start(call_request(ctx), args.agent, args.task, plan)

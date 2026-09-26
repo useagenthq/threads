@@ -19,7 +19,7 @@ import {
 import type { DeferTools } from "../defer";
 import { memberEntry } from "../registry";
 import type { Store } from "../sqlite";
-import { ancestorsOf } from "./budgets";
+import { ancestorsOf, startedCap } from "./budgets";
 import { takeTeamLogMail } from "./log-mail";
 import {
   closed,
@@ -370,7 +370,10 @@ export class TeamWorker {
         task.actor.principal,
       holder,
       notify: this.notify,
-      covering: await ancestorsOf(this.#env.log, parent),
+      covering: [
+        ...(await startedCap(this.#env.log, parent)),
+        ...(await ancestorsOf(this.#env.log, parent)),
+      ],
       signal: user === undefined ? signal : AbortSignal.any([user, signal]),
       ...(choice === undefined ? {} : { dynamic: choice }),
       ...(this.#env.deferTools === undefined
