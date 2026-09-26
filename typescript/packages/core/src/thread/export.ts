@@ -52,8 +52,17 @@ export async function exportBundle(
   try {
     return ok(publish(path, branchId, collected.value));
   } catch (error) {
-    rmSync(path, { recursive: true, force: true });
+    discard(path);
     return err(ioError(error, path));
+  }
+}
+
+/** What a failed export wrote, best effort: a directory with no bundle.json is refused anyway. */
+function discard(path: string): void {
+  try {
+    rmSync(path, { recursive: true, force: true });
+  } catch {
+    // The caller already has the failure that matters; a stuck directory is not a second one.
   }
 }
 
