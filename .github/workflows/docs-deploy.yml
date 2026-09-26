@@ -27,8 +27,22 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run build
+      # Deploys are also done by hand with wrangler, so a repo without the token is a normal
+      # state, not a broken build. Say so and stop, rather than leaving main permanently red —
+      # a red that is always there is a red nobody reads.
+      - name: Is a Cloudflare token configured?
+        id: token
+        working-directory: .
+        run: |
+          if [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No CLOUDFLARE_API_TOKEN secret; skipping the deploy. The docs were built and checked."
+          fi
       # Run from docs/ so wrangler also uploads the Pages Function in docs/functions/.
       - uses: cloudflare/wrangler-action@v3
+        if: steps.token.outputs.present == 'true'
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
