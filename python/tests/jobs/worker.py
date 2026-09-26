@@ -50,7 +50,7 @@ from threads.host import (
 )
 from threads.host.runs import Runner
 from threads.host.schedules import Scheduler
-from threads.log import Event, JsonObject, ParseError, Principal
+from threads.log import EffectCommitEvent, Event, JsonObject, ParseError, Principal
 from threads.loop.guard import block_model_requests
 from threads.loop.model import Found, LookupResult, LookupUnknown, ModelRequest, NotFound
 from threads.memory.fence import check
@@ -204,11 +204,7 @@ async def serve(where: Path) -> None:
         reached("user_input", where)
         return {"decision": "proceed"}
 
-    async def committed(_event: Event) -> None:
-        # An observer is told of an event after its append: the reply's commit is durable.
-        reached("effect_commit", where)
-
-    drill = extension(name="drill", hooks={"before_model": gate}, on={"effect_commit": committed})
+    drill = extension(name="drill", hooks={"before_model": gate})
     bot = agent(model=model, extensions=[drill])
     channel = FileChannel(where, os.environ.get("DRILL_LOOKUP", "final"))
     async with host(store=store, agents={"bot": bot}, channels={"fake": channel}) as served:
@@ -218,11 +214,18 @@ async def serve(where: Path) -> None:
             record(where / "acks.jsonl", {"status": answer.value.status})
             reached("webhook_ack", where)
         conversation = await open_store(scoped(store, TEAM))
-        await until(lambda: _settled(conversation))
+        await until(lambda: _settled(conversation, where))
 
 
-async def _settled(sq: SqliteStore) -> bool:
-    return settled(await read(sq))
+async def _settled(sq: SqliteStore, where: Path) -> bool:
+    fold = await read(sq)
+    # The host appends a reply's effect_commit with its tool_result, outside any run's
+    # observers: seen in the log, the commit is durable. An observer is background delivery
+    # (it may lag past the end of the run, by contract), so it is no kill barrier. The same
+    # as TypeScript's test/jobs/worker.ts.
+    if fold is not None and any(isinstance(e, EffectCommitEvent) for e in fold.events):
+        reached("effect_commit", where)
+    return settled(fold)
 
 
 async def until(probe: Callable[[], Awaitable[bool]]) -> None:

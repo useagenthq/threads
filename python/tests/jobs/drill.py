@@ -88,9 +88,29 @@ def wait_at(worker: subprocess.Popen[str], point: str) -> None:
     """Until the worker reports it is blocked at `point`."""
     assert worker.stdout is not None
     ready, _, _ = select.select([worker.stdout], [], [], WAIT_S)
-    assert ready, f"the worker never reached {point}\n{stuck(worker)}"
+    assert ready, f"the worker never reached {point}\n{evidence(worker)}"
     line = worker.stdout.readline()
-    assert line.strip() == f"at {point}", f"the worker ended before {point}: {line!r}"
+    # An empty line is EOF: the worker ended before it got there, and this message is all the
+    # next reader gets (a crash, a bad interpreter, or a host that simply finished first).
+    assert line.strip() == f"at {point}", (
+        f"the worker ended before {point}: {line!r}\n{evidence(worker)}"
+    )
+
+
+def evidence(worker: subprocess.Popen[str]) -> str:
+    """What tells one failure here from another: how the worker exited (None: still running),
+    what it had made durable, and what every worker of the drill printed."""
+    return f"exit code {worker.poll()}\n--- log\n{written(_DIRS[worker.pid])}\n{stuck(worker)}"
+
+
+def written(where: Path) -> str:
+    """The durable log as the drill's parent can read it: the seq and type of every event."""
+    try:
+        fold = asyncio.run(_read(where))
+    except Exception as unreadable:
+        # A store a live worker still holds, or a drill that never made one.
+        return f"unreadable: {unreadable!r}"
+    return "empty" if fold is None else ", ".join(f"{e.seq} {e.type}" for e in fold.events)
 
 
 def kill(worker: subprocess.Popen[str]) -> None:
