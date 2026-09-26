@@ -13,6 +13,7 @@
 """
 
 import asyncio
+import logging
 from collections.abc import Mapping
 from typing import Literal, assert_never
 
@@ -20,6 +21,7 @@ from pydantic import JsonValue, TypeAdapter
 
 from threads._generated.host_api_v1 import Input
 from threads.agents.intake import Intake
+from threads.agents.results import Failed
 from threads.agents.store import Store, now_ms, open_store
 from threads.host import answers
 from threads.host.channel import (
@@ -46,7 +48,9 @@ from threads.thread.handle import Thread
 
 _INBOUND: TypeAdapter[Inbound] = TypeAdapter(Inbound)
 RETRY_S = 0.5
-"""How soon an answer that met another process's lease is tried again."""
+"""Base wait before intake that recorded nothing is tried again."""
+MAX_MESSAGE_ATTEMPTS = 3
+_log = logging.getLogger(__name__)
 
 
 class ChannelIntake:
@@ -56,6 +60,7 @@ class ChannelIntake:
         self._locks: dict[ThreadId, asyncio.Lock] = {}
         self._tasks: set[asyncio.Task[None]] = set()
         self._retries: set[asyncio.TimerHandle] = set()
+        self._attempts: dict[tuple[str, int], int] = {}
 
     async def receive(self, channel: str, raw: RawRequest) -> Ok[RawResponse] | Err[ParseError]:
         """Steps 1-5: the webhook's answer, after its whole batch is durable."""
@@ -142,10 +147,11 @@ class ChannelIntake:
                     blocked = blocked or not took
                     progressed = progressed or took
 
-    def _later(self, store: Store, thread_id: ThreadId) -> None:
-        # ponytail: a fixed retry while another process holds the branch; a lease-expiry wake
-        # would need the holder's TTL.
-        handle = asyncio.get_running_loop().call_later(RETRY_S, self.consume, store, thread_id)
+    def _later(self, store: Store, thread_id: ThreadId, wait: float | None = None) -> None:
+        # ponytail: a timer instead of a lease-expiry wake, which would need the holder's TTL.
+        handle = asyncio.get_running_loop().call_later(
+            RETRY_S if wait is None else wait, self.consume, store, thread_id
+        )
         self._retries.add(handle)
 
     async def _one(
@@ -197,6 +203,10 @@ class ChannelIntake:
                 return False
 
     async def _message(self, bound: Bound, thread: Thread, row: inbox.Row, item: Message) -> bool:
+        key = (item.principal.tenant, row.inbox_id)
+        attempts = self._attempts.get(key, 0)
+        if attempts >= MAX_MESSAGE_ATTEMPTS:
+            return False
         delivery = _delivery(row, item)
         delivered = delivery.event_id
         recorded: asyncio.Future[StoredEvent] = asyncio.get_running_loop().create_future()
@@ -211,7 +221,28 @@ class ChannelIntake:
         await asyncio.wait({recorded, task}, return_when=asyncio.FIRST_COMPLETED)
         # Once the input is durable the run goes on alone: a later answer or cancel reaches it
         # through its writer, and the run's end drains what waited.
-        return recorded.done()
+        if recorded.done():
+            self._attempts.pop(key, None)
+            return True
+        attempts += 1
+        self._attempts[key] = attempts
+        result = None if task.cancelled() or task.exception() is not None else task.result()
+        reason = result.error.code if isinstance(result, Failed) else "exception"
+        if attempts == 1:
+            _log.warning(
+                "threads host: channel inbox item %s failed before recording input (%s); "
+                "retrying with backoff",
+                row.inbox_id,
+                reason,
+            )
+        if attempts < MAX_MESSAGE_ATTEMPTS:
+            self._later(thread.store, thread.id, RETRY_S * 2 ** (attempts - 1))
+        else:
+            _log.warning(
+                "threads host: channel inbox item %s retry cap reached; left pending",
+                row.inbox_id,
+            )
+        return False
 
     async def _control(
         self, bound: Bound, thread: Thread, row: inbox.Row, item: Decision | Control
