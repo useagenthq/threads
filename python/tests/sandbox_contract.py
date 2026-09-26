@@ -117,13 +117,21 @@ async def files_keep_the_path_contract(h: Harness) -> None:
 async def terminate_never_confirms_what_the_guest_could_forge(h: Harness) -> None:
     """only a provider primitive proves a process group gone. An adapter whose
     provider has none answers unknown (the effect parks) even for a command that detached a
-    descendant, and never already_exited from an empty scan."""
+    descendant, and never already_exited from an empty scan. One that has a primitive answers
+    from it, never from anything the guest could forge."""
     s = await session(h)
     started = await s.exec(["sleep", "100"], OPEN, process_key="long")
     detached = await s.exec(["sh", "-c", "setsid sleep 1000 &"], OPEN, process_key="bg")
     assert isinstance(started, Ok)
     assert isinstance(detached, Ok)
-    assert h.sandbox.info.termination == "unconfirmed", "no provider here confirms a group"
+    if h.sandbox.info.termination == "confirmed":
+        # A confirmed provider proves the group ended, and its sweep takes the detached
+        # descendant with it. A key it has no record of still proves nothing.
+        assert await s.terminate("long", OPEN) == Ok("terminated")
+        assert await s.terminate("bg", OPEN) == Ok("already_exited")
+        assert await s.terminate("never-ran", OPEN) == Ok("unknown")
+        assert not any(p.running for p in h.backend.boxes[s.id].orphans), "a descendant survived"
+        return
     for key in ("long", "bg", "never-ran"):
         assert await s.terminate(key, OPEN) == Ok("unknown")
 

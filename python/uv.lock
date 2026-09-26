@@ -2941,6 +2941,9 @@ anthropic = [
 daytona = [
     { name = "daytona" },
 ]
+docker = [
+    { name = "httpx" },
+]
 e2b = [
     { name = "e2b" },
 ]
@@ -2999,6 +3002,7 @@ requires-dist = [
     { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=1.8.0,<2" },
     { name = "daytona", marker = "extra == 'daytona'", specifier = ">=0.216,<0.217" },
     { name = "e2b", marker = "extra == 'e2b'", specifier = ">=2.51,<3" },
+    { name = "httpx", marker = "extra == 'docker'", specifier = ">=0.28,<1" },
     { name = "httpx", marker = "extra == 'github'", specifier = ">=0.28,<1" },
     { name = "httpx", marker = "extra == 'otel'", specifier = ">=0.28,<1" },
     { name = "httpx", marker = "extra == 'slack'", specifier = ">=0.28,<1" },
@@ -3017,7 +3021,7 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'host'", specifier = ">=0.53,<1" },
     { name = "zep-cloud", marker = "extra == 'zep'", specifier = ">=3.28,<4" },
 ]
-provides-extras = ["anthropic", "openai", "litellm", "e2b", "daytona", "modal", "mcp", "supermemory", "zep", "postgres", "host", "slack", "whatsapp", "github", "otel"]
+provides-extras = ["anthropic", "openai", "litellm", "e2b", "daytona", "modal", "docker", "mcp", "supermemory", "zep", "postgres", "host", "slack", "whatsapp", "github", "otel"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -14,6 +14,8 @@ import pytest
 from aiohttp.test_utils import TestServer
 from anthropic import AsyncAnthropic
 from daytona_server import API_KEY, DaytonaServer
+from docker_fake import TracedTransport as DockerTransport
+from docker_fake import adapter as docker_adapter
 from e2b_fake import TracedTransport, adapter
 from grpclib.testing import ChannelFor
 from loop_kit import BYPASS, Sessions, text, use
@@ -274,3 +276,26 @@ def test_a_daytona_stop_in_flight_is_drained_before_the_session_closes(kill_s: f
 
     asyncio.run(main())
     gc.collect()
+
+
+def test_one_docker_adapter_on_two_loops() -> None:
+    """Each loop opens its own Engine client, and closing it stops the exec stream still
+    reading it: the next loop starts on nothing the first left behind."""
+    made: list[DockerTransport] = []
+    box = docker_adapter(FakeBackend(), "docker", made=made)
+
+    async def main(key: str) -> None:
+        async with holding():
+            created = await box.create(key, OPEN)
+            assert isinstance(created, Ok), created
+            ran = await created.value.exec(["echo", "hi"], OPEN, process_key=key)
+            assert isinstance(ran, Ok)
+            assert await collect(ran.value) == (0, b"hi\n", b"")
+            left = await created.value.exec(["sleep", "1000"], OPEN, process_key=f"{key}-bg")
+            assert isinstance(left, Ok)  # left unread and running
+        assert made[-1].closed
+
+    asyncio.run(main("k1"))
+    asyncio.run(main("k2"))
+    assert len(made) == 2  # noqa: PLR2004 - one client per loop
+    assert made[0] is not made[1]

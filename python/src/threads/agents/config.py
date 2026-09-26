@@ -10,6 +10,7 @@ type ConfigErrorCode = Literal[
     "duplicate_name",
     "capability_missing",
     "mcp_unreachable",
+    "docker_unreachable",
     "budget_unenforceable",
     "permission_rule_invalid",
     "hosted_tool_unsupported",

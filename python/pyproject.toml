@@ -31,6 +31,13 @@ daytona = [
 modal = [
     "modal>=1.5.5,<2",
 ]
+# threads.docker. The Docker Engine API is HTTP over a unix socket with no official Python SDK
+# worth a dependency (docker-py is sync and vendors its own transport stack); httpx is the async
+# client the other adapters already send through, and its unix-socket transport plus the
+# request-header trace are what the run's fence needs.
+docker = [
+    "httpx>=0.28,<1",
+]
 mcp = [
     "jsonschema>=4.23,<5",
     "mcp>=1.20,<2",

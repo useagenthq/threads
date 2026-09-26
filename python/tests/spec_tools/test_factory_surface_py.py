@@ -61,6 +61,7 @@ def test_every_contracted_factory_is_checked() -> None:
         "litellm",
         "e2b",
         "daytona",
+        "docker",
         "modal",
         "devSandbox",
         "postgres",

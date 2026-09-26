@@ -3,12 +3,14 @@ daytona and modal): what a create then sends, and what the sandbox declares."""
 
 import asyncio
 import json
+from collections.abc import Callable
 
 import httpx
 import pytest
 from aiohttp.test_utils import TestServer
 from daytona_server import API_KEY as DAYTONA_KEY
 from daytona_server import DaytonaServer
+from docker_fake import DockerEngine, TracedTransport
 from e2b_fake import API_KEY as E2B_KEY
 from e2b_fake import control, transports
 from modal_fake import TOKEN_ID, TOKEN_SECRET, FakeModal, harness
@@ -16,9 +18,12 @@ from sandbox_backend import FakeBackend
 from sandbox_kit import OPEN
 
 from threads.adapters.loop_resources import holding
+from threads.adapters.sandboxes.docker import transport as docker_transport
+from threads.adapters.sandboxes.docker.sandbox import IMAGE
 from threads.adapters.sandboxes.e2b import sandbox as e2b_module
 from threads.agents.config import ConfigError
 from threads.daytona import daytona
+from threads.docker import docker
 from threads.e2b import e2b
 from threads.modal import modal
 from threads.result import Ok
@@ -112,3 +117,64 @@ def test_modal_defaults() -> None:
     assert (made.definition.timeout_secs, made.definition.block_network) == (HOUR_MS // 1000, True)
     named = modal(image_id="im-x", token_id=TOKEN_ID, token_secret=TOKEN_SECRET)
     assert named.info.provider == "modal"
+
+
+def test_docker_defaults() -> None:
+    """The pinned node:22-bookworm image, no internet, provider name "docker", and a container
+    with no network, a fixed PidsLimit and no limit it wasn't given."""
+    backend = FakeBackend.scripted()
+    engine = DockerEngine(backend)
+    made = docker(transport=lambda: TracedTransport(backend, engine.handle))
+    info = made.info
+    assert (info.provider, info.egress) == ("docker", "enforced")
+    assert (info.lookup.create, info.lookup.snapshot) == ("nonfinal", "none")
+    # ponytail: Docker's snapshots are core's host trees (lane 16C), which isn't on main.
+    assert info.capture_classes == ()
+    assert info.termination == "confirmed"
+
+    async def create() -> None:
+        async with holding():
+            assert isinstance(await made.create("k", OPEN), Ok)
+
+    asyncio.run(create())
+    (body,) = engine.created
+    assert body["Image"] == IMAGE
+    assert IMAGE.startswith("node:22-bookworm@sha256:")
+    host = body["HostConfig"]
+    assert (host["NetworkMode"], host["PidsLimit"]) == ("none", 1024)
+    assert "Memory" not in host
+    assert "NanoCpus" not in host
+
+
+def test_a_docker_limit_that_cannot_be_expressed_is_invalid_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every limit Docker can't express, and every socket it can't speak, named with its
+    value before anything is created."""
+    refusals = [
+        lambda: docker(cpus=0),
+        lambda: docker(cpus=-1),
+        lambda: docker(memory_mb=8),
+        lambda: docker(memory_mb=64.5),  # pyright: ignore[reportArgumentType] - an untyped caller
+        lambda: docker(name="Not-A-Name"),
+    ]
+    for make in refusals:
+        with pytest.raises(ConfigError) as refused:
+            make()
+        assert refused.value.code == "invalid_config"
+        assert refused.value.message.startswith("docker: ")
+    assert "not -1" in _refusal(lambda: docker(cpus=-1))
+    assert "not 8" in _refusal(lambda: docker(memory_mb=8))
+    monkeypatch.setenv(docker_transport.DOCKER_HOST, "tcp://127.0.0.1:2375")
+    with pytest.raises(ConfigError) as refused:
+        asyncio.run(docker().setup())
+    assert refused.value.code == "invalid_config"
+    assert refused.value.message == (
+        "docker: DOCKER_HOST must be a unix:// socket, not tcp://127.0.0.1:2375"
+    )
+
+
+def _refusal(make: Callable[[], object]) -> str:
+    with pytest.raises(ConfigError) as refused:
+        make()
+    return refused.value.message
