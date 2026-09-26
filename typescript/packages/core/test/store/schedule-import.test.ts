@@ -68,9 +68,12 @@ describe("importing a schedule thread", () => {
     const into = await fixture();
     unwrap(await into.store.importLog(bytes));
     unwrap(await into.store.importLog(bytes));
-    expect((await rows(into.db, "SELECT thread_id FROM schedule_threads")).length).toBe(1);
     expect(
-      (await rows(into.db, "SELECT occurrence_at FROM schedule_occurrences")).length,
+      (await rows(into.db, "SELECT thread_id FROM schedule_threads")).length,
+    ).toBe(1);
+    expect(
+      (await rows(into.db, "SELECT occurrence_at FROM schedule_occurrences"))
+        .length,
     ).toBe(1);
   });
 
@@ -88,7 +91,9 @@ describe("importing a schedule thread", () => {
     const refused = await into.store.importLog(bytes);
     expect(code(refused)).toBe("schedule_conflict");
     expect(await rows(into.db, "SELECT branch_id FROM branches")).toEqual([]);
-    expect(await rows(into.db, "SELECT occurrence_at FROM schedule_occurrences")).toEqual([]);
+    expect(
+      await rows(into.db, "SELECT occurrence_at FROM schedule_occurrences"),
+    ).toEqual([]);
   });
 
   test("an occurrence another thread already decided is schedule_conflict", async () => {

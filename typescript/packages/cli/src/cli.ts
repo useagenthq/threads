@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { importThread, openThread, type Store, sqlite } from "@threads/core";
@@ -263,7 +262,10 @@ async function exportBundleTo(
   if (!read.ok) return fail(io, read.error);
   const threadId = read.value.segments[0]?.header.thread_id;
   if (threadId === undefined)
-    return fail(io, { code: "branch_not_found", message: `no branch ${branchId}` });
+    return fail(io, {
+      code: "branch_not_found",
+      message: `no branch ${branchId}`,
+    });
   const thread = await openThread(store, threadId, { branchId });
   if (!thread.ok) return fail(io, thread.error);
   const written = await thread.value.export(p.bundle ?? "");

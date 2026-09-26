@@ -115,10 +115,15 @@ export function ledgerSuite(harness: SandboxHarness): void {
         const point = log.events.at(-1)?.event.event_id;
         if (point === undefined)
           throw new Error("the parent ends with its snapshot");
-        const forking = forkBranch(f.store, f.artifacts, gatedRestore(base, g), {
-          ...request,
-          point,
-        });
+        const forking = forkBranch(
+          f.store,
+          f.artifacts,
+          gatedRestore(base, g),
+          {
+            ...request,
+            point,
+          },
+        );
         await g.entered;
 
         f.clock.now += LEASE + 1; // the creator stalls; its lease lapses
