@@ -1,357 +1,187 @@
 "use client";
 
 import { useState } from "react";
+import recorded from "./recorded-run.json";
 
 /*
- * One run, as thread.timeline() returns it: every entry is a recorded event plus a fork_point flag.
+ * One real run, as thread.timeline() returned it.
  *
- * The run is the same one the trace panel below shows as spans, so a reader can see that the log
- * and the spans are one record read twice. Field names and enum values come from the event schema
- * (spec/schema/events.v1.schema.json); nothing here is invented.
+ * Nothing here is drawn. recorded-run.json is the output of thread.timeline() for a live
+ * claude-sonnet-5 support agent that looks up an order, is told a refund needs a person, parks,
+ * is approved, resumes and refunds. Every seq, type, field name and value below is read out of
+ * that file, and the one-line note beside each row is derived from the event's own data rather
+ * than written by hand, so the section cannot drift from the recording.
  *
- * The two turns sit side by side rather than in one scrolling column: the park, the approval and
- * the fork point are the point of the example, and an inner scrollbar would hide them.
+ * The run has no snapshot event, so it has no fork point: the section claims neither.
  */
 
-type Row = {
+type Json = string | number | boolean | null | undefined | Json[] | { [k: string]: Json };
+type Event = {
   readonly seq: number;
   readonly type: string;
-  readonly note: string;
-  readonly detail: readonly (readonly [string, string])[];
-  readonly forkPoint?: true;
+  readonly epoch: number;
+  readonly actor: Json;
+  readonly data: { readonly [k: string]: Json };
 };
 
-type Phase = {
-  readonly label: string;
-  readonly aside: string;
-  readonly rows: readonly Row[];
-  readonly footer?: string;
-};
+const EVENTS: readonly Event[] = recorded.entries.map((e) => e.event);
+/** Where the run parks. Splitting here keeps the two columns even and puts the wait on the seam. */
+const SPLIT = EVENTS.findIndex((e) => e.type === "parked") + 1;
 
-const PHASES: readonly Phase[] = [
-  {
-    label: "Turn 1",
-    aside: "Asked in the API, parked on an approval.",
-    rows: [
-      {
-        seq: 1,
-        type: "thread_started",
-        note: "support · claude-sonnet-5 · 3 tools",
-        detail: [
-          ["actor", "host"],
-          ["data.agent_name", '"support"'],
-          ["data.model", '{ provider: "anthropic", name: "claude-sonnet-5" }'],
-          ["data.tools", "[lookup_order, list_refunds, mcp__billing__refund]"],
-          ["data.instructions", '"You handle billing questions for…" (312 chars)'],
-          ["data.config_hash", "1f3c9ab4…"],
-        ],
-      },
-      {
-        seq: 2,
-        type: "user_input",
-        note: "Refund order A-2291, it arrived broken.",
-        detail: [
-          ["actor", "user"],
-          ["data.source", '"api"'],
-          ["data.text", '"Refund order A-2291, it arrived broken."'],
-        ],
-      },
-      {
-        seq: 3,
-        type: "model_request",
-        note: "the exact bytes the model received",
-        detail: [
-          ["actor", "host"],
-          ["data.attempt", "1"],
-          ["data.purpose", '"turn"'],
-          ["data.request_ref", '{ sha256: "9f2c4e…", bytes: 4812 }'],
-          ["data.declared_prefix", '{ sha256: "4be1d0…", bytes: 2190 }'],
-        ],
-      },
-      {
-        seq: 4,
-        type: "model_response",
-        note: "tool_use · 1,284 in / 96 out",
-        detail: [
-          ["actor", "model"],
-          ["data.stop_reason", '"tool_use"'],
-          ["data.completeness", '"complete"'],
-          ["data.usage", "{ input_tokens: 1284, output_tokens: 96, cache_read_tokens: 2048 }"],
-        ],
-      },
-      {
-        seq: 5,
-        type: "tool_call",
-        note: 'lookup_order {"order_id": "A-2291"}',
-        detail: [
-          ["actor", "model"],
-          ["data.call_id", '"call_5b1"'],
-          ["data.name", '"lookup_order"'],
-          ["data.input", '{ "order_id": "A-2291" }'],
-        ],
-      },
-      {
-        seq: 6,
-        type: "permission_decision",
-        note: "allow · read_only, no approval",
-        detail: [
-          ["actor", "host"],
-          ["data.call_id", '"call_5b1"'],
-          ["data.decision", '"allow"'],
-          ["data.source", '"default"'],
-        ],
-      },
-      {
-        seq: 7,
-        type: "tool_result",
-        note: "A-2291 · delivered 3 Sep · $84.00",
-        detail: [
-          ["actor", "tool"],
-          ["data.call_id", '"call_5b1"'],
-          ["data.is_error", "false"],
-          ["data.origin", '"executed"'],
-          ["data.preview", '"A-2291 · delivered 3 Sep · $84.00"'],
-        ],
-      },
-      {
-        seq: 8,
-        type: "model_response",
-        note: "tool_use · asks for the refund",
-        detail: [
-          ["actor", "model"],
-          ["data.stop_reason", '"tool_use"'],
-          ["data.usage", "{ input_tokens: 1461, output_tokens: 74 }"],
-        ],
-      },
-      {
-        seq: 9,
-        type: "tool_call",
-        note: "mcp__billing__refund · $84.00",
-        detail: [
-          ["actor", "model"],
-          ["data.call_id", '"call_7g2"'],
-          ["data.name", '"mcp__billing__refund"'],
-          ["data.input", '{ "order_id": "A-2291", "amount_cents": 8400 }'],
-        ],
-      },
-      {
-        seq: 10,
-        type: "permission_decision",
-        note: "ask · a person has to approve",
-        detail: [
-          ["actor", "host"],
-          ["data.call_id", '"call_7g2"'],
-          ["data.decision", '"ask"'],
-          ["data.source", '"policy"'],
-          ["data.rule_id", '"refunds-need-approval"'],
-        ],
-      },
-      {
-        seq: 11,
-        type: "approval_requested",
-        note: "call_7g2 · expires in 24h",
-        detail: [
-          ["actor", "host"],
-          ["data.call_id", '"call_7g2"'],
-          ["data.args_hash", "c0d81f…"],
-          ["data.challenge_id", '"0193f2a1-…"'],
-        ],
-      },
-      {
-        seq: 12,
-        type: "parked",
-        note: "awaiting_approval · the process can exit",
-        detail: [
-          ["actor", "host"],
-          ["data.reason", '"awaiting_approval"'],
-          ["data.address", '{ kind: "approval", id: "call_7g2" }'],
-        ],
-      },
-    ],
-  },
-  {
-    label: "Turn 2",
-    aside: "Six minutes later, approved in Slack. Another process, same log.",
-    footer:
-      "Entry 20 is a fork point. fork() starts a new branch from exactly this state, sandbox included, and the branch keeps its own events from there.",
-    rows: [
-      {
-        seq: 13,
-        type: "approval_granted",
-        note: "approver · amrita@acme.com",
-        detail: [
-          ["actor", 'approver { principal: "amrita@acme.com" }'],
-          ["data", "{}"],
-        ],
-      },
-      {
-        seq: 14,
-        type: "resumed",
-        note: "picks up where it parked",
-        detail: [
-          ["actor", "host"],
-          ["data.address", '{ kind: "approval", id: "call_7g2" }'],
-          ["data.cause_event_id", '"ev_01JBQ5…"'],
-        ],
-      },
-      {
-        seq: 15,
-        type: "effect_begin",
-        note: "durable before the call goes out",
-        detail: [
-          ["actor", "host"],
-          ["data.call_id", '"call_7g2"'],
-          ["data.attempt", "1"],
-        ],
-      },
-      {
-        seq: 16,
-        type: "effect_commit",
-        note: "the provider's receipt, recorded",
-        detail: [
-          ["actor", "host"],
-          ["data.call_id", '"call_7g2"'],
-          ["data.provider_receipt", '"re_3PqL8xK2"'],
-          ["data.result_ref", '{ sha256: "b7a5c1…", bytes: 318 }'],
-        ],
-      },
-      {
-        seq: 17,
-        type: "tool_result",
-        note: "Refunded $84.00 to the original card.",
-        detail: [
-          ["actor", "tool"],
-          ["data.call_id", '"call_7g2"'],
-          ["data.origin", '"materialized_from_commit"'],
-          ["data.preview", '"Refunded $84.00 to the original card."'],
-        ],
-      },
-      {
-        seq: 18,
-        type: "model_response",
-        note: "end_turn · writes the answer",
-        detail: [
-          ["actor", "model"],
-          ["data.stop_reason", '"end_turn"'],
-          ["data.usage", "{ input_tokens: 1702, output_tokens: 61 }"],
-        ],
-      },
-      {
-        seq: 19,
-        type: "turn_completed",
-        note: "end_turn",
-        detail: [
-          ["actor", "host"],
-          ["data.reason", '"end_turn"'],
-        ],
-      },
-      {
-        seq: 20,
-        type: "snapshot",
-        note: "fork point · branch from here",
-        forkPoint: true,
-        detail: [
-          ["actor", "host"],
-          ["data.provider", '"e2b"'],
-          ["data.capture_class", '"filesystem"'],
-          ["data.manifest_hash", "6e42bb…"],
-          ["fork_point", "true"],
-        ],
-      },
-    ],
-  },
-];
+function field(v: Json, key: string): Json {
+  return typeof v === "object" && v !== null && !Array.isArray(v) ? v[key] : undefined;
+}
 
-const ROWS: readonly Row[] = PHASES.flatMap((p) => p.rows);
+function plain(v: Json): string {
+  return typeof v === "string" ? v : (JSON.stringify(v) ?? "");
+}
+
+/** The note beside a row: real values from that event, never prose about it. */
+const NOTE = new Map<string, (d: Event["data"]) => string>([
+  ["thread_started", (d) => `${plain(d.agent_name)} · ${plain(field(d.model, "name"))}`],
+  ["user_input", (d) => plain(d.text)],
+  ["model_request", (d) => `${plain(field(d.request_ref, "bytes"))} bytes sent`],
+  [
+    "model_response",
+    (d) => `${plain(d.stop_reason)} · ${plain(field(d.usage, "output_tokens"))} output tokens`,
+  ],
+  ["tool_call", (d) => `${plain(d.name)} ${plain(d.input)}`],
+  ["permission_decision", (d) => `${plain(d.decision)} · source ${plain(d.source)}`],
+  ["tool_result", (d) => plain(d.preview)],
+  ["approval_requested", (d) => `args_hash ${plain(d.args_hash).slice(0, 8)}…`],
+  ["parked", (d) => plain(d.reason)],
+  ["approval_granted", (d) => `challenge ${plain(d.challenge_id).slice(0, 8)}…`],
+  ["resumed", (d) => `address ${plain(field(d.address, "kind"))}`],
+  ["effect_begin", (d) => `attempt ${plain(d.attempt)}`],
+  ["effect_commit", (d) => `receipt ${plain(field(d.result_ref, "bytes"))} bytes`],
+  ["turn_completed", (d) => plain(d.reason)],
+]);
+
+const MAX = 116;
+function value(v: Json): string {
+  const s = JSON.stringify(v) ?? "";
+  return s.length > MAX ? `${s.slice(0, MAX)}…` : s;
+}
 
 /** What the log is for, in the reader's terms. Each one reads these same events. */
 const USES: readonly { readonly call: string; readonly body: string }[] = [
   { call: "timeline()", body: "Read a bad answer back, months later, with no logging added." },
-  { call: "fork()", body: "Branch at a fork point and try another prompt from the same state." },
-  { call: "run()", body: "Resume after a crash without repeating the refund." },
-  { call: "saveCase()", body: "Keep this turn as a test that reruns with no model calls." },
+  { call: "run()", body: "Resume after a crash without sending the refund twice." },
+  { call: "fork()", body: "Branch from an eligible snapshot and try another prompt from the same state." },
+  { call: "saveCase()", body: "Keep a turn as a test that reruns with no model calls." },
 ];
 
-function EventRow({ row, active, onSelect }: { row: Row; active: boolean; onSelect: (seq: number) => void }) {
+function Row({ e, active, onSelect }: { e: Event; active: boolean; onSelect: (seq: number) => void }) {
   return (
-    <li>
-      <button
-        type="button"
-        onClick={() => onSelect(row.seq)}
-        aria-current={active ? "true" : undefined}
-        className={`grid w-full grid-cols-[1.4rem_minmax(0,auto)_minmax(0,1fr)] items-baseline gap-x-2 rounded border-l-2 py-[3px] pr-2 pl-1.5 text-left font-mono cursor-pointer text-[0.72rem] leading-5 transition-colors sm:text-[0.76rem] ${
-          active ? "border-fd-primary bg-fd-primary/10" : "border-transparent hover:bg-fd-accent/70"
-        }`}
-      >
-        <span className="text-right text-fd-muted-foreground tabular-nums">{row.seq}</span>
-        <span className={active ? "text-fd-primary" : "text-fd-foreground"}>{row.type}</span>
-        <span className="min-w-0 truncate text-fd-muted-foreground">
-          {row.forkPoint ? (
-            <span className="mr-1.5 rounded border border-fd-primary/40 px-1 text-[0.6rem] tracking-wide text-fd-primary uppercase">
-              fork
-            </span>
-          ) : null}
-          {row.note}
-        </span>
-      </button>
-    </li>
+    <button
+      type="button"
+      onClick={() => onSelect(e.seq)}
+      aria-current={active ? "true" : undefined}
+      className={`grid w-full cursor-pointer grid-cols-[1.4rem_minmax(0,auto)_minmax(0,1fr)] items-baseline gap-x-2 rounded border-l-2 py-[3px] pr-2 pl-1.5 text-left font-mono text-[0.72rem] leading-5 transition-colors sm:text-[0.76rem] ${
+        active ? "border-fd-primary bg-fd-primary/10" : "border-transparent hover:bg-fd-accent/70"
+      }`}
+    >
+      <span className="text-right text-fd-muted-foreground tabular-nums">{e.seq}</span>
+      <span className={active ? "text-fd-primary" : "text-fd-foreground"}>{e.type}</span>
+      <span className="min-w-0 truncate text-fd-muted-foreground">{NOTE.get(e.type)?.(e.data) ?? ""}</span>
+    </button>
+  );
+}
+
+function Column({
+  label,
+  aside,
+  rows,
+  selected,
+  onSelect,
+  className,
+}: {
+  label: string;
+  aside: string;
+  rows: readonly Event[];
+  selected: number;
+  onSelect: (seq: number) => void;
+  className: string;
+}) {
+  return (
+    <div className={`border-fd-border px-2 py-3 ${className}`}>
+      <div className="px-1.5 pb-2">
+        <p className="font-mono text-[0.68rem] tracking-widest text-fd-muted-foreground uppercase">{label}</p>
+        <p className="mt-0.5 text-xs leading-5 text-fd-muted-foreground">{aside}</p>
+      </div>
+      <ol>
+        {rows.map((e, i) => (
+          <li key={e.seq}>
+            {e.epoch !== (rows[i - 1]?.epoch ?? EVENTS[0]?.epoch) ? (
+              <p className="mt-2 mb-1 flex items-center gap-2 px-1.5 font-mono text-[0.62rem] tracking-widest text-fd-muted-foreground uppercase">
+                epoch {e.epoch}
+                <span className="h-px flex-1 bg-fd-border" aria-hidden="true" />
+              </p>
+            ) : null}
+            <Row e={e} active={e.seq === selected} onSelect={onSelect} />
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
 export function Timeline() {
-  const [selected, setSelected] = useState(12);
-  const row = ROWS.find((r) => r.seq === selected) ?? ROWS[0];
+  const [selected, setSelected] = useState(13);
+  const row = EVENTS.find((e) => e.seq === selected) ?? EVENTS[0];
+  if (!row) return null;
 
   return (
     <div className="mt-12 overflow-hidden rounded-2xl border border-fd-border bg-fd-card">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-fd-border px-4 py-2.5 text-xs">
         <span className="font-medium text-fd-foreground">await thread.timeline()</span>
-        <span className="font-mono text-fd-muted-foreground">thr_01JBQ4Z7 · main</span>
-        <span className="ml-auto font-mono text-fd-muted-foreground">20 events · append-only</span>
+        <span className="font-mono text-fd-muted-foreground">{recorded.thread_id.slice(0, 13)}…</span>
+        <span className="ml-auto font-mono text-fd-muted-foreground">
+          {EVENTS.length} events · append-only
+        </span>
       </div>
 
       <div className="grid md:grid-cols-2">
-        {PHASES.map((phase, i) => (
-          <div
-            key={phase.label}
-            className={`border-fd-border px-2 py-3 ${i === 0 ? "border-b md:border-r md:border-b-0" : ""}`}
-          >
-            <div className="px-1.5 pb-2">
-              <p className="font-mono text-[0.68rem] tracking-widest text-fd-muted-foreground uppercase">
-                {phase.label}
-              </p>
-              <p className="mt-0.5 text-xs leading-5 text-fd-muted-foreground">{phase.aside}</p>
-            </div>
-            <ol>
-              {phase.rows.map((r) => (
-                <EventRow key={r.seq} row={r} active={r.seq === selected} onSelect={setSelected} />
-              ))}
-            </ol>
-            {phase.footer ? (
-              <p className="mt-3 border-t border-fd-border px-1.5 pt-3 text-xs leading-5 text-fd-muted-foreground">
-                {phase.footer}
-              </p>
-            ) : null}
-          </div>
-        ))}
+        <Column
+          label="Up to the park"
+          aside="Asked over the API. The agent looks up the order, asks to refund it, and the policy hands the decision to a person."
+          rows={EVENTS.slice(0, SPLIT)}
+          selected={selected}
+          onSelect={setSelected}
+          className="border-b md:border-r md:border-b-0"
+        />
+        <Column
+          label="After the approval"
+          aside="The approval arrives under a new epoch, the run picks up where it parked, the refund goes out, and a second turn follows."
+          rows={EVENTS.slice(SPLIT)}
+          selected={selected}
+          onSelect={setSelected}
+          className=""
+        />
       </div>
 
       <div className="border-t border-fd-border bg-fd-background/50 px-4 py-3">
         <p className="text-xs text-fd-muted-foreground">
-          <span className="font-mono text-[0.8rem] text-fd-primary">{row.type}</span> · entry {row.seq} of 20,
-          exactly as it is stored
+          <span className="font-mono text-[0.8rem] text-fd-primary">{row.type}</span> · entry {row.seq} of{" "}
+          {EVENTS.length}, read from the recording
         </p>
-        <dl className="mt-2 grid gap-x-8 font-mono text-[0.74rem] leading-6 sm:grid-cols-2 xl:grid-cols-3">
-          {row.detail.map(([k, v]) => (
-            <div key={k} className="flex min-w-0 gap-x-2">
-              <dt className="shrink-0 text-fd-muted-foreground">{k}</dt>
-              <dd className="min-w-0 break-words text-fd-foreground">{v}</dd>
+        <dl className="mt-2 gap-x-8 font-mono text-[0.74rem] leading-6 sm:columns-2 xl:columns-3">
+          <div className="flex min-w-0 break-inside-avoid gap-x-2">
+            <dt className="shrink-0 text-fd-muted-foreground">actor</dt>
+            <dd className="min-w-0 break-all text-fd-foreground">{value(row.actor)}</dd>
+          </div>
+          {Object.entries(row.data).map(([k, v]) => (
+            <div key={k} className="flex min-w-0 break-inside-avoid gap-x-2">
+              <dt className="shrink-0 text-fd-muted-foreground">data.{k}</dt>
+              <dd className="min-w-0 break-all text-fd-foreground">{value(v)}</dd>
             </div>
           ))}
         </dl>
         <p className="mt-2.5 text-xs text-fd-muted-foreground">
-          Held as one canonical JSON line: the same bytes in SQLite, in{" "}
-          <span className="font-mono text-[0.75rem]">threads export</span> and in the conformance fixtures.
+          Every value on this page comes from{" "}
+          <span className="font-mono text-[0.75rem]">components/home/recorded-run.json</span>, the timeline()
+          output of one real run, committed in this repo. Values over {MAX} characters are cut with an
+          ellipsis; nothing else is changed.
         </p>
       </div>
 

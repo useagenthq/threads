@@ -1,0 +1,909 @@
+{
+  "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+  "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+  "entries": [
+    {
+      "event": {
+        "seq": 1,
+        "event_id": "01a0ddb5-53f2-764c-8a53-a3c8d8dbdb32",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 1,
+        "time": 1790426043378,
+        "prev_hash": "afeeb37d32a806faa57e82a58b6a84e46851f634ea46e9894de33b78902e49c8",
+        "type": "thread_started",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "agent_name": "support",
+          "config_hash": "301ff004fc4f8e911ec4d89f5d2f0d19b6babbeb63dd718f10ac0bab52cdd559",
+          "model": {
+            "provider": "anthropic",
+            "name": "claude-sonnet-5"
+          },
+          "model_params": {
+            "max_tokens": 8192
+          },
+          "adapter": {
+            "name": "anthropic",
+            "version": "1",
+            "settings": {
+              "prompt_cache": "5m"
+            }
+          },
+          "instructions": "Help customers with orders and refunds.",
+          "tools": [
+            {
+              "name": "read_tool_result",
+              "description": "Read bytes [offset, offset + length) of an earlier tool result by call_id, including spilled or cleared output.",
+              "input_schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "call_id": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "length": {
+                    "maximum": 65536,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "offset": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": ["call_id", "offset", "length"],
+                "type": "object"
+              },
+              "effect_class": "read_only"
+            },
+            {
+              "name": "todo_write",
+              "description": "Replace your todo list with todos, the complete new list. Use it to plan and track multi-step work.",
+              "input_schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "todos": {
+                    "description": "The complete new list; ids are unique.",
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "active_form": {
+                          "description": "Present tense, shown while in_progress.",
+                          "type": "string"
+                        },
+                        "content": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "id": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "status": {
+                          "enum": ["pending", "in_progress", "completed"],
+                          "type": "string"
+                        }
+                      },
+                      "required": ["id", "content", "status"],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": ["todos"],
+                "type": "object"
+              },
+              "effect_class": "read_only"
+            },
+            {
+              "name": "lookup_order",
+              "description": "Look an order up by id.",
+              "input_schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "order_id": {
+                    "type": "string"
+                  }
+                },
+                "required": ["order_id"],
+                "type": "object"
+              },
+              "effect_class": "read_only"
+            },
+            {
+              "name": "mcp__billing__refund",
+              "description": "Refund an order to the original card.",
+              "input_schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "amount": {
+                    "type": "number"
+                  },
+                  "order_id": {
+                    "type": "string"
+                  }
+                },
+                "required": ["order_id", "amount"],
+                "type": "object"
+              },
+              "effect_class": "idempotent",
+              "dedup_window_ms": 86400000
+            }
+          ],
+          "policy": {
+            "models": [
+              {
+                "provider": "anthropic",
+                "name": "claude-sonnet-5",
+                "context_window": 1000000,
+                "max_output_tokens": 128000,
+                "input_billing_bound": "context_window"
+              }
+            ],
+            "retry": {
+              "max_retries": 8,
+              "base_delay_ms": 1000,
+              "max_delay_ms": 32000,
+              "max_retry_after_ms": 60000,
+              "max_total_wait_ms": 600000,
+              "crash_resends": 2,
+              "fallback_after": 3,
+              "fallback_scope": "turn",
+              "heartbeat_ms": 15000
+            },
+            "context": {
+              "reserve_tokens": 20000,
+              "cache_ttl_ms": 300000,
+              "clear_results": {
+                "trigger": {
+                  "permille": 700
+                },
+                "keep_recent": 5,
+                "exclude_tools": []
+              },
+              "spill": {
+                "threshold_bytes": 32768,
+                "head_bytes": 2048,
+                "tail_bytes": 1024,
+                "request_budget_bytes": 204800
+              },
+              "compact": {
+                "trigger": {
+                  "permille": 850
+                },
+                "keep_tail": {
+                  "tokens": 20000
+                },
+                "max_failures": 3
+              },
+              "restore": {
+                "max_files": 5,
+                "file_tokens": 5000,
+                "skill_tokens": 5000,
+                "skills_total_tokens": 25000
+              },
+              "max_output_continuations": 3,
+              "defer_tools": "auto",
+              "defer_threshold": {
+                "permille": 100
+              },
+              "server_edits": "disabled"
+            },
+            "permissions": {
+              "mode": "default",
+              "allow": [],
+              "ask": [],
+              "deny": [],
+              "protected_paths": [
+                ".git/**",
+                ".threads/**",
+                ".claude/**",
+                ".mcp.json",
+                "**/.bashrc",
+                "**/.zshrc",
+                "**/.profile",
+                "**/.gitconfig",
+                "**/.ssh/**"
+              ],
+              "allow_bypass": false,
+              "plan_exit_mode": "default"
+            }
+          }
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 2,
+        "event_id": "01a0ddb5-5426-7720-9a86-94da12ef1ddb",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 1,
+        "time": 1790426043430,
+        "prev_hash": "0e87f01d71d6e6e7f87a33123a2b72b6181a6901ea98e47d61a9e619ee3e2650",
+        "type": "user_input",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "user",
+          "principal": {
+            "issuer": "api",
+            "tenant": "local",
+            "subject": "operator"
+          }
+        },
+        "data": {
+          "source": "api",
+          "text": "Refund order A-2291, it arrived broken."
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 3,
+        "event_id": "01a0ddb5-5433-782e-96cf-262474a960c5",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 1,
+        "time": 1790426043443,
+        "prev_hash": "2e33966c8c6a0191a2d06a8234fd5d2d5696150ad5a1ae2dd58327c9dd9769c8",
+        "type": "model_request",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "attempt": 1,
+          "request_ref": {
+            "sha256": "825f5db061ebb69de8ab1dbde78f947d70c71e7a750b5647eb5c9d092ba0e5c2",
+            "bytes": 1868,
+            "media_type": "application/x-ndjson"
+          },
+          "declared_prefix": {
+            "bytes": 1775,
+            "sha256": "f2e5e0d56a9789031dcc653ff816e1a483eb5376d5c4007139a29a556b5be68d"
+          }
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 4,
+        "event_id": "01a0ddb5-5dc3-7ac0-8270-4664cd01f0bd",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 1,
+        "time": 1790426045891,
+        "prev_hash": "eb44ef034ac4f707abf546fb819644dd0af6978f6928819a1b3f7a345e0b8825",
+        "type": "model_response",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "model"
+        },
+        "data": {
+          "request_event_id": "01a0ddb5-5433-782e-96cf-262474a960c5",
+          "content": [
+            {
+              "type": "reasoning",
+              "provider": "anthropic",
+              "model": "claude-sonnet-5",
+              "format": "thinking",
+              "ref": {
+                "sha256": "e292ad3bdeb2ed7c289f2260d0dfb0d8444d93656827609ae9797aaee3aacf39",
+                "bytes": 508,
+                "media_type": "application/json"
+              }
+            },
+            {
+              "type": "tool_use",
+              "call_id": "toolu_01AAnDhhd7DgRmHe5JdDktUh",
+              "name": "lookup_order",
+              "input": {
+                "order_id": "A-2291"
+              }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 2,
+            "output_tokens": 82,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 1043,
+            "reasoning_tokens": 27
+          },
+          "completeness": "complete"
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 5,
+        "event_id": "01a0ddb5-5dc8-7cbd-b7da-2bb80150bd30",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 1,
+        "time": 1790426045896,
+        "prev_hash": "9a7b466f07c5edcc9c6ef314e8ac47d06ddc00ee0ca03964d2cb9550b8563e39",
+        "type": "tool_call",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "call_id": "toolu_01AAnDhhd7DgRmHe5JdDktUh",
+          "name": "lookup_order",
+          "input": {
+            "order_id": "A-2291"
+          },
+          "request_event_id": "01a0ddb5-5433-782e-96cf-262474a960c5"
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 6,
+        "event_id": "01a0ddb5-5dca-78c9-8283-b284cdd9c707",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 1,
+        "time": 1790426045898,
+        "prev_hash": "ff788be65f513535867d0626a45e828d9b0b1a298364b3ae9bcf443f9649b645",
+        "type": "permission_decision",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "call_id": "toolu_01AAnDhhd7DgRmHe5JdDktUh",
+          "decision": "allow",
+          "source": "mode",
+          "mode": "default"
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 7,
+        "event_id": "01a0ddb5-5dcd-7212-9cc0-efcabf17ac53",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 1,
+        "time": 1790426045901,
+        "prev_hash": "cd2f2eaffb0401bcaef11c84b23e03c1354302b1ffab72f2d71c00ecdd3d3eb2",
+        "type": "tool_result",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "tool"
+        },
+        "data": {
+          "call_id": "toolu_01AAnDhhd7DgRmHe5JdDktUh",
+          "is_error": false,
+          "completeness": "complete",
+          "preview": "A-2291 · delivered 3 Sep · $84.00",
+          "origin": "executed"
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 8,
+        "event_id": "01a0ddb5-5dd6-73ca-8126-6a9196226bc6",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 1,
+        "time": 1790426045910,
+        "prev_hash": "b6e3a2ad905933fbe58d9b97f4245e9d24a66317e6be681329148cc6ba409628",
+        "type": "model_request",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "attempt": 1,
+          "request_ref": {
+            "sha256": "c6bbb53a2394f000e4ea32d9b4b364d6dc06200fc14049c8c2e05ce342c22e6e",
+            "bytes": 2383,
+            "media_type": "application/x-ndjson"
+          },
+          "declared_prefix": {
+            "bytes": 1775,
+            "sha256": "f2e5e0d56a9789031dcc653ff816e1a483eb5376d5c4007139a29a556b5be68d"
+          }
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 9,
+        "event_id": "01a0ddb5-66dd-7f6f-b617-f75a49c0e753",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 1,
+        "time": 1790426048221,
+        "prev_hash": "ec9ca8d90d52c9f3fd671d54caea0e1aa021bca30a06596e9dc8ae7ccafa5e6a",
+        "type": "model_response",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "model"
+        },
+        "data": {
+          "request_event_id": "01a0ddb5-5dd6-73ca-8126-6a9196226bc6",
+          "content": [
+            {
+              "type": "text",
+              "text": "I found order A-2291 — delivered Sep 3, total $84.00. I'll process a full refund since it arrived broken."
+            },
+            {
+              "type": "tool_use",
+              "call_id": "toolu_01JCYPdBrWcUfWaXCat3gHig",
+              "name": "mcp__billing__refund",
+              "input": {
+                "amount": 84,
+                "order_id": "A-2291"
+              }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 2,
+            "output_tokens": 123,
+            "cache_read_tokens": 1043,
+            "cache_write_tokens": 107,
+            "reasoning_tokens": 0
+          },
+          "completeness": "complete"
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 10,
+        "event_id": "01a0ddb5-66df-779d-9994-de345f56f857",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 1,
+        "time": 1790426048223,
+        "prev_hash": "f53a87394cd9db620bb805e8ede7ae9155934040139c62866eee25bbd8f005da",
+        "type": "tool_call",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "call_id": "toolu_01JCYPdBrWcUfWaXCat3gHig",
+          "name": "mcp__billing__refund",
+          "input": {
+            "amount": 84,
+            "order_id": "A-2291"
+          },
+          "request_event_id": "01a0ddb5-5dd6-73ca-8126-6a9196226bc6"
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 11,
+        "event_id": "01a0ddb5-66e1-7af0-bd7f-64d3677dee0b",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 1,
+        "time": 1790426048225,
+        "prev_hash": "8c9aa968c0f6302becd182ee97625861b50d4544b56ab95a0be4b600b0276dd1",
+        "type": "permission_decision",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "call_id": "toolu_01JCYPdBrWcUfWaXCat3gHig",
+          "decision": "ask",
+          "source": "mode",
+          "mode": "default"
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 12,
+        "event_id": "01a0ddb5-66e3-77be-830c-271bfaf3c8b8",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 1,
+        "time": 1790426048227,
+        "prev_hash": "9aceae259bff658d54e731dba04d6fc63ad4a7fdbd57ed85b37d41571838ba46",
+        "type": "approval_requested",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "challenge_id": "f3ec2389-269c-4b1d-a126-50dc3e854b5c",
+          "call_id": "toolu_01JCYPdBrWcUfWaXCat3gHig",
+          "args_hash": "5276f8a1a5c3d2d89acf0a0918cae4384fec6585b52a3d8934ac328854b0198e",
+          "expires_at": 1790429648227
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 13,
+        "event_id": "01a0ddb5-66e3-732f-840c-e5fe715bb8b9",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 1,
+        "time": 1790426048227,
+        "prev_hash": "0eb1d718248b8c729e0d1f114038def83b0bedff347b9f5aa4752e7ebdbb6850",
+        "type": "parked",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "address": {
+            "kind": "approval",
+            "id": "f3ec2389-269c-4b1d-a126-50dc3e854b5c"
+          },
+          "reason": "awaiting_approval",
+          "expires_at": 1790429648227
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 14,
+        "event_id": "01a0ddb5-66ee-7d22-86cc-45f81bedefcd",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 2,
+        "time": 1790426048238,
+        "prev_hash": "eafb24cbc551fb68afd410069b23ac7223126b5b9e9a75f48fc33c9b31183cc0",
+        "type": "approval_granted",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "approver",
+          "principal": {
+            "issuer": "api",
+            "tenant": "local",
+            "subject": "amrita@acme.com"
+          }
+        },
+        "data": {
+          "challenge_id": "f3ec2389-269c-4b1d-a126-50dc3e854b5c",
+          "call_id": "toolu_01JCYPdBrWcUfWaXCat3gHig",
+          "args_hash": "5276f8a1a5c3d2d89acf0a0918cae4384fec6585b52a3d8934ac328854b0198e"
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 15,
+        "event_id": "01a0ddb5-66ee-7f8b-a2c5-2188fbeb3e69",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 2,
+        "time": 1790426048238,
+        "prev_hash": "ec94e6f79c616e14539d52cba38032a77d831363575a7d0ee05fcc2df1424e11",
+        "type": "resumed",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "address": {
+            "kind": "approval",
+            "id": "f3ec2389-269c-4b1d-a126-50dc3e854b5c"
+          },
+          "cause_event_id": "01a0ddb5-66ee-7d22-86cc-45f81bedefcd"
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 16,
+        "event_id": "01a0ddb5-66f5-7d2f-b2f7-2fd80e38549a",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 3,
+        "time": 1790426048245,
+        "prev_hash": "4a7e625b3491b0f2c5b4a7bc3734c0d97e5d564d0b07cdce009685828477ef39",
+        "type": "effect_begin",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "call_id": "toolu_01JCYPdBrWcUfWaXCat3gHig",
+          "attempt": 1
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 17,
+        "event_id": "01a0ddb5-66f8-7bea-b386-74263ba67a41",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 3,
+        "time": 1790426048248,
+        "prev_hash": "e4263b7ed63436ee6141a85e5a3580b804edd3314038ede288939aa21a594db5",
+        "type": "effect_commit",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "call_id": "toolu_01JCYPdBrWcUfWaXCat3gHig",
+          "result_ref": {
+            "sha256": "bbf3ce639078112234b415f5d4482e7952f80853cac3ad1f0fb2ada021478a9c",
+            "bytes": 37,
+            "media_type": "text/plain"
+          }
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 18,
+        "event_id": "01a0ddb5-66f8-7b4b-8538-f020d85f2631",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 3,
+        "time": 1790426048248,
+        "prev_hash": "10f05869c5e5689edfcaa18aad38b7af444bbc2fdd45d23a0d245cedab40a690",
+        "type": "tool_result",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "tool"
+        },
+        "data": {
+          "call_id": "toolu_01JCYPdBrWcUfWaXCat3gHig",
+          "is_error": false,
+          "completeness": "complete",
+          "preview": "Refunded $84.00 to the original card.",
+          "origin": "executed"
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 19,
+        "event_id": "01a0ddb5-66fd-76ea-9881-c12eca05e0e8",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 3,
+        "time": 1790426048253,
+        "prev_hash": "98be05eaf153581729c9e6c552ae3581885fa95ff99ad78e356f46203d7c3eb1",
+        "type": "model_request",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "attempt": 1,
+          "request_ref": {
+            "sha256": "15de92ee44b979d40eaa470f2798f34ef2a23066a2b8124699740533b794d3d3",
+            "bytes": 2835,
+            "media_type": "application/x-ndjson"
+          },
+          "declared_prefix": {
+            "bytes": 1775,
+            "sha256": "f2e5e0d56a9789031dcc653ff816e1a483eb5376d5c4007139a29a556b5be68d"
+          }
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 20,
+        "event_id": "01a0ddb5-6e7f-78ec-a698-b2fbbda452cb",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 3,
+        "time": 1790426050175,
+        "prev_hash": "ae1bbc61cc3b3abcb398ba7ef4c7b54be607380b6e0d5a9f5b5f8d10f9a0eaa4",
+        "type": "model_response",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "model"
+        },
+        "data": {
+          "request_event_id": "01a0ddb5-66fd-76ea-9881-c12eca05e0e8",
+          "content": [
+            {
+              "type": "text",
+              "text": "Your refund of **$84.00** for order A-2291 has been processed back to your original payment method. Sorry it arrived broken — you should see the refund reflected on your card in the next few business days. Let me know if there's anything else I can help with!"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": {
+            "input_tokens": 2,
+            "output_tokens": 77,
+            "cache_read_tokens": 1150,
+            "cache_write_tokens": 140,
+            "reasoning_tokens": 0
+          },
+          "completeness": "complete"
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 21,
+        "event_id": "01a0ddb5-6e83-72cb-89fe-abf9b61266a3",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 3,
+        "time": 1790426050179,
+        "prev_hash": "1109d74ff085dbab7be30f396be32949458cf375621b7b2e5be2628f1fdd1399",
+        "type": "turn_completed",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "reason": "end_turn"
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 22,
+        "event_id": "01a0ddb5-6e86-7078-a755-adb24f6984c1",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 3,
+        "time": 1790426050182,
+        "prev_hash": "7f6c7f0111fea57b2a47e836ae92968f39ee6c64f263fcaf673baaa1d9c1a5e0",
+        "type": "user_input",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "user",
+          "principal": {
+            "issuer": "api",
+            "tenant": "local",
+            "subject": "operator"
+          }
+        },
+        "data": {
+          "source": "api",
+          "text": "Thanks."
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 23,
+        "event_id": "01a0ddb5-6e90-77b9-8f1d-6cec13e30037",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 3,
+        "time": 1790426050192,
+        "prev_hash": "7819322db089979bad9a2e4950d175ec6850c473e882854753cbd87651439f25",
+        "type": "model_request",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "attempt": 1,
+          "request_ref": {
+            "sha256": "3b73da41ab1c866e132f8f57d97621246cf1ead488c210adf05ee64ba54dbbaf",
+            "bytes": 3216,
+            "media_type": "application/x-ndjson"
+          },
+          "declared_prefix": {
+            "bytes": 1775,
+            "sha256": "f2e5e0d56a9789031dcc653ff816e1a483eb5376d5c4007139a29a556b5be68d"
+          }
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 24,
+        "event_id": "01a0ddb5-74d8-742d-af91-d68d2164f2a5",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 3,
+        "time": 1790426051800,
+        "prev_hash": "9901cc79a0fc45cf0065a07e0e0f9bfe05f6cd989cb5014ff4de4d576ebfdf43",
+        "type": "model_response",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "model"
+        },
+        "data": {
+          "request_event_id": "01a0ddb5-6e90-77b9-8f1d-6cec13e30037",
+          "content": [
+            {
+              "type": "text",
+              "text": "You're welcome! If anything else comes up—another order issue, question, or refund—just let me know. Have a great day!"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": {
+            "input_tokens": 2,
+            "output_tokens": 38,
+            "cache_read_tokens": 1290,
+            "cache_write_tokens": 84,
+            "reasoning_tokens": 0
+          },
+          "completeness": "complete"
+        }
+      },
+      "fork_point": false
+    },
+    {
+      "event": {
+        "seq": 25,
+        "event_id": "01a0ddb5-74dd-7880-a84e-ec594445d3d6",
+        "thread_id": "01a0ddb5-53e0-7fb7-a8f5-a4c738ddaa76",
+        "branch_id": "01a0ddb5-53e1-7d21-8985-f8e581027d7d",
+        "epoch": 3,
+        "time": 1790426051805,
+        "prev_hash": "0b18f24b155e3f574759ecc0410578433df30dec4dec527a2090c3690577f316",
+        "type": "turn_completed",
+        "type_version": 1,
+        "critical": true,
+        "actor": {
+          "kind": "host"
+        },
+        "data": {
+          "reason": "end_turn"
+        }
+      },
+      "fork_point": false
+    }
+  ]
+}

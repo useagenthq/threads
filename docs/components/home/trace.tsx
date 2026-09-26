@@ -1,9 +1,15 @@
 /*
  * The same run as the timeline above, seen as OpenTelemetry spans.
  *
- * Span names, kinds and attribute keys are the ones the exporter actually sends
- * (spec/otel/README.md and the Observability guide). We draw no vendor UI: the point is that the
- * spans are ordinary OTLP, so they land in whatever tracing tool the reader already runs.
+ * Every value is derived from components/home/recorded-run.json by the rules in
+ * spec/otel/README.md: a turn span opens at user_input and closes at parked, a resumed turn opens
+ * at the first event after the park, a continuation opens at resumed for the call still pending,
+ * and a span id is the first eight bytes of SHA-256("threads-span\0" + branch_id + "\0" +
+ * event_id). Durations are the gaps between those events' recorded times, and the usage numbers
+ * are the convention's input total (input + cache read + cache write).
+ *
+ * We draw no vendor UI: the point is that the spans are ordinary OTLP, so they land in whatever
+ * tracing tool the reader already runs.
  */
 
 type Span = {
@@ -21,74 +27,76 @@ type Span = {
 
 const TRACE: readonly Span[] = [
   {
-    id: "c41d8a7e",
+    id: "1063113481f9bcde",
     op: "invoke_agent",
     arg: "support",
     kind: "INTERNAL",
-    took: "2.9s",
-    attrs: ["gen_ai.agent.name=support", "threads.parked"],
-    note: "turn 1 · ends where it parks",
+    took: "4.8s",
+    attrs: ["gen_ai.agent.name=support", "threads.seq.start=2", "threads.parked"],
+    note: "the turn · opens at user_input, closes where it parks",
     children: [
       {
-        id: "2b70ef11",
+        id: "057a19ab12c00e35",
         op: "chat",
         arg: "claude-sonnet-5",
         kind: "CLIENT",
-        took: "1.2s",
-        attrs: ["gen_ai.request.model=claude-sonnet-5", "gen_ai.usage.input_tokens=3332"],
+        took: "2.4s",
+        attrs: ["gen_ai.request.model=claude-sonnet-5", "gen_ai.usage.input_tokens=1045"],
       },
       {
-        id: "91ac5d40",
+        id: "387c287be6747967",
         op: "execute_tool",
         arg: "lookup_order",
         kind: "INTERNAL",
-        took: "0.3s",
-        attrs: ["gen_ai.tool.name=lookup_order", "gen_ai.tool.call.id=call_5b1"],
+        took: "5ms",
+        attrs: ["gen_ai.tool.call.id=toolu_01AAnDhh…", "threads.tool.effect_class=read_only"],
+        events: ["permission_decision"],
       },
       {
-        id: "6e0b12b9",
+        id: "9c70dad1e4114009",
         op: "chat",
         arg: "claude-sonnet-5",
         kind: "CLIENT",
-        took: "1.1s",
-        attrs: ["gen_ai.response.finish_reasons=[tool_use]", "gen_ai.usage.output_tokens=74"],
+        took: "2.3s",
+        attrs: ["gen_ai.response.finish_reasons=[tool_use]", "gen_ai.usage.output_tokens=123"],
       },
       {
-        id: "d7f349c2",
+        id: "63f233b3eb80101c",
         op: "execute_tool",
         arg: "mcp__billing__refund",
         kind: "INTERNAL",
-        took: "0.2s",
-        attrs: ["threads.parked", "threads.tool.effect_class=external"],
+        took: "4ms",
+        attrs: ["threads.tool.effect_class=idempotent", "threads.parked"],
         events: ["permission_decision", "approval_requested"],
       },
     ],
   },
   {
-    id: "8a15cc03",
+    id: "1384ae019c5c1c54",
     op: "invoke_agent",
     arg: "support",
     kind: "INTERNAL",
-    took: "1.4s",
-    attrs: ["gen_ai.conversation.id=thr_01JBQ4Z7", "threads.seq.start=13"],
-    note: "turn 2 · same trace, linked to turn 1, six minutes later",
+    took: "1.9s",
+    attrs: ["gen_ai.conversation.id=01a0ddb5-53e0…", "threads.seq.start=14"],
+    note: "the resumed turn · same trace, linked to the one above",
+    events: ["approval_granted"],
     children: [
       {
-        id: "33be9077",
+        id: "0aa1243677ad80fb",
         op: "execute_tool",
         arg: "mcp__billing__refund",
         kind: "INTERNAL",
-        took: "0.6s",
-        attrs: ["threads.resumed", "gen_ai.tool.call.id=call_7g2"],
+        took: "10ms",
+        attrs: ["gen_ai.tool.call.id=toolu_01JCYPdB…", "threads.resumed"],
         events: ["effect_begin", "effect_commit"],
       },
       {
-        id: "5fd2a418",
+        id: "8e8fd385db308086",
         op: "chat",
         arg: "claude-sonnet-5",
         kind: "CLIENT",
-        took: "0.8s",
-        attrs: ["gen_ai.response.finish_reasons=[end_turn]", "gen_ai.usage.output_tokens=61"],
+        took: "1.9s",
+        attrs: ["gen_ai.response.finish_reasons=[end_turn]", "gen_ai.usage.output_tokens=77"],
       },
     ],
   },
@@ -152,10 +160,10 @@ function SpanRow({ span, last }: { span: Span; last: boolean }) {
 
 export function Trace() {
   return (
-    <div className="min-w-0 overflow-hidden rounded-2xl border border-fd-border bg-fd-card">
+    <div className="min-w-0 overflow-hidden rounded-2xl border border-fd-border bg-fd-background">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-fd-border px-4 py-2.5 text-xs">
         <span className="font-medium text-fd-foreground">One trace, the run above</span>
-        <span className="ml-auto font-mono text-fd-muted-foreground">trace 8f21c0d4…</span>
+        <span className="ml-auto font-mono text-fd-muted-foreground">trace 7037b65c44b8f46e…</span>
       </div>
       <ol className="overflow-x-auto px-4 py-3">
         {TRACE.map((s) => (
@@ -170,7 +178,9 @@ export function Trace() {
       <p className="border-t border-fd-border px-4 py-3 text-xs leading-5 text-fd-muted-foreground">
         Every span carries <code className="font-mono text-fd-foreground">threads.thread_id</code>,{" "}
         <code className="font-mono text-fd-foreground">threads.branch_id</code> and the log positions it
-        covers, so a span in your tracing tool points straight back at the events that produced it.
+        covers, so a span in your tracing tool points straight back at the events that produced it. The second
+        question the customer asked opens its own trace: a{" "}
+        <code className="font-mono text-fd-foreground">user_input</code> is always its own root.
       </p>
     </div>
   );

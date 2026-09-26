@@ -23,7 +23,7 @@ export function UseCases() {
         <TabsContent
           key={u.id}
           value={u.id}
-          className="mt-4 overflow-hidden rounded-2xl border border-fd-border bg-fd-card"
+          className="mt-4 overflow-hidden rounded-2xl border border-fd-border bg-fd-background"
         >
           <div className="flex flex-col gap-2 border-b border-fd-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm leading-6 text-fd-muted-foreground">{u.body}</p>

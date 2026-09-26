@@ -1,149 +1,43 @@
-import {
-  ArrowRight,
-  Bot,
-  Box,
-  Brain,
-  FlaskConical,
-  GitFork,
-  type LucideIcon,
-  MessageCircle,
-  ScrollText,
-  Shield,
-  ShieldCheck,
-  SlidersHorizontal,
-  SquareCode,
-  Users,
-} from "lucide-react";
-import Image from "next/image";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { CodeSample } from "@/components/home/code-sample";
 import { CopyCommand } from "@/components/home/copy-command";
 import { Evals } from "@/components/home/evals";
 import { EventLog } from "@/components/home/event-log";
+import { Features } from "@/components/home/features";
 import { GitHubIcon } from "@/components/home/github-icon";
 import { HeroThreads } from "@/components/home/hero-threads";
+import { Plumbing } from "@/components/home/plumbing";
 import { Providers } from "@/components/home/providers";
 import { QUICKSTART, TELEMETRY } from "@/components/home/samples";
+import { Band, Code, SectionHeading } from "@/components/home/section";
 import { Timeline } from "@/components/home/timeline";
 import { Backends, Trace } from "@/components/home/trace";
 import { UseCases } from "@/components/home/use-cases";
 import { LogoMark } from "@/components/logo";
 import { githubUrl, tagline } from "@/lib/shared";
 
-type Feature = { title: string; icon: LucideIcon; href: string; tags: string[]; body: string };
-
-const FEATURES: Feature[] = [
-  {
-    title: "Evals & testing",
-    icon: FlaskConical,
-    href: "/docs/evals/saved-cases",
-    tags: ["saveCase", "Scripted model", "Fake sandbox"],
-    body: "Save a real run as a regression case and replay it with a scripted model: no API keys, no network.",
-  },
-  {
-    title: "Sandboxes",
-    icon: Box,
-    href: "/docs/sandboxes/overview",
-    tags: ["E2B", "Daytona", "Modal · Python"],
-    body: "Run code in an isolated machine with no internet by default. Your keys never enter it.",
-  },
-  {
-    title: "Agents & tools",
-    icon: Bot,
-    href: "/docs/agents/agents",
-    tags: ["agent()", "tool()", "MCP"],
-    body: "A model, instructions and tools. Built-in shell, file, web, git and code tools, plus any MCP server.",
-  },
-  {
-    title: "Multi-agent",
-    icon: Users,
-    href: "/docs/multi-agent/subagents",
-    tags: ["Subagents", "Handoffs", "Teams"],
-    body: "Let an agent start helpers, hand the conversation to a specialist, or share a task board.",
-  },
-  {
-    title: "Channels",
-    icon: MessageCircle,
-    href: "/docs/host/overview",
-    tags: ["Slack", "WhatsApp", "GitHub", "HTTP"],
-    body: "Put an agent in Slack, WhatsApp or GitHub, on a cron schedule, or behind an HTTP API.",
-  },
-  {
-    title: "Memory & knowledge",
-    icon: Brain,
-    href: "/docs/memory/memory",
-    tags: ["Local", "Supermemory", "Zep"],
-    body: "Remember across runs and search your own documents, scoped per tenant.",
-  },
-  {
-    title: "Durability",
-    icon: ShieldCheck,
-    href: "/docs/production/durability",
-    tags: ["Crash-safe", "Approvals", "Budgets"],
-    body: "Resume after a crash without repeating an action. Park risky steps for a human to decide.",
-  },
-  {
-    title: "Hooks & permissions",
-    icon: SlidersHorizontal,
-    href: "/docs/control/hooks",
-    tags: ["Hooks", "Rules", "Plan mode"],
-    body: "Gate tools, inject context, and decide who can approve what.",
-  },
-  {
-    title: "API reference",
-    icon: SquareCode,
-    href: "/docs/reference/overview",
-    tags: ["TypeScript", "Python", "HTTP"],
-    body: "Every public function and type, side by side in both languages.",
-  },
-];
-
-const REASONS: { title: string; icon: LucideIcon; body: ReactNode }[] = [
-  {
-    title: "Auditable",
-    icon: ScrollText,
-    body: (
-      <>
-        Every input, every exact model request, every tool call and result. Read it with{" "}
-        <Code>timeline()</Code> or <Code>threads timeline</Code>.
-      </>
-    ),
-  },
-  {
-    title: "Crash-safe",
-    icon: Shield,
-    body: "After a crash, an action that may already have happened is checked or handed to you, never blindly retried.",
-  },
-  {
-    title: "Easy evals",
-    icon: GitFork,
-    body: "Fork any past step into its own sandbox, test with a scripted model, and save real threads as regression cases.",
-  },
-];
-
-function Code({ children }: { children: ReactNode }) {
-  return (
-    <code className="rounded border border-fd-border bg-fd-muted px-1 py-0.5 font-mono text-[0.85em] text-fd-foreground">
-      {children}
-    </code>
-  );
-}
-
 const buttonBase =
   "inline-flex h-10 items-center justify-center gap-2 rounded-full px-5 text-sm font-medium transition-colors";
 
+/*
+ * The argument, in order: here it is → here is the plumbing you stop writing → here is one run,
+ * read three ways (the log, the trace, the eval) → here is what you build with it → start.
+ *
+ * Sections alternate surfaces so two large ones never share a background, and the three "read it
+ * back" sections share a numbered eyebrow so they read as one movement instead of three clones.
+ */
 export default function HomePage() {
   return (
     <main className="flex flex-1 flex-col">
       <Hero />
       <Providers />
-      <BuiltFor />
+      <StopRebuilding />
       <TheRecord />
       <Observability />
       <EvalsSection />
-      <Features />
-      <Reasons />
+      <BuiltFor />
+      <WhatYouCanBuild />
       <CallToAction />
     </main>
   );
@@ -153,8 +47,8 @@ function Hero() {
   return (
     <section className="relative overflow-hidden border-b border-fd-border">
       <HeroThreads />
-      <div className="relative mx-auto flex max-w-6xl flex-col items-center px-4 pt-16 pb-16 text-center sm:px-6 sm:pt-24 lg:pb-24">
-        <LogoMark className="mb-6 h-12 w-auto text-fd-primary sm:h-14" />
+      <div className="relative mx-auto flex max-w-6xl flex-col items-center px-4 pt-14 pb-16 text-center sm:px-6 sm:pt-20 lg:pb-20">
+        <LogoMark className="mb-5 h-11 w-auto text-fd-primary sm:h-12" />
         <Link
           href={githubUrl}
           className="mb-6 inline-flex items-center gap-2 rounded-full border border-fd-border bg-fd-background/70 px-3 py-1 text-xs font-medium text-fd-muted-foreground backdrop-blur transition-colors hover:text-fd-foreground"
@@ -166,11 +60,11 @@ function Hero() {
           Agents you can <span className="text-fd-primary">inspect</span>,{" "}
           <span className="text-fd-primary">replay</span> and <span className="text-fd-primary">trust</span>.
         </h1>
-        <p className="mt-6 max-w-2xl text-base leading-7 text-pretty text-fd-muted-foreground sm:text-lg">
+        <p className="mt-5 max-w-2xl text-base leading-7 text-pretty text-fd-muted-foreground sm:text-lg">
           Build in TypeScript or Python on an append-only event log. Inspect model calls, tool effects and
           approvals; use built-in sandboxes, channels, memory and evals.
         </p>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
           <Link
             href="/docs/quickstart"
             className={`${buttonBase} bg-fd-primary text-fd-primary-foreground hover:bg-fd-primary/90`}
@@ -186,18 +80,18 @@ function Hero() {
             GitHub
           </Link>
         </div>
-        <div className="mt-6 flex w-full justify-center">
+        <div className="mt-6 flex w-full max-w-full flex-col items-center gap-2">
           <CopyCommand command="git clone https://github.com/useagenthq/threads" />
+          <p className="text-xs text-fd-muted-foreground">
+            Not on npm or PyPI yet.{" "}
+            <Link href="/docs/installation" className="underline underline-offset-4 hover:text-fd-foreground">
+              Install from source
+            </Link>
+            .
+          </p>
         </div>
-        <p className="mt-2 text-xs text-fd-muted-foreground">
-          Not on npm or PyPI yet.{" "}
-          <Link href="/docs/installation" className="underline underline-offset-4 hover:text-fd-foreground">
-            Install from source
-          </Link>
-          .
-        </p>
 
-        <div className="mt-14 grid w-full overflow-hidden rounded-2xl border border-fd-border bg-fd-card text-left shadow-2xl shadow-fd-primary/5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="mt-12 grid w-full overflow-hidden rounded-2xl border border-fd-border bg-fd-card text-left shadow-2xl shadow-fd-primary/5 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="min-w-0 border-fd-border lg:border-r">
             <CodeSample sample={QUICKSTART} />
           </div>
@@ -206,226 +100,198 @@ function Hero() {
           </div>
         </div>
         <p className="mt-4 max-w-xl text-sm text-fd-muted-foreground">
-          Every run is a log you can read, resume and fork. The right side is what{" "}
-          <Code>thread.timeline()</Code> returns for this agent.
+          That is the whole program. Beside it are the events <Code>thread.timeline()</Code> gives back for
+          that run, in order, and nothing was added to get them.
         </p>
       </div>
     </section>
   );
 }
 
-function SectionHeading({
-  eyebrow,
-  title,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  children: ReactNode;
-}) {
+function StopRebuilding() {
   return (
-    <div className="max-w-2xl">
-      <p className="font-mono text-xs font-medium tracking-widest text-fd-primary uppercase">{eyebrow}</p>
-      <h2 className="mt-3 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">{title}</h2>
-      <p className="mt-4 text-base leading-7 text-fd-muted-foreground">{children}</p>
-    </div>
-  );
-}
-
-function BuiltFor() {
-  return (
-    <section className="mx-auto w-full max-w-6xl px-4 pt-20 sm:px-6 lg:pt-28">
-      <SectionHeading eyebrow="Use cases" title="Built for the agent you need">
-        The same agent definition runs as a script, in a sandbox, in Slack or on a schedule. Pick one to see
-        the whole program.
+    <Band tone="card">
+      <SectionHeading
+        eyebrow="The problem"
+        title="Stop rebuilding the same agent plumbing"
+        aside={
+          <>
+            The v1 schema has 73 event types, each stored as one canonical JSON line. Those exact bytes are
+            what SQLite holds, what <Code>threads export</Code> writes and what the conformance fixtures pin,
+            so a log written by the TypeScript library reduces to the same state in Python.
+          </>
+        }
+      >
+        Sandboxes, approvals, resume-after-crash, audit and evals get built again on every agent project, each
+        one its own little system. threads writes one append-only log instead and reads all of them back out
+        of it.
       </SectionHeading>
-      <UseCases />
-    </section>
+      <Plumbing />
+    </Band>
   );
 }
 
 function TheRecord() {
   return (
-    <section id="timeline" className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
-      <SectionHeading eyebrow="The record" title="Every run reads back, step by step">
+    <Band id="timeline">
+      <SectionHeading
+        step="01"
+        eyebrow="The record"
+        title="Every run reads back, step by step"
+        aside={
+          <>
+            From the command line the same run is <Code>threads timeline &lt;thread_id&gt;</Code>. Pick any
+            entry below to see the stored event.
+          </>
+        }
+      >
         There is nothing to instrument. A thread already holds every input, the exact bytes of every model
         request, every tool call, every approval and every result. <Code>timeline()</Code> reads it back in
         order, from production, months later, with only the store and the thread id.
       </SectionHeading>
       <Timeline />
       <p className="mt-6 max-w-3xl text-sm leading-6 text-fd-muted-foreground">
-        Pick any entry to see the stored event. This run parked on an approval and finished six minutes later
-        in a different process, and the log reads as one story either way. From the command line it is{" "}
-        <Code>threads timeline &lt;thread_id&gt;</Code>.
+        This is one recorded run of a support agent on <Code>claude-sonnet-5</Code>, not a drawing of one. It
+        parked waiting for a person to approve a refund, and the epoch in the margin is the lease changing
+        hands: whether the approval takes a millisecond or a week, the log reads the same.
       </p>
-    </section>
+    </Band>
   );
 }
 
 function Observability() {
   return (
-    <section id="observability" className="border-y border-fd-border bg-fd-card/60">
-      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
-        <SectionHeading eyebrow="Observability" title="The same log, as OpenTelemetry spans">
-          One line on your host sends every turn, model call and tool call to the tracing tool you already
-          run. Spans are computed from the log rather than recorded beside it, so a run that crashed and was
-          recovered still traces, and an approval a person gave hours later lands in the same trace as the
-          turn that asked for it.
-        </SectionHeading>
-        <div className="mt-12 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-10">
-          <div className="flex min-w-0 flex-col gap-6">
-            <div className="overflow-hidden rounded-2xl border border-fd-border bg-fd-card">
-              <CodeSample sample={TELEMETRY} />
-            </div>
-            <div>
-              <p className="text-sm leading-6 text-fd-muted-foreground">
-                The exporter speaks OTLP/HTTP JSON and the standard <Code>OTEL_*</Code> variables, so the
-                endpoint is the only thing that changes:
-              </p>
-              <div className="mt-4">
-                <Backends />
-              </div>
-              <dl className="mt-6 space-y-3 text-sm leading-6">
-                <div>
-                  <dt className="font-medium text-fd-foreground">Content is off by default</dt>
-                  <dd className="text-fd-muted-foreground">
-                    Names, timings, token counts and outcomes leave the process. The conversation does not,
-                    and prompts are never exported.
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-fd-foreground">Sent once, when a span closes</dt>
-                  <dd className="text-fd-muted-foreground">
-                    A slow collector never holds up a run, and nothing is dropped while it is down.
-                  </dd>
-                </div>
-              </dl>
-            </div>
+    <Band id="observability" tone="card">
+      <SectionHeading
+        step="02"
+        eyebrow="Observability"
+        title="The same log, as OpenTelemetry spans"
+        aside={
+          <>
+            The panel on the right is the recorded run above put through the rules in{" "}
+            <Code>spec/otel/README.md</Code>: the turn span closes where the run parks, the resumed turn opens
+            on the approval, and the span ids are derived from the event ids.
+          </>
+        }
+      >
+        One line on your host sends every turn, model call and tool call to the tracing tool you already run.
+        Spans are computed from the log rather than recorded beside it, so a run that crashed and was
+        recovered still traces, and an approval a person gave hours later lands in the same trace as the turn
+        that asked for it.
+      </SectionHeading>
+      <div className="mt-12 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-10">
+        <div className="flex min-w-0 flex-col gap-6">
+          <div className="overflow-hidden rounded-2xl border border-fd-border bg-fd-background">
+            <CodeSample sample={TELEMETRY} />
           </div>
-          <Trace />
+          <div>
+            <p className="text-sm leading-6 text-fd-muted-foreground">
+              The exporter speaks OTLP/HTTP JSON and the standard <Code>OTEL_*</Code> variables, so the
+              endpoint is the only thing that changes:
+            </p>
+            <div className="mt-4">
+              <Backends />
+            </div>
+            <dl className="mt-8 space-y-4 text-sm leading-6">
+              <div>
+                <dt className="font-medium text-fd-foreground">Content is off by default</dt>
+                <dd className="text-fd-muted-foreground">
+                  Names, timings, token counts and outcomes leave the process. The conversation does not, and
+                  prompts are never exported.
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-fd-foreground">Sent once, when a span closes</dt>
+                <dd className="text-fd-muted-foreground">
+                  A slow collector never holds up a run, and nothing is dropped while it is down.
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-fd-foreground">Nothing extra is recorded</dt>
+                <dd className="text-fd-muted-foreground">
+                  A pure function turns committed events into spans, so a run that crashed and was recovered
+                  traces exactly like one that did not.
+                </dd>
+              </div>
+            </dl>
+          </div>
         </div>
+        <Trace />
       </div>
-    </section>
+    </Band>
   );
 }
 
 function EvalsSection() {
   return (
-    <section id="evals" className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
-      <SectionHeading eyebrow="Evals" title="Save a real run. Rerun it forever.">
+    <Band id="evals">
+      <SectionHeading
+        step="03"
+        eyebrow="Evals"
+        title="Save a real run. Rerun it forever."
+        aside={
+          <>
+            A saved case reruns with zero model calls, and an effectful tool call can only answer from the
+            recording, so an eval never performs a real side effect.
+          </>
+        }
+      >
         <Code>saveCase</Code> keeps a turn you liked as a regression case: the recorded replies, the tool
         results and the exact request bytes. <Code>threads eval</Code> then checks it on every commit.
       </SectionHeading>
       <Evals />
-    </section>
+    </Band>
   );
 }
 
-function Features() {
+function BuiltFor() {
   return (
-    <section className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
-      <SectionHeading eyebrow="Built in" title="What you can build">
+    <Band tone="card">
+      <SectionHeading
+        eyebrow="Use cases"
+        title="Built for the agent you need"
+        aside="Nothing above changes when you switch: the run is the same log whether it started from a script, a Slack message or a cron trigger."
+      >
+        The same agent definition runs as a script, in a sandbox, in Slack or on a schedule. Pick one to see
+        the whole program.
+      </SectionHeading>
+      <UseCases />
+    </Band>
+  );
+}
+
+function WhatYouCanBuild() {
+  return (
+    <Band>
+      <SectionHeading
+        eyebrow="Built in"
+        title="What you can build"
+        aside="Every piece has the same shape in TypeScript and Python, and the public names are mapped one to one in spec/api.json."
+      >
         Each piece is one option on your agent or host. Bring your API keys; threads does the plumbing.
       </SectionHeading>
-      <ul className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-fd-border bg-fd-border sm:grid-cols-2 lg:grid-cols-3">
-        {FEATURES.map((f) => (
-          <li key={f.title} className="bg-fd-background">
-            <Link
-              href={f.href}
-              className="group flex h-full flex-col gap-3 p-6 transition-colors hover:bg-fd-card focus-visible:-outline-offset-2"
-            >
-              <span className="flex items-center gap-3">
-                <span className="grid size-9 place-items-center rounded-lg border border-fd-border bg-fd-card text-fd-primary">
-                  <f.icon className="size-[18px]" aria-hidden="true" />
-                </span>
-                <span className="font-semibold">{f.title}</span>
-                <ArrowRight
-                  className="ml-auto size-4 -translate-x-1 text-fd-muted-foreground opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100"
-                  aria-hidden="true"
-                />
-              </span>
-              <span className="text-sm leading-6 text-fd-muted-foreground">{f.body}</span>
-              <span className="mt-auto flex flex-wrap gap-1.5 pt-2">
-                {f.tags.map((t) => (
-                  <span
-                    key={t}
-                    className="rounded-md border border-fd-border px-1.5 py-0.5 font-mono text-[0.7rem] text-fd-muted-foreground"
-                  >
-                    {t}
-                  </span>
-                ))}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function Reasons() {
-  return (
-    <section className="border-y border-fd-border bg-fd-card/60">
-      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
-        <SectionHeading eyebrow="Why threads" title="One record makes the hard parts simple">
-          Every run is an append-only log of what the agent saw and did. That one record is what makes these
-          work.
-        </SectionHeading>
-        <LogDiagram />
-        <div className="mt-12 grid gap-10 md:grid-cols-3">
-          {REASONS.map((r) => (
-            <div key={r.title} className="flex flex-col gap-3 border-l-2 border-fd-primary/40 pl-5">
-              <r.icon className="size-5 text-fd-primary" aria-hidden="true" />
-              <h3 className="text-lg font-semibold">{r.title}</h3>
-              <p className="text-sm leading-6 text-fd-muted-foreground">{r.body}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function LogDiagram() {
-  const alt =
-    "Every run is a log: thread_started, user_input, model_request, model_response, tool_call, " +
-    "permission_decision, tool_result, turn_completed. Replay (timeline), resume (run again), fork and " +
-    "evals (saveCase) are all read from it.";
-  return (
-    <div className="mt-12 max-w-4xl">
-      <Image
-        src="/images/run-is-a-log-light.svg"
-        alt={alt}
-        width={880}
-        height={516}
-        unoptimized
-        className="h-auto w-full dark:hidden"
-      />
-      <Image
-        src="/images/run-is-a-log-dark.svg"
-        alt={alt}
-        width={880}
-        height={516}
-        unoptimized
-        className="hidden h-auto w-full dark:block"
-      />
-    </div>
+      <Features />
+    </Band>
   );
 }
 
 function CallToAction() {
   return (
-    <section className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
-      <div className="relative overflow-hidden rounded-2xl border border-fd-border bg-fd-card px-6 py-12 text-center sm:px-12">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-32 left-1/2 h-64 w-[40rem] max-w-[120vw] -translate-x-1/2 rounded-full bg-fd-primary/15 blur-3xl"
-        />
-        <h2 className="relative text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+    <section className="relative overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-40 left-1/2 h-80 w-[56rem] max-w-[140vw] -translate-x-1/2 rounded-full bg-fd-primary/12 blur-3xl"
+      />
+      <div className="relative mx-auto w-full max-w-6xl px-4 py-20 text-center sm:px-6 lg:py-28">
+        <p className="font-mono text-sm font-medium tracking-wide text-fd-primary">state = reduce(log)</p>
+        <h2 className="mt-4 text-3xl font-semibold tracking-tight text-balance sm:text-4xl lg:text-5xl">
           Run your first agent with no API key
         </h2>
-        <p className="relative mx-auto mt-4 max-w-xl text-fd-muted-foreground">{tagline}</p>
-        <div className="relative mt-8 flex flex-wrap justify-center gap-3">
+        <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-fd-muted-foreground">
+          The quickstart builds a weather agent on a scripted model, so it runs offline with no keys. Then you
+          swap in a real one and read back the thread you just produced.
+        </p>
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link
             href="/docs/quickstart"
             className={`${buttonBase} bg-fd-primary text-fd-primary-foreground hover:bg-fd-primary/90`}

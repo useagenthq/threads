@@ -94,11 +94,6 @@ export function Evals() {
           </div>
         ))}
       </dl>
-
-      <p className="mt-8 max-w-3xl border-l-2 border-fd-primary/40 pl-5 text-base leading-7 text-pretty text-fd-foreground">
-        A saved case reruns with zero model calls, and an effectful tool call can only answer from the
-        recording, so an eval never performs a real side effect.
-      </p>
     </div>
   );
 }
