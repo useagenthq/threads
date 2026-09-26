@@ -16,8 +16,13 @@ export type Call = {
 type Rule = {
   readonly text: string;
   readonly tool: string;
+  readonly wildcard: boolean;
   readonly spec?: string;
 };
+
+type ParsedRule =
+  | { readonly ok: true; readonly value: Rule }
+  | { readonly ok: false; readonly error: string };
 
 const FILE_TOOLS = new Set([
   "read",
@@ -30,16 +35,55 @@ const FILE_TOOLS = new Set([
   "grep",
 ]);
 
-function parseRule(text: string): Rule {
-  const open = text.indexOf("(");
-  if (open === -1 || !text.endsWith(")")) return { text, tool: text };
-  return { text, tool: text.slice(0, open), spec: text.slice(open + 1, -1) };
+function parseRule(text: string): ParsedRule {
+  const found = /^([a-z][a-z0-9_]{0,127})(\*?)(?:\(([\s\S]+)\))?$/.exec(text);
+  if (found === null || found[0] !== text)
+    return { ok: false, error: `'${text}' is not tool or tool(specifier)` };
+  const [, tool = "", star = "", spec] = found;
+  if (spec !== undefined && star === "*")
+    return {
+      ok: false,
+      error: `'${text}': a tool pattern takes no specifier`,
+    };
+  if (spec !== undefined) {
+    const error = specError(tool, spec);
+    if (error !== undefined) return { ok: false, error: `'${text}': ${error}` };
+  }
+  return {
+    ok: true,
+    value: {
+      text,
+      tool,
+      wildcard: star === "*",
+      ...(spec === undefined ? {} : { spec }),
+    },
+  };
 }
 
-function toolMatches(pattern: string, tool: string): boolean {
-  return pattern.endsWith("*")
-    ? tool.startsWith(pattern.slice(0, -1))
-    : pattern === tool;
+export function permissionRuleError(text: string): string | undefined {
+  const parsed = parseRule(text);
+  return parsed.ok ? undefined : parsed.error;
+}
+
+function specError(tool: string, spec: string): string | undefined {
+  if (tool === "bash") {
+    const parsed = parseShell(spec.endsWith(":*") ? spec.slice(0, -2) : spec);
+    return parsed.unparseable || parsed.commands.length !== 1
+      ? "a bash specifier is one plain simple command"
+      : undefined;
+  }
+  if (FILE_TOOLS.has(tool) || tool === "spawn_agent" || tool === "handoff")
+    return undefined;
+  if (tool === "web_fetch" || tool.startsWith("browser_"))
+    return /^domain:(\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*$/.exec(spec)?.[0] ===
+      spec
+      ? undefined
+      : "expected domain:host or domain:*.host";
+  return "this tool takes no specifier";
+}
+
+function toolMatches(rule: Rule, tool: string): boolean {
+  return rule.wildcard ? tool.startsWith(rule.tool) : rule.tool === tool;
 }
 
 export function isFileTool(tool: string): boolean {
@@ -169,8 +213,10 @@ export function anyMatch(
   shell: ParsedShell | undefined,
 ): string | undefined {
   return rules.find((text) => {
-    const rule = parseRule(text);
-    if (!toolMatches(rule.tool, call.tool)) return false;
+    const parsed = parseRule(text);
+    if (!parsed.ok) return false;
+    const rule = parsed.value;
+    if (!toolMatches(rule, call.tool)) return false;
     if (rule.spec === undefined) return true;
     if (call.tool !== "bash")
       return specMatches(rule, rule.spec, call, workspace);
@@ -196,15 +242,20 @@ export function allMatch(
   shell: ParsedShell | undefined,
 ): string | undefined {
   if (call.tool !== "bash") return anyMatch(rules, call, workspace, shell);
-  const anything = rules.find((text) => anyCommand(parseRule(text)));
+  const anything = rules.find((text) => {
+    const parsed = parseRule(text);
+    return parsed.ok && anyCommand(parsed.value);
+  });
   if (anything !== undefined) return anything;
   if (shell === undefined || shell.unparseable || shell.commands.length === 0)
     return undefined;
   const matched = shell.commands.map((command) =>
     command.allowable
       ? rules.find((text) => {
-          const rule = parseRule(text);
-          if (!toolMatches(rule.tool, call.tool)) return false;
+          const parsed = parseRule(text);
+          if (!parsed.ok) return false;
+          const rule = parsed.value;
+          if (!toolMatches(rule, call.tool)) return false;
           return rule.spec === undefined || bashMatches(rule.spec, command);
         })
       : undefined,
