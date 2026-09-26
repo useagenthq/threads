@@ -160,7 +160,14 @@ function inside(text: string, span: { start: number; end: number }): boolean {
 export async function batchGate(s: Session): Promise<Gated> {
   const step = stepEvents(s.events, s.fold);
   if (!step.some((e) => e.type === "tool_result")) return undefined;
-  const got = await context(s, "after_tool_batch", [s.state()], step);
+  // Keyed by the response whose calls this batch answered, so the decision names its subject and
+  // a re-run of the step reads its own record back (parity with Python's after_batch).
+  const response = turnEvents(s.events, s.fold).findLast(
+    (e) => e.type === "model_response",
+  );
+  if (response?.type !== "model_response") return undefined;
+  const key = { request_event_id: response.data.request_event_id };
+  const got = await context(s, "after_tool_batch", [s.state()], step, key);
   if (got === "failed")
     return (await s.append(draft.turnCompleted("error"))) ?? "ended";
   return got;

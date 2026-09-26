@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .common import ALICE, T0, sha, tokens, tool
+from .common import ALICE, T0, obj, sha, tokens, tool
 from .jcs import JsonValue, Obj, canonical
 from .log import Log
 from .pieces import answer, call, reduce_case, render_case, result, started, user
@@ -31,6 +31,11 @@ def _ask_call(log: Log, cid: str, cmd: str) -> Obj:
     use: Obj = {"type": "tool_use", "call_id": cid, "name": "bash", "input": inp}
     log.model_response(r, [use], "tool_use", tokens(60, 10))
     return log.tool_call(r, cid, "bash", inp)
+
+
+def _request_of(call: Obj) -> JsonValue:
+    """The request whose response asked for this call: what after_tool_batch is keyed by."""
+    return obj(call["data"])["request_event_id"]
 
 
 def _thread_rule(root: pathlib.Path) -> None:
@@ -141,12 +146,13 @@ def _hooks(root: pathlib.Path) -> None:
     log.add("injected", ctx)
     u = user(log, "Check disk usage.")
     _hook(log, "before_input", "allow", input_event_id=u["event_id"])
-    _ask_call(log, "call_1", "df -h")
+    call = _ask_call(log, "call_1", "df -h")
     _hook(log, "before_tool", "allow", call_id="call_1")
     log.add("permission_decision", {"call_id": "call_1", "decision": "allow", "source": "hook"})
     result(log, "call_1", "/ 40% used")
     _hook(log, "before_tool_result", "proceed", call_id="call_1")
-    _hook(log, "after_tool_batch", "proceed")
+    # Keyed by the response whose calls it answered: both languages record it (lane 14 E).
+    _hook(log, "after_tool_batch", "proceed", request_event_id=_request_of(call))
     _hook(log, "notification", "failed", reason="webhook timed out")
     _hook(log, "before_model_switch", "allow")
     log.add(

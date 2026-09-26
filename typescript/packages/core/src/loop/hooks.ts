@@ -152,18 +152,19 @@ export async function context(
   hook: "session_start" | "after_tool_batch" | "after_compact",
   args: HookArgs[typeof hook],
   window: readonly KnownEvent[] = [],
+  key: HookKey = {},
 ): Promise<Halt | "failed" | undefined> {
   for (const ext of defining(s, hook)) {
-    if (recorded(window, ext.name, hook) !== undefined) continue;
+    if (recorded(window, ext.name, hook, key) !== undefined) continue;
     const out = await run(ext, hook, args);
     if (out.kind === "failed") {
       const stopped = await s.append(
-        decision(ext.name, hook, "failed", {}, out.reason),
+        decision(ext.name, hook, "failed", key, out.reason),
       );
       return stopped ?? "failed";
     }
     const stopped = await s.append(
-      decision(ext.name, hook, "proceed"),
+      decision(ext.name, hook, "proceed", key),
       ...out.value.map((text) => injection(ext.name, text)),
     );
     if (stopped !== undefined) return stopped;
