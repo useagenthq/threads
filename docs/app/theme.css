@@ -7,9 +7,9 @@
 /*
  * The brand blue. This is the only place a blue is chosen; every other step is mixed from it,
  * so changing --brand moves the whole site. #1A65FE is 4.8:1 on white (AA for text), but only
- * 4.0:1 on the near-black background, so the dark theme uses --brand-lift (8.0:1) instead.
+ * Both themes use --brand itself; --brand-lift is a lighter step kept for the hero strands only.
  * The two files that cannot read CSS repeat the resolved hex with a pointer back here:
- * app/icon.svg (#1A65FE) and lib/og.tsx (#1A65FE, #74A5FF).
+ * app/icon.svg and lib/og.tsx both repeat #1A65FE.
  */
 :root {
   --brand: #1a65fe;
@@ -48,13 +48,13 @@
   --color-fd-card: #151412;
   --color-fd-card-foreground: #f4f2ee;
   --color-fd-border: rgb(255 255 255 / 0.1);
-  --color-fd-primary: var(--brand-lift);
-  --color-fd-primary-foreground: #0d0c0b;
+  --color-fd-primary: var(--brand);
+  --color-fd-primary-foreground: #ffffff;
   --color-fd-secondary: #151412;
   --color-fd-secondary-foreground: #f4f2ee;
   --color-fd-accent: #23211d;
   --color-fd-accent-foreground: #f4f2ee;
-  --color-fd-ring: var(--brand-lift);
+  --color-fd-ring: var(--brand);
   --prose-body: #a5a29e;
 }
 
