@@ -5,6 +5,7 @@ import { ALREADY_OPEN, openBranch } from "../store/open";
 import { parseRows } from "../store/tables";
 import { type LogError, logError } from "../verify/error";
 import { changeRows, insertRows } from "./index";
+import { teamAppended } from "./wake";
 
 // The team index on the write path (spec/schema/README.md, "Teams"): the index hooks every
 // append runs in its transaction, with the same insertRows/changeRows a rebuild folds, so the
@@ -124,7 +125,9 @@ async function teamsOf(
 export async function feedRows(a: Appended): Promise<Result<void, LogError>> {
   const teams = await teamsOf(a);
   if (!teams.ok) return teams;
-  for (const { team_id } of teams.value)
+  for (const { team_id } of teams.value) {
+    // Only once the rows are durable: a follower woken here reads committed offsets or nothing.
+    a.tx.afterCommit(() => teamAppended(team_id));
     for (const e of a.events)
       await a.tx.run(
         `INSERT INTO team_feed (team_id, epoch, feed_offset, branch_id, seq)
@@ -134,5 +137,6 @@ export async function feedRows(a: Appended): Promise<Result<void, LogError>> {
           FROM (SELECT COALESCE(MAX(epoch), 1) AS e FROM team_feed WHERE team_id = ?) AS current_epoch`,
         [team_id, team_id, a.branchId, e.seq, team_id],
       );
+  }
   return ok(undefined);
 }

@@ -338,6 +338,61 @@ if started.status == "started":
 - **Ask members, not the lead.** `team.ask` on the team's lead is refused `lead`: only members take turns here, so nobody would ever answer it. Sending the lead a message, waiting for it and cancelling it all work as usual.
 - **Refusals are values.** A call that can't go ahead returns `{ status: "refused", code }`: the member is unknown (a `MemberRef` of another tenant or team included), has ended or its mailbox is full, the team has closed, or `busy` if the team's log stayed locked by another writer for 5 s (nothing was recorded; retry with the same key). `team.wait` also returns `invalid_request` for an empty member list or a `mode` below 1 or above the number of members; nothing is recorded.
 
+## Following the team's events
+
+`team.events()` is the team's audit feed: every event of every log in the team, member by member, in the order they committed. Each item carries a cursor, so a reader that stops can pick up exactly where it left off, and `follow` keeps the stream open for items that have not committed yet.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+// A live tail. It ends when the team closes, or when you stop iterating.
+let last: TeamCursor | undefined;
+for await (const item of team.events({ follow: true })) {
+  last = item.cursor;
+  // The feed was rebuilt under a new epoch: read on from the cursor it names.
+  if (item.kind === "epoch_restarted") continue;
+  const who = item.source.kind === "member" ? item.source.member.name : item.source.kind;
+  console.log(`${item.cursor.epoch}:${item.cursor.offset} ${who} ${item.event.type}`);
+  if (item.event.type === "member_started") break;
+}
+
+// Later, or in another process: exactly where that reader stopped.
+if (last === undefined) throw new Error("the feed was empty");
+for await (const item of team.events({ after: last }))
+  console.log(item.kind === "event" ? item.event.type : item.kind);
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+# A live tail. It ends when the team closes, or when you stop iterating.
+last: TeamCursor | None = None
+async for item in team.events(follow=True):
+    last = item.cursor
+    # The feed was rebuilt under a new epoch: read on from the cursor it names.
+    if item.kind == "epoch_restarted":
+        continue
+    who = item.source.member.name if item.source.kind == "member" else item.source.kind
+    print(f"{item.cursor.epoch}:{item.cursor.offset} {who} {item.event.type}")
+    if item.event.type == "member_started":
+        break
+
+# Later, or in another process: exactly where that reader stopped.
+async for item in team.events(after=last):
+    print(item.event.type if item.kind == "event" else item.kind)
+```
+
+</Tab>
+</Tabs>
+
+- **Every item has a cursor**, `{epoch, offset}`. Pass the last one you saw as `after` and the next read starts just after it: no gap and no duplicate, whether the reader stopped on purpose or was killed.
+- **`follow: true` ends when the team closes**, after the items of the append that closed it. Without `follow` it ends at whatever was committed when the call began.
+- **A rebuilt index is a new epoch.** Delivery order is an index, and rebuilding it renumbers the offsets, so an old cursor no longer names a position. The stream says so once, with `epoch_restarted` naming the new epoch, and then replays that epoch from its start. A cursor from a *later* epoch, or past the end of the current one, is a mistake rather than a restart: it throws `InvalidCursorError`.
+- **It never drives the team.** `events()` only reads: it starts no member and writes nothing. A follower in the same process is woken by each commit; one in another process sees new items within a second.
+- **Over HTTP:** `GET /v1/teams/{team}/events` streams the same items as server-sent events, to any principal of the team's tenant. Each message's `id` is `<epoch>:<offset>`, so a browser's `EventSource` resumes with `Last-Event-ID` by itself; `?after=<epoch>:<offset>` does the same by hand, and the header wins when both are sent. The route always follows, and on `epoch_restarted` it sends that one item and closes, so the client reconnects with the new cursor. A team id outside the caller's tenant is `404`, and so is the host team's: it has no HTTP stream.
+
 ## Specialists the lead defines
 
 Sometimes the lead knows best what help it needs. A dynamic agent lets its model write a specialist's instructions, pick its tools and pick its model when it starts it, while your code still decides everything the specialist may ever have.

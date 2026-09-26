@@ -50,6 +50,7 @@ from threads.agents.team_answers import (  # noqa: E402
     Waited,
     WaitResult,
 )
+from threads.agents.team_feed import InvalidCursorError  # noqa: E402
 from threads.agents.team_handle import Team  # noqa: E402
 from threads.agents.team_handle_types import (  # noqa: E402
     AskStatus,
@@ -158,6 +159,7 @@ __all__ = [
     "Failure",
     "HandedOff",
     "Hooks",
+    "InvalidCursorError",
     "InvalidDefinition",
     "KnowledgeHit",
     "KnowledgeProvider",

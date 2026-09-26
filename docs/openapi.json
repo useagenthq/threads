@@ -12862,8 +12862,7 @@
           "4XX": {
             "$ref": "#/components/responses/SubscribeTeamError"
           }
-        },
-        "description": "**Phase 2, not yet available** (lane 29-teams-phase2-29b): Until then a cursor of any other epoch restarts the feed, follow is not supported, and GET /v1/teams/{team}/events is not served."
+        }
       }
     },
     "/v1/threads/{thread_id}/timeline": {

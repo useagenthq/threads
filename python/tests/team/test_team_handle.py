@@ -48,6 +48,8 @@ from threads.team.rows import team_row
 BOB = Principal(issuer="api", tenant="local", subject="bob")
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")
 """The run's own principal: the local operator run() records by default."""
+_PAGE = 256
+"""The feed's page size: a paging test needs more rows than this."""
 
 
 def _lead(writer: Sequence[str] = ("Draft.",)) -> TeamAgent[None, str]:
@@ -296,10 +298,11 @@ def test_a_feed_read_while_the_team_grows_past_a_page_yields_what_was_committed(
     async def main() -> None:
         store = sqlite(":memory:")
         _lead, _, team = await _ran(store)  # held: open_team rebinds it
-        # 120 refused starts: three feed rows each, more than one page.
-        for _ in range(120):
+        # 90 refused starts: three feed rows each, so over 256 rows, more than one page.
+        for _ in range(90):
             await team.start("editor", "Go.")
         committed = len(await _collect(team.events()))
+        assert committed > _PAGE
         seen = 0
         async for _item in team.events():
             seen += 1

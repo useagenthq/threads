@@ -49,6 +49,20 @@ export class StoreCorruptError extends Error {
 }
 
 /**
+ * Thrown by Team.events when its `after` names no readable position: a cursor of a later epoch
+ * than the feed's, or an offset past the head of the current one (spec/api.json Team.events).
+ * The HTTP team stream answers it 400 invalid_cursor.
+ */
+export class InvalidCursorError extends Error {
+  readonly code = "invalid_cursor" as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidCursorError";
+  }
+}
+
+/**
  * A dynamic member's recorded choice names a tool or model its template no longer has here: its
  * rebind fails pin_unavailable, unlike a setup that failed for now.
  */

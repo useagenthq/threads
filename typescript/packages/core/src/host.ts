@@ -1,6 +1,7 @@
 // @threads/core/host: what @threads/host builds on. Core never imports the host.
 
 export { dryPin } from "./agent/dry-pin";
+export { InvalidCursorError } from "./agent/errors";
 export type { HostRunner, NewThreadPin } from "./agent/hosted";
 export { hostRunner } from "./agent/registry";
 export {
@@ -17,6 +18,17 @@ export {
   storeOf,
   tenantStore,
 } from "./agent/sqlite";
+export {
+  cursorAgainst,
+  type FeedHead,
+  feedHead,
+  teamEvents,
+} from "./agent/team/feed";
+export type {
+  TeamCursor,
+  TeamItem,
+  TeamSource,
+} from "./agent/team/handle-types";
 export { renewTeam } from "./agent/team/runtime";
 export { assertNever } from "./assert-never";
 export { caseNames } from "./evals/case-dir";
@@ -48,6 +60,7 @@ export {
   Principal,
   type PrincipalKey,
   principalKey,
+  TeamId,
   ThreadId,
   ThreadStartedData,
   Uuid,

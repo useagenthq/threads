@@ -201,8 +201,13 @@ export type Team = {
   readonly askStatus: (askId: AskId) => Promise<AskStatus>;
   /** Every member, the lead included, with its state and, once settled, its result. */
   readonly members: () => Promise<readonly TeamMember[]>;
-  /** The team's audit feed: every committed event of every team log, as stored. */
+  /**
+   * The team's audit feed: every committed event of every team log, as stored. `follow` keeps
+   * it open for new items until the team closes; without it the committed feed ends the stream.
+   * Throws InvalidCursorError for an `after` of a later epoch, or past the head of this one.
+   */
   readonly events: (options?: {
     readonly after?: TeamCursor;
+    readonly follow?: boolean;
   }) => AsyncIterable<TeamItem>;
 };

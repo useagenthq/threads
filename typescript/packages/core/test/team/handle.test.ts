@@ -30,6 +30,8 @@ const ALICE = { issuer: "api", tenant: "local", subject: "alice" } as const;
 const BOB = { issuer: "api", tenant: "local", subject: "bob" } as const;
 /** The run's own principal: the local operator run() records by default. */
 const OPERATOR = { issuer: "api", tenant: "local", subject: "operator" };
+/** The feed's page size: a paging test needs more rows than this. */
+const PAGE = 256;
 
 function lead(writerAnswers: readonly string[] = ["Draft."]) {
   return agent({
@@ -322,11 +324,15 @@ describe("team.events", () => {
     await assertTeamReplays(await logOf(store), team.ref.id);
   });
 
+  // Ninety operator requests, each its own transaction, so this takes seconds on a quiet
+  // machine and much longer on a busy one. It asserts no latency, and bun's 5 s default turned
+  // that into a flaky failure, so it gets a ceiling that only a real hang can reach.
   test("a feed read while the team grows past a page yields what was committed at the start", async () => {
     const { store, team } = await ran();
-    // 120 refused starts: three feed rows each, more than one page.
-    for (let i = 0; i < 120; i += 1) await team.start("editor", "Go.");
+    // 90 refused starts: three feed rows each, so over PAGE rows, more than one page.
+    for (let i = 0; i < 90; i += 1) await team.start("editor", "Go.");
     const committed = (await collect(team.events())).length;
+    expect(committed).toBeGreaterThan(PAGE);
     let seen = 0;
     for await (const _item of team.events()) {
       seen += 1;
@@ -335,7 +341,7 @@ describe("team.events", () => {
     expect(seen).toBe(committed);
     expect(await collect(team.events())).toHaveLength(committed + 4);
     await assertTeamReplays(await logOf(store), team.ref.id);
-  });
+  }, 60_000);
 
   test("a rebuilt feed restarts: epoch_restarted, then the whole new epoch", async () => {
     const { store, team } = await ran();

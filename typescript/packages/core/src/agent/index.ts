@@ -10,6 +10,7 @@ export {
 export {
   ConfigError,
   type ConfigErrorCode,
+  InvalidCursorError,
   StoreCorruptError,
 } from "./errors";
 export {

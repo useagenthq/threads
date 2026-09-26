@@ -15,6 +15,7 @@ from threads.store.appended import Appended
 from threads.store.conn import Conn
 from threads.store.lines import Draft
 from threads.store.sql import text_of
+from threads.team import wake
 from threads.team.index import TeamLog, change_rows, insert_rows
 
 if TYPE_CHECKING:
@@ -94,6 +95,7 @@ def feed_rows(conn: Conn, a: Appended) -> ParseError | None:
     for team in _teams_of(conn, a):
         for e in a.events:
             conn.execute(_FEED, (team, team, a.branch_id, e.seq, team))
+        wake.appended(team)
     return None
 
 

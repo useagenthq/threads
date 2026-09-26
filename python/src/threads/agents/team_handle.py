@@ -126,9 +126,14 @@ class Team:
         """Every member, the lead included, with its state and, once settled, its result."""
         return await roster(self._env.sq, self.ref.id)
 
-    def events(self, *, after: TeamCursor | None = None) -> AsyncIterator[TeamItem]:
-        """The team's audit feed: every committed event of every team log, as stored."""
-        return team_events(self._env.sq, self.ref.id, after)
+    def events(
+        self, *, after: TeamCursor | None = None, follow: bool = False
+    ) -> AsyncIterator[TeamItem]:
+        """The team's audit feed: every committed event of every team log, as stored. `follow`
+        keeps it open for new items until the team closes; without it the committed feed ends
+        the stream. Raises InvalidCursorError for an `after` of a later epoch, or past the head
+        of this one."""
+        return team_events(self._env.sq, self.ref.id, after, follow=follow)
 
 
 async def _start(  # noqa: PLR0913, PLR0917 - the start's own fields, each optional

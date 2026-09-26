@@ -5417,7 +5417,7 @@
         "events": {
           "ts": "events",
           "py": "events",
-          "doc": "The team's audit feed: every committed event of every team log, as stored (results keep their artifact refs, so this never raises StoreCorruptError). A pure read that drives nothing.",
+          "doc": "The team's audit feed: every committed event of every team log, as stored (results keep their artifact refs, so this never raises StoreCorruptError). A pure read that drives nothing. The stream itself is the return value, so invalid_cursor is raised as InvalidCursorError when the iteration begins, not returned; the HTTP route answers it 400.",
           "async": true,
           "params": [
             {

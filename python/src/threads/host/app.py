@@ -19,7 +19,8 @@ from threads.adapters.loop_resources import holding
 from threads.agents.agent import Agent
 from threads.agents.config import ConfigError
 from threads.agents.store import Store, open_store
-from threads.host import expiry, start, stream
+from threads.agents.team_handle_types import TeamCursor, TeamItem
+from threads.host import expiry, start, stream, team_stream
 from threads.host.channel import Challenged, ChannelAdapter, RawRequest, RawResponse
 from threads.host.intake import ChannelIntake
 from threads.host.reopen import Reopening
@@ -213,6 +214,15 @@ class Host:
         """GET /v1/threads/{thread_id}/runs/{run_id}/events: the run's events from the log,
         then its result. Takes no input and starts nothing."""
         return await stream.subscribe(self._runner, thread_id, run_id, principal, after_seq)
+
+    async def subscribe_team(
+        self, team: str, *, principal: Principal, after: TeamCursor | None = None
+    ) -> Ok[AsyncIterator[TeamItem]] | Err[ParseError]:
+        """GET /v1/teams/{team}/events: a lead team's feed, following. A pure read that starts
+        nothing. Internal: the HTTP layer's, since api.json names the route Team.events."""
+        return await team_stream.subscribe_team(
+            self._runner.store(principal.tenant), team, principal.tenant, after
+        )
 
     async def thread(
         self, principal: Principal, thread_id: ThreadId, branch_id: BranchId | None

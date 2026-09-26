@@ -44,7 +44,7 @@ export function teamHandle(env: HandleEnv): Team {
       cancelMember(env, member, options.idempotencyKey),
     askStatus: (askId) => statusOf(env, askId),
     members: () => roster(env.log, env.artifacts, env.ref.id),
-    events: (options = {}) => teamEvents(env.log, env.ref.id, options.after),
+    events: (options = {}) => teamEvents(env.log, env.ref.id, options),
   };
 }
 

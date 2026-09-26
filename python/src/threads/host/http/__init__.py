@@ -10,7 +10,7 @@ from starlette.applications import Starlette
 from starlette.routing import Route
 
 from threads.host.app import Host
-from threads.host.http import runs, threads, ui_ag_ui, ui_ai_sdk, ui_frames
+from threads.host.http import runs, teams, threads, ui_ag_ui, ui_ai_sdk, ui_frames
 
 
 def app(host: Host) -> Starlette:
@@ -27,6 +27,7 @@ def app(host: Host) -> Starlette:
         Route(
             "/v1/threads/{thread_id}/runs/{run_id}/events", runs.subscribe(host), methods=["GET"]
         ),
+        Route("/v1/teams/{team}/events", teams.subscribe(host), methods=["GET"]),
         Route("/channels/{channel}/events", runs.webhook(host), methods=["POST"]),
         Route("/channels/{channel}/events", runs.challenge(host), methods=["GET"]),
         *threads.routes(host),

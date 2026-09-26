@@ -4,6 +4,7 @@ import { failure, json, routeFailure } from "./errors";
 import { startRun } from "./runs";
 import { IdempotencyKey, StartRunRequest } from "./schemas";
 import { type SseMessage, subscribe } from "./subscribe";
+import { teamEventsRoute } from "./teams";
 import * as threads from "./threads";
 import { agUiRun } from "./ui/ag-ui-route";
 import { aiSdkChat, aiSdkReconnect } from "./ui/ai-sdk-route";
@@ -30,6 +31,12 @@ const ROUTES: readonly Route[] = [
     method: "GET",
     path: new RegExp(`^${T}/runs/(?<run_id>[^/]+)/events$`),
     handler: events,
+  },
+  {
+    method: "GET",
+    path: /^\/v1\/teams\/(?<team>[^/]+)\/events$/,
+    handler: (call, request) =>
+      teamEventsRoute(call.ctx, call.principal, call.params["team"], request),
   },
   {
     method: "GET",
