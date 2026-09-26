@@ -1,14 +1,15 @@
 {
-  "name": "threads-examples",
-  "private": true,
+  "name": "@threads/coding",
+  "version": "0.0.0",
   "license": "Apache-2.0",
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "dependencies": {
     "@threads/anthropic": "workspace:*",
-    "@threads/coding": "workspace:*",
     "@threads/core": "workspace:*",
-    "@threads/host": "workspace:*",
-    "@threads/slack": "workspace:*",
+    "@threads/docker": "workspace:*",
     "zod": "^4.6.5"
   }
 }

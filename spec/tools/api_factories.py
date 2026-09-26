@@ -60,6 +60,10 @@ def _package_problems(api: Json) -> list[str]:
         for k, p in packages.items()
         if not any(lang in _obj(p) for lang in LANGS)
     ]
+    for key, c in _obj(_obj(api).get("constants")).items():
+        name = str(_obj(c).get("package", "core"))
+        if name not in packages:
+            errs.append(f"api.json constants.{key}: package {name} is not in packages")
     for key, f in _functions(api):
         name = str(f.get("package", "core"))
         package = packages.get(name)

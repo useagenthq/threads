@@ -111,7 +111,7 @@ def agent(
 </Field>
 
 <Field name="sandbox" type={"Sandbox"}>
-  The sandbox the sandbox tools run in: bash and the file tools (read, write, edit, ls, glob, grep). The git, lsp and computer options also need one. Omitted: no sandbox tools. See [Sandbox](/docs/reference/types/Sandbox).
+  The sandbox the sandbox tools run in: bash and the file tools (read, write, edit, ls, glob, grep). The git, lsp and computer options also need one. Omitted, or null / undefined, which is what a conditional config passes: no sandbox tools. See [Sandbox](/docs/reference/types/Sandbox).
 </Field>
 
 <Field name="workspace" type={"Workspace"}>
@@ -119,7 +119,7 @@ def agent(
 </Field>
 
 <Field name="memory" type={"MemoryProvider"}>
-  Saved cross-run memory: localMemory() or a memory adapter. It pins save_memory, search_memory and forget_memory. Omitted: the agent has no memory tools. See [MemoryProvider](/docs/reference/types/MemoryProvider).
+  Saved cross-run memory: localMemory() or a memory adapter. It pins save_memory, search_memory and forget_memory. Omitted, or null / undefined, which is what a conditional config passes: the agent has no memory tools. See [MemoryProvider](/docs/reference/types/MemoryProvider).
 </Field>
 
 <Field name="memoryWrite / memory_write" type={"\"deny\" | \"ask\" | \"allow_principal\" | \"allow\""} default={"ask"}>

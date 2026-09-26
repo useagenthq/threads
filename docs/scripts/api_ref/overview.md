@@ -21,6 +21,12 @@ $rows
 |---|---|---|
 $fns
 
+## Constants
+
+| Name | Package | What it is |
+|---|---|---|
+$constants
+
 ## Providers
 
 A provider factory connects an agent to an outside service and returns one of the protocol types below. Its page lists every option in both languages and the `ConfigError` codes it can raise. Options whose description starts with "Seam:" exist in one language to swap a transport or clock in tests.

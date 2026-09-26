@@ -91,14 +91,14 @@ class Emitter:
         return f'{self.type_ref(m.parent)}["{m.ts}"]'
 
     def keyed(self, m: Member, owner: str) -> None:
-        """A function, property, field or method: present, its required flag, and a function
-        or method is callable."""
+        """A function, constant, property, field or method: present, its required flag, and a
+        function or method is callable. A constant and a function are exports, never optional."""
         kind, key = self.gap(m), f'"{m.ts}"'
         if kind == "missing":
             self._out(m, "missing", f"Assert<IsMissing<{owner}, {key}>>")
             return
         self._out(m, "present", f"Assert<HasKey<{owner}, {key}>>")
-        if m.role != "function":
+        if m.role not in ("function", "constant"):
             flip = kind == "required_mismatch"
             self._out(
                 m, "required", f"Assert<Equals<Req<{owner}, {key}>, {_ts(m.required != flip)}>>"
@@ -130,7 +130,7 @@ class Emitter:
                 self.placed(m)
         elif m.role == "option":
             self.option(m)
-        elif m.role == "function":
+        elif m.role in ("function", "constant"):
             self.keyed(m, f"typeof {alias(m.package)}")
         else:
             self.keyed(m, self.type_ref(m.parent))

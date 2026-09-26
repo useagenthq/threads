@@ -7,6 +7,9 @@ on:
       - "typescript/packages/docker/**"
       - "python/src/threads/adapters/sandboxes/docker/**"
       - "python/tests/adapters/sandboxes/test_live_docker.py"
+      - "typescript/packages/coding/**"
+      - "python/src/threads/coding.py"
+      - "python/tests/coding/**"
       - "scripts/build-supervisor.sh"
       - ".github/workflows/docker.yml"
   pull_request:
@@ -15,6 +18,9 @@ on:
       - "typescript/packages/docker/**"
       - "python/src/threads/adapters/sandboxes/docker/**"
       - "python/tests/adapters/sandboxes/test_live_docker.py"
+      - "typescript/packages/coding/**"
+      - "python/src/threads/coding.py"
+      - "python/tests/coding/**"
       - "scripts/build-supervisor.sh"
       - ".github/workflows/docker.yml"
 
@@ -54,7 +60,7 @@ jobs:
       - name: Generate code from spec/
         run: ./scripts/generate.sh ts
       - name: TypeScript, against the real daemon
-        run: bun test packages/docker/test/live.test.ts
+        run: bun test packages/docker/test/live.test.ts packages/coding/test/live.test.ts
         working-directory: typescript
         env:
           THREADS_LIVE: "1"
@@ -63,7 +69,7 @@ jobs:
         working-directory: python
       - run: ./scripts/generate.sh py
       - name: Python, against the real daemon
-        run: uv run pytest -m live tests/adapters/sandboxes/test_live_docker.py
+        run: uv run pytest -m live tests/adapters/sandboxes/test_live_docker.py tests/coding/test_live_coding.py
         working-directory: python
         env:
           THREADS_LIVE: "1"

@@ -798,6 +798,16 @@
       "tests/web/test_search_unset_key.py::test_check_reports_an_unset_key_as_missing_secret[brave]"
     ]
   },
+  "codingAgent": {
+    "ts": [
+      "packages/coding/test/preset.test.ts > codingAgent > its pin is the equivalent agent() pin, config_hash included",
+      "packages/coding/test/preset.test.ts > codingAgent > the defaults are Claude Sonnet 5, Docker, bash(*) and local memory"
+    ],
+    "py": [
+      "tests/coding/test_preset.py::test_its_pin_is_the_equivalent_agent_pin_config_hash_included",
+      "tests/coding/test_preset.py::test_the_defaults_are_claude_sonnet_5_docker_bash_any_and_local_memory"
+    ]
+  },
   "daytona": {
     "ts": [
       "packages/daytona/test/daytona.test.ts > daytona declarations > egress, termination, snapshots, lookup and expiry are declared as Daytona documents them"

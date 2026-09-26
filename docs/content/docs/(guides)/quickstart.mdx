@@ -4,7 +4,7 @@ description: "Run your first agent with no API key, then switch to a real model.
 icon: Rocket
 ---
 
-import { Cpu, FlaskConical, History, Wrench } from "lucide-react";
+import { Cpu, FlaskConical, History, Terminal, Wrench } from "lucide-react";
 
 You'll build a small weather agent with one tool. First it runs on a **scripted model**, so it works offline with no keys. Then you swap in a real model.
 
@@ -244,9 +244,110 @@ A run never throws for an expected outcome. It returns one of these, keyed on `s
   A tool without `effect: "read_only"` asks for approval before it runs, so the run parks with `awaiting_approval`. See [Permissions & approvals](/docs/control/permissions) to allow it.
 </Callout>
 
+## Start with `codingAgent()`
+
+A coding agent needs a model, a sandbox, the file and shell tools, permissions that don't ask
+before every edit, memory and instructions. `codingAgent()` is `agent()` with those already
+chosen, so it is one call:
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { codingAgent } from "@threads/coding";
+
+const coder = codingAgent({ workspace: { localDir: "./app" } });
+const result = await coder.run("Add a --json flag to the CLI and run its tests");
+if (result.status === "completed") console.log(result.output);
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads.coding import coding_agent
+
+coder = coding_agent(workspace={"local_dir": "./app"})
+result = await coder.run("Add a --json flag to the CLI and run its tests")
+```
+
+</Tab>
+</Tabs>
+
+You get Claude Sonnet 5 (keyed from `ANTHROPIC_API_KEY`), a [Docker sandbox](/docs/sandboxes/overview)
+with 2 CPUs, 4 GiB and no network, the sandbox tools under `{mode: "accept_edits", allow: ["bash(*)"]}`,
+`localMemory()` and the `CODING_INSTRUCTIONS` the package exports. It needs a running Docker
+daemon; `check()` answers `docker_unreachable` and names the alternatives when there isn't one.
+
+**`./app` is copied into the sandbox, and your files on disk are never written to.** The answer
+ends with a unified diff of everything the agent changed, which you apply yourself:
+
+```bash
+# paste the diff into changes.patch
+git apply changes.patch
+```
+
+The copy skips `.git`, anything your `.gitignore` covers, and secret-looking paths (`.env*`, keys,
+`.npmrc`), and refuses a file holding a [registered secret](/docs/production/deploying); the thread's
+pin lists what was skipped. It takes at most 10,000 files and 256 MiB after those exclusions. Pass
+`include: [".env.test"]` to re-admit one path, or `workspace: {git: {repo, ref}}` for a large tree.
+A `localDir` is resolved once and pinned as bytes, so continuing the thread after `./app` changed
+on disk fails closed with `invalid_config`: start a new thread.
+
+**There is no internet in the sandbox**, so `npm install`, `pip install` and `git clone` fail.
+"Run its tests" works when the dependencies are in the image or in files that aren't gitignored —
+an ignored `node_modules` is not copied. To let a dependency install through:
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { docker } from "@threads/docker";
+
+const coder = codingAgent({
+  sandbox: docker({ allowInternet: true, cpus: 4, memoryMb: 8192 }),
+  egress: "unenforced", // required: a bridge network filters nothing
+  workspace: { localDir: "./app" },
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads.docker import docker
+
+coder = coding_agent(
+    sandbox=docker(allow_internet=True, cpus=4, memory_mb=8192),
+    egress="unenforced",  # required: a bridge network filters nothing
+    workspace={"local_dir": "./app"},
+)
+```
+
+</Tab>
+</Tabs>
+
+Every default is one option away, and a key you pass replaces that default whole: see the
+[`codingAgent` reference](/docs/reference/functions/codingAgent). `permissions: {mode: "plan"}`
+starts read-only, `memory: undefined` (Python `None`) drops the memory tools, and
+`instructions: CODING_INSTRUCTIONS + "\n\nThe repo is acme/app."` extends the defaults instead of
+losing them. A thread from `codingAgent()` and a thread from the equivalent `agent()` call have
+the same `config_hash`: the preset is those defaults and nothing else.
+
+<Callout type="warn">
+  `bash(*)` allows every command, because the sandbox is the boundary. Use
+  [rootless Docker](https://docs.docker.com/engine/security/rootless/) or Podman: the Docker
+  socket is root-equivalent on your machine. And if the directory you copy in contains the agent
+  definition itself, the agent may edit its own config — nothing protects a file the framework
+  doesn't know is config, so your review of the diff is the gate.
+</Callout>
+
 ## Next steps
 
 <Cards>
+  <Card title="Coding agent" icon={<Terminal />} href="/docs/reference/functions/codingAgent">
+    Every option codingAgent() sets, and how to replace one.
+  </Card>
   <Card title="Tools" icon={<Wrench />} href="/docs/agents/tools">
     Input schemas, effects and errors.
   </Card>

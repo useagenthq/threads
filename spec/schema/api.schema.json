@@ -34,6 +34,11 @@
       "minProperties": 1,
       "additionalProperties": { "$ref": "#/$defs/Callable" }
     },
+    "constants": {
+      "description": "Top-level exported constant values, keyed by name (the same name in both languages).",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/Constant" }
+    },
     "types": {
       "description": "Exported types (handles, protocols, data), keyed by name (PascalCase, same in both languages).",
       "type": "object",
@@ -101,6 +106,7 @@
       ]
     },
     "TsName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
+    "ConstName": { "description": "A constant is SCREAMING_SNAKE_CASE, the same name in both languages.", "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
     "PyName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
     "FieldName": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
     "TypeName": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
@@ -115,7 +121,7 @@
       "properties": {
         "ts": { "type": "string", "minLength": 1 },
         "py": { "type": "string", "minLength": 1 },
-        "kind": { "description": "core: the framework itself. adapter: provider factories that return a protocol type.", "enum": ["core", "adapter"] },
+        "kind": { "description": "core: the framework itself. adapter: provider factories that return a protocol type. preset: a function that returns agent() with some options set; may depend on adapter packages.", "enum": ["core", "adapter", "preset"] },
         "provider": { "description": "The provider's name as users know it, when the package wraps one (E2B, Slack).", "$ref": "#/$defs/Doc" },
         "doc": { "$ref": "#/$defs/Doc" }
       }
@@ -202,6 +208,19 @@
           "type": "array",
           "items": { "enum": ["ConfigError", "StoreCorruptError"] }
         }
+      }
+    },
+    "Constant": {
+      "description": "An exported value the surface gate checks for in both languages. Its bytes or contents are a golden test's job, not the gate's.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ts", "py", "type", "doc"],
+      "properties": {
+        "ts": { "$ref": "#/$defs/ConstName" },
+        "py": { "$ref": "#/$defs/ConstName" },
+        "package": { "description": "A key of packages. Absent: core.", "$ref": "#/$defs/PackageName" },
+        "type": { "$ref": "#/$defs/TypeExpr" },
+        "doc": { "$ref": "#/$defs/Doc" }
       }
     },
     "Overload": {

@@ -38,6 +38,11 @@ modal = [
 docker = [
     "httpx>=0.28,<1",
 ]
+# threads.coding: the preset is agent() with a model and a sandbox already chosen, so it needs
+# both of their extras and adds no dependency of its own.
+coding = [
+    "threads[anthropic,docker]",
+]
 mcp = [
     "jsonschema>=4.23,<5",
     "mcp>=1.20,<2",
