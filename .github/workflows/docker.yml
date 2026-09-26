@@ -50,6 +50,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: typescript
+      # The store imports its embedded SQL from spec/, which is generated, not committed.
+      - name: Generate code from spec/
+        run: ./scripts/generate.sh ts
       - name: TypeScript, against the real daemon
         run: bun test packages/docker/test/live.test.ts
         working-directory: typescript
