@@ -282,6 +282,24 @@ def test_mode_any_returns_once_one_member_settles_a_mode_above_the_count_records
     asyncio.run(main())
 
 
+def test_an_unknown_string_mode_is_invalid_request_and_records_nothing() -> None:
+    async def main() -> None:
+        store, team = await _ran(
+            answers([lambda _r: say("Drafted.")]), answers([lambda _r: say("Read.")])
+        )
+        await team.start("writer", "Draft.")
+        await team.start("reader", "Read.")
+        both = [_ref(team, "writer-1"), _ref(team, "reader-1")]
+        before = len(await _team_log(store, team))
+        got = await team.wait(both, mode="bogus")  # pyright: ignore[reportArgumentType] - exercise the public boundary
+        assert got == TeamWaitRefused("invalid_request")
+        assert len(await _team_log(store, team)) == before
+        assert isinstance(await team.wait(both, mode="all"), Waited)
+        assert isinstance(await team.wait(both, mode="any"), Waited)
+
+    asyncio.run(main())
+
+
 def test_a_starting_members_cancel_is_durable_at_once_it_ends_cancelled_without_running() -> None:
     async def main() -> None:
         requests: list[str] = []

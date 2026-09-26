@@ -189,6 +189,25 @@ describe("team.wait", () => {
     expect(got.status === "waited" && got.finished.length).toBeGreaterThan(0);
     await assertTeamReplays(await logOf(store), team.ref.id);
   });
+
+  test("an unknown string mode is invalid_request and records nothing", async () => {
+    const { store, team } = await ran(
+      answers([() => say("Drafted.")]),
+      answers([() => say("Read.")]),
+    );
+    await team.start("writer", "Draft.");
+    await team.start("reader", "Read.");
+    const both = [refIn(team, "writer-1"), refIn(team, "reader-1")];
+    const before = (await teamLog(store, team)).length;
+    // @ts-expect-error -- an untyped caller can pass a string outside the public union.
+    expect(await team.wait(both, { mode: "bogus" })).toEqual({
+      status: "refused",
+      code: "invalid_request",
+    });
+    expect(await teamLog(store, team)).toHaveLength(before);
+    expect((await team.wait(both, { mode: "all" })).status).toBe("waited");
+    expect((await team.wait(both, { mode: "any" })).status).toBe("waited");
+  });
 });
 
 // spec/api.json declares mode and both timeouts PosInt. A public value that is not one is a
