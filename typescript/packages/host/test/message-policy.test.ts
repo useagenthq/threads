@@ -4,6 +4,7 @@ import {
   openStore,
   pinnedLine0,
   sha256Hex,
+  storeConnection,
   tenantStore,
 } from "@threads/core/host";
 import { z } from "zod";
@@ -18,6 +19,7 @@ import {
   sseMessages,
   use,
 } from "./kit";
+import { sqlAll } from "./sql";
 
 // The host's messagePolicy (spec/api.json host.message_policy; lane 29 section C): its setup
 // refusals, the team tools a rule gives an agent in line 0, a rule that makes its from a lead, and
@@ -78,6 +80,8 @@ async function mainBranch(live: Harness, thread: string): Promise<string> {
   );
   return branches[0]?.branch_id ?? "";
 }
+
+const Ids = z.array(z.object({ budget_id: z.string() }));
 
 const TEAM_TOOLS = [
   "ask",
@@ -276,5 +280,13 @@ describe("a rule that allows start makes its from a lead", () => {
     if (started?.type !== "member_started")
       throw new Error("the start records the member");
     expect(started.data.budget).toEqual({ max_model_requests: 3 });
+    // And it covers the member: every request of its turns reserves against the cap.
+    const { db } = await storeConnection(tenantStore(h.store, alice.tenant));
+    const reserved = Ids.parse(
+      await sqlAll(db, "SELECT DISTINCT budget_id FROM budget_ledger", []),
+    );
+    expect(reserved.map((r) => r.budget_id)).toContain(
+      `start:${started.event_id}`,
+    );
   });
 });
