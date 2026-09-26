@@ -38,7 +38,7 @@ from threads.agents.team_outcomes import ask_status
 from threads.agents.team_roster import roster
 from threads.agents.team_tools import SendRefusal, Sent, Started, StartRefusal
 from threads.agents.team_waits import ask_member, cancel_member, wait_for
-from threads.log import BranchId, MemberRef, Parent, ThreadId, ThreadStartedEvent
+from threads.log import AskId, BranchId, MemberRef, Parent, ThreadId, ThreadStartedEvent
 from threads.loop.budget import start_room
 from threads.result import Err
 from threads.store.lines import uuid7
@@ -94,7 +94,8 @@ class Team:
         timeout_ms: int | None = None,
         idempotency_key: str | None = None,
     ) -> TeamAskResult:
-        """Asks a member a question and waits for its reply, its end, or the deadline."""
+        """Asks a member a question and waits for its reply, its end, or the deadline.
+        timeout_ms: a positive integer; anything else is refused invalid_request."""
         return await ask_member(self._env, to, question, timeout_ms, idempotency_key)
 
     async def wait(
@@ -106,7 +107,8 @@ class Team:
         idempotency_key: str | None = None,
     ) -> TeamWaitResult:
         """Waits until members settle (become idle or end), or the deadline. mode: all (the
-        default), any, or how many must settle; any never cancels the others."""
+        default), any, or how many must settle; any never cancels the others. A mode or a
+        timeout_ms that is not a positive integer is refused invalid_request."""
         return await wait_for(self._env, members, mode, timeout_ms, idempotency_key)
 
     async def cancel(
@@ -115,7 +117,7 @@ class Team:
         """Requests a member's cancel: durable at once, applied at the member's next step."""
         return await cancel_member(self._env, member, idempotency_key)
 
-    async def ask_status(self, ask_id: str) -> AskStatus:
+    async def ask_status(self, ask_id: AskId) -> AskStatus:
         """An ask's state from the team log. A pure read; it never closes an ask."""
         return await ask_status(self._env.sq, self.ref.id, ask_id)
 

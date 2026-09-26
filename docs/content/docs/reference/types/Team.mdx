@@ -159,7 +159,7 @@ async def ask(
 </Field>
 
 <Field name="timeoutMs / timeout_ms" type={"PosInt"}>
-  How long to wait. Omitted: the host policy, initially 120 s, and never more than it.
+  How long to wait, a positive integer. Omitted: the host policy, initially 120 s, and never more than it. Zero, a negative, a fraction or a non-finite value is refused invalid_request before anything is recorded.
 </Field>
 
 <Field name="idempotencyKey / idempotency_key" type={"string"}>
@@ -204,11 +204,11 @@ async def wait(
 </Field>
 
 <Field name="mode" type={"\"all\" | \"any\" | PosInt"} default={"all"}>
-  all, any, or how many must settle. any never cancels the others. A number below 1 or above the count of distinct members is refused invalid_request before anything is recorded.
+  all, any, or how many must settle. any never cancels the others. A number that is not a positive integer, or one above the count of distinct members, is refused invalid_request before anything is recorded.
 </Field>
 
 <Field name="timeoutMs / timeout_ms" type={"PosInt"}>
-  How long to wait. Omitted: the host policy, initially 120 s, and never more than it.
+  How long to wait, a positive integer. Omitted: the host policy, initially 120 s, and never more than it. Zero, a negative, a fraction or a non-finite value is refused invalid_request before anything is recorded.
 </Field>
 
 <Field name="idempotencyKey / idempotency_key" type={"string"}>

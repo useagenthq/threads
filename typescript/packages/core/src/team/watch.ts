@@ -1,4 +1,5 @@
 import type { MemberRef } from "../log";
+import { isPosInt } from "../pos-int";
 import {
   addressed,
   type CallContext,
@@ -87,8 +88,8 @@ export async function wait(
 
 /**
  * An operator wait's members, a repeat dropped (they are frozen at the call); invalid_request for
- * an empty list, or a numeric mode below 1 or above their count, refused before any writer is
- * taken.
+ * an empty list, or a numeric mode that is not a positive integer no greater than their count,
+ * refused before any writer is taken.
  */
 export function waitMembers(
   members: readonly MemberRef[],
@@ -99,7 +100,7 @@ export function waitMembers(
   const distinct = [...new Map(members.map((m) => [key(m), m])).values()];
   const bad =
     distinct.length === 0 ||
-    (typeof mode === "number" && (mode < 1 || mode > distinct.length));
+    (typeof mode === "number" && (!isPosInt(mode) || mode > distinct.length));
   return bad ? "invalid_request" : distinct;
 }
 

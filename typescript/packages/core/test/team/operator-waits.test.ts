@@ -191,6 +191,57 @@ describe("team.wait", () => {
   });
 });
 
+// spec/api.json declares mode and both timeouts PosInt. A public value that is not one is a
+// refusal before the writer, never a throw inside the append (AGENTS.md, "Trust boundaries").
+describe("a public PosInt option", () => {
+  const REFUSED = { status: "refused", code: "invalid_request" } as const;
+  const NOT_POS_INT = [
+    0,
+    1.5,
+    -1,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+  ];
+
+  // Two members, so 1.5 sits inside [1, count] and the old range check let it reach the writer.
+  test("team.wait refuses every mode that is not a positive integer, and records nothing", async () => {
+    const { store, team } = await ran(
+      answers([() => say("Drafted.")]),
+      answers([() => say("Read.")]),
+    );
+    await team.start("writer", "Draft.");
+    await team.start("reader", "Read.");
+    const both = [refIn(team, "writer-1"), refIn(team, "reader-1")];
+    const before = (await teamLog(store, team)).length;
+    for (const mode of NOT_POS_INT)
+      expect(await team.wait(both, { mode })).toEqual(REFUSED);
+    expect(await teamLog(store, team)).toHaveLength(before);
+  });
+
+  test("team.wait refuses every timeoutMs that is not a positive integer, zero included", async () => {
+    const { store, team } = await ran(answers([() => say("Drafted.")]));
+    await team.start("writer", "Draft.");
+    const writer = refIn(team, "writer-1");
+    const before = (await teamLog(store, team)).length;
+    for (const timeoutMs of NOT_POS_INT)
+      expect(await team.wait([writer], { timeoutMs })).toEqual(REFUSED);
+    expect(await teamLog(store, team)).toHaveLength(before);
+  });
+
+  test("team.ask refuses every timeoutMs that is not a positive integer, zero included", async () => {
+    const { store, team } = await ran(answers([() => say("Drafted.")]));
+    await team.start("writer", "Draft.");
+    const writer = refIn(team, "writer-1");
+    const before = (await teamLog(store, team)).length;
+    for (const timeoutMs of NOT_POS_INT)
+      expect(await team.ask(writer, "Which topic?", { timeoutMs })).toEqual(
+        REFUSED,
+      );
+    expect(await teamLog(store, team)).toHaveLength(before);
+  });
+});
+
 describe("team.cancel", () => {
   test("a ref carrying another tenant names no member of this team", async () => {
     const { team } = await ran(answers([() => say("Drafted.")]));

@@ -16,6 +16,6 @@ Any [`AskOutcome`](/docs/reference/types/AskOutcome).
   "refused": nothing was done; code says why.
 </Field>
 
-<Field name="code" type={"AskRefusal | OperatorRefusal"} required>
-  Why it was refused.
+<Field name="code" type={"AskRefusal | OperatorRefusal | \"invalid_request\""} required>
+  Why it was refused. invalid_request (a timeout_ms that is not a positive integer) is returned before any writer, so, like busy, it is never logged.
 </Field>

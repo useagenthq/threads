@@ -34,6 +34,7 @@ from threads.agents.team_outcomes import ask_outcome, wait_outcome
 from threads.agents.team_worker import TeamWorker
 from threads.log import MemberRef
 from threads.loop.budget import ask_room
+from threads.pos_int import is_pos_int
 from threads.reduce.handlers import to_json
 from threads.team.ask import AskPlan, open_ask
 from threads.team.cancel import request_cancel
@@ -48,8 +49,11 @@ from threads.team.watch import WaitMode, open_wait, wait_members
 async def ask_member(
     env: HandleEnv, to: MemberRef, question: str, timeout_ms: int | None, key: str | None
 ) -> TeamAskResult:
+    # Refused before any writer, so, like busy, it records nothing.
+    if timeout_ms is not None and not is_pos_int(timeout_ms):
+        return TeamAskRefused("invalid_request")
     room = await _room(env, to)
-    plan = AskPlan(env.limits, lambda _row: room, timeout_ms or TEAM_CONSTANTS.ask_wait_default_ms)
+    plan = AskPlan(env.limits, lambda _row: room, _timeout(timeout_ms))
     body: dict[str, JsonValue] = {
         "to": to.model_dump(mode="json"),
         "question": question,
@@ -73,6 +77,12 @@ async def ask_member(
     return await _drive(env, lambda: ask_outcome(env.sq, env.ref.id, ask_id))
 
 
+def _timeout(timeout_ms: int | None) -> int:
+    """The deadline an ask or a wait takes. Only None means the default: a zero was refused at
+    the boundary, so it never reaches here as "use the default"."""
+    return TEAM_CONSTANTS.ask_wait_default_ms if timeout_ms is None else timeout_ms
+
+
 async def _room(env: HandleEnv, to: MemberRef) -> bool:
     """Whether the asked member's budgets have room for one request of its model, read before the
     append as a model's ask reads it."""
@@ -90,7 +100,7 @@ async def wait_for(
 ) -> TeamWaitResult:
     distinct = wait_members(members, mode)
     # Refused before any writer, so, like busy, it records nothing.
-    if distinct == "invalid_request":
+    if distinct == "invalid_request" or (timeout_ms is not None and not is_pos_int(timeout_ms)):
         return TeamWaitRefused("invalid_request")
     body: dict[str, JsonValue] = {
         "members": [to_json(m) for m in members],
@@ -103,8 +113,7 @@ async def wait_for(
     def decide(req: Request, team: TeamRow, close: CloseContext) -> dict[str, JsonValue]:
         opened.append(req.mail_id)
         targets = [ref_target(req.conn, team, m) for m in distinct]
-        timeout = timeout_ms or TEAM_CONSTANTS.ask_wait_default_ms
-        got = open_wait(req, close, targets, mode or "all", timeout)
+        got = open_wait(req, close, targets, "all" if mode is None else mode, _timeout(timeout_ms))
         if not isinstance(got, dict):
             raise AssertionError("a wait records an object")
         return got

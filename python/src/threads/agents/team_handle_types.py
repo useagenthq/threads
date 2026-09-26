@@ -14,7 +14,7 @@ from threads.agents.team_answers import (
     Waited,
 )
 from threads.agents.team_tools import SendRefusal, Sent, Started, StartRefusal
-from threads.log import Event, MemberRef, Principal
+from threads.log import AskId, Event, MemberRef, Principal
 from threads.team.dynamic import InvalidDefinition
 
 
@@ -55,7 +55,10 @@ type TeamSendResult = Sent | TeamSendRefused
 
 @dataclass(frozen=True, slots=True)
 class TeamAskRefused:
-    code: AskRefusal | OperatorRefusal
+    """invalid_request (a timeout_ms that is not a positive integer) is returned before any
+    writer, so, like busy, it is never logged."""
+
+    code: AskRefusal | OperatorRefusal | Literal["invalid_request"]
     status: Literal["refused"] = "refused"
 
 
@@ -65,8 +68,9 @@ type TeamAskResult = AskOutcome | TeamAskRefused
 
 @dataclass(frozen=True, slots=True)
 class TeamWaitRefused:
-    """invalid_request (no members, or a numeric mode below 1 or above the member count) is
-    returned before any writer, so, like busy, it is never logged."""
+    """invalid_request (no members, a mode that is not a positive integer no greater than the
+    member count, or a timeout_ms that is not a positive integer) is returned before any writer,
+    so, like busy, it is never logged."""
 
     code: ObserveRefusal | OperatorRefusal | Literal["invalid_request"]
     status: Literal["refused"] = "refused"
@@ -90,7 +94,7 @@ type TeamCancelResult = CancelRequested | TeamCancelRefused
 class AskOpen:
     """Waiting for a reply."""
 
-    ask_id: str
+    ask_id: AskId
     deadline: int
     """When it times out."""
     status: Literal["open"] = "open"
@@ -100,7 +104,7 @@ class AskOpen:
 class AskNotFound:
     """No such ask in this team's log."""
 
-    ask_id: str
+    ask_id: AskId
     status: Literal["not_found"] = "not_found"
 
 

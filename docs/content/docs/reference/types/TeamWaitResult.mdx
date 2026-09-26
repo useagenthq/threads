@@ -17,5 +17,5 @@ Any [`Waited`](/docs/reference/types/Waited).
 </Field>
 
 <Field name="code" type={"ObserveRefusal | OperatorRefusal | \"invalid_request\""} required>
-  Why it was refused. invalid_request (no members, or a mode below 1 or above the member count) is returned before any writer, so, like busy, it is never logged.
+  Why it was refused. invalid_request (no members, a mode that is not a positive integer no greater than the member count, or a timeout_ms that is not a positive integer) is returned before any writer, so, like busy, it is never logged.
 </Field>
