@@ -10,16 +10,19 @@ icon: Download
 
 ## Requirements
 
-- [Bun](https://bun.sh) for TypeScript. The core runs on Bun.
-- [uv](https://docs.astral.sh/uv/) and Python 3.12 or newer for Python.
+- [Bun](https://bun.sh) to run TypeScript.
+- [uv](https://docs.astral.sh/uv/) and Python 3.12 or newer to generate the shared code, even if
+  you only plan to use TypeScript. Python also uses them to run the package.
 
 ## Clone and build
 
-Both languages share generated code built from `spec/`. Run the generator once after cloning, and again after each pull.
+Both languages share generated code built from `spec/`. Run the generator through uv so it uses
+Python 3.12 rather than an older system `python3`. The first run creates `python/.venv`. Repeat the
+same command after each pull.
 
 ```bash
 git clone https://github.com/useagenthq/threads && cd threads
-./scripts/generate.sh
+uv run --project python ./scripts/generate.sh
 ```
 
 ## Install your language
@@ -78,13 +81,29 @@ git clone https://github.com/useagenthq/threads && cd threads
     | `@threads/cli` | The `threads` command |
   </Tab>
   <Tab value="Python">
-    The Python package is `threads`, with one optional extra per provider. Install it in editable mode into your project's environment:
+    To follow the tutorials from this clone, put `support.py` in `python/` and run it in the
+    environment the generator created:
 
     ```bash
-    uv pip install -e "path/to/threads/python[anthropic]"
+    cd python
+    uv run python support.py
     ```
 
-    Add the extras you need, comma separated:
+    The offline tutorials need no provider extra. Before using a real Anthropic model, add its
+    extra with `uv sync --extra anthropic`.
+
+    To use `threads` from your own project instead, create that project's environment before
+    installing the clone in editable mode:
+
+    ```bash
+    cd /path/to/your-app
+    uv venv --python 3.12
+    uv pip install -e "/absolute/path/to/threads/python[anthropic]"
+    .venv/bin/python support.py
+    ```
+
+    On Windows, run `.venv\Scripts\python` instead. Add the extras you need, comma separated in
+    the editable path:
 
     | Extra | What it adds |
     |---|---|
@@ -95,30 +114,43 @@ git clone https://github.com/useagenthq/threads && cd threads
     | `host` | The host server and `threads dev` / `threads start` |
     | `slack`, `whatsapp`, `github` | Channels |
 
-    The core package needs only `pydantic`. Installing it also puts the `threads` command on your path.
+    The core package needs only `pydantic`. The `threads` command lives in the selected environment:
+    run `uv run threads` from `python/`, or `.venv/bin/threads` from your own project.
   </Tab>
 </Tabs>
 
 ## Check your setup
 
-From the clone, run each language's checks:
+From the clone's root, run the offline eval example in your language. It needs no API key or
+network connection:
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
 
 ```bash
-cd typescript && bun run check
+cd typescript && bun examples/evals.ts
 ```
 
 </Tab>
 <Tab value="Python">
 
 ```bash
-cd python && uv sync --all-extras && uv run pytest
+cd python && uv run python examples/evals.py
 ```
 
 </Tab>
 </Tabs>
+
+Both print `1 passed, 0 failed`. These commands check that the generated code and your selected
+language run together. If you're working on the framework itself, return to the clone's root and
+run the full suites instead:
+
+```bash
+cd typescript && uv run --project ../python --extra host bun run check
+```
+
+For Python, use `cd python && uv sync --all-extras && uv run pytest`. The TypeScript suite includes
+tests against the Python host, which is why its full check asks uv for the `host` extra.
 
 ## API keys
 
