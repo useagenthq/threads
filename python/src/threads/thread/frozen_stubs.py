@@ -8,9 +8,13 @@ from collections.abc import Sequence
 from pydantic import JsonValue, TypeAdapter, ValidationError
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.log import ArtifactRef, Event, ForkEvent, ParseError
+from threads.log import ArtifactRef, Event, EventId, ForkEvent, ParseError
 from threads.loop.stubs import Stub, parse_stubs
+from threads.reduce.fold import Fold
 from threads.result import Err, Ok
+from threads.store import SqliteStore
+from threads.thread.case_files import encode_stub_script, stub_script
+from threads.thread.fork import fork_point
 
 _SCRIPT: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
 
@@ -37,3 +41,25 @@ def frozen_stubs(chain: Sequence[Event], data: bytes) -> Ok[tuple[Stub, ...]] | 
     except (ValidationError, ValueError):
         why = f"the frozen stub script {ref.sha256} is not a stub script"
         return Err(ParseError("artifact_corrupt", why))
+
+
+async def freeze_after(
+    sq: SqliteStore, fold: Fold, point: EventId
+) -> Ok[JsonValue] | Err[ParseError]:
+    """A stub fork's frozen script: the branch's mediated calls after `point`, each with its
+    complete verified output, stored as an artifact before the fork event names it. A missing or
+    corrupt parent artifact fails here, so the fork leaves no child."""
+    at = fork_point(fold, point)
+    if isinstance(at, Err):
+        return at
+    after = [e for e in fold.events if e.seq > at.value.seq]
+    script = await stub_script(after, sq.get_artifact)
+    if isinstance(script, Err):
+        return script
+    data = encode_stub_script(script.value)
+    ref: JsonValue = {
+        "sha256": await sq.put_artifact(data),
+        "bytes": len(data),
+        "media_type": "application/json",
+    }
+    return Ok(ref)

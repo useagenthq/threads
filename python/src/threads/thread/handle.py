@@ -45,12 +45,12 @@ from threads.store import SqliteStore, VerifiedLog
 from threads.store.lines import uuid7
 from threads.thread import approvals, control, style, tree
 from threads.thread.authority import Checked, refused
+from threads.thread.branch_list import listed
 from threads.thread.bundle import ExportedBundle, export_bundle
 from threads.thread.case import CaseExpectation, CaseRequest, SavedCase, save_case
-from threads.thread.case_files import encode_stub_script, stub_script
 from threads.thread.control import Accepted, Controlled
-from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch, fork_point
-from threads.thread.frozen_stubs import stub_fork_ref
+from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch
+from threads.thread.frozen_stubs import freeze_after
 from threads.thread.member_view import member_of, with_member
 from threads.thread.read import read_error, read_log
 from threads.thread.usage import tree_cost
@@ -136,7 +136,7 @@ class Thread:
         sq = await open_store(self.store)
         frozen: JsonValue = None
         if mode == "stub":
-            recorded = await self._frozen_after(sq, event_id)
+            recorded = await self._freeze(sq, event_id)
             if isinstance(recorded, Err):
                 return recorded
             frozen = recorded.value
@@ -150,32 +150,13 @@ class Thread:
         await forked.value.release()
         return Ok(Thread(self.id, child, self.store, sandbox=self.sandbox))
 
-    async def _frozen_after(
-        self, sq: SqliteStore, point: EventId
-    ) -> Ok[JsonValue] | Err[ParseError]:
-        """The frozen stub script of a stub fork at `point`: this branch's mediated calls after
-        it, each with its complete verified output, stored as an artifact before the fork event
-        names it. A missing or corrupt parent artifact fails the fork and leaves no child."""
+    async def _freeze(self, sq: SqliteStore, point: EventId) -> Ok[JsonValue] | Err[ParseError]:
+        """Stub mode needs a sandbox that enforces deny-all egress; then the script is frozen."""
         if self.sandbox is not None and self.sandbox.info.egress != "enforced":
             why = f"{self.sandbox.info.provider} can't enforce deny-all egress"
             return Err(ParseError("egress_policy_unsupported", why))
         read = await self._read()
-        if isinstance(read, Err):
-            return read
-        at = fork_point(read.value.fold, point)
-        if isinstance(at, Err):
-            return at
-        after = [e for e in read.value.fold.events if e.seq > at.value.seq]
-        script = await stub_script(after, sq.get_artifact)
-        if isinstance(script, Err):
-            return script
-        data = encode_stub_script(script.value)
-        ref: JsonValue = {
-            "sha256": await sq.put_artifact(data),
-            "bytes": len(data),
-            "media_type": "application/json",
-        }
-        return Ok(ref)
+        return read if isinstance(read, Err) else await freeze_after(sq, read.value.fold, point)
 
     async def save_case(  # noqa: PLR0913 - spec/api.json saveCase options, keyword only
         self,
@@ -258,31 +239,7 @@ class Thread:
     async def branches(self) -> tuple[BranchInfo, ...]:
         """The thread's visible branches; a forking or failed fork is never listed. A branch whose
         resolved chain holds a stub fork reports mode stub: every run of it is stubbed."""
-        sq = await open_store(self.store)
-        rows = await sq.tables.branches(self.id)
-        listed: list[BranchInfo] = []
-        for r in rows:
-            mode = "stub" if await self._stubbed(sq, r.branch_id, r.parent_branch_id) else "live"
-            listed.append(
-                BranchInfo.model_validate(
-                    {"branch_id": r.branch_id, "mode": mode, "runnable": r.state == "ready"}
-                    | (
-                        {}
-                        if r.parent_branch_id is None
-                        else {"parent_branch_id": r.parent_branch_id}
-                    )
-                    | ({} if r.fork_at_seq is None else {"fork_at_seq": r.fork_at_seq})
-                )
-            )
-        return tuple(listed)
-
-    async def _stubbed(self, sq: SqliteStore, branch: BranchId, parent: str | None) -> bool:
-        """Whether a listed branch runs stubbed: its chain holds a fork that froze a stub script.
-        A root branch never does, so the common case reads nothing."""
-        if parent is None:
-            return False
-        read = await sq.read(branch, now_ms())
-        return isinstance(read, Ok) and stub_fork_ref(read.value.fold.events) is not None
+        return await listed(await open_store(self.store), self.id)
 
     async def pending_approvals(self) -> Ok[tuple[PendingApproval, ...]] | Err[ParseError]:
         """Open challenges on this branch, with the rules an approver may keep."""
