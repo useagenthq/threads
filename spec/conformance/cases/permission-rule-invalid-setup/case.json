@@ -1,0 +1,34 @@
+{
+  "name": "permission-rule-invalid-setup",
+  "family": "permissions_approvals",
+  "kind": "policy",
+  "description": "A malformed permission rule is rejected during agent setup in both runtimes.",
+  "clock": {
+    "now": 1790000060000
+  },
+  "input": {
+    "workspace": "/workspace",
+    "permissions": {
+      "mode": "default",
+      "allow": [],
+      "ask": [],
+      "deny": [
+        "b*(*)"
+      ],
+      "protected_paths": [
+        ".git/**",
+        ".threads/**",
+        ".claude/**",
+        ".mcp.json",
+        "**/.bashrc",
+        "**/.zshrc",
+        "**/.profile",
+        "**/.gitconfig",
+        "**/.ssh/**"
+      ],
+      "allow_bypass": false,
+      "plan_exit_mode": "default"
+    },
+    "calls": []
+  }
+}

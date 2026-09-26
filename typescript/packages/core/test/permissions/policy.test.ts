@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
+import { agent, scriptedModel } from "../../src";
 import { PermissionMode, PermissionsPolicy } from "../../src/log";
 import {
   category,
@@ -38,16 +39,22 @@ const PolicyCase = z.object({
     ),
   }),
 });
-const Expected = z.strictObject({
-  outcome: z.literal("ok"),
-  decisions: z.array(
-    z.strictObject({
-      decision: z.enum(["allow", "deny", "ask"]),
-      source: z.string(),
-      rule: z.string().optional(),
-    }),
-  ),
-});
+const Expected = z.discriminatedUnion("outcome", [
+  z.strictObject({
+    outcome: z.literal("ok"),
+    decisions: z.array(
+      z.strictObject({
+        decision: z.enum(["allow", "deny", "ask"]),
+        source: z.string(),
+        rule: z.string().optional(),
+      }),
+    ),
+  }),
+  z.strictObject({
+    outcome: z.literal("error"),
+    error: z.strictObject({ code: z.literal("permission_rule_invalid") }),
+  }),
+]);
 
 const read = (name: string, file: string): unknown =>
   JSON.parse(readFileSync(join(CASES, name, file), "utf8"));
@@ -63,9 +70,20 @@ describe("policy conformance", () => {
     expect(policyCases.length).toBeGreaterThanOrEqual(4);
   });
   for (const name of policyCases) {
-    test(name, () => {
+    test(name, async () => {
       const { input } = PolicyCase.parse(read(name, "case.json"));
-      const { decisions } = Expected.parse(read(name, "expected.json"));
+      const expected = Expected.parse(read(name, "expected.json"));
+      if (expected.outcome === "error") {
+        const checked = await agent({
+          model: scriptedModel({ responses: [] }),
+          permissions: input.permissions,
+        }).check();
+        expect(checked).toMatchObject({
+          ok: false,
+          error: { code: expected.error.code },
+        });
+        return;
+      }
       const got = input.calls.map((call) =>
         input.ceiling === undefined
           ? decide(input.permissions, input.workspace, call, input.thread_rules)
@@ -76,7 +94,7 @@ describe("policy conformance", () => {
               call,
             ),
       );
-      expect<unknown>(got).toEqual(decisions);
+      expect<unknown>(got).toEqual(expected.decisions);
     });
   }
 });
