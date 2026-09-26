@@ -11,7 +11,11 @@ export type StoreApiCode =
   | "invalid_request"
   | "sandbox_required"
   | "busy"
-  | "thread_in_team";
+  | "thread_in_team"
+  | "path_exists"
+  | "bundle_incomplete"
+  | "schedule_conflict"
+  | "io_error";
 
 /** A typed log failure. Runners compare `code` and `seq`, never `message`. */
 export type LogError = {

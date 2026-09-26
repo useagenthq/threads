@@ -1,0 +1,50 @@
+{
+  "$defs": {
+    "Int": {
+      "description": "JSON integer in the cross-language safe range.",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "Sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:threads:schema:bundle:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A portable thread bundle's manifest, written last so its presence means the bundle is complete.",
+  "properties": {
+    "artifacts": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Int"
+      },
+      "description": "Each artifacts/<sha256> file and its length in bytes.",
+      "propertyNames": {
+        "$ref": "#/$defs/Sha256"
+      },
+      "type": "object"
+    },
+    "branch_id": {
+      "description": "The exported leaf branch.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "format": {
+      "const": 1,
+      "type": "number"
+    },
+    "log_sha256": {
+      "$ref": "#/$defs/Sha256",
+      "description": "sha256 of log.jsonl."
+    }
+  },
+  "required": [
+    "format",
+    "branch_id",
+    "log_sha256",
+    "artifacts"
+  ],
+  "type": "object"
+}

@@ -44,6 +44,7 @@ from threads.store import VerifiedLog
 from threads.store.lines import uuid7
 from threads.thread import approvals, control, style, tree
 from threads.thread.authority import Checked, refused
+from threads.thread.bundle import ExportedBundle, export_bundle
 from threads.thread.case import (
     CaseExpectation,
     CaseRequest,
@@ -187,6 +188,12 @@ class Thread:
         criteria = None if rubric is None else tuple(rubric)
         request = CaseRequest(name, expect, external_effects, at, dir, criteria)
         return await save_case(await open_store(self.store), read.value, self.sandbox, request)
+
+    async def export(self, path: str) -> "Ok[ExportedBundle] | Err[ParseError]":
+        """spec/api.json `Thread.export`: writes this branch's chain and every artifact it names
+        to `path` as a portable bundle, which `import_thread` stores anywhere. `path` must not
+        exist."""
+        return await export_bundle(await open_store(self.store), self.branch, path)
 
     async def todos(self) -> Ok[tuple[Todo, ...]] | Err[ParseError]:
         """The agent's current todo list: the latest todos_updated."""

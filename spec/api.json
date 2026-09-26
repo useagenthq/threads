@@ -994,6 +994,21 @@
         "errors": ["not_found", "log_corrupt", "unsupported_format", "unsupported_critical_event"]
       }
     },
+    "importThread": {
+      "ts": "importThread",
+      "py": "import_thread",
+      "package": "core",
+      "doc": "Stores a bundle written by thread.export, or a bare .jsonl export, and returns a handle on its leaf branch. Everything is validated before anything is written: the log, every recorded model request, each bundled file against the manifest's hash and length, and the destination's thread tombstones, so a thread deleted here is never brought back. A failure there leaves the store exactly unchanged. Then the artifacts are stored, and all the rows in one transaction, so the rows are all or nothing; a crash in between can leave artifact files no row names, which are harmless (content-addressed, never read without a ref) and reused by a retry. A bare .jsonl needs its artifacts already in the store.",
+      "async": true,
+      "params": [
+        {"name": "store", "kind": "positional", "type": {"$ref": "#/types/Store"}, "required": true, "doc": "The store to import into."},
+        {"name": "path", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "A bundle directory, or a bare .jsonl export."}
+      ],
+      "returns": {
+        "result": {"$ref": "#/types/Thread"},
+        "errors": ["bundle_incomplete", "invalid_line", "prev_hash_mismatch", "seq_mismatch", "seq_conflict", "invalid_transition", "unsupported_format", "unsupported_critical_event", "log_corrupt", "artifact_missing", "artifact_corrupt", "branch_exists", "branch_not_found", "schedule_conflict", "secret_in_stored_bytes", "io_error"]
+      }
+    },
     "sqlite": {
       "ts": "sqlite",
       "py": "sqlite",
@@ -2707,6 +2722,19 @@
             "errors": ["invalid_request", "case_missing_dependency", "egress_policy_unsupported"]
           }
         },
+        "export": {
+          "ts": "export",
+          "py": "export",
+          "doc": "Writes this branch's resolved chain and every artifact it names to path as a portable bundle: log.jsonl, artifacts/<sha256> and bundle.json, the manifest written last. importThread stores one in any other store, so a thread moves between machines whole. path must not exist: an existing file or directory is path_exists and nothing is replaced. Export claims the path with an exclusive mkdir and fsyncs what it writes, so a crash leaves a directory without bundle.json, which import refuses as incomplete rather than storing half a thread.",
+          "async": true,
+          "params": [
+            {"name": "path", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The bundle directory to create. It must not exist."}
+          ],
+          "returns": {
+            "result": {"$ref": "#/types/ExportedBundle"},
+            "errors": ["branch_not_found", "log_corrupt", "unsupported_format", "unsupported_critical_event", "artifact_missing", "artifact_corrupt", "path_exists", "io_error"]
+          }
+        },
         "replay": {
           "ts": "replay",
           "py": "replay",
@@ -3040,6 +3068,24 @@
         }
       },
       "doc": "What saveCase returns: where the case was written and whether it reruns offline."
+    },
+    "ExportedBundle": {
+      "kind": "object",
+      "casing": "wire",
+      "fields": {
+        "path": {"type": {"prim": "string"}, "required": true, "doc": "The bundle directory that was written."},
+        "branch_id": {
+          "type": {"$ref": "urn:threads:schema:events:v1#/$defs/BranchId"},
+          "required": true,
+          "doc": "The exported leaf branch."
+        },
+        "artifacts": {
+          "type": {"prim": "int"},
+          "required": true,
+          "doc": "How many artifact files the bundle carries."
+        }
+      },
+      "doc": "What export returns: where the bundle is and what it holds."
     },
     "Live": {
       "kind": "object",

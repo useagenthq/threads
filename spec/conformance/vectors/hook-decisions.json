@@ -1,0 +1,181 @@
+{
+  "doc": "The hook_decision events each language's per-hook test produces (typescript/packages/core/test/hooks/each-hook.test.ts, python/tests/hooks/test_each_hook.py), normalized so the two can be compared. Whole events are not comparable: their ids and timestamps differ legitimately. A decision is normalized to its hook (the WIRE name, so on_stop_failure appears as stop_failure), decision, extension and reason, with every id field (call_id, request_event_id, input_event_id) replaced by the 0-based position, in that branch's log, of the event it names: for call_id, the tool_call event carrying it. A failed decision's reason is the host's own error text, worded differently in each language, so it is replaced by \"<failure>\"; its presence still says the failure was recorded with a reason. Keys are the hook names spec/api.json types.Hooks lists, one per case, in that order; the list is a case's whole branch, in log order, so a case spanning two runs carries both. known_divergences names the fields the two languages do not yet agree on: both tests drop exactly those before comparing, and each entry is a bug to close, not a rule.",
+  "known_divergences": [
+    {
+      "hook": "after_tool_batch",
+      "field": "request_event_id",
+      "note": "Python records the response the batch answers (loop/tool_gates.py after_batch, which reads it back to know the hook already ran); TypeScript records no id (loop/gates.ts batchGate, which uses the step window instead). The pinned log spec/conformance/cases/hooks-full-set-recorded holds the TypeScript shape. One of the two has to change; until it does, neither language's after_tool_batch decision is compared on this field."
+    }
+  ],
+  "decisions": {
+    "session_start": [
+      {
+        "hook": "session_start",
+        "decision": "proceed",
+        "extension": "ops"
+      }
+    ],
+    "session_end": [
+      {
+        "hook": "session_end",
+        "decision": "failed",
+        "extension": "ops",
+        "reason": "<failure>"
+      }
+    ],
+    "before_input": [
+      {
+        "hook": "before_input",
+        "decision": "deny",
+        "extension": "ops",
+        "reason": "off topic",
+        "input_event_id": 1
+      }
+    ],
+    "before_model": [
+      {
+        "hook": "before_model",
+        "decision": "deny",
+        "extension": "ops",
+        "reason": "frozen window"
+      }
+    ],
+    "after_model": [
+      {
+        "hook": "after_model",
+        "decision": "deny",
+        "extension": "ops",
+        "reason": "unsafe",
+        "request_event_id": 2
+      }
+    ],
+    "before_tool": [
+      {
+        "hook": "before_tool",
+        "decision": "deny",
+        "extension": "ops",
+        "reason": "no echo today",
+        "call_id": 4
+      }
+    ],
+    "permission_request": [
+      {
+        "hook": "permission_request",
+        "decision": "allow",
+        "extension": "ops",
+        "call_id": 4
+      }
+    ],
+    "permission_denied": [
+      {
+        "hook": "permission_denied",
+        "decision": "failed",
+        "extension": "ops",
+        "reason": "<failure>",
+        "call_id": 4
+      }
+    ],
+    "after_tool": [
+      {
+        "hook": "after_tool",
+        "decision": "failed",
+        "extension": "ops",
+        "reason": "<failure>",
+        "call_id": 4
+      }
+    ],
+    "before_tool_result": [
+      {
+        "hook": "before_tool_result",
+        "decision": "redact",
+        "extension": "ops",
+        "call_id": 4
+      }
+    ],
+    "after_tool_batch": [
+      {
+        "hook": "after_tool_batch",
+        "decision": "proceed",
+        "extension": "ops"
+      }
+    ],
+    "before_compact": [
+      {
+        "hook": "before_compact",
+        "decision": "proceed",
+        "extension": "ops"
+      }
+    ],
+    "after_compact": [
+      {
+        "hook": "after_compact",
+        "decision": "proceed",
+        "extension": "ops"
+      }
+    ],
+    "on_stop": [
+      {
+        "hook": "on_stop",
+        "decision": "continue",
+        "extension": "ops",
+        "reason": "keep going",
+        "request_event_id": 2
+      },
+      {
+        "hook": "on_stop",
+        "decision": "stop",
+        "extension": "ops",
+        "request_event_id": 6
+      }
+    ],
+    "on_stop_failure": [
+      {
+        "hook": "stop_failure",
+        "decision": "failed",
+        "extension": "ops",
+        "reason": "<failure>"
+      }
+    ],
+    "subagent_start": [
+      {
+        "hook": "subagent_start",
+        "decision": "deny",
+        "extension": "ops",
+        "reason": "no children today",
+        "call_id": 4
+      }
+    ],
+    "subagent_stop": [
+      {
+        "hook": "subagent_stop",
+        "decision": "stop",
+        "extension": "ops",
+        "call_id": 4
+      }
+    ],
+    "before_model_switch": [
+      {
+        "hook": "before_model_switch",
+        "decision": "deny",
+        "extension": "ops",
+        "reason": "stay on the pinned model"
+      }
+    ],
+    "after_model_switch": [
+      {
+        "hook": "after_model_switch",
+        "decision": "failed",
+        "extension": "ops",
+        "reason": "<failure>"
+      }
+    ],
+    "notification": [
+      {
+        "hook": "notification",
+        "decision": "failed",
+        "extension": "ops",
+        "reason": "<failure>"
+      }
+    ]
+  }
+}

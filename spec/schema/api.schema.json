@@ -92,7 +92,11 @@
         "thread_in_team",
         "collector_unavailable",
         "collector_rejected",
-        "invalid_cursor"
+        "invalid_cursor",
+        "path_exists",
+        "bundle_incomplete",
+        "schedule_conflict",
+        "io_error"
       ]
     },
     "TsName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },

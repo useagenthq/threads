@@ -7,6 +7,7 @@ import type { Sandbox, SnapshotData } from "../sandbox/protocol";
 import { uuidv7 } from "../store/encode";
 import { type LogError, logError, type VerifiedLog } from "../verify";
 import { controls, type ThreadControl } from "./controls";
+import { type ExportedBundle, exportBundle } from "./export";
 import { forkBranch, type KnowledgePolicy } from "./fork";
 import { type ReadError, readLog } from "./read";
 import { type ReplayError, replay } from "./replay";
@@ -52,6 +53,11 @@ export type Thread = ThreadRef & {
     name: string,
     options: SaveCaseOptions,
   ) => Promise<Result<SavedCase, LogError>>;
+  /**
+   * Writes this branch's chain and every artifact it names to `path` as a portable bundle,
+   * which `importThread` stores anywhere. `path` must not exist.
+   */
+  readonly export: (path: string) => Promise<Result<ExportedBundle, LogError>>;
   /** The latest todo list. */
   readonly todos: () => Promise<Projections["todos"]>;
   /** One entry per spawned child, running until its agent_finished. */
@@ -170,5 +176,6 @@ export function threadHandle(
         sandbox: options.sandbox,
         points: await points(),
       }),
+    export: async (path) => exportBundle(log, artifacts, branchId, path),
   };
 }

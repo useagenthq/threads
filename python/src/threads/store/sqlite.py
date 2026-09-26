@@ -26,6 +26,7 @@ from threads.store.budgets import BudgetLedger
 from threads.store.conn import Conn, Dialect, SqliteConn
 from threads.store.context import CleanupContext, OwnerContext
 from threads.store.cursors import ObserverCursors
+from threads.store.import_rows import tombstoned
 from threads.store.lines import Draft, head_line, header_line, imported_bytes
 from threads.store.opening import ALREADY_OPEN, BranchOpening, open_alone, open_checked
 from threads.store.resources import Ledger, Resource
@@ -243,6 +244,12 @@ class SqliteStore(BranchStore):
         except SecretInStoredBytesError:
             message = "the export holds a registered secret; nothing imported"
             return Err(ParseError("secret_in_stored_bytes", message))
+
+    async def deleted_thread(self, thread_ids: Sequence[ThreadId]) -> ThreadId | None:
+        """The first of `thread_ids` this tenant has deleted, if any: import checks it before
+        writing anything, and `insert_segments` checks it again in the row transaction."""
+        tenant = self._tenant
+        return await self._worker.read(lambda c: tombstoned(c, tenant, thread_ids))
 
     async def put_artifact(self, data: bytes) -> str:
         """Stores bytes content-addressed and returns their sha256 once they are durable."""

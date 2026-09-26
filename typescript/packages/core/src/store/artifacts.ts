@@ -195,7 +195,8 @@ function fileSink(root: string, path: (sha256: string) => string): FileSink {
   };
 }
 
-function fsyncDir(dir: string): void {
+/** Makes a directory's entries durable, so a file published in it survives a crash. */
+export function fsyncDir(dir: string): void {
   const fd = openSync(dir, "r");
   try {
     fsyncSync(fd);
