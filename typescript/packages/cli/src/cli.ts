@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { openThread, type Store, sqlite } from "@threads/core";
+import { importThread, openThread, type Store, sqlite } from "@threads/core";
 import {
   BranchId,
   collect,
@@ -29,8 +29,9 @@ const USAGE = `usage: threads <command> [options]
   dev [module] [--port N]           run a host module locally; prints each channel's webhook URL
   start [module] [--port N]         the same, for production
   timeline <thread_id> [--branch B] print a branch's steps as JSON lines
-  export <branch_id>                write a branch's JSONL export to stdout
-  import <file>                     verify and store an export
+  export <branch_id> [--bundle D]   write a branch's JSONL export to stdout, or a portable
+                                    bundle (log.jsonl, artifacts/, bundle.json) to D
+  import <dir|file>                 verify and store a bundle or a bare JSONL export
   repair <branch_id>                record log_repaired on an imported torn branch
   delete <thread_id> | --tenant T   delete a thread, or every thread of a tenant
   gc [module] [--grace-days N]      release collectable resources, sweep unreferenced artifacts
@@ -43,6 +44,7 @@ const OPTIONS = {
   store: { type: "string" },
   tenant: { type: "string" },
   branch: { type: "string" },
+  bundle: { type: "string" },
   port: { type: "string", default: "8787" },
   "grace-days": { type: "string", default: "7" },
   agent: { type: "string" },
@@ -59,6 +61,7 @@ type Parsed = {
   readonly store: string;
   readonly tenant: string | undefined;
   readonly branch: string | undefined;
+  readonly bundle: string | undefined;
   readonly port: number;
   readonly graceDays: number;
   readonly eval: EvalArgs;
@@ -76,6 +79,7 @@ function parse(argv: readonly string[]): Parsed {
     args,
     store: values.store ?? ".threads",
     tenant: values.tenant,
+    bundle: values.bundle,
     branch: values.branch,
     port: Number(values.port),
     graceDays: Number(values["grace-days"]),
@@ -239,22 +243,42 @@ async function timeline(p: Parsed, io: Io): Promise<number> {
 
 async function exportBranch(p: Parsed, io: Io): Promise<number> {
   const id = BranchId.safeParse(p.args[0]);
-  if (!id.success) return usage(io, "export <branch_id>");
+  if (!id.success) return usage(io, "export <branch_id> [--bundle <dir>]");
+  if (p.bundle !== undefined) return await exportBundleTo(p, io, id.data);
   const bytes = await (await logOf(p)).exportBranch(id.data);
   if (!bytes.ok) return fail(io, bytes.error);
   io.bytes(bytes.value);
   return 0;
 }
 
+/** `--bundle`: thread.export, the public function, and nothing else. */
+async function exportBundleTo(
+  p: Parsed,
+  io: Io,
+  branchId: BranchId,
+): Promise<number> {
+  const store = tenantStore(await storeAt(p.store), p.tenant ?? "local");
+  const { log } = await openStore(store);
+  const read = await log.read(branchId);
+  if (!read.ok) return fail(io, read.error);
+  const threadId = read.value.segments[0]?.header.thread_id;
+  if (threadId === undefined)
+    return fail(io, { code: "branch_not_found", message: `no branch ${branchId}` });
+  const thread = await openThread(store, threadId, { branchId });
+  if (!thread.ok) return fail(io, thread.error);
+  const written = await thread.value.export(p.bundle ?? "");
+  if (!written.ok) return fail(io, written.error);
+  io.out(`${written.value.path}\n`);
+  return 0;
+}
+
 async function importFile(p: Parsed, io: Io): Promise<number> {
-  const file = p.args[0];
-  if (file === undefined) return usage(io, "import <file>");
-  const stored = await (await logOf(p)).importLog(
-    new Uint8Array(readFileSync(file)),
-  );
+  const path = p.args[0];
+  if (path === undefined) return usage(io, "import <dir|file>");
+  const store = tenantStore(await storeAt(p.store), p.tenant ?? "local");
+  const stored = await importThread(store, path);
   if (!stored.ok) return fail(io, stored.error);
-  const leaf = stored.value.segments.at(-1)?.header.branch_id;
-  io.out(`${leaf ?? ""}\n`);
+  io.out(`${stored.value.branch}\n`);
   return 0;
 }
 

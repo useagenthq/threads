@@ -524,6 +524,14 @@
       "tests/thread/test_handle.py::test_fork_restores_an_isolated_sandbox_and_the_child_runs"
     ]
   },
+  "Thread.export": {
+    "ts": [
+      "packages/core/test/thread/bundle.test.ts > thread.export > writes log.jsonl, artifacts/ and bundle.json last, and importThread reproduces the thread"
+    ],
+    "py": [
+      "tests/thread/test_bundle.py::test_export_writes_a_bundle_import_thread_reproduces_the_thread"
+    ]
+  },
   "Thread.forkPoints": {
     "ts": [
       "packages/core/test/thread/open.test.ts > openThread > timeline lists the chain and marks the fork point; forkPoints returns it"
@@ -1289,6 +1297,14 @@
     ],
     "py": [
       "tests/team/test_team_handle.py::test_another_tenant_is_forbidden_and_an_unknown_team_is_not_found"
+    ]
+  },
+  "importThread": {
+    "ts": [
+      "packages/core/test/thread/bundle.test.ts > thread.export > writes log.jsonl, artifacts/ and bundle.json last, and importThread reproduces the thread"
+    ],
+    "py": [
+      "tests/thread/test_bundle.py::test_export_writes_a_bundle_import_thread_reproduces_the_thread"
     ]
   },
   "openThread": {

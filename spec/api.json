@@ -3080,7 +3080,7 @@
           "doc": "The exported leaf branch."
         },
         "artifacts": {
-          "type": {"prim": "int"},
+          "type": {"prim": "integer"},
           "required": true,
           "doc": "How many artifact files the bundle carries."
         }
@@ -6957,11 +6957,15 @@
       "doc": "Production; same as dev without reload."
     },
     {"usage": "threads timeline <thread_id> [--branch <branch_id>]", "via": "openThread() then Thread.timeline()"},
-    {"usage": "threads export <branch_id>", "via": "the store's branch export (schema README, JSONL)"},
     {
-      "usage": "threads import <file>",
-      "via": "the store's import (verify, then store the same bytes)",
-      "doc": "Prints the imported branch id. A torn tail imports inspection-only until repair."
+      "usage": "threads export <branch_id> [--bundle <dir>]",
+      "via": "the store's branch export (schema README, JSONL), or Thread.export with --bundle",
+      "doc": "Without --bundle, the JSONL export on stdout. With it, a portable bundle directory (log.jsonl, artifacts/, bundle.json) whose path must not exist; prints the path."
+    },
+    {
+      "usage": "threads import <dir|file>",
+      "via": "importThread",
+      "doc": "A bundle directory or a bare JSONL export. Prints the imported branch id. A torn tail imports inspection-only until repair."
     },
     {
       "usage": "threads repair <branch_id>",

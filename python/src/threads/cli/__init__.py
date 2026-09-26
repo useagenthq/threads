@@ -41,8 +41,10 @@ def _parser() -> argparse.ArgumentParser:
     shown = commands.add_parser("timeline", help="print a thread's steps")
     shown.add_argument("thread_id")
     shown.add_argument("--branch")
-    commands.add_parser("export", help="export a branch").add_argument("branch_id")
-    commands.add_parser("import", help="import an export").add_argument("file")
+    written = commands.add_parser("export", help="export a branch")
+    written.add_argument("branch_id")
+    written.add_argument("--bundle", help="write a portable bundle to this directory instead")
+    commands.add_parser("import", help="import a bundle or an export").add_argument("file")
     commands.add_parser("repair", help="repair a torn import").add_argument("branch_id")
     removal = commands.add_parser("delete", help="delete a thread or a tenant's threads")
     removal.add_argument("thread_id", nargs="?")
@@ -86,7 +88,7 @@ def _command(command: str, args: argparse.Namespace) -> Coroutine[object, object
 
     commands: dict[str, Callable[[], Coroutine[object, object, int]]] = {
         "timeline": lambda: store.timeline(path, tenant, str(args.thread_id), optional("branch")),
-        "export": lambda: store.export(path, tenant, str(args.branch_id)),
+        "export": lambda: store.export(path, tenant, str(args.branch_id), optional("bundle")),
         "import": lambda: store.import_(path, tenant, str(args.file)),
         "repair": lambda: store.repair(path, tenant, str(args.branch_id)),
         "delete": lambda: store.delete(path, optional("all_of") or tenant, optional("thread_id")),
