@@ -46,6 +46,16 @@ def _function_rows(fns: list[Obj]) -> str:
     )
 
 
+def _constant_rows(api: Obj) -> str:
+    packages = obj(api["packages"])
+    return "\n".join(
+        f"| `{name}` | `{text(obj(packages[text(c.get('package', 'core'))])['ts'])}` / "
+        f"`{text(obj(packages[text(c.get('package', 'core'))])['py'])}` | "
+        f"{mdx(first_sentence(doc_of(c)))} |"
+        for name, c in ((k, obj(v)) for k, v in obj(api.get("constants", {})).items())
+    )
+
+
 def pending_list(decisions: Obj) -> str:
     """Providers that exist but whose factory is not in the contract yet."""
     return "\n".join(
@@ -75,6 +85,7 @@ def overview_page(api: Obj, groups: Groups, decisions: Obj) -> str:
         + TEMPLATE.substitute(
             rows=rows,
             fns=_function_rows(core),
+            constants=_constant_rows(api),
             providers=_function_rows(listed),
             pending=pending_list(decisions),
             groups=links,

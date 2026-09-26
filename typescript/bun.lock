@@ -14,6 +14,7 @@
       "name": "threads-examples",
       "dependencies": {
         "@threads/anthropic": "workspace:*",
+        "@threads/coding": "workspace:*",
         "@threads/core": "workspace:*",
         "@threads/host": "workspace:*",
         "@threads/slack": "workspace:*",
@@ -63,6 +64,16 @@
         "@threads/core": "workspace:*",
         "@threads/host": "workspace:*",
         "@threads/postgres": "workspace:*",
+        "zod": "^4.6.5",
+      },
+    },
+    "packages/coding": {
+      "name": "@threads/coding",
+      "version": "0.0.0",
+      "dependencies": {
+        "@threads/anthropic": "workspace:*",
+        "@threads/core": "workspace:*",
+        "@threads/docker": "workspace:*",
         "zod": "^4.6.5",
       },
     },
@@ -329,6 +340,8 @@
     "@threads/anthropic": ["@threads/anthropic@workspace:packages/anthropic"],
 
     "@threads/cli": ["@threads/cli@workspace:packages/cli"],
+
+    "@threads/coding": ["@threads/coding@workspace:packages/coding"],
 
     "@threads/core": ["@threads/core@workspace:packages/core"],
 

@@ -59,15 +59,16 @@ class CommonOptions(TypedDict, total=False):
     output_retries: int
     """Failed candidates per turn (a rejected final_output or a plain-text end) before the run
     fails output_invalid; default 2. A non-negative integer."""
-    sandbox: Sandbox
-    """Absent: no sandbox tools. Present: bash, read, write, edit, ls, glob and grep."""
+    sandbox: Sandbox | None
+    """Absent, or None (what a conditional config passes): no sandbox tools. Present: bash,
+    read, write, edit, ls, glob and grep."""
     workspace: Workspace
     """Files every sandbox this thread creates starts with in /workspace, resolved on the host
     and pinned when the thread starts. Needs a sandbox with export_tree and import_tree."""
     egress: Egress
     """Sandbox egress allowlist; [] (the default) is deny-all."""
-    memory: MemoryProvider
-    """save_memory, search_memory and forget_memory."""
+    memory: MemoryProvider | None
+    """save_memory, search_memory and forget_memory. Absent or None: no memory tools."""
     memory_write: MemoryWrite
     """Write authority for save_memory and forget_memory; default "ask"."""
     knowledge: KnowledgeProvider

@@ -9,7 +9,8 @@ Stdlib only, Python 3.12+. Checks:
   any other keyword in the meta-schema is itself an error, so the subset stays honest);
 - every $ref in every spec schema, api.json and openapi.json resolves (urn:threads:... $ids,
   relative file paths, JSON pointers);
-- every function and method name pair is TS lowerCamel of the Python snake_case name;
+- every function and method name pair is TS lowerCamel of the Python snake_case name, and a
+  constant is one SCREAMING_SNAKE name in both;
 - every optional method names its Python capability protocol (capability);
 - every typed failure code is a wire ErrorCode (what the log records) or an ApiErrorCode
   from api.schema.json (what public calls return);
@@ -107,6 +108,10 @@ def check_names(api: Json) -> list[str]:
         kinds = [str(obj(p).get("kind")) for p in arr(f.get("params"))]
         if kinds != sorted(kinds, key=lambda k: k != "positional"):
             errs.append(f"api.json {where}: positional params must come before options")
+    for key, c in obj(obj(api).get("constants")).items():
+        ts, py = str(obj(c).get("ts")), str(obj(c).get("py"))
+        if not key == ts == py:
+            errs.append(f"api.json constants.{key}: ts {ts}, py {py} (a constant is one name)")
     for tname, t in obj(obj(api).get("types")).items():
         members = {**obj(obj(t).get("fields")), **obj(obj(t).get("properties"))}
         errs += [

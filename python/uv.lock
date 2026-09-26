@@ -2938,6 +2938,10 @@ dependencies = [
 anthropic = [
     { name = "anthropic" },
 ]
+coding = [
+    { name = "anthropic" },
+    { name = "httpx" },
+]
 daytona = [
     { name = "daytona" },
 ]
@@ -3017,11 +3021,12 @@ requires-dist = [
     { name = "slack-sdk", marker = "extra == 'slack'", specifier = ">=3.40,<4" },
     { name = "starlette", marker = "extra == 'host'", specifier = ">=1.6,<2" },
     { name = "supermemory", marker = "extra == 'supermemory'", specifier = ">=3.62,<4" },
+    { name = "threads", extras = ["anthropic", "docker"], marker = "extra == 'coding'" },
     { name = "typing-extensions", specifier = ">=4.12" },
     { name = "uvicorn", marker = "extra == 'host'", specifier = ">=0.53,<1" },
     { name = "zep-cloud", marker = "extra == 'zep'", specifier = ">=3.28,<4" },
 ]
-provides-extras = ["anthropic", "openai", "litellm", "e2b", "daytona", "modal", "docker", "mcp", "supermemory", "zep", "postgres", "host", "slack", "whatsapp", "github", "otel"]
+provides-extras = ["anthropic", "openai", "litellm", "e2b", "daytona", "modal", "docker", "coding", "mcp", "supermemory", "zep", "postgres", "host", "slack", "whatsapp", "github", "otel"]
 
 [package.metadata.requires-dev]
 dev = [

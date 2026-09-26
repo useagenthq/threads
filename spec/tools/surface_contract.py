@@ -2,7 +2,8 @@
 """The API surface contract, read from spec/api.json, and the reviewed gaps registry
 (spec/api-surface-gaps.json). Shared by gen_api_surface.py and check_surface.py. Stdlib only.
 
-A member name uses api.json keys: `fn`, `fn.option`, `Type`, `Type.member`, `Type.method.option`.
+A member name uses api.json keys: `fn`, `fn.option`, `Type`, `Type.member`, `Type.method.option`,
+`CONSTANT`.
 """
 
 from __future__ import annotations
@@ -16,11 +17,11 @@ from check_api import Json, callables, camel
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-type Role = Literal["function", "option", "type", "property", "field", "method"]
+type Role = Literal["function", "constant", "option", "type", "property", "field", "method"]
 
 LANGS = frozenset({"ts", "py"})
 KINDS: dict[str, frozenset[Role]] = {
-    "missing": frozenset({"function", "option", "type", "property", "field", "method"}),
+    "missing": frozenset({"function", "constant", "option", "type", "property", "field", "method"}),
     "required_mismatch": frozenset({"option", "property", "field", "method"}),
     "placement": frozenset({"type", "method"}),
     # A member that exists but whose contract changed ahead of its build (surface_changed.py).
@@ -138,6 +139,10 @@ def members(api: Json) -> dict[str, Member]:
     """Every checked member of the contract, by name."""
     found: list[Member] = []
     types = obj(obj(api).get("types"))
+    for name, c in obj(obj(api).get("constants")).items():
+        found.append(
+            Member(name, "constant", LANGS, True, str(obj(c).get("package", "core")), name, name)
+        )
     for name, t in types.items():
         found += _type(name, obj(t))
     for where, _, f in callables(api):

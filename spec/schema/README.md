@@ -34,6 +34,7 @@ Both packages are checked against `../api.json` in CI. TypeScript: `tools/gen_ap
 **What it checks**, in each language:
 
 - every function and method exists and is callable;
+- every exported constant (`constants` in `../api.json`) exists under the same name in both languages; what it holds is a golden test's job, not the gate's;
 - every option exists, with its required flag, across all overloads;
 - every type is exported from its declared `package` entry (a `placement` gap names the other public entry that exports it instead, `at`, and the gate checks it is there);
 - every field of a data type exists and can be omitted exactly when the contract marks it optional: in TypeScript a `?` property; in Python the type's constructor inputs (a parameter with a default is optional) or its TypedDict keys (a top-level `Required`/`NotRequired` counts even in a postponed annotation);
@@ -51,7 +52,7 @@ Both packages are checked against `../api.json` in CI. TypeScript: `tools/gen_ap
 
 **The gaps registry.** Anything either language lacks is listed in `../api-surface-gaps.json`, the one registry of what isn't built (the docs reference reads it too), one gap per member and language (a Python optional method may have two: its base protocol and its capability protocol), each with its owning lane. A gap's `kind` is `missing`, `required_mismatch`, `placement` (with `at`), or `changed`: a member that exists in both languages but whose contract (a signature, a returned variant, an error code, an HTTP route) changed ahead of its build. The gate can't see signatures, so for a `changed` gap it checks that the member's `api.json` entry differs from the base commit's when the gap is new, and that the member's docs reference page carries the marker the docs generator writes for it (`**Phase 2, not yet available** (lane <lane>)`, with what today's build does instead), so the published docs never promise what isn't built (`../tools/surface_changed.py`). It only shrinks: a listed gap that is fixed fails until its entry is deleted, and a PR may add an entry only for a member its own contract change introduces (compared against the base commit's `api.json`). It must be empty at the release gate (`--release`).
 
-**Test evidence.** `../api-coverage.json` names, for every function, required method and required option in each language that has it, a test that must pass in the same CI run's JUnit report. That proves a named, reviewed test exists and passed; that it exercises the member is a reviewed claim, not something CI checks.
+**Test evidence.** `../api-coverage.json` names, for every function, required method and required option in each language that has it (a constant carries none: the gate's existence check plus its golden is the whole claim), a test that must pass in the same CI run's JUnit report. That proves a named, reviewed test exists and passed; that it exercises the member is a reviewed claim, not something CI checks.
 
 ## One contract for storage and interchange
 

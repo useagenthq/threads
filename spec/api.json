@@ -98,6 +98,12 @@
       "provider": "Docker",
       "doc": "Sandboxes in local Docker containers over the Engine API on its unix socket (Python extra docker), with no SDK and no registry credentials. Every request goes through the run's fenced transport."
     },
+    "coding": {
+      "kind": "preset",
+      "ts": "@threads/coding",
+      "py": "threads.coding",
+      "doc": "codingAgent(): agent() with a coding agent's defaults already chosen (Python extra coding = anthropic + docker). It holds one function and one constant, and depends on the anthropic and docker packages, which is why it is its own package: core depends only on zod / pydantic."
+    },
     "modal": {
       "kind": "adapter",
       "ts": "@threads/modal",
@@ -433,10 +439,10 @@
           "kind": "option",
           "type": {"$ref": "#/types/Sandbox"},
           "required": false,
-          "doc": "The sandbox the sandbox tools run in: bash and the file tools (read, write, edit, ls, glob, grep). The git, lsp and computer options also need one. Omitted: no sandbox tools."
+          "doc": "The sandbox the sandbox tools run in: bash and the file tools (read, write, edit, ls, glob, grep). The git, lsp and computer options also need one. Omitted, or null / undefined, which is what a conditional config passes: no sandbox tools."
         },
         {"name": "workspace", "kind": "option", "type": {"$ref": "#/types/Workspace"}, "required": false, "doc": "Files every sandbox this thread creates starts with in /workspace, resolved on the host into one tree and pinned (policy.workspace, covered by config_hash) when the thread starts. Continuing a thread re-resolves them; any change is ConfigError invalid_config. Needs a sandbox whose sessions have exportTree and importTree, or it is capability_missing. Omitted: /workspace starts empty."},
-        {"name": "memory", "kind": "option", "type": {"$ref": "#/types/MemoryProvider"}, "required": false, "doc": "Saved cross-run memory: localMemory() or a memory adapter. It pins save_memory, search_memory and forget_memory. Omitted: the agent has no memory tools."},
+        {"name": "memory", "kind": "option", "type": {"$ref": "#/types/MemoryProvider"}, "required": false, "doc": "Saved cross-run memory: localMemory() or a memory adapter. It pins save_memory, search_memory and forget_memory. Omitted, or null / undefined, which is what a conditional config passes: the agent has no memory tools."},
         {
           "name": "memory_write",
           "kind": "option",
@@ -601,6 +607,30 @@
       "returns": {"$ref": "#/types/Agent", "args": [{"generic": "Deps"}, {"generic": "Output"}]},
       "overloads": [{"when": "team", "returns": {"$ref": "#/types/TeamAgent", "args": [{"generic": "Deps"}, {"generic": "Output"}]}, "doc": "With team, agent() returns a TeamAgent: TS selects the overload by the team option, Python returns the TeamAgent class, so run().team and stream().result.team are typed. An explicit team: [] is a team with no startable agents: it still returns a TeamAgent, whose team log opens and whose operator can still act; only omitting team returns a plain Agent."}]
     },
+    "codingAgent": {
+      "ts": "codingAgent",
+      "py": "coding_agent",
+      "package": "coding",
+      "doc": "A coding agent in one call: agent() with Claude Sonnet 5, a keyless Docker sandbox (2 CPUs, 4 GiB, no network), the sandbox tools under permissions {mode: \"accept_edits\", allow: [\"bash(*)\"]}, localMemory() and CODING_INSTRUCTIONS. Every agent() option is accepted and replaces the preset's value for that key, whole; the options below are the ones whose default the preset sets, and every other option keeps agent()'s own default (compaction, todo_write, memory_write \"ask\", no web, git, lsp, MCP, skills, subagents or budget). A thread from codingAgent() and a thread from the equivalent agent() call have the same config_hash: the preset is those five defaults and nothing else. Pass workspace: {localDir} to copy a directory in; /workspace starts empty otherwise, and the agent's edits come back as a unified diff at the end of its answer.",
+      "async": false,
+      "generics": [
+        {"name": "Deps", "default": {"prim": "null"}},
+        {"name": "Output", "default": {"prim": "string"}}
+      ],
+      "params": [
+        {"name": "model", "kind": "option", "type": {"$ref": "#/types/Model"}, "required": false, "default_doc": "anthropic(\"claude-sonnet-5\")", "doc": "The model every turn is sent to. Omitted: anthropic(\"claude-sonnet-5\"), whose key is read from ANTHROPIC_API_KEY on the host when the run is set up."},
+        {"name": "instructions", "kind": "option", "type": {"prim": "string"}, "required": false, "default_doc": "CODING_INSTRUCTIONS", "doc": "Pinned system text (Render v1 line 0). Omitted: CODING_INSTRUCTIONS. It replaces the default rather than adding to it, so write CODING_INSTRUCTIONS + your own text to keep the baseline and diff steps."},
+        {"name": "sandbox", "kind": "option", "type": {"$ref": "#/types/Sandbox"}, "required": false, "default_doc": "docker({cpus: 2, memoryMb: 4096})", "doc": "Where bash and the file tools run. Omitted: docker({cpus: 2, memoryMb: 4096}), which needs a running Docker daemon (check() answers docker_unreachable otherwise). Another sandbox replaces the limits too, so pass them again; docker({allowInternet: true}) also needs egress: \"unenforced\". null or undefined removes the sandbox, and with it the sandbox tools."},
+        {"name": "workspace", "kind": "option", "type": {"$ref": "#/types/Workspace"}, "required": false, "doc": "Files every sandbox of the thread starts with in /workspace, as for agent(). Omitted: /workspace starts empty. A localDir is copied, never written back: .git, gitignored files and secret-looking paths are skipped, and the diff at the end of the answer is how the edits come out."},
+        {"name": "permissions", "kind": "option", "type": {"partial": {"$ref": "urn:threads:schema:events:v1#/$defs/Policy/properties/permissions"}}, "required": false, "default_doc": "{mode: \"accept_edits\", allow: [\"bash(*)\"]}", "doc": "The permission policy every tool call is decided under. Omitted: {mode: \"accept_edits\", allow: [\"bash(*)\"]}, with the built-in protected paths and allow_bypass false kept, so edits and commands inside the sandbox don't ask and everything else still does. It replaces the preset's object whole, so permissions: {mode: \"plan\"} drops bash(*) with it."},
+        {"name": "memory", "kind": "option", "type": {"$ref": "#/types/MemoryProvider"}, "required": false, "default_doc": "localMemory()", "doc": "Saved cross-run memory, pinning save_memory, search_memory and forget_memory. Omitted: localMemory(), in the run's store. null or undefined removes the memory tools."},
+        {"name": "output", "kind": "option", "type": {"schema": {"generic": "Output"}}, "required": false, "doc": "Structured final output: a schema the final answer must parse with, as for agent(). Omitted: completed.output is the final text, which CODING_INSTRUCTIONS ends with the diff. A schema replaces that text, so the diff has to be in it."},
+        {"name": "team", "kind": "option", "type": {"array": {"union": [{"$ref": "#/types/Agent", "args": [{"prim": "unknown"}, {"prim": "unknown"}]}, {"$ref": "#/types/DynamicAgent", "args": [{"prim": "unknown"}, {"prim": "unknown"}]}]}}, "required": false, "doc": "Agents this one may start as team members, with the team tools, as for agent(). Passing it, even as [], returns a TeamAgent. Omitted: no team, a plain Agent; a coding agent is more often a member of someone else's team than its lead."}
+      ],
+      "returns": {"$ref": "#/types/Agent", "args": [{"generic": "Deps"}, {"generic": "Output"}]},
+      "overloads": [{"when": "team", "returns": {"$ref": "#/types/TeamAgent", "args": [{"generic": "Deps"}, {"generic": "Output"}]}, "doc": "With team, codingAgent() returns a TeamAgent, exactly as agent() does."}],
+      "throws": ["ConfigError"]
+    },
     "dynamicAgent": {
       "ts": "dynamicAgent",
       "py": "dynamic_agent",
@@ -627,8 +657,8 @@
         {"name": "name", "kind": "option", "type": {"$ref": "urn:threads:schema:events:v1#/$defs/Name"}, "required": false, "default": "agent", "doc": "The template's name: the agent a start names, and each member is <name>-<k>. Unique in the team tree; operator is reserved."},
         {"name": "tools", "kind": "option", "type": {"array": {"union": [{"$ref": "#/types/Tool"}, {"$ref": "#/types/McpServer"}]}}, "required": false, "default": [], "doc": "App tools and MCP servers. Built-in tools come from the sandbox and the options below."},
         {"name": "extensions", "kind": "option", "type": {"array": {"$ref": "#/types/Extension"}}, "required": false, "default": [], "doc": "Instructions and hooks run in this order."},
-        {"name": "sandbox", "kind": "option", "type": {"$ref": "#/types/Sandbox"}, "required": false, "doc": "The sandbox the sandbox tools run in: bash and the file tools (read, write, edit, ls, glob, grep). The git, lsp and computer options also need one. Omitted: no sandbox tools."},
-        {"name": "memory", "kind": "option", "type": {"$ref": "#/types/MemoryProvider"}, "required": false, "doc": "Saved cross-run memory: localMemory() or a memory adapter. It pins save_memory, search_memory and forget_memory. Omitted: the agent has no memory tools."},
+        {"name": "sandbox", "kind": "option", "type": {"$ref": "#/types/Sandbox"}, "required": false, "doc": "The sandbox the sandbox tools run in: bash and the file tools (read, write, edit, ls, glob, grep). The git, lsp and computer options also need one. Omitted, or null / undefined, which is what a conditional config passes: no sandbox tools."},
+        {"name": "memory", "kind": "option", "type": {"$ref": "#/types/MemoryProvider"}, "required": false, "doc": "Saved cross-run memory: localMemory() or a memory adapter. It pins save_memory, search_memory and forget_memory. Omitted, or null / undefined, which is what a conditional config passes: the agent has no memory tools."},
         {"name": "memory_write", "kind": "option", "type": {"enum": ["deny", "ask", "allow_principal", "allow"]}, "required": false, "default": "ask", "doc": "Write authority for save_memory."},
         {"name": "knowledge", "kind": "option", "type": {"$ref": "#/types/KnowledgeProvider"}, "required": false, "doc": "Retrieval over sources the host admits: localKnowledge(paths) or a knowledge adapter. It pins search_knowledge. Omitted: the agent has no knowledge tool."},
         {"name": "skills", "kind": "option", "type": {"array": {"$ref": "#/types/Skill"}}, "required": false, "default": [], "doc": "Pinned in config_hash (name, description, sha256 of body). Line 0 lists them after the extension instructions as \"Skills you can load with load_skill:\" then one \"- name: description\" line each, in the given order; load_skill (pinned only when this is non-empty) appends the body as injected{source: skill, trust: trusted_instruction, origin: {id: name, version: sha256 of body}} (F4.1). Unique names; a description is one non-empty line."},
@@ -1645,6 +1675,17 @@
           "py": "typing.NoReturn"
         }
       }
+    }
+  },
+  "constants": {
+    "CODING_INSTRUCTIONS": {
+      "ts": "CODING_INSTRUCTIONS",
+      "py": "CODING_INSTRUCTIONS",
+      "package": "coding",
+      "type": {
+        "prim": "string"
+      },
+      "doc": "The instructions codingAgent() pins when you pass none: explore first, plan with todo_write, make the smallest change, verify it, save memory only when asked, and record a git baseline in /workspace before the first edit so the answer can end with a unified diff of everything that changed. Pinned byte for byte by a golden test in both languages; extend it rather than replace it to keep the diff."
     }
   },
   "types": {

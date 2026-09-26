@@ -1,0 +1,85 @@
+---
+title: "codingAgent / coding_agent"
+description: "A coding agent in one call: agent() with Claude Sonnet 5, a keyless Docker sandbox (2 CPUs, 4 GiB, no network), the sandbox tools under permissions {mode: \"accept_edits\", allow: [\"bash(*)\"]}, localMemory() and CODING_INSTRUCTIONS."
+icon: "SquareFunction"
+---
+
+Every agent() option is accepted and replaces the preset's value for that key, whole; the options below are the ones whose default the preset sets, and every other option keeps agent()'s own default (compaction, todo_write, memory_write "ask", no web, git, lsp, MCP, skills, subagents or budget). A thread from codingAgent() and a thread from the equivalent agent() call have the same config_hash: the preset is those five defaults and nothing else. Pass workspace: &#123;localDir&#125; to copy a directory in; /workspace starts empty otherwise, and the agent's edits come back as a unified diff at the end of its answer.
+
+Import from `@threads/coding` (TypeScript) or `threads.coding` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function codingAgent(options?: {
+  model?: Model;
+  instructions?: string;
+  sandbox?: Sandbox;
+  workspace?: Workspace;
+  permissions?: Partial<Policy.permissions>;
+  memory?: MemoryProvider;
+  output?: z.ZodType<Output>;
+  team?: readonly (Agent<unknown, unknown> | DynamicAgent<unknown, unknown>)[];
+}): Agent<Deps, Output>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def coding_agent(
+    *,
+    model: Model | None = None,
+    instructions: str | None = None,
+    sandbox: Sandbox | None = None,
+    workspace: Workspace | None = None,
+    permissions: Policy.permissions | None = None,
+    memory: MemoryProvider | None = None,
+    output: type[Output] | None = None,
+    team: Sequence[Agent[object, object] | DynamicAgent[object, object]] | None = None,
+) -> Agent[Deps, Output]
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="model" type={"Model"}>
+  The model every turn is sent to. Omitted: anthropic("claude-sonnet-5"), whose key is read from ANTHROPIC_API_KEY on the host when the run is set up. See [Model](/docs/reference/types/Model).
+</Field>
+
+<Field name="instructions" type={"string"}>
+  Pinned system text (the pinned prompt prefix). Omitted: CODING_INSTRUCTIONS. It replaces the default rather than adding to it, so write CODING_INSTRUCTIONS + your own text to keep the baseline and diff steps.
+</Field>
+
+<Field name="sandbox" type={"Sandbox"}>
+  Where bash and the file tools run. Omitted: docker(&#123;cpus: 2, memoryMb: 4096&#125;), which needs a running Docker daemon (check() answers docker_unreachable otherwise). Another sandbox replaces the limits too, so pass them again; docker(&#123;allowInternet: true&#125;) also needs egress: "unenforced". null or undefined removes the sandbox, and with it the sandbox tools. See [Sandbox](/docs/reference/types/Sandbox).
+</Field>
+
+<Field name="workspace" type={"Workspace"}>
+  Files every sandbox of the thread starts with in /workspace, as for agent(). Omitted: /workspace starts empty. A localDir is copied, never written back: .git, gitignored files and secret-looking paths are skipped, and the diff at the end of the answer is how the edits come out. See [Workspace](/docs/reference/types/Workspace).
+</Field>
+
+<Field name="permissions" type={"Partial<Policy.permissions>"}>
+  The permission policy every tool call is decided under. Omitted: &#123;mode: "accept_edits", allow: ["bash(*)"]&#125;, with the built-in protected paths and allow_bypass false kept, so edits and commands inside the sandbox don't ask and everything else still does. It replaces the preset's object whole, so permissions: &#123;mode: "plan"&#125; drops bash(*) with it.
+</Field>
+
+<Field name="memory" type={"MemoryProvider"}>
+  Saved cross-run memory, pinning save_memory, search_memory and forget_memory. Omitted: localMemory(), in the run's store. null or undefined removes the memory tools. See [MemoryProvider](/docs/reference/types/MemoryProvider).
+</Field>
+
+<Field name="output" type={"z.ZodType<Output>"}>
+  Structured final output: a schema the final answer must parse with, as for agent(). Omitted: completed.output is the final text, which CODING_INSTRUCTIONS ends with the diff. A schema replaces that text, so the diff has to be in it.
+</Field>
+
+<Field name="team" type={"readonly (Agent<unknown, unknown> | DynamicAgent<unknown, unknown>)[]"}>
+  Agents this one may start as team members, with the team tools, as for agent(). Passing it, even as [], returns a TeamAgent. Omitted: no team, a plain Agent; a coding agent is more often a member of someone else's team than its lead.
+</Field>
+
+## Returns
+
+[`Agent<Deps, Output>`](/docs/reference/types/Agent)
+
+**Throws** `ConfigError` for a definition that can't run.

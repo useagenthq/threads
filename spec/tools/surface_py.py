@@ -7,6 +7,7 @@ with the gaps registry.
 
 What it reads, and nothing more (spec/schema/README.md, "The API surface gate"):
 - a function or method: a callable attribute;
+- a constant: an exported attribute (what it holds is a golden test's job);
 - an option: a keyword-only parameter or an `Unpack[TypedDict]` key, and whether it has a default;
 - a field of a data type: a parameter of the type's constructor (a dataclass, a Pydantic model,
   an exception) or a TypedDict key, and whether it can be omitted;
@@ -192,6 +193,10 @@ class PythonSurface:
     def type(self, m: Member) -> Found:
         return self.package.locate(m.package, m.py)[1]
 
+    def constant(self, m: Member) -> Found:
+        """An exported value: what it holds is a golden test's job, not the gate's."""
+        return [] if self.package.export(m.package, m.py) is not None else MISSING
+
     def property(self, m: Member) -> Found:
         owner = self._type(m.parent)
         if owner is None:
@@ -233,6 +238,7 @@ class PythonSurface:
         checks: dict[str, Callable[[Member], Found]] = {
             "function": self.function, "type": self.type, "property": self.property,
             "field": self.field, "method": self.method, "option": self.option,
+            "constant": self.constant,
         }  # fmt: skip
         return {
             (m.name, kind, at)

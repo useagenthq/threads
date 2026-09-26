@@ -65,8 +65,8 @@ export type AgentOptions<Deps, Output> = {
   readonly onUnknownUsage?: PinOptions["onUnknownUsage"];
   readonly retry?: Partial<z.infer<typeof RetryPolicy>>;
   readonly context?: Partial<z.infer<typeof ContextPolicy>>;
-  /** Absent: no sandbox tools (bash, files). */
-  readonly sandbox?: Sandbox;
+  /** Absent, or undefined (what a conditional config passes): no sandbox tools (bash, files). */
+  readonly sandbox?: Sandbox | undefined;
   /**
    * Files every sandbox this thread creates starts with in /workspace, resolved on the host and
    * pinned when the thread starts. Needs a sandbox.
@@ -95,8 +95,8 @@ export type AgentOptions<Deps, Output> = {
   readonly team?: Listed;
   /** The team's limits: 4 running members and 100 pending mails per member by default. */
   readonly teamLimits?: TeamLimits;
-  /** Saved cross-run memory: localMemory() or an adapter. */
-  readonly memory?: MemoryProvider;
+  /** Saved cross-run memory: localMemory() or an adapter. Absent or undefined: no memory tools. */
+  readonly memory?: MemoryProvider | undefined;
   /** Write authority for save_memory and forget_memory. */
   readonly memoryWrite?: MemoryWrite;
   /** Retrieval over host-admitted sources: localKnowledge({paths}) or an adapter. */

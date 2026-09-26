@@ -32,6 +32,7 @@ say so.
 | e2b | `@threads/e2b` | `threads.e2b` |
 | daytona | `@threads/daytona` | `threads.daytona` |
 | docker | `@threads/docker` | `threads.docker` |
+| coding | `@threads/coding` | `threads.coding` |
 | modal | `@threads/modal` | `threads.modal` |
 | dev | `@threads/core` | `threads.dev` |
 | postgres | `@threads/postgres` | `threads.postgres` |
@@ -46,6 +47,7 @@ say so.
 | TypeScript | Python | What it does |
 |---|---|---|
 | [`agent`](/docs/reference/functions/agent) | `agent` | Describe an agent. |
+| [`codingAgent`](/docs/reference/functions/codingAgent) | `coding_agent` | A coding agent in one call: agent() with Claude Sonnet 5, a keyless Docker sandbox (2 CPUs, 4 GiB, no network), the sandbox tools under permissions &#123;mode: "accept_edits", allow: ["bash(*)"]&#125;, localMemory() and CODING_INSTRUCTIONS. |
 | [`dynamicAgent`](/docs/reference/functions/dynamicAgent) | `dynamic_agent` | Describe a dynamic agent: a template in a lead's team whose members the lead (or team.start) defines at runtime within what this code pins. |
 | [`tool`](/docs/reference/functions/tool) | `tool` | Define an app tool. |
 | [`extension`](/docs/reference/functions/extension) | `extension` | The one extension primitive: tools, trusted instructions and hooks. |
@@ -63,6 +65,12 @@ say so.
 | [`openTeam`](/docs/reference/functions/openTeam) | `open_team` | A Team handle for a team another process ran, or to act as another principal. |
 | [`runEvals`](/docs/reference/functions/runEvals) | `run_evals` | Runs every saved case under cases through the checks, cheapest first: replay (the recorded requests re-render byte for byte with the code running now), rerun (the recorded turn reruns offline to the same events, with no model call and every effect stubbed), drift (with agents: the case's recorded config against each agent as it is pinned now, by a dry pin that runs no setup, reads no secret and connects to no MCP server) and, only with live, a judged run of the current agent. |
 | [`assertNever`](/docs/reference/functions/assertNever) | `assert_never` | Ends a switch over a union, so a variant nobody handles is a type error. |
+
+## Constants
+
+| Name | Package | What it is |
+|---|---|---|
+| `CODING_INSTRUCTIONS` | `@threads/coding` / `threads.coding` | The instructions codingAgent() pins when you pass none: explore first, plan with todo_write, make the smallest change, verify it, save memory only when asked, and record a git baseline in /workspace before the first edit so the answer can end with a unified diff of everything that changed. |
 
 ## Providers
 
