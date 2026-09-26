@@ -5,11 +5,12 @@ import asyncio
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from threads.agents.definition import Definition
 from threads.agents.results import DeltaItem, EventItem, StatusItem, StreamEvent
 from threads.agents.store import now_ms
 from threads.hooks.observers import ObserverPump
 from threads.log import EventId
-from threads.store import StoredEvent
+from threads.store import SqliteStore, StoredEvent, Writer
 
 type Emit = Callable[[StreamEvent], None]
 type OnDelta = Callable[[EventId, int, str], None]
@@ -35,3 +36,17 @@ class RunStream:
     async def wait_until(self, when: int) -> None:
         self.emit(StatusItem(when))
         await asyncio.sleep(max(0, when - now_ms()) / 1000)
+
+
+def run_stream[D](
+    sq: SqliteStore,
+    writer: Writer,
+    definition: Definition[D],
+    emit: Emit,
+    on_delta: OnDelta | None,
+) -> RunStream:
+    """A run's stream, with the observer pump already poked for its branch."""
+    observers = {e.name: e.on for e in definition.extensions}
+    pump = ObserverPump(sq.cursors, writer.branch_id, lambda: writer.fold.events, observers)
+    pump.poke()
+    return RunStream(emit, pump, on_delta)

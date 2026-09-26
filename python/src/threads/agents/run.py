@@ -29,7 +29,7 @@ from threads.agents.results import (
     StreamEvent,
     Thread,
 )
-from threads.agents.run_stream import Emit, OnDelta, RunStream
+from threads.agents.run_stream import Emit, OnDelta, run_stream
 from threads.agents.scope import Execute, Scope
 from threads.agents.servers import fenced, host_serving, with_servers
 from threads.agents.setup import set_up
@@ -50,7 +50,6 @@ from threads.agents.teams import team_of
 from threads.agents.tool import invalid
 from threads.agents.workspace import with_workspace
 from threads.hooks.extension import bind, extension_tools
-from threads.hooks.observers import ObserverPump
 from threads.log import (
     BranchId,
     Budget,
@@ -126,20 +125,6 @@ async def execute[D](  # noqa: PLR0913, PLR0917 - the run, plus how it was launc
         )
 
 
-def _stream[D](
-    sq: SqliteStore,
-    writer: Writer,
-    definition: Definition[D],
-    emit: Emit,
-    on_delta: OnDelta | None,
-) -> RunStream:
-    """The run's stream, with the observer pump already poked for this branch."""
-    observers = {e.name: e.on for e in definition.extensions}
-    pump = ObserverPump(sq.cursors, writer.branch_id, lambda: writer.fold.events, observers)
-    pump.poke()
-    return RunStream(emit, pump, on_delta)
-
-
 async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
     definition: Definition[D],
     input: Input | None,
@@ -178,7 +163,7 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
         sandbox = definition.sandbox or (None if thread is None else thread.sandbox)
         handle = Thread(thread_id, writer.branch_id, store, sandbox=sandbox)
         ctx = RunContext(deps, handle.id, handle.branch, principal)
-        stream = _stream(sq, writer, definition, emit, on_delta)
+        stream = run_stream(sq, writer, definition, emit, on_delta)
         box = definition.sandbox
         shared = None if launch is None else launch.shared
         builtins = shared or (

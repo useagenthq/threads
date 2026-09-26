@@ -36,6 +36,8 @@ from threads.store.taking import repair_draft, take
 from threads.store.verify import VerifiedLog, verify_export
 from threads.store.worker import Clock, Worker
 from threads.store.writer import Writer
+from threads.store.writes import result as _result
+from threads.store.writes import stored_first as _stored_first
 from threads.team.imported import import_indexed
 
 if TYPE_CHECKING:
@@ -381,22 +383,3 @@ class SqliteStore(BranchStore):
             return repaired
         await self._worker.call(lambda c: sql.mark_repaired(c, branch_id))
         return taken
-
-
-def _stored_first[T](
-    artifacts: ArtifactStore, data: bytes | None, job: Callable[[Conn], T]
-) -> Callable[[Conn], T]:
-    """`job`, after `data` (if any) is stored as an artifact with registration paused."""
-    if data is None:
-        return job
-    stored = data
-
-    def both(conn: Conn) -> T:
-        artifacts.put(stored)
-        return job(conn)
-
-    return lambda c: published(stored, lambda: both(c))
-
-
-def _result(error: ParseError | None) -> Ok[None] | Err[ParseError]:
-    return Ok(None) if error is None else Err(error)
