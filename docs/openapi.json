@@ -5697,7 +5697,8 @@
           "writer_mismatch",
           "secret_in_provider_output",
           "secret_in_stored_bytes",
-          "archive_invalid"
+          "archive_invalid",
+          "workspace_mismatch"
         ]
       },
       "events_Event": {
@@ -7413,6 +7414,9 @@
               "heartbeat_ms"
             ],
             "type": "object"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/events_WorkspacePin"
           }
         },
         "type": "object"
@@ -7941,6 +7945,120 @@
         "description": "<waiter branch_id>:<call_id or request_id>.",
         "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[A-Za-z0-9_.-]{1,128}$",
         "type": "string"
+      },
+      "events_WorkspacePin": {
+        "additionalProperties": false,
+        "description": "The workspace inputs, resolved into one tree on the host before thread_started (spec/schema/README.md, Workspace inputs).",
+        "properties": {
+          "manifest_hash": {
+            "$ref": "#/components/schemas/events_Sha256"
+          },
+          "sources": {
+            "description": "In the order files, local_dir, git; each at most once.",
+            "items": {
+              "$ref": "#/components/schemas/events_WorkspaceSource"
+            },
+            "type": "array"
+          },
+          "tree": {
+            "additionalProperties": false,
+            "description": "The tree artifact (tree.v1.schema.json).",
+            "properties": {
+              "bytes": {
+                "$ref": "#/components/schemas/events_Int"
+              },
+              "sha256": {
+                "$ref": "#/components/schemas/events_Sha256"
+              }
+            },
+            "required": [
+              "sha256",
+              "bytes"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "tree",
+          "manifest_hash",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "events_WorkspaceSource": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "files"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "local_dir"
+              },
+              "path": {
+                "$ref": "#/components/schemas/events_NonEmpty",
+                "description": "The host directory exactly as the agent config wrote it."
+              },
+              "skipped": {
+                "description": "The excluded paths (.git, gitignored, deny-listed), top-most only, sorted by UTF-16 code units; never their contents.",
+                "items": {
+                  "$ref": "#/components/schemas/events_NonEmpty"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "skipped"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "commit": {
+                "$ref": "#/components/schemas/events_NonEmpty",
+                "description": "The commit the ref resolved to."
+              },
+              "kind": {
+                "const": "git"
+              },
+              "ref": {
+                "$ref": "#/components/schemas/events_NonEmpty"
+              },
+              "repo": {
+                "$ref": "#/components/schemas/events_NonEmpty",
+                "description": "owner/name on the configured forge."
+              },
+              "skipped": {
+                "description": "The excluded paths (.git, gitignored, deny-listed), top-most only, sorted by UTF-16 code units; never their contents.",
+                "items": {
+                  "$ref": "#/components/schemas/events_NonEmpty"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "kind",
+              "repo",
+              "ref",
+              "commit",
+              "skipped"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "events_ev_agent_finished": {
         "description": "The child's one terminal result (F7.5). Exactly once per agent_spawned.",

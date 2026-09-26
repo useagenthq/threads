@@ -21,7 +21,7 @@ import { type MessagePolicyRule, teamTools } from "../team/policy";
 import { builtins, type Capabilities, type Egress } from "../tools";
 import { frameworkSpec, searchToolSpec } from "../tools/framework";
 import { requireCapabilities } from "../tools/gated";
-import type { Workspace } from "../workspace/resolve";
+import { checkWorkspace, type Workspace } from "../workspace/resolve";
 import { deferredNames, referenceForm } from "./defer";
 import { checkEnforceable } from "./enforceable";
 import { ConfigError, Unbound } from "./errors";
@@ -159,11 +159,8 @@ function pinned(
   readonly artifacts: readonly Uint8Array[];
 } {
   const deferTools = options.context.defer_tools ?? "auto";
-  // A child runs without a sandbox, so without a workspace.
-  const base =
-    within === undefined
-      ? options
-      : { ...options, sandbox: undefined, workspace: undefined };
+  const child = { ...options, sandbox: undefined, workspace: undefined };
+  const base = within === undefined ? options : child;
   const o = { ...base, context: { ...base.context, defer_tools: deferTools } };
   const user = [...o.tools, ...extensionTools(o.extensions, o.mcp)];
   const deferred = deferredNames(ownTools(user, within, o.dynamic), deferTools);
@@ -325,21 +322,6 @@ function hashedOnly(o: PinOptions): Record<string, unknown> {
           },
         }),
   };
-}
-
-/** A workspace needs a sandbox, and is pinned only once check() or a run resolved it. */
-function checkWorkspace(o: PinOptions): void {
-  if (o.workspace === undefined) return;
-  if (o.sandbox === undefined)
-    throw new ConfigError(
-      "capability_missing",
-      "workspace: needs a sandbox to place the files in",
-    );
-  if (o.workspacePin === undefined)
-    throw new ConfigError(
-      "invalid_config",
-      "workspace: its files are read on the host by check() or a run; this pin can't see them",
-    );
 }
 
 const TEAM = [

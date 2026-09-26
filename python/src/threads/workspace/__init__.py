@@ -7,6 +7,8 @@ from threads.workspace.resolve import (
     Resolved,
     Workspace,
     WorkspaceGit,
+    WorkspacePin,
+    check_workspace,
     resolve_workspace,
 )
 
@@ -16,5 +18,7 @@ __all__ = [
     "Resolved",
     "Workspace",
     "WorkspaceGit",
+    "WorkspacePin",
+    "check_workspace",
     "resolve_workspace",
 ]

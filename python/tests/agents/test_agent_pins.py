@@ -2,9 +2,13 @@
 (spec/schema/README.md, "The pinned config"): the shared vector pins the bytes."""
 
 import asyncio
+import os
+import tempfile
+from collections.abc import Generator
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, override
+from typing import TYPE_CHECKING, Literal, cast, override
 
 import pytest
 from pydantic import JsonValue, TypeAdapter
@@ -22,8 +26,10 @@ from threads import (
     scripted_model,
 )
 from threads.agents.bindings import DEFAULT_PERMISSIONS
+from threads.agents.definition import Definition
 from threads.agents.dynamic_agent import member_definition
 from threads.agents.teams import member_pin
+from threads.agents.workspace import with_workspace
 from threads.hooks.extension import Extension
 from threads.log import Budget, Context, Event, MemberDefine, ModelRef, Permissions, Retry
 from threads.loop.defaults import CONTEXT, RETRY
@@ -34,6 +40,7 @@ if TYPE_CHECKING:
     from threads.agents.dynamic import DynamicAgentOptions
     from threads.agents.factory import AgentOptions
     from threads.hooks.types import Hooks
+    from threads.workspace import Workspace
 
 type Obj = dict[str, JsonValue]
 _OBJ: TypeAdapter[Obj] = TypeAdapter(Obj)
@@ -136,6 +143,9 @@ def _parts(d: Obj, options: "AgentOptions") -> None:
         options["extensions"] = [_extension(e) for e in _OBJS.validate_python(d["extensions"])]
     if "sandbox" in d:
         options["sandbox"] = fake_sandbox()
+    if "workspace" in d:
+        # The vector spells a workspace as the wire does, which is what Python takes.
+        options["workspace"] = cast("Workspace", _OBJ.validate_python(d["workspace"]))
     if "egress" in d:
         assert d["egress"] == "unenforced", d["egress"]
         options["egress"] = "unenforced"
@@ -192,11 +202,47 @@ def _build(d: Obj) -> Agent[None, object]:
     return agent(**options)
 
 
+@contextmanager
+def _in_directory(entries: list[Obj], at: str) -> Generator[None]:
+    """Writes `entries` under `<scratch>/<at>` and runs in that scratch directory, so a
+    local_dir the vector wrote as "./app" is the same relative path in both languages."""
+    with tempfile.TemporaryDirectory(prefix="threads-pins-") as scratch:
+        root = Path(scratch, at)
+        root.mkdir(parents=True, exist_ok=True)
+        for e in entries:
+            path = root / _TEXT.validate_python(e["path"])
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if "symlink" in e:
+                path.symlink_to(_TEXT.validate_python(e["symlink"]))
+            elif e.get("dir") is True:
+                path.mkdir(parents=True, exist_ok=True)
+            else:
+                path.write_text(_TEXT.validate_python(e.get("text", "")))
+                path.chmod(0o755 if e.get("exec") is True else 0o644)
+        was = Path.cwd()
+        os.chdir(scratch)
+        try:
+            yield
+        finally:
+            os.chdir(was)
+
+
+def _resolved(case: Obj) -> Definition[None]:
+    """The case's agent with its workspace inputs read from disk, as a run or check() does."""
+    definition = _member(_OBJ.validate_python(case["agent"])).definition
+    if "directory" not in case:
+        return asyncio.run(with_workspace(definition))[0]
+    workspace = _OBJ.validate_python(_OBJ.validate_python(case["agent"])["workspace"])
+    at = _TEXT.validate_python(workspace.get("local_dir", "."))
+    with _in_directory(_OBJS.validate_python(case["directory"]), at):
+        return asyncio.run(with_workspace(definition))[0]
+
+
 @pytest.mark.parametrize(
     "case", _OBJS.validate_python(VECTOR["cases"]), ids=lambda c: str(c["name"])
 )
 def test_the_agent_pins_the_vector(case: Obj) -> None:
-    definition = _member(_OBJ.validate_python(case["agent"])).definition
+    definition = _resolved(case)
     if "member" not in case:
         started, _ = definition.pin()
         assert started == case["thread_started"]

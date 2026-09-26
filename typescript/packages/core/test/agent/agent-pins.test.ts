@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
 import { type Agent, agent } from "../../src/agent/agent";
 import type { DeferTools } from "../../src/agent/defer";
@@ -22,6 +30,7 @@ import { type Model, scriptedModel } from "../../src/model";
 import { markTestKit } from "../../src/model/guard";
 import { DEFAULT_PERMISSIONS } from "../../src/permissions";
 import { fakeSandbox } from "../../src/sandbox/fake";
+import type { Workspace } from "../../src/workspace/resolve";
 
 // The same agent pins the same thread_started and config_hash in both languages
 // (spec/schema/README.md, "The pinned config"): the shared vector pins the bytes.
@@ -49,6 +58,21 @@ const ExtensionDef = z.strictObject({
   observers: z.array(z.string()).optional(),
   hook_timeout_ms: z.number().int().optional(),
 });
+/** agent({workspace}); the vector spells its keys as the wire does. */
+const WorkspaceDef = z.strictObject({
+  files: z.record(z.string(), z.string()).optional(),
+  local_dir: z.string().optional(),
+  include: z.array(z.string()).optional(),
+});
+/** One entry of a case's `directory`, written to disk before the agent resolves it. */
+const DirEntry = z.strictObject({
+  path: z.string(),
+  text: z.string().optional(),
+  exec: z.boolean().optional(),
+  symlink: z.string().optional(),
+  dir: z.boolean().optional(),
+});
+
 const Plain = z.strictObject({
   name: z.string(),
   instructions: z.string(),
@@ -62,6 +86,7 @@ const Plain = z.strictObject({
   output_styles: z.record(z.string(), z.string()).optional(),
   extensions: z.array(ExtensionDef).optional(),
   sandbox: z.literal("fake").optional(),
+  workspace: WorkspaceDef.optional(),
   egress: z.literal("unenforced").optional(),
   /** A dynamic agent: its models by key, in order. */
   models: z.array(ModelDef).optional(),
@@ -98,6 +123,8 @@ const Vector = z.strictObject({
       dynamic: z
         .strictObject({ define: MemberDefine, starter: z.string() })
         .optional(),
+      /** The host directory a `local_dir` workspace reads, written under the case's cwd. */
+      directory: z.array(DirEntry).optional(),
       thread_started: z.record(z.string(), z.json()),
     }),
   ),
@@ -169,6 +196,44 @@ function template(d: Def): DynamicAgent<never, unknown> {
 /** The agents built for a lead's team, by name: a member case pins one of them. */
 const members = new Map<string, object>();
 
+/** The vector's workspace, with its wire keys as agent() spells them. */
+function workspaceOf(w: z.output<typeof WorkspaceDef>): Workspace {
+  return {
+    ...(w.files === undefined ? {} : { files: w.files }),
+    ...(w.local_dir === undefined ? {} : { localDir: w.local_dir }),
+    ...(w.include === undefined ? {} : { include: w.include }),
+  };
+}
+
+/**
+ * Writes `entries` under `<scratch>/<at>` and runs in that scratch directory, so a `local_dir`
+ * the vector wrote as "./app" is the same relative path in both languages.
+ */
+function inDirectory(
+  entries: readonly z.output<typeof DirEntry>[],
+  at: string,
+): () => void {
+  const scratch = mkdtempSync(join(tmpdir(), "threads-pins-"));
+  const root = resolve(scratch, at);
+  mkdirSync(root, { recursive: true });
+  for (const e of entries) {
+    const path = join(root, e.path);
+    mkdirSync(dirname(path), { recursive: true });
+    if (e.symlink !== undefined) symlinkSync(e.symlink, path);
+    else if (e.dir === true) mkdirSync(path, { recursive: true });
+    else
+      writeFileSync(path, e.text ?? "", {
+        mode: e.exec === true ? 0o755 : 0o644,
+      });
+  }
+  const was = process.cwd();
+  process.chdir(scratch);
+  return () => {
+    process.chdir(was);
+    rmSync(scratch, { recursive: true, force: true });
+  };
+}
+
 /** The fake sandbox, with the vector's egress when given. */
 const sandboxed = (d: Def) =>
   d.sandbox === undefined
@@ -198,6 +263,9 @@ function build(d: Def): Agent<never, unknown> {
       ? {}
       : { extensions: d.extensions.map(ext) }),
     ...sandboxed(d),
+    ...(d.workspace === undefined
+      ? {}
+      : { workspace: workspaceOf(d.workspace) }),
     ...(d.memory_write === undefined
       ? {}
       : { memory: localMemory(), memoryWrite: d.memory_write }),
@@ -247,22 +315,32 @@ async function memberPin(
   return { ...Object.fromEntries(started), config_hash: pinned.configHash };
 }
 
+/** The pin one case expects: a member's, or the lead's own less its per-thread team ids. */
+async function pinOf(c: Vector["cases"][number]): Promise<unknown> {
+  const a = build(c.agent);
+  const started = (await hostRunner(a)?.started())?.event;
+  if (started?.type !== "thread_started") throw new Error("no pin");
+  if (c.member === undefined) {
+    const { team: _team, ...data } = started.data;
+    return z.json().parse(data);
+  }
+  const member = members.get(c.member);
+  if (member === undefined) throw new Error(`no member ${c.member}`);
+  const lead = started.data.policy?.context?.defer_tools ?? "auto";
+  return z.json().parse(await memberPin(member, lead, c.dynamic));
+}
+
 describe("agent pins", () => {
   for (const c of vector.cases)
     test(c.name, async () => {
-      const a = build(c.agent);
-      const started = (await hostRunner(a)?.started())?.event;
-      if (started?.type !== "thread_started") throw new Error("no pin");
-      if (c.member !== undefined) {
-        const member = members.get(c.member);
-        if (member === undefined) throw new Error(`no member ${c.member}`);
-        const lead = started.data.policy?.context?.defer_tools ?? "auto";
-        const pin = await memberPin(member, lead, c.dynamic);
-        expect(z.json().parse(pin)).toEqual(c.thread_started);
-        return;
+      const done =
+        c.directory === undefined
+          ? undefined
+          : inDirectory(c.directory, c.agent.workspace?.local_dir ?? ".");
+      try {
+        expect(await pinOf(c)).toEqual(c.thread_started);
+      } finally {
+        done?.();
       }
-      // A lead's team ids are fresh per thread.
-      const { team: _team, ...data } = started.data;
-      expect(z.json().parse(data)).toEqual(c.thread_started);
     });
 });

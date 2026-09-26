@@ -19,6 +19,7 @@ function agent(options: {
   tools?: readonly (Tool | McpServer)[];
   extensions?: readonly Extension[];
   sandbox?: Sandbox;
+  workspace?: Workspace;
   memory?: MemoryProvider;
   memoryWrite?: "deny" | "ask" | "allow_principal" | "allow";
   knowledge?: KnowledgeProvider;
@@ -57,6 +58,7 @@ def agent(
     tools: Sequence[Tool | McpServer] = (),
     extensions: Sequence[Extension] = (),
     sandbox: Sandbox | None = None,
+    workspace: Workspace | None = None,
     memory: MemoryProvider | None = None,
     memory_write: Literal["deny", "ask", "allow_principal", "allow"] = "ask",
     knowledge: KnowledgeProvider | None = None,
@@ -110,6 +112,10 @@ def agent(
 
 <Field name="sandbox" type={"Sandbox"}>
   The sandbox the sandbox tools run in: bash and the file tools (read, write, edit, ls, glob, grep). The git, lsp and computer options also need one. Omitted: no sandbox tools. See [Sandbox](/docs/reference/types/Sandbox).
+</Field>
+
+<Field name="workspace" type={"Workspace"}>
+  Files every sandbox this thread creates starts with in /workspace, resolved on the host into one tree and pinned (policy.workspace, covered by config_hash) when the thread starts. Continuing a thread re-resolves them; any change is ConfigError invalid_config. Needs a sandbox whose sessions have exportTree and importTree, or it is capability_missing. Omitted: /workspace starts empty. See [Workspace](/docs/reference/types/Workspace).
 </Field>
 
 <Field name="memory" type={"MemoryProvider"}>

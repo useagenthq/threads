@@ -37,6 +37,25 @@ export type Workspace = {
   readonly include?: readonly string[];
 };
 
+/** A workspace needs a sandbox, and is pinned only once check() or a run resolved it. */
+export function checkWorkspace(o: {
+  readonly workspace: Workspace | undefined;
+  readonly sandbox: unknown;
+  readonly workspacePin?: unknown;
+}): void {
+  if (o.workspace === undefined) return;
+  if (o.sandbox === undefined)
+    throw new ConfigError(
+      "capability_missing",
+      "workspace: needs a sandbox to place the files in",
+    );
+  if (o.workspacePin === undefined)
+    throw new ConfigError(
+      "invalid_config",
+      "workspace: its files are read on the host by check() or a run; this pin can't see them",
+    );
+}
+
 /** Keeps one artifact's bytes: the store's put, or nothing for check(). */
 export type Keep = (bytes: Uint8Array) => Promise<unknown>;
 

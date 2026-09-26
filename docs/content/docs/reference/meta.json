@@ -117,6 +117,7 @@
     "types/Verdict",
     "types/ModelBlockedError",
     "types/Principal",
+    "types/Workspace",
     "types/TeamRef",
     "types/MemberRef",
     "types/Team",

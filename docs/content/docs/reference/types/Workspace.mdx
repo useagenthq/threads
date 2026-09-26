@@ -1,0 +1,33 @@
+---
+title: "Workspace"
+description: "Workspace inputs."
+icon: "Braces"
+---
+
+Every input file is scanned for registered secret values: a hit is ConfigError invalid_config naming the file, never the value. At most 10,000 files and 256 MiB in total after exclusions. Two inputs naming one path are ConfigError invalid_config.
+
+## Fields
+
+<Field name="files" type={"Record<string, string | Uint8Array>"}>
+  Tree path to contents (text as UTF-8), mode 0o644, taken as given.
+</Field>
+
+<Field name="localDir / local_dir" type={"string"}>
+  A host directory, read on the host and pinned exactly as written. .git, gitignored files (the host's git, including the user's global excludes) and deny-listed names (.env*, *.pem, *.key, id_rsa and the other exact key names, .npmrc, .pypirc, .netrc, .aws, .ssh, .docker/config.json) are skipped and listed in the pin. Submodules, nested repositories, escaping symlinks and special files are ConfigError invalid_config.
+</Field>
+
+<Field name="git" type={"{ repo: string; ref: string }"}>
+  A repository fetched on the host with the git option's credential (anonymously without one), with the local_dir exclusions.
+</Field>
+
+<Field name="git.repo" type={"string"} required>
+  owner/name on the forge of the agent's git option (default https://github.com).
+</Field>
+
+<Field name="git.ref" type={"string"} required>
+  A branch, tag or commit, resolved to a commit when the thread starts.
+</Field>
+
+<Field name="include" type={"readonly string[]"} default={"[]"}>
+  Tree paths that the gitignore or deny-list rules skipped, re-admitted one by one; a directory re-admits its subtree except .git and deny-listed names inside it. An entry that re-admits nothing, or names .git, is ConfigError invalid_config.
+</Field>

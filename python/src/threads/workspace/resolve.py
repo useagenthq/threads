@@ -17,6 +17,7 @@ from threads._generated.events_v1 import (
     WorkspaceSource2,
     WorkspaceSource3,
 )
+from threads.agents.config import ConfigError
 from threads.log.digest import sha256_hex
 from threads.log.jcs import utf16_key
 from threads.redaction.stored import contains_secret
@@ -60,6 +61,22 @@ class Workspace(TypedDict, total=False):
     """A repository on the forge of the agent's git option, fetched on the host."""
     include: Sequence[str]
     """Skipped tree paths to re-admit, one by one; a directory re-admits its subtree."""
+
+
+def check_workspace(
+    workspace: "Workspace | None", sandbox: object, pin: "WorkspacePin | None"
+) -> None:
+    """A workspace needs a sandbox, and is pinned only once a run or check() resolved it."""
+    if workspace is None:
+        return
+    if sandbox is None:
+        raise ConfigError("capability_missing", "workspace: needs a sandbox to place the files in")
+    if pin is None:
+        raise ConfigError(
+            "invalid_config",
+            "workspace: its files are read on the host by check() or a run; "
+            "this pin can't see them",
+        )
 
 
 type Keep = Callable[[bytes], Awaitable[object]]
@@ -238,5 +255,7 @@ __all__ = [
     "Resolved",
     "Workspace",
     "WorkspaceGit",
+    "WorkspacePin",
+    "check_workspace",
     "resolve_workspace",
 ]
