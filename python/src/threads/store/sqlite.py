@@ -280,6 +280,11 @@ class SqliteStore(BranchStore):
         """An artifact's bytes, verified against its hash."""
         return await self._worker.free(lambda _: self._artifacts.get(sha256))
 
+    @property
+    def read_artifact(self) -> ReadArtifact:
+        """The synchronous read a renderer or a tree builder takes (`ReadArtifact`)."""
+        return self._artifacts.get
+
     async def render(
         self, events: Sequence[Event], *, compaction: bool = False, cause: EventId | None = None
     ) -> Ok[Rendered] | Err[ParseError]:

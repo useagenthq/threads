@@ -37,6 +37,9 @@ def dynamic_agent(**options: Unpack[DynamicAgentOptions]) -> DynamicAgent[None, 
     if nested is not None:
         why = f"{nested}: a dynamic agent can't start or hand off to other agents"
         raise ConfigError("invalid_config", why)
+    if "workspace" in options:
+        why = "workspace: a dynamic agent's members share the thread's sandbox, not their own"
+        raise ConfigError("invalid_config", why)
     if "model" in options:
         why = "a dynamic agent takes models, not model: models={key: model}, the first the default"
         raise ConfigError("invalid_config", why)

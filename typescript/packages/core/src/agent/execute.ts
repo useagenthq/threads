@@ -3,17 +3,20 @@ import { ObserverPump } from "../hooks/observers";
 import { type LoopConfig, type LoopEnd, resume } from "../loop";
 import { knownEvents } from "../reduce";
 import { type EventDraft, keepLease, type Writer } from "../store";
+import type { ArtifactStore } from "../store/artifacts";
 import { controlItemsPending } from "../thread/control-items";
 import { type Thread, threadHandle } from "../thread/handle";
 import { bindBuiltins } from "../tools";
+import type { Placement } from "../tools/session";
 import type { LogError } from "../verify";
+import type { Resolved as ResolvedWorkspace } from "../workspace/resolve";
 import { loopConfig } from "./config";
 import { inheritDefer, storeSpecs } from "./defer";
 import { ConfigError } from "./errors";
 import { observerOf } from "./extension";
 import { handedOff } from "./handoff";
 import { open } from "./open-thread";
-import { type ChildPin, pin } from "./pin";
+import { type ChildPin, type PinOptions, pin } from "./pin";
 import { pinChange } from "./pin-change";
 import { bindProviders } from "./providers";
 import { type RunResult, runResult } from "./result";
@@ -25,6 +28,7 @@ import {
   type Plan,
   type Resolved,
   type SetUp,
+  workspaceOf,
 } from "./run";
 import { connectAll } from "./setup";
 import { skillTools } from "./skills";
@@ -40,6 +44,21 @@ import { leadStarted, teamOf } from "./team/runtime";
  * idle. A child's inputs are its whole history of inputs: those already in its log are skipped,
  * so a restarted parent resumes the child instead of prompting it twice.
  */
+/** The two things a resolved workspace gives a run: its pin, and the tree new sandboxes take. */
+function workspaceParts(
+  workspace: ResolvedWorkspace | undefined,
+  artifacts: ArtifactStore,
+): {
+  readonly pinned: Pick<PinOptions, "workspacePin">;
+  readonly placement: Placement | undefined;
+} {
+  if (workspace === undefined) return { pinned: {}, placement: undefined };
+  return {
+    pinned: { workspacePin: workspace.pin },
+    placement: { tree: workspace.tree, artifacts },
+  };
+}
+
 export async function execute<Deps, Output>(
   def: Resolved<Deps, Output>,
   plan: Plan<Deps>,
@@ -54,7 +73,18 @@ export async function execute<Deps, Output>(
   const { log, artifacts } = opened;
   const link = linkOf(plan);
   const context = inheritDefer(def.context, parentDefer(plan));
-  const set: SetUp<Deps, Output> = { ...def, context, mcp: mcp.tools };
+  // A subagent runs within its parent's sandbox, so it resolves no workspace of its own.
+  const sandbox = child === undefined ? def.sandbox : undefined;
+  const parts = workspaceParts(
+    await workspaceOf({ ...def, sandbox }, artifacts.put),
+    artifacts,
+  );
+  const set: SetUp<Deps, Output> = {
+    ...def,
+    context,
+    mcp: mcp.tools,
+    ...parts.pinned,
+  };
   const created = pin(set, link, undefined, plan.answerer === true);
   // Durable before any event names them (a thread_started of this pin).
   await storeSpecs(artifacts, created.artifacts);
@@ -82,7 +112,7 @@ export async function execute<Deps, Output>(
     );
     checkPin(writer, pinned.started);
     const builtin = bindBuiltins(
-      child === undefined ? def.sandbox : undefined,
+      sandbox,
       def.egress,
       {
         ledger: log.ledger,
@@ -90,6 +120,7 @@ export async function execute<Deps, Output>(
         artifacts,
       },
       def.capabilities,
+      parts.placement,
     );
     const providers = await bindProviders(def, {
       log,

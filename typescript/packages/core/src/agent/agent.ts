@@ -14,6 +14,7 @@ import type { Sandbox } from "../sandbox";
 import { TEAM_LIMITS } from "../team/constants";
 import { type Capabilities, type Egress, SANDBOX_TOOLS } from "../tools";
 import type { GitOptions } from "../tools/git/host";
+import type { Workspace } from "../workspace/resolve";
 import { subagent } from "./child";
 import { dryOf } from "./dry-pin";
 import { checkTree } from "./enforceable";
@@ -66,6 +67,11 @@ export type AgentOptions<Deps, Output> = {
   readonly context?: Partial<z.infer<typeof ContextPolicy>>;
   /** Absent: no sandbox tools (bash, files). */
   readonly sandbox?: Sandbox;
+  /**
+   * Files every sandbox this thread creates starts with in /workspace, resolved on the host and
+   * pinned when the thread starts. Needs a sandbox.
+   */
+  readonly workspace?: Workspace;
   /** Sandbox egress: absent is deny-all; "unenforced" opts in to a provider that can't enforce it. */
   readonly egress?: Egress;
   /** Host-side web_fetch (fetch: true) and web_search (a SearchBackend). */
@@ -218,6 +224,7 @@ export function resolve<Deps, Output>(
     retry: options.retry ?? {},
     context: options.context ?? {},
     sandbox: options.sandbox,
+    workspace: options.workspace,
     egress: options.egress,
     capabilities: capabilitiesOf(options),
     extensions: options.extensions ?? [],

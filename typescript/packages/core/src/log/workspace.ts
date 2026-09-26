@@ -47,6 +47,7 @@ export const WorkspaceSource: z.ZodDiscriminatedUnion<
     }),
   ])
   .meta({ id: "WorkspaceSource" });
+export type WorkspaceSource = z.infer<typeof WorkspaceSource>;
 
 export const WorkspacePin: Strict<{
   tree: Strict<{ sha256: typeof Sha256; bytes: typeof Int }>;

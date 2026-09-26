@@ -11,12 +11,22 @@ from threads.agents.bindings import DEFAULT_PERMISSIONS, AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
 from threads.agents.cache_ttl import agreed_cache_ttl
 from threads.agents.catalog import NO_CATALOG, Catalog
+from threads.agents.config import ConfigError
 from threads.agents.deferral import DeferTools, Pinned, pinned_tools
 from threads.agents.instructions import full_instructions
 from threads.agents.skills import Skill, pinned
 from threads.agents.tool import Tool, json_schema
 from threads.hooks.extension import Extension, extension_tools
-from threads.log import Budget, Context, MemberDefine, Permissions, Principal, Retry, ToolSpec
+from threads.log import (
+    Budget,
+    Context,
+    MemberDefine,
+    Permissions,
+    Principal,
+    Retry,
+    ToolSpec,
+    WorkspacePin,
+)
 from threads.log.digest import canonical_sha256, sha256_hex
 from threads.log.jcs import canonicalize
 from threads.loop.defaults import CONTEXT, RETRY
@@ -32,6 +42,7 @@ from threads.team.ops import TeamLimits
 from threads.team.policy import MessagePolicyRule, team_tools
 from threads.tools import specs
 from threads.tools.specs import agent_tools
+from threads.workspace import Workspace
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +123,11 @@ class Definition[D]:
     """A dynamic member: pinned with this choice, which the hashed config records."""
     inherited_defer: DeferTools | None = None
     """A child's parent's resolved defer_tools: pinned when the child sets no context."""
+    workspace: Workspace | None = None
+    """agent(workspace=...): what every sandbox this thread creates starts with in /workspace.
+    Needs a sandbox; the host resolves it once, after setup, into `workspace_pin`."""
+    workspace_pin: WorkspacePin | None = None
+    """`workspace` resolved on the host into one tree, pinned as policy.workspace."""
 
     def policy(self) -> dict[str, JsonValue]:
         """The resolved runtime policy. Permissions, retry and context are always pinned
@@ -138,6 +154,8 @@ class Definition[D]:
             pinned["handoffs"] = [h.name for h in self.handoffs]
         if self.output_styles:
             pinned["output_styles"] = dict(self.output_styles)
+        if self.workspace_pin is not None:
+            pinned["workspace"] = to_json(self.workspace_pin)
         return pinned
 
     def _context(self) -> Context:
@@ -216,10 +234,26 @@ class Definition[D]:
         """Line 0's instructions (agents/instructions.py)."""
         return full_instructions(self)
 
+    def _check_workspace(self) -> None:
+        """A workspace needs a sandbox, and is pinned only once a run or check() resolved it."""
+        if self.workspace is None:
+            return
+        if self.sandbox is None:
+            raise ConfigError(
+                "capability_missing", "workspace: needs a sandbox to place the files in"
+            )
+        if self.workspace_pin is None:
+            raise ConfigError(
+                "invalid_config",
+                "workspace: its files are read on the host by check() or a run; "
+                "this pin can't see them",
+            )
+
     def pin(self) -> tuple[dict[str, JsonValue], bytes]:
         """`thread_started` and the canonical bytes of the resolved, secret-free config its
         `config_hash` names. The config adds each extension's hook and observer manifest, so the
         host content-addressed store holds exactly which hooks a thread runs."""
+        self._check_workspace()
         info = self.model.info
         data: dict[str, JsonValue] = {
             "agent_name": self.name,

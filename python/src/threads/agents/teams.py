@@ -19,6 +19,7 @@ from threads.agents.store import Store
 from threads.agents.team_budgets import recipient_of, run_covering
 from threads.agents.team_check import agents_of
 from threads.agents.team_worker import MemberRun, TeamWorker, WorkerEnv
+from threads.agents.workspace import with_workspace
 from threads.log import ModelRef, Policy, Principal, ThreadStartedEvent
 from threads.log.digest import sha256_hex
 from threads.loop.team_runtime import TeamAgentPin, TeamRuntime
@@ -48,7 +49,8 @@ async def member_pin[D](definition: Definition[D]) -> TeamAgentPin:
     await set_up(definition)
     async with AsyncExitStack() as stack:
         connected = await with_servers(definition, stack, outside_any_branch)
-        member = replace(connected, in_team=True)
+        resolved, _ = await with_workspace(connected)
+        member = replace(resolved, in_team=True)
         started, config = member.pin()
         specs = member.spec_artifacts()
         names = [s.name for s in member.specs()]

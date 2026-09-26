@@ -13,6 +13,7 @@ from threads.agents.pinned import outside_any_branch
 from threads.agents.servers import with_servers
 from threads.agents.setup import set_up
 from threads.agents.teams import Pin, pins
+from threads.agents.workspace import with_workspace
 from threads.log.digest import sha256_hex
 from threads.team.ops import TeamLimits
 
@@ -47,6 +48,7 @@ def register_lead[D](handle: object, definition: Definition[D]) -> None:
         await set_up(definition)
         async with AsyncExitStack() as stack:
             connected = await with_servers(definition, stack, outside_any_branch)
+            connected, _ = await with_workspace(connected)
             # What the thread resolved is what it inherited, unless the lead sets its own.
             pinned = replace(
                 connected,

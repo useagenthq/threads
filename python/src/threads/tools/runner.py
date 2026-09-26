@@ -38,7 +38,13 @@ from threads.permissions.rules import glob_matches
 from threads.reduce.handlers import to_json as as_json
 from threads.result import Err, Ok
 from threads.sandbox.exec import Command, run_exec
-from threads.sandbox.protocol import ExecResult, SandboxContext, SandboxError, SandboxSession
+from threads.sandbox.protocol import (
+    ExecResult,
+    SandboxContext,
+    SandboxError,
+    SandboxSession,
+    WorkspaceRefusal,
+)
 from threads.store import SqliteStore
 from threads.tools import desktop, files, lsp, notebook
 from threads.tools.specs import MODELS, PROVIDED
@@ -50,7 +56,8 @@ and tail; page with a narrower path."""
 
 NO_SERVERS: Final[Mapping[str, Sequence[str]]] = MappingProxyType({})
 
-type Open = Callable[[], Awaitable[Ok[SandboxSession] | Err[SandboxError | ParseError]]]
+type Opened = Ok[SandboxSession] | Err[SandboxError | ParseError | WorkspaceRefusal]
+type Open = Callable[[], Awaitable[Opened]]
 
 
 class SandboxTools:
@@ -69,6 +76,7 @@ class SandboxTools:
         self._servers = servers
         self._open = open
         self._session: SandboxSession | None = None
+        self._refused: WorkspaceRefusal | None = None
         self._context = context
         self._store = store
         self._limits = limits
@@ -87,8 +95,19 @@ class SandboxTools:
     async def _ensure(self) -> SandboxSession | None:
         if self._session is None:
             opened = await self._open()
-            self._session = opened.value if isinstance(opened, Ok) else None
+            if isinstance(opened, Ok):
+                self._session = opened.value
+            elif isinstance(opened.error, WorkspaceRefusal):
+                self._refused = opened.error
         return self._session
+
+    def _not_opened(self) -> Dispatched:
+        """No session: the command was never handed to a provider. A workspace the sandbox
+        never took is the agent's to see; every other failure only says nothing was sent."""
+        refused = self._refused
+        if refused is None:
+            return NotSent()
+        return Output(f"{refused.code}: {refused.message}", is_error=True)
 
     @property
     def context(self) -> SandboxContext:
@@ -136,8 +155,11 @@ class SandboxTools:
         parsed = parse(call.spec.name, call.input)
         if isinstance(parsed, Err):
             raise AssertionError(f"a dispatched call was parsed first: {parsed.error}")
-        # No session: the command was never handed to a provider.
-        return NotSent() if await self._ensure() is None else await self._run(parsed.value, call)
+        return (
+            self._not_opened()
+            if await self._ensure() is None
+            else await self._run(parsed.value, call)
+        )
 
     async def _run(self, input: BaseModel, call: Invocation) -> Dispatched:  # noqa: PLR0911 - one per tool
         match input:

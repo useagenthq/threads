@@ -39,6 +39,17 @@ type SandboxErrorCode = Literal[
 ]
 """The codes spec/api.json lists for the sandbox methods."""
 
+
+@dataclass(frozen=True, slots=True)
+class WorkspaceRefusal:
+    """Why the thread's pinned workspace never reached a fresh sandbox (lane 16 E). Not an
+    adapter failure: core places the tree, and the tool call that opened the session sees this
+    instead of a bare "never sent"."""
+
+    code: Literal["workspace_mismatch", "capability_missing"]
+    message: str
+
+
 type Refusal = Literal["stale_epoch", "cleanup_claim_lost"]
 """A failed fence: nothing reached the provider, and the caller lost its authority."""
 

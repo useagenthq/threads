@@ -17,7 +17,12 @@ import { entry } from "./catalog";
 // A built-in tool: a pinned spec, and a body bound to one run's sandbox session,
 // artifacts and log. Arguments are parsed with the same Zod schema the spec exports.
 
-export type SessionFailure = Failure<"unavailable" | "timeout"> | Stale;
+export type SessionFailure =
+  | Failure<
+      // Placing the pinned workspace tree failed, or this sandbox can't take one.
+      "unavailable" | "timeout" | "workspace_mismatch" | "capability_missing"
+    >
+  | Stale;
 
 export type BuiltinEnv = {
   /** The run's sandbox session, created (through the resource ledger) on first use. */
@@ -101,6 +106,8 @@ export function failed(error: FileFailure | SessionFailure): ToolRun {
         kind: "unknown",
         reason: error.code === "timeout" ? "timeout" : "transport_error",
       };
+    case "workspace_mismatch":
+    case "capability_missing":
     case "not_found":
     case "invalid_path":
     case "permission_denied":
@@ -117,5 +124,10 @@ export async function sessionOf(
   env: BuiltinEnv,
 ): Promise<Result<SandboxSession, ToolRun>> {
   const got = await env.session();
-  return got.ok ? got : err({ kind: "not_sent" });
+  if (got.ok) return got;
+  // A workspace the sandbox never took is the agent's to see; everything else never left.
+  const workspace =
+    got.error.code === "workspace_mismatch" ||
+    got.error.code === "capability_missing";
+  return err(workspace ? failed(got.error) : { kind: "not_sent" });
 }

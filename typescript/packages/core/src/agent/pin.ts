@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { sha256Hex } from "../hash";
+import type { WorkspacePin } from "../log";
 import {
   type Budget,
   type ContextPolicy,
@@ -20,6 +21,7 @@ import { type MessagePolicyRule, teamTools } from "../team/policy";
 import { builtins, type Capabilities, type Egress } from "../tools";
 import { frameworkSpec, searchToolSpec } from "../tools/framework";
 import { requireCapabilities } from "../tools/gated";
+import type { Workspace } from "../workspace/resolve";
 import { deferredNames, referenceForm } from "./defer";
 import { checkEnforceable } from "./enforceable";
 import { ConfigError, Unbound } from "./errors";
@@ -49,6 +51,10 @@ export type PinOptions = {
   readonly retry: Partial<z.infer<typeof RetryPolicy>>;
   readonly context: Partial<z.infer<typeof ContextPolicy>>;
   readonly sandbox: Sandbox | undefined;
+  /** agent({workspace}): needs a sandbox, and its pin resolved on the host (workspacePin). */
+  readonly workspace: Workspace | undefined;
+  /** The workspace as check() or a run resolved it; pinned as policy.workspace. */
+  readonly workspacePin?: WorkspacePin;
   readonly egress: Egress | undefined;
   /** The capability-gated built-ins: web, git, computer, lsp. */
   readonly capabilities: Capabilities;
@@ -153,8 +159,11 @@ function pinned(
   readonly artifacts: readonly Uint8Array[];
 } {
   const deferTools = options.context.defer_tools ?? "auto";
+  // A child runs without a sandbox, so without a workspace.
   const base =
-    within === undefined ? options : { ...options, sandbox: undefined };
+    within === undefined
+      ? options
+      : { ...options, sandbox: undefined, workspace: undefined };
   const o = { ...base, context: { ...base.context, defer_tools: deferTools } };
   const user = [...o.tools, ...extensionTools(o.extensions, o.mcp)];
   const deferred = deferredNames(ownTools(user, within, o.dynamic), deferTools);
@@ -171,6 +180,7 @@ function pinned(
   };
   // A child runs without a sandbox and within its parent's tools, which were checked already.
   if (within === undefined) requireCapabilities(o.capabilities, o.sandbox);
+  checkWorkspace(o);
   checkSkills(o.skills);
   checkRetries(o.outputRetries);
   checkStyles(o.outputStyles);
@@ -315,6 +325,21 @@ function hashedOnly(o: PinOptions): Record<string, unknown> {
           },
         }),
   };
+}
+
+/** A workspace needs a sandbox, and is pinned only once check() or a run resolved it. */
+function checkWorkspace(o: PinOptions): void {
+  if (o.workspace === undefined) return;
+  if (o.sandbox === undefined)
+    throw new ConfigError(
+      "capability_missing",
+      "workspace: needs a sandbox to place the files in",
+    );
+  if (o.workspacePin === undefined)
+    throw new ConfigError(
+      "invalid_config",
+      "workspace: its files are read on the host by check() or a run; this pin can't see them",
+    );
 }
 
 const TEAM = [

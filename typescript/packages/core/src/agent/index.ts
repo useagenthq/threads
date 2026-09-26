@@ -1,4 +1,5 @@
 export type { MessagePolicyRule } from "../team/policy";
+export type { Workspace } from "../workspace/resolve";
 export {
   type Agent,
   type AgentOptions,

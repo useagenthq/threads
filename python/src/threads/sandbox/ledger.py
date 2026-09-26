@@ -71,6 +71,10 @@ class Tracked[T]:
     lookup: Lookup[T]
     capability: LookupCapability
     ref: Callable[[T], str]
+    ready: Callable[[T], Awaitable[None]] | None = None
+    """Prepares what was created before its row goes live (16E places the workspace tree there,
+    so no command can reach a sandbox whose /workspace isn't the pinned one). It records its own
+    failure: the caller releases the resource once the row is live."""
 
 
 async def acquire[T](
@@ -85,6 +89,8 @@ async def acquire[T](
     made = await how.create(row.operation_key)
     answer, value = await _outcome(how, made, row.operation_key)
     ref = None if value is None else how.ref(value)
+    if value is not None and how.ready is not None:
+        await how.ready(value)
     # A stale owner leaves the row pending: cleanup resolves it by its key.
     settled = await ledger.resolve(owner, row, answer, clock(), ref)
     if isinstance(settled, Err):

@@ -20,12 +20,9 @@ _OPEN_EGRESS: Final = (
 def pin_change(stored: JsonValue, new: JsonValue) -> str:
     """The refusal for continuing a thread whose thread_started data is `stored` with an agent
     that pins `new`."""
-    if _unresolved(stored):
-        return (
-            "this thread was started by an older Python release that didn't pin its default "
-            "permissions, retry and context settings; its config can't be matched now, so start "
-            "a new thread"
-        )
+    unmatched = _unmatched(stored, new)
+    if unmatched is not None:
+        return unmatched
     # Checked before the caching advice, as origins are: no setting continues such a thread.
     if _opened_egress(stored, new):
         return _OPEN_EGRESS
@@ -57,6 +54,25 @@ def _unresolved(started: JsonValue) -> bool:
     return not isinstance(policy, dict) or any(
         k not in policy for k in ("permissions", "retry", "context")
     )
+
+
+def _unmatched(stored: JsonValue, new: JsonValue) -> str | None:
+    """The changes no setting can fix: a pin from before configs recorded their resolved
+    settings, and a workspace whose inputs no longer resolve to the pinned tree."""
+    if _unresolved(stored):
+        return (
+            "this thread was started by an older Python release that didn't pin its default "
+            "permissions, retry and context settings; its config can't be matched now, so start "
+            "a new thread"
+        )
+    if _workspace(stored) != _workspace(new):
+        return "the workspace changed since this thread started; start a new thread"
+    return None
+
+
+def _workspace(started: JsonValue) -> JsonValue:
+    policy = started.get("policy") if isinstance(started, dict) else None
+    return policy.get("workspace") if isinstance(policy, dict) else None
 
 
 def _prompt_cache(started: JsonValue) -> JsonValue:

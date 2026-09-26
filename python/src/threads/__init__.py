@@ -126,6 +126,7 @@ from threads.telemetry import Exporter, SkippedBranch, SyncReport  # noqa: E402
 from threads.thread.case import CaseExpectation, SavedCase  # noqa: E402
 from threads.thread.handle import open_thread  # noqa: E402
 from threads.web.search import SearchBackend, SearchHit  # noqa: E402
+from threads.workspace import Workspace, WorkspaceGit  # noqa: E402
 
 __all__ = [
     "VERSION",
@@ -238,6 +239,8 @@ __all__ = [
     "Verdict",
     "WaitResult",
     "Waited",
+    "Workspace",
+    "WorkspaceGit",
     "__version__",
     "agent",
     "dynamic_agent",

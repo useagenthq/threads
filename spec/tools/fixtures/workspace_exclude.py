@@ -110,7 +110,9 @@ def _admitted(path: str, include: list[str]) -> bool:
     return False
 
 
-def local_dir_pin(path: str, contents: list[JsonValue], include: list[str]) -> tuple[Obj, list[Obj]]:
+def local_dir_pin(
+    path: str, contents: list[JsonValue], include: list[str]
+) -> tuple[Obj, list[Obj]]:
     """The local_dir source and its tree entries. `contents`: {path, text[, exec]}, {path,
     symlink} or {path, dir: true}; parent directories are implied."""
     kinds: dict[str, Obj] = {}
@@ -121,9 +123,7 @@ def local_dir_pin(path: str, contents: list[JsonValue], include: list[str]) -> t
         kinds[p] = c
     kept = {p for p in kinds if _admitted(p, include)}
     kept |= {d for p in kept for d in _parents(p)}
-    skipped = [
-        p for p in kinds if p not in kept and all(d in kept for d in _parents(p))
-    ]
+    skipped = [p for p in kinds if p not in kept and all(d in kept for d in _parents(p))]
     entries: list[Obj] = []
     for p in kept:
         c = kinds[p]
@@ -149,7 +149,9 @@ def files_entries(files: Obj) -> list[Obj]:
     out: list[Obj] = []
     for p, value in files.items():
         data = text(value).encode()
-        out.append({"path": p, "kind": "file", "mode": 0o644, "size": len(data), "sha256": sha(data)})
+        out.append(
+            {"path": p, "kind": "file", "mode": 0o644, "size": len(data), "sha256": sha(data)}
+        )
     return out
 
 

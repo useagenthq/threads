@@ -48,6 +48,7 @@ from threads.agents.team_run import covered, finish, notifying, team_side, unpar
 from threads.agents.team_worker import MemberRun
 from threads.agents.teams import team_of
 from threads.agents.tool import invalid
+from threads.agents.workspace import with_workspace
 from threads.hooks.extension import bind, extension_tools
 from threads.hooks.observers import ObserverPump
 from threads.log import (
@@ -68,6 +69,7 @@ from threads.memory.authority import with_memory_write
 from threads.memory.setup import Providers, RunBinding, provider_tools
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
+from threads.sandbox.tree.tree import Tree
 from threads.store import SqliteStore, Writer
 from threads.store.lines import uuid7
 from threads.thread.control import LOCAL_OPERATOR
@@ -146,6 +148,10 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
     principal = options.get("principal", LOCAL_OPERATOR) if launch is None else launch.principal
     async with _held(writer), AsyncExitStack() as servers:
         definition = await with_servers(definition, servers, fenced(writer))
+        # Resolved after setup (secrets registered) and before the pin and the first session.
+        definition, workspace = await with_workspace(
+            definition, sq.put_artifact, child=launch is not None
+        )
         runner = member_runner(store)
         side = team_side(servers, team_of(definition, member, writer, store, sq, runner, principal))
         thread_id = writer.fold.thread_id
@@ -160,7 +166,9 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
         stream = RunStream(emit, pump, on_delta)
         box = definition.sandbox
         shared = None if launch is None else launch.shared
-        builtins = shared or (None if box is None else _sandbox_tools(sq, box, writer, definition))
+        builtins = shared or (
+            None if box is None else _sandbox_tools(sq, box, writer, definition, workspace)
+        )
         results = ReadResults(sq, lambda: writer.fold.events)
         providers = Providers(definition.memory, definition.knowledge)
         lent = RunBinding(now_ms, fenced(writer), lambda: writer.fold.events)
@@ -323,9 +331,9 @@ async def _open(
 
 
 def _sandbox_tools[D](
-    sq: SqliteStore, box: Sandbox, writer: Writer, definition: Definition[D]
+    sq: SqliteStore, box: Sandbox, writer: Writer, definition: Definition[D], tree: Tree | None
 ) -> SandboxTools:
-    return sandbox_tools(sq, box, writer, now_ms, definition.catalog.servers())
+    return sandbox_tools(sq, box, writer, now_ms, definition.catalog.servers(), workspace=tree)
 
 
 def _ceilings[D](options: RunOptions[D], launch: Launch | None) -> tuple[Permissions, ...]:

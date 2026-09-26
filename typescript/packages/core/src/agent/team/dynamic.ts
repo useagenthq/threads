@@ -9,10 +9,10 @@ import type { DynamicAgent } from "./types";
 // label, written instructions, a subset of its tools and one of its models; everything else is
 // this config, pinned for every member started from it.
 
-/** Every agent() option but model, team, subagents, handoffs and teamLimits, plus models. */
+/** Every agent() option but model, team, subagents, handoffs, teamLimits and workspace, plus models. */
 export type DynamicAgentOptions<Deps, Output> = Omit<
   AgentOptions<Deps, Output>,
-  "model" | "team" | "subagents" | "handoffs" | "teamLimits"
+  "model" | "team" | "subagents" | "handoffs" | "teamLimits" | "workspace"
 > & {
   /** The models a start may choose, by key; the first key is the default. */
   readonly models: Readonly<Record<string, Model>>;

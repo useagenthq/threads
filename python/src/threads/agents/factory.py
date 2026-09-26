@@ -31,6 +31,7 @@ from threads.memory.protocol import KnowledgeProvider, MemoryProvider
 from threads.sandbox.protocol import Sandbox
 from threads.team.ops import TeamLimits as Limits
 from threads.tools.specs import MEMBERS
+from threads.workspace import Workspace
 
 if TYPE_CHECKING:
     from threads.agents.dynamic_agent import DynamicAgent
@@ -60,6 +61,9 @@ class CommonOptions(TypedDict, total=False):
     fails output_invalid; default 2. A non-negative integer."""
     sandbox: Sandbox
     """Absent: no sandbox tools. Present: bash, read, write, edit, ls, glob and grep."""
+    workspace: Workspace
+    """Files every sandbox this thread creates starts with in /workspace, resolved on the host
+    and pinned when the thread starts. Needs a sandbox with export_tree and import_tree."""
     egress: Egress
     """Sandbox egress allowlist; [] (the default) is deny-all."""
     memory: MemoryProvider
@@ -349,6 +353,8 @@ def build_definition[T](
         definition = replace(definition, approvers=tuple(options["approvers"]))
     if "on_unknown_usage" in options:
         definition = replace(definition, on_unknown_usage=options["on_unknown_usage"])
+    if "workspace" in options:
+        definition = replace(definition, workspace=options["workspace"])
     pinned = frozenset(s.name for s in definition.specs())
     defer = definition.defer_tools()
     # A child that sets no context pins its parent's resolved defer_tools (spec/schema/README.md).

@@ -25,32 +25,45 @@ export type Ran = {
   readonly stderr: string;
 };
 
-export const remoteUrl = (o: GitOptions, repo: string): string =>
+export const remoteUrl = (o: ForgeAccess, repo: string): string =>
   `${(o.forgeUrl ?? "https://github.com").replace(/\/$/, "")}/${repo}.git`;
 
+/** Where a host git run fetches from, and with what: the forge credential when there is one. */
+export type ForgeAccess = Pick<GitOptions, "forgeUrl"> & {
+  readonly credential?: Secret;
+};
+
 /** The environment for one host git run: the credential as a header, nothing inherited. */
-function gitEnv(o: GitOptions, home: string): Record<string, string> {
-  const basic = Buffer.from(`x-access-token:${o.credential.reveal()}`).toString(
-    "base64",
-  );
+function gitEnv(o: ForgeAccess, home: string): Record<string, string> {
+  const config: (readonly [string, string])[] = [
+    // A bundle from the sandbox is untrusted input: every object is checked.
+    ["transfer.fsckObjects", "true"],
+  ];
+  if (o.credential !== undefined) {
+    const token = `x-access-token:${o.credential.reveal()}`;
+    const basic = Buffer.from(token).toString("base64");
+    config.push(["http.extraHeader", `Authorization: Basic ${basic}`]);
+  }
   return {
     PATH: process.env["PATH"] ?? "/usr/bin:/bin",
     HOME: home,
     GIT_TERMINAL_PROMPT: "0",
     GIT_CONFIG_NOSYSTEM: "1",
     GIT_CONFIG_GLOBAL: "/dev/null",
-    GIT_CONFIG_COUNT: "2",
-    GIT_CONFIG_KEY_0: "http.extraHeader",
-    GIT_CONFIG_VALUE_0: `Authorization: Basic ${basic}`,
-    // A bundle from the sandbox is untrusted input: every object is checked.
-    GIT_CONFIG_KEY_1: "transfer.fsckObjects",
-    GIT_CONFIG_VALUE_1: "true",
+    GIT_CONFIG_COUNT: String(config.length),
+    ...Object.fromEntries(
+      config.flatMap(([key, value], i) => [
+        [`GIT_CONFIG_KEY_${i}`, key],
+        [`GIT_CONFIG_VALUE_${i}`, value],
+      ]),
+    ),
   };
 }
 
-function run(
+/** One git run on the host; a git that can't be started is code 127. */
+export function runGit(
   args: readonly string[],
-  env: Record<string, string>,
+  env: Readonly<Record<string, string | undefined>>,
   cwd: string,
 ): Promise<Ran> {
   const { promise, resolve } = Promise.withResolvers<Ran>();
@@ -78,13 +91,13 @@ function run(
 
 /** A scratch directory on the host for one operation, removed afterwards. */
 export async function scratch<T>(
-  o: GitOptions,
+  o: ForgeAccess,
   body: (git: (...args: string[]) => Promise<Ran>, dir: string) => Promise<T>,
 ): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), "threads-git-"));
   try {
     const env = gitEnv(o, dir);
-    return await body((...args) => run(args, env, dir), dir);
+    return await body((...args) => runGit(args, env, dir), dir);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

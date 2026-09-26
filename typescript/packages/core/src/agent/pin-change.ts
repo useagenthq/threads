@@ -16,6 +16,7 @@ type Started = {
         readonly context?: { readonly cache_ttl_ms: number } | undefined;
         readonly permissions?: unknown;
         readonly retry?: unknown;
+        readonly workspace?: unknown;
       }
     | undefined;
 };
@@ -23,6 +24,25 @@ type Started = {
 const DEFAULT_TTL_MS = 300_000;
 
 /** The refusal for continuing `stored` with an agent that pins `next`. */
+/** A value as JSON with every object's keys sorted: a stored pin's key order is JCS's. */
+function stable(value: unknown): string {
+  return JSON.stringify(ordered(value));
+}
+
+function ordered(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    const items: readonly unknown[] = value;
+    return items.map(ordered);
+  }
+  if (typeof value !== "object" || value === null) return value;
+  const pairs: readonly (readonly [string, unknown])[] = Object.entries(value);
+  return Object.fromEntries(
+    pairs
+      .toSorted(([a], [b]) => (a < b ? -1 : 1))
+      .map(([key, v]) => [key, ordered(v)]),
+  );
+}
+
 export function pinChange(stored: Started, next: Started): string {
   // Any pin missing a section: only an older Python release pinned one from agent().
   const p = stored.policy;
@@ -32,6 +52,8 @@ export function pinChange(stored: Started, next: Started): string {
     p.context === undefined
   )
     return "this thread was started by an older Python release that didn't pin its default permissions, retry and context settings; its config can't be matched now, so start a new thread";
+  if (stable(p.workspace) !== stable(next.policy?.workspace))
+    return "the workspace changed since this thread started; start a new thread";
   // Checked before the caching advice, as origins are: no setting continues such a thread.
   if (openedEgress(stored, next)) return OPEN_EGRESS;
   // Checked before the caching advice: an agent with extension tools can't continue such a

@@ -25,6 +25,7 @@ from threads.agents.run import (
 from threads.agents.servers import with_servers
 from threads.agents.setup import set_up
 from threads.agents.stream import RunStream
+from threads.agents.workspace import with_workspace
 from threads.result import Err, Ok
 
 
@@ -120,7 +121,9 @@ class Agent[D, O]:
             await set_up(self._definition)
             async with AsyncExitStack() as sessions:
                 pinned = await with_servers(self._definition, sessions, outside_any_branch)
-                pinned.pin()
+                # The host reads the workspace inputs here too: check() proves they resolve.
+                resolved, _ = await with_workspace(pinned)
+                resolved.pin()
         except ConfigError as error:
             return Err(Failure(error.code, error.message))
         return Ok(None)

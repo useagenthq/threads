@@ -7,6 +7,7 @@ from threads.agents.definition import Definition
 from threads.agents.servers import with_servers
 from threads.agents.setup import set_up
 from threads.agents.store import Store, open_store
+from threads.agents.workspace import with_workspace
 from threads.loop.drafts import draft
 from threads.store import Draft
 
@@ -16,11 +17,12 @@ async def pinned_start[D](definition: Definition[D], store: Store) -> Draft:
     to list their tools, which dispatches nothing, so no writer fences them. The agent is set up
     first, as a run would be: a setup failure raises ConfigError before anything is stored."""
     await set_up(definition)
+    opened = await open_store(store)
     async with AsyncExitStack() as stack:
         connected = await with_servers(definition, stack, outside_any_branch)
+        connected, _ = await with_workspace(connected, opened.put_artifact)
         started, config = connected.pin()
         specs = connected.spec_artifacts()
-    opened = await open_store(store)
     for raw in (config, *specs):
         await opened.put_artifact(raw)
     return draft("thread_started", started)

@@ -65,6 +65,9 @@ export function policy(o: PinOptions): Policy {
     ...(o.output === undefined
       ? {}
       : { output: outputPolicy(o.output, o.outputRetries) }),
+    ...(o.workspace === undefined || o.workspacePin === undefined
+      ? {}
+      : { workspace: o.workspacePin }),
   };
 }
 

@@ -234,4 +234,3 @@ def directories() -> dict[str, list[JsonValue]]:
             {"path": "config.json", "text": "{}\n"},
         ]
     }
-

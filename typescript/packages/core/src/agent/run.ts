@@ -9,6 +9,11 @@ import type {
 import type { ChildRun, Covering, StubGateway } from "../loop";
 import { DEFAULT_PERMISSIONS } from "../permissions";
 import type { EventDraft } from "../store";
+import {
+  type Keep,
+  type Resolved as ResolvedWorkspace,
+  resolveWorkspace,
+} from "../workspace/resolve";
 import type { Agent, Models } from "./agent";
 import { type DeferTools, inheritDefer, storeSpecs } from "./defer";
 import { checkTree } from "./enforceable";
@@ -176,7 +181,32 @@ export async function pinnedAfterSetup<Deps, Output>(
   await def.setup();
   await using mcp = await connectAll(def.servers);
   const context = inheritDefer(def.context, deferTools);
-  return pin({ ...def, context, mcp: mcp.tools }, undefined, member, answerer);
+  const workspace = await workspaceOf(def, async () => undefined);
+  return pin(
+    {
+      ...def,
+      context,
+      mcp: mcp.tools,
+      ...(workspace === undefined ? {} : { workspacePin: workspace.pin }),
+    },
+    undefined,
+    member,
+    answerer,
+  );
+}
+
+/**
+ * The agent's workspace resolved on the host, after setup registered its secrets, each artifact
+ * kept with `keep`; nothing for an agent without one or without a sandbox (pin refuses it).
+ */
+export async function workspaceOf(
+  def: Pick<PinOptions, "workspace" | "sandbox" | "capabilities">,
+  keep: Keep,
+): Promise<ResolvedWorkspace | undefined> {
+  if (def.workspace === undefined || def.sandbox === undefined)
+    return undefined;
+  const forge = def.capabilities.git ?? {};
+  return resolveWorkspace(def.workspace, forge, keep);
 }
 
 /** Whether a thread's pin offers ask_user: a host started it for someone who can answer. */

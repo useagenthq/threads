@@ -13,7 +13,7 @@ import { type Capabilities, gated } from "./gated";
 import { notebookEdit } from "./notebook";
 import { readToolResult } from "./read-result";
 import { glob, grep, ls } from "./search";
-import { lazySession } from "./session";
+import { lazySession, type Placement } from "./session";
 import { bash } from "./shell";
 
 export type { Builtin } from "./builtin";
@@ -92,6 +92,8 @@ export function bindBuiltins(
     readonly artifacts: ArtifactStore;
   },
   capabilities: Capabilities = {},
+  /** agent({workspace}): the pinned tree every sandbox this thread creates starts from. */
+  placement?: Placement,
 ): {
   readonly tools: readonly ToolImpl[];
   readonly session: SessionGetter;
@@ -102,7 +104,7 @@ export function bindBuiltins(
   const session: SessionGetter =
     sandbox === undefined
       ? async () => err({ code: "unavailable", message: "no sandbox" })
-      : lazySession(ledger, writer, sandbox);
+      : lazySession(ledger, writer, sandbox, placement);
   const env: BuiltinEnv = {
     session,
     context: ownerContext(writer),
