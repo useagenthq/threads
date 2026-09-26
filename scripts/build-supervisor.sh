@@ -27,3 +27,18 @@ for dest in "$root/typescript/packages/docker/bin" "$root/python/src/threads/ada
 done
 
 cat "$src/binaries.json"
+
+# Each adapter pins the same two values in its own source, because neither package ships this
+# file. A rebuild that changes them must change all three, so drift fails here and not later.
+drift=0
+for arch in amd64 arm64; do
+  want="$(hash_of "$out/linux-$arch/supervise")"
+  for pinned in "$root/typescript/packages/docker/src/pins.ts" \
+    "$root/python/src/threads/adapters/sandboxes/docker/create.py"; do
+    if [ -f "$pinned" ] && ! grep -q "$want" "$pinned"; then
+      echo "stale pin: $pinned does not carry the linux-$arch sha256 $want" >&2
+      drift=1
+    fi
+  done
+done
+exit "$drift"
