@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { stubForkRef } from "../agent/frozen-stubs";
 import type {
   BranchId,
   PermissionMode,
@@ -9,6 +10,7 @@ import type {
 import { knownEvents } from "../reduce";
 import { ok, type Result } from "../result";
 import type { LogStore } from "../store";
+import type { ListedBranch } from "../store/fork-reads";
 import { cancelChildren } from "./cancel";
 import {
   type Appended,
@@ -95,7 +97,11 @@ export function controls(
   return {
     branches: async () => {
       const rows = await log.branches(threadId);
-      return rows.ok ? rows.value.map(branchInfo) : [];
+      if (!rows.ok) return [];
+      const listed: BranchInfo[] = [];
+      for (const row of rows.value)
+        listed.push(branchInfo(row, await stubbed(log, row)));
+      return listed;
     },
     pendingApprovals: async () => {
       const current = await readLog(log, branchId);
@@ -182,4 +188,14 @@ export function controls(
         idle: true,
       }),
   };
+}
+
+/**
+ * Whether a listed branch runs stubbed: its resolved chain holds a fork that froze a stub script.
+ * A root branch never does, so the common case reads nothing.
+ */
+async function stubbed(log: LogStore, row: ListedBranch): Promise<boolean> {
+  if (row.parent_branch_id === null) return false;
+  const read = await log.read(row.branch_id);
+  return read.ok && stubForkRef(knownEvents(read.value)) !== undefined;
 }

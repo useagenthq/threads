@@ -204,7 +204,14 @@ async function caseFiles(saving: Saving): Promise<
 > {
   const { read, turn, name, options, context } = saving;
   const files: Files = new Map();
-  const stubs = await stubScript(turn.events, context.artifacts);
+  const built = await stubScript(turn.events, context.artifacts);
+  // A mediated call whose committed output is gone makes the case unreplayable, the same way a
+  // missing chain artifact does.
+  if (!built.ok)
+    return err(
+      logError("case_missing_dependency", built.error.message, built.error.seq),
+    );
+  const stubs = built.value;
   const logged = await logFiles(saving, files, stubs.stubs.length);
   if (!logged.ok) return logged;
   const turnRefs = new Set<string>();

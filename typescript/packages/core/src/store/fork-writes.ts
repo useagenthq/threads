@@ -1,4 +1,4 @@
-import type { BranchId, SandboxId } from "../log";
+import type { ArtifactRef, BranchId, SandboxId } from "../log";
 import { err, ok, type Result } from "../result";
 import { type Chain, tipHash, type VerifiedLog } from "../verify";
 import { type LogError, logError } from "../verify/error";
@@ -79,6 +79,8 @@ export function finishFork(
   restored: {
     readonly sandboxId: SandboxId;
     readonly knowledgePolicy: "pinned" | "current";
+    /** A stub fork's frozen script, durable before this event. Absent: a live branch. */
+    readonly stubScriptRef?: ArtifactRef;
   },
 ): Promise<Result<void, LogError>> {
   const parent = writer.chain.segments.at(-2)?.header.branch_id;
@@ -96,6 +98,9 @@ export function finishFork(
           reason: "snapshot",
           sandbox_id: restored.sandboxId,
           knowledge_policy: restored.knowledgePolicy,
+          ...(restored.stubScriptRef === undefined
+            ? {}
+            : { mode: "stub", stub_script_ref: restored.stubScriptRef }),
         },
       },
     ]);

@@ -193,6 +193,35 @@ async def save_case(
 
 **Returns an error value** with one of these codes: `invalid_request`, `case_missing_dependency`, `egress_policy_unsupported`.
 
+### export
+
+Writes this branch's resolved chain and every artifact it names to path as a portable bundle: log.jsonl, artifacts/&lt;sha256> and bundle.json, the manifest written last. importThread stores one in any other store, so a thread moves between machines whole. path must not exist: an existing file or directory is path_exists and nothing is replaced. Export claims the path with an exclusive mkdir and fsyncs what it writes, so a crash leaves a directory without bundle.json, which import refuses as incomplete rather than storing half a thread.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+export(path: string): Promise<Result<ExportedBundle>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def export(
+    path: str,
+) -> Ok[ExportedBundle] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="path" type={"string"} required>
+  The bundle directory to create. It must not exist.
+</Field>
+
+**Returns an error value** with one of these codes: `branch_not_found`, `log_corrupt`, `unsupported_format`, `unsupported_critical_event`, `artifact_missing`, `artifact_corrupt`, `path_exists`, `io_error`.
+
 ### replay
 
 Re-renders every recorded model request of this branch from the log and checks it byte for byte against what was sent: the system prompt against its settings epoch, then the stored request bytes, then the rendered request of the events before it. No model or tool calls, no sandbox, no appends; a fork includes its parent's prefix. The first failure comes back with the failing request's seq; a branch with no model request replays trivially. Import ran this check once; replay() re-runs it against the code running now, so run it over real threads in CI to prove an upgrade still reproduces them.

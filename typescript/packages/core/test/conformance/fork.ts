@@ -35,6 +35,7 @@ const Input = z.strictObject({
   fork_at_event_id: EventId,
   new_branch_id: BranchId,
   knowledge_policy: z.enum(["pinned", "current"]).optional(),
+  mode: z.enum(["live", "stub"]).optional(),
 });
 
 export async function runFork(
@@ -110,12 +111,13 @@ async function operate(
   parent: BranchId,
   input: z.infer<typeof Input>,
 ): Promise<void> {
-  const forking = forkBranch(f.store, used, {
+  const forking = forkBranch(f.store, f.artifacts, used, {
     parent,
     point: input.fork_at_event_id,
     child: input.new_branch_id,
     knowledge: input.knowledge_policy ?? "pinned",
     holderId: "conformance-runner",
+    mode: input.mode ?? "live",
   });
   if (used !== sandbox) {
     await expect(forking).rejects.toThrow(Crash);

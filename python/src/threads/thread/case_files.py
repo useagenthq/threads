@@ -18,6 +18,7 @@ from threads.log import (
     ToolResultEvent,
 )
 from threads.log.digest import canonical_sha256
+from threads.log.jcs import canonicalize
 from threads.reduce.handlers import to_json
 from threads.result import Err, Ok
 
@@ -57,21 +58,33 @@ def _begun(turn: Sequence[Event], call_id: str) -> bool:
     return any(isinstance(e, EffectBeginEvent) and e.data.call_id == call_id for e in turn)
 
 
-async def _output(turn: Sequence[Event], call_id: str, read: ReadArtifact) -> str:
-    """A mediated call's full recorded output: the committed artifact, else the result preview."""
+async def _output(
+    turn: Sequence[Event], call_id: str, read: ReadArtifact
+) -> Ok[str] | Err[ParseError]:
+    """A mediated call's complete recorded output. A committed one is read from its artifact and
+    verified (sha256 by the store, length here): a missing or corrupt one is an error naming the
+    call, never the truncated preview. A call with no effect_commit committed no output at all
+    (nothing was sent, or it failed), so its result preview is the whole recorded output."""
     commit = next(
         (e for e in turn if isinstance(e, EffectCommitEvent) and e.data.call_id == call_id), None
     )
-    if commit is not None:
-        got = await read(commit.data.result_ref.sha256)
-        if isinstance(got, Ok):
-            return got.value.decode("utf-8")
-    result = _result(turn, call_id)
-    return "" if result is None else result.data.preview
+    if commit is None:
+        result = _result(turn, call_id)
+        return Ok("" if result is None else result.data.preview)
+    ref = commit.data.result_ref
+    got = await read(ref.sha256)
+    if isinstance(got, Err):
+        return Err(ParseError(got.error.code, f"{call_id}: {got.error.message}"))
+    if len(got.value) != ref.bytes:
+        why = f"{call_id}: artifact {ref.sha256} is {len(got.value)} bytes, not {ref.bytes}"
+        return Err(ParseError("artifact_corrupt", why))
+    return Ok(got.value.decode("utf-8"))
 
 
-async def stub_script(turn: Sequence[Event], read: ReadArtifact) -> JsonValue:
-    """Every mediated call (one with effect events) as a stub, by (tool, args_hash, occurrence)."""
+async def stub_script(turn: Sequence[Event], read: ReadArtifact) -> Ok[JsonValue] | Err[ParseError]:
+    """Every mediated call (one with effect events) as a stub, by (tool, args_hash, occurrence),
+    each holding its complete verified output. A stub fork freezes this as an artifact and a saved
+    case writes it as stubs.json, so both carry the same guarantee."""
     seen: dict[tuple[str, str], int] = {}
     stubs: list[JsonValue] = []
     for e in turn:
@@ -81,16 +94,20 @@ async def stub_script(turn: Sequence[Event], read: ReadArtifact) -> JsonValue:
         occurrence = seen.get(key, 0)
         seen[key] = occurrence + 1
         result = _result(turn, e.data.call_id)
+        output = await _output(turn, e.data.call_id, read)
+        if isinstance(output, Err):
+            return output
         stubs.append(
             {
                 "tool": key[0],
                 "args_hash": key[1],
                 "occurrence": occurrence,
-                "output": await _output(turn, e.data.call_id, read),
+                "output": output.value,
                 "is_error": False if result is None else result.data.is_error,
             }
         )
-    return {"stubs": stubs}
+    script: JsonValue = {"stubs": stubs}
+    return Ok(script)
 
 
 def sandbox_results(turn: Sequence[Event]) -> JsonValue | None:
@@ -120,3 +137,12 @@ def sandbox_results(turn: Sequence[Event]) -> JsonValue | None:
         entry |= {k: wire[k] for k in ("content", "ref") if k in wire}
         results.append(entry)
     return {"version": 2, "results": results} if results else None
+
+
+def encode_stub_script(script: JsonValue) -> bytes:
+    """The script's artifact bytes: RFC 8785 canonical JSON, the same bytes in both languages."""
+    match canonicalize(script):
+        case Ok(value=text):
+            return text.encode("utf-8")
+        case Err(error=reason):
+            raise ValueError(f"a stub script is JSON: {reason}")

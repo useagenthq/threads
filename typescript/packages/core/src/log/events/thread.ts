@@ -30,7 +30,7 @@ import {
   TimeMs,
 } from "../primitives";
 import { type Ruled, withRule } from "../rules";
-import type { Arr, EnumOf, Opt, Strict } from "../zod-types";
+import type { Arr, EnumOf, Lit, Opt, Strict } from "../zod-types";
 
 // Thread lifecycle, settings epochs, tool sets, snapshots and branches.
 
@@ -286,14 +286,23 @@ export const Snapshot: EventDef<"snapshot", typeof SnapshotData, true> = event({
 });
 
 const FORK_DATA_RULE = {
-  if: { properties: { reason: { const: "snapshot" } } },
-  then: { required: ["sandbox_id", "knowledge_policy"] },
-  else: {
-    allOf: [
-      { not: { required: ["sandbox_id"] } },
-      { not: { required: ["knowledge_policy"] } },
-    ],
-  },
+  allOf: [
+    {
+      if: { properties: { reason: { const: "snapshot" } } },
+      then: { required: ["sandbox_id", "knowledge_policy"] },
+      else: {
+        allOf: [
+          { not: { required: ["sandbox_id"] } },
+          { not: { required: ["knowledge_policy"] } },
+          { not: { required: ["mode"] } },
+          { not: { required: ["stub_script_ref"] } },
+        ],
+      },
+    },
+    // A stub fork records both or neither: the mode is only meaningful with the frozen script.
+    { if: { required: ["mode"] }, then: { required: ["stub_script_ref"] } },
+    { if: { required: ["stub_script_ref"] }, then: { required: ["mode"] } },
+  ],
 } as const;
 export const ForkData: Ruled<
   Strict<{
@@ -302,6 +311,8 @@ export const ForkData: Ruled<
     reason: EnumOf<typeof FORK_REASONS>;
     sandbox_id: Opt<typeof SandboxId>;
     knowledge_policy: Opt<EnumOf<typeof KNOWLEDGE_POLICIES>>;
+    mode: Opt<Lit<"stub">>;
+    stub_script_ref: Opt<typeof ArtifactRef>;
   }>,
   typeof FORK_DATA_RULE
 > = withRule(
@@ -324,6 +335,15 @@ export const ForkData: Ruled<
         "How the child searches knowledge. pinned (the API default): as of the fork snapshot's knowledge_revision. current: the live corpus. Recorded retrievals always replay as recorded.",
       )
       .optional(),
+    mode: z
+      .literal("stub")
+      .describe(
+        "Recorded only on a stub fork, with stub_script_ref: every run of this branch answers each mediated operation from the frozen script, never live. Absent: a live branch.",
+      )
+      .optional(),
+    stub_script_ref: ArtifactRef.describe(
+      "The frozen stub script (case.schema.json StubScript), computed from the parent's mediated calls after the fork point and durable before this event. Later parent appends never change it.",
+    ).optional(),
   }),
   FORK_DATA_RULE,
 );

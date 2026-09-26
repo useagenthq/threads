@@ -149,12 +149,13 @@ export function threadHandle(
           ),
         );
       const child = BranchId.parse(uuidv7(log.now()));
-      const forked = await forkBranch(log, sandbox, {
+      const forked = await forkBranch(log, artifacts, sandbox, {
         parent: branchId,
         point: typeof point === "string" ? point : point.event_id,
         child,
         knowledge: forkOptions.knowledge ?? "pinned",
         holderId: HOLDER,
+        mode: forkOptions.mode ?? "live",
       });
       if (!forked.ok) return forked;
       return ok(threadHandle(opened, { ...ref, branch: child }, options));

@@ -33,7 +33,7 @@ from threads.log import (
 )
 from threads.loop.guard import ModelBlockedError
 from threads.loop.model import Model
-from threads.loop.stubs import parse_stubs
+from threads.loop.stubs import Stub, parse_stubs
 from threads.result import Ok
 from threads.store.lines import uuid7
 from threads.thread.read import read_log
@@ -129,7 +129,11 @@ class Misconfigured:
 
 
 async def _run(
-    definition: Definition[None], text: str, env: Env, thread: Thread
+    definition: Definition[None],
+    text: str,
+    env: Env,
+    thread: Thread,
+    stubs: tuple[Stub, ...] | None = None,
 ) -> RunResult[str] | Blocked | Misconfigured:
     """One run: its result, a guard block, or a setup mistake. Any other throw is a bug."""
     options: RunOptions[None] = {
@@ -139,22 +143,25 @@ async def _run(
         "thread": thread,
     }
     try:
-        return await execute(definition, text, options, None, _drop)
+        return await execute(definition, text, options, None, _drop, stubs=stubs)
     except ModelBlockedError as blocked:
         return Blocked(blocked.model)
     except ConfigError as error:
         return Misconfigured(f"{error.code}: {error.message}")
 
 
-async def _new_thread(env: Env, stubs: JsonValue) -> Thread:
-    """A new thread; with stubs, its run answers every mediated call from them."""
+async def _new_thread(env: Env) -> Thread:
+    """A new thread for one live run."""
     sq = await open_store(env.store)
     now = now_ms()
     thread_id, branch_id = ThreadId(uuid7(now)), BranchId(uuid7(now))
     await sq.create(thread_id, branch_id, now)
-    if not isinstance(stubs, dict):
-        return Thread(thread_id, branch_id, env.store)
-    return Thread(thread_id, branch_id, env.store, stubs=parse_stubs(stubs))
+    return Thread(thread_id, branch_id, env.store)
+
+
+def _recorded(stubs: JsonValue) -> tuple[Stub, ...] | None:
+    """The case's recorded stubs, which the run answers every mediated call from."""
+    return parse_stubs(stubs) if isinstance(stubs, dict) else None
 
 
 def _refused(ran: Blocked | Misconfigured, calls: int = 0, cost: Cost | None = None) -> Outcome:
@@ -197,7 +204,7 @@ async def _judged(
     judge = agent(
         name="judge", model=env.live.judge, instructions=JUDGE_V1, output=Verdicts, output_retries=1
     )
-    thread = await _new_thread(env, None)
+    thread = await _new_thread(env)
     ran = await _run(
         judge.definition, judge_input(text or "", events, answer, criteria), env, thread
     )
@@ -238,8 +245,8 @@ async def live_check(case: CaseDir, target: EvalAgent, env: Env) -> Outcome:
     text = case.meta.input.text if case.meta.input is not None else None
     if text is None:
         return Outcome("skipped", reason="offline_not_runnable:content_input")
-    thread = await _new_thread(env, case.stubs or {"stubs": []})
-    lead = await _run(target.definition, text, env, thread)
+    thread = await _new_thread(env)
+    lead = await _run(target.definition, text, env, thread, _recorded(case.stubs or {"stubs": []}))
     if isinstance(lead, Blocked | Misconfigured):
         return _refused(lead)
     if not isinstance(lead, Completed):

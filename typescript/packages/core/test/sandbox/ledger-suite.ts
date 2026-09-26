@@ -96,6 +96,7 @@ const request = {
   child: CHILD,
   knowledge: "pinned",
   holderId: "creator",
+  mode: "live",
 } as const;
 
 /** The ledger crash and takeover suite against one adapter. */
@@ -114,7 +115,7 @@ export function ledgerSuite(harness: SandboxHarness): void {
         const point = log.events.at(-1)?.event.event_id;
         if (point === undefined)
           throw new Error("the parent ends with its snapshot");
-        const forking = forkBranch(f.store, gatedRestore(base, g), {
+        const forking = forkBranch(f.store, f.artifacts, gatedRestore(base, g), {
           ...request,
           point,
         });
@@ -256,7 +257,7 @@ export function ledgerSuite(harness: SandboxHarness): void {
           .event_id;
         if (point === undefined)
           throw new Error("the parent ends with its snapshot");
-        const forked = await forkBranch(f.store, sandbox, {
+        const forked = await forkBranch(f.store, f.artifacts, sandbox, {
           ...request,
           point,
           holderId: "old-owner",

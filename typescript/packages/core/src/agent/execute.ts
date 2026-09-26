@@ -1,6 +1,7 @@
 import { loopParked } from "../fold/state";
 import { ObserverPump } from "../hooks/observers";
 import { type LoopConfig, type LoopEnd, resume } from "../loop";
+import type { StubGateway } from "../loop/types";
 import { knownEvents } from "../reduce";
 import { type EventDraft, keepLease, type Writer } from "../store";
 import { controlItemsPending } from "../thread/control-items";
@@ -11,6 +12,7 @@ import { loopConfig } from "./config";
 import { inheritDefer, storeSpecs } from "./defer";
 import { ConfigError } from "./errors";
 import { observerOf } from "./extension";
+import { frozenStubs } from "./frozen-stubs";
 import { handedOff } from "./handoff";
 import { open } from "./open-thread";
 import { type ChildPin, pin } from "./pin";
@@ -105,6 +107,13 @@ export async function execute<Deps, Output>(
       def.hookable.flatMap((e) => observerOf(e) ?? []),
     );
     observers.poke();
+    const stubs = await frozenStubs(
+      knownEvents(writer.chain),
+      artifacts,
+      def.sandbox,
+      def.egress,
+    );
+    if (!stubs.ok) return failed(stubs.error, thread);
     const config = loopConfig(set, {
       options: plan,
       principal,
@@ -123,7 +132,7 @@ export async function execute<Deps, Output>(
       ],
       events: () => knownEvents(writer.chain),
       ceilings: ceilingsOf(plan),
-      ...scopeOf(plan),
+      ...scopeOf(plan, stubs.value),
       ledger: log.budgets,
       inherited: inheritedOf(plan),
       controlItems: () => controlItemsPending(log.driver, thread.id),
@@ -269,10 +278,17 @@ function asPinned<P>(
     : created;
 }
 
-/** What a run inherits from the run that started it: its decision chain and a live eval's stubs. */
-function scopeOf(plan: Plan<unknown>): Pick<Plan<unknown>, "chain" | "stub"> {
+/**
+ * What a run inherits from the run that started it: its decision chain and a live eval's stubs.
+ * A stub fork's `frozen` script wins over both: it is the durable record of how this branch runs.
+ */
+function scopeOf(
+  plan: Plan<unknown>,
+  frozen: StubGateway | undefined,
+): Pick<Plan<unknown>, "chain" | "stub"> {
+  const stub = frozen ?? plan.stub;
   return {
     ...(plan.chain === undefined ? {} : { chain: plan.chain }),
-    ...(plan.stub === undefined ? {} : { stub: plan.stub }),
+    ...(stub === undefined ? {} : { stub }),
   };
 }

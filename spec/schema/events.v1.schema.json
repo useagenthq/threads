@@ -4211,31 +4211,79 @@
         },
         "data": {
           "additionalProperties": false,
-          "else": {
-            "allOf": [
-              {
-                "not": {
-                  "required": [
-                    "sandbox_id"
-                  ]
+          "allOf": [
+            {
+              "else": {
+                "allOf": [
+                  {
+                    "not": {
+                      "required": [
+                        "sandbox_id"
+                      ]
+                    }
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "knowledge_policy"
+                      ]
+                    }
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "mode"
+                      ]
+                    }
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "stub_script_ref"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "if": {
+                "properties": {
+                  "reason": {
+                    "const": "snapshot"
+                  }
                 }
               },
-              {
-                "not": {
-                  "required": [
-                    "knowledge_policy"
-                  ]
-                }
+              "then": {
+                "required": [
+                  "sandbox_id",
+                  "knowledge_policy"
+                ]
               }
-            ]
-          },
-          "if": {
-            "properties": {
-              "reason": {
-                "const": "snapshot"
+            },
+            {
+              "if": {
+                "required": [
+                  "mode"
+                ]
+              },
+              "then": {
+                "required": [
+                  "stub_script_ref"
+                ]
+              }
+            },
+            {
+              "if": {
+                "required": [
+                  "stub_script_ref"
+                ]
+              },
+              "then": {
+                "required": [
+                  "mode"
+                ]
               }
             }
-          },
+          ],
           "properties": {
             "at_hash": {
               "$ref": "#/$defs/Sha256",
@@ -4247,6 +4295,10 @@
                 "pinned",
                 "current"
               ]
+            },
+            "mode": {
+              "const": "stub",
+              "description": "Recorded only on a stub fork, with stub_script_ref: every run of this branch answers each mediated operation from the frozen script, never live. Absent: a live branch."
             },
             "parent_branch_id": {
               "$ref": "#/$defs/BranchId"
@@ -4261,6 +4313,10 @@
             "sandbox_id": {
               "$ref": "#/$defs/NonEmpty",
               "description": "The isolated child sandbox restored from the snapshot, with its manifest verified."
+            },
+            "stub_script_ref": {
+              "$ref": "#/$defs/ArtifactRef",
+              "description": "The frozen stub script (case.schema.json StubScript), computed from the parent's mediated calls after the fork point and durable before this event. Later parent appends never change it."
             }
           },
           "required": [
@@ -4268,12 +4324,6 @@
             "at_hash",
             "reason"
           ],
-          "then": {
-            "required": [
-              "sandbox_id",
-              "knowledge_policy"
-            ]
-          },
           "type": "object"
         },
         "type": {

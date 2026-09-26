@@ -174,7 +174,12 @@ async def _files(
     store: SqliteStore, fold: Fold, turn: Turn, request: CaseRequest, export: bytes
 ) -> Ok[tuple[dict[str, bytes], Offline | None]] | Err[ParseError]:
     files: dict[str, bytes] = {}
-    stubs = await stub_script(turn.events, store.get_artifact)
+    built = await stub_script(turn.events, store.get_artifact)
+    # A mediated call whose committed output is gone makes the case unreplayable, the same way a
+    # missing chain artifact does.
+    if isinstance(built, Err):
+        return Err(ParseError("case_missing_dependency", built.error.message))
+    stubs = built.value
     consumed = len(_list(stubs, "stubs"))
     appended: list[JsonValue] = [_wire(e) for e in turn.events]
     for impl in IMPLS:

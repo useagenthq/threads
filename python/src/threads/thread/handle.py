@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import Literal
 
+from pydantic import JsonValue
+
 from threads._generated.host_api_v1 import (
     BranchInfo,
     PendingApproval,
@@ -34,24 +36,18 @@ from threads.log import (
     UsageTotals,
 )
 from threads.loop import defaults
-from threads.loop.stubs import Stub, parse_stubs
 from threads.reduce.projections import cache_breaks, cost
 from threads.reduce.state import usage_totals
 from threads.render.verify import verify_requests
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
-from threads.store import VerifiedLog
+from threads.store import SqliteStore, VerifiedLog
 from threads.store.lines import uuid7
 from threads.thread import approvals, control, style, tree
 from threads.thread.authority import Checked, refused
 from threads.thread.bundle import ExportedBundle, export_bundle
-from threads.thread.case import (
-    CaseExpectation,
-    CaseRequest,
-    SavedCase,
-    recorded_stubs,
-    save_case,
-)
+from threads.thread.case import CaseExpectation, CaseRequest, SavedCase, save_case
+from threads.thread.case_files import encode_stub_script, stub_script
 from threads.thread.control import Accepted, Controlled
 from threads.thread.fork import ForkAt, KnowledgePolicy, fork_branch, fork_point
 from threads.thread.member_view import member_of, with_member
@@ -107,9 +103,6 @@ class Thread:
     authority: Checked | None = field(default=None, kw_only=True, compare=False, repr=False)
     """Who may answer approvals and resolve parked effects: a host handle's approval authority,
     checked as it stands now; None, in-process operator authority (threads.thread.authority)."""
-    stubs: tuple[Stub, ...] | None = field(default=None, kw_only=True, compare=False, repr=False)
-    """Stub mode: a run of this handle answers every mediated operation from these,
-    never live. None: live."""
 
     async def timeline(self) -> Ok[Timeline] | Err[ParseError]:
         """Every step, with the fork points marked (F13.1)."""
@@ -139,25 +132,29 @@ class Thread:
         operation from what this branch recorded after the point; it needs a sandbox
         that enforces deny-all egress."""
         event_id = point if isinstance(point, str) else point.event_id
-        stubs = None
+        sq = await open_store(self.store)
+        frozen: JsonValue = None
         if mode == "stub":
-            recorded = await self._recorded_after(event_id)
+            recorded = await self._frozen_after(sq, event_id)
             if isinstance(recorded, Err):
                 return recorded
-            stubs = recorded.value
+            frozen = recorded.value
         child = BranchId(uuid7(now_ms()))
-        at = ForkAt(self.branch, event_id, child, knowledge)
-        sq = await open_store(self.store)
+        at = ForkAt(self.branch, event_id, child, knowledge, frozen)
         async with holding():  # the restore's sandbox connections are closed when it returns
             forked = await fork_branch(sq, self.sandbox, at, HOLDER, now_ms)
         if isinstance(forked, Err):
             return forked
         # Done with the child: hand its lease back so a run (its own holder) takes it at once.
         await forked.value.release()
-        return Ok(Thread(self.id, child, self.store, sandbox=self.sandbox, stubs=stubs))
+        return Ok(Thread(self.id, child, self.store, sandbox=self.sandbox))
 
-    async def _recorded_after(self, point: EventId) -> Ok[tuple[Stub, ...]] | Err[ParseError]:
-        """The stubs a stub fork at `point` replays: this branch's recorded results after it."""
+    async def _frozen_after(
+        self, sq: SqliteStore, point: EventId
+    ) -> Ok[JsonValue] | Err[ParseError]:
+        """The frozen stub script of a stub fork at `point`: this branch's mediated calls after
+        it, each with its complete verified output, stored as an artifact before the fork event
+        names it. A missing or corrupt parent artifact fails the fork and leaves no child."""
         if self.sandbox is not None and self.sandbox.info.egress != "enforced":
             why = f"{self.sandbox.info.provider} can't enforce deny-all egress"
             return Err(ParseError("egress_policy_unsupported", why))
@@ -167,7 +164,17 @@ class Thread:
         at = fork_point(read.value.fold, point)
         if isinstance(at, Err):
             return at
-        return Ok(parse_stubs({"stubs": recorded_stubs(read.value.fold, at.value.seq)}))
+        after = [e for e in read.value.fold.events if e.seq > at.value.seq]
+        script = await stub_script(after, sq.get_artifact)
+        if isinstance(script, Err):
+            return script
+        data = encode_stub_script(script.value)
+        ref: JsonValue = {
+            "sha256": await sq.put_artifact(data),
+            "bytes": len(data),
+            "media_type": "application/json",
+        }
+        return Ok(ref)
 
     async def save_case(  # noqa: PLR0913 - spec/api.json saveCase options, keyword only
         self,
