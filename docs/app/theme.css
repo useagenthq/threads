@@ -123,16 +123,22 @@ button[data-search-full] kbd {
   background: var(--color-fd-muted);
 }
 
-/* Code blocks: 16px radius, flat, the code body on the page color and a tinted title bar. */
-figure.shiki,
-div:has(> [role="tablist"]) {
+/*
+ * Code blocks: 16px radius, flat, the code body on the page color and a tinted title bar.
+ * Scoped to the docs page on purpose. These rules are unlayered so they beat Tailwind
+ * utilities, which means an unscoped version also beat the landing page's own
+ * `rounded-none border-0 bg-transparent`, drawing a rounded #0b0b0c card inside a panel
+ * of a different color. The landing code panel inherits its container instead.
+ */
+#nd-page figure.shiki,
+#nd-page div:has(> [role="tablist"]) {
   border-radius: 1rem;
   box-shadow: none;
 }
-figure.shiki:not(:has(figcaption)) {
+#nd-page figure.shiki:not(:has(figcaption)) {
   background: var(--color-fd-background);
 }
-.dark figure.shiki {
+.dark #nd-page figure.shiki {
   background: #0b0b0c;
 }
 
