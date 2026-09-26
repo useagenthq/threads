@@ -1,9 +1,21 @@
 /*
  * Look modeled on the Mintlify "Aspen" docs theme: warm neutral grays, Inter, pill controls,
  * 16px-radius surfaces, a top bar with section tabs. Accent is our brand blue.
- * Blue #2563EB on white is 5.2:1; #60A5FA on the dark background is 8:1.
  * Rules are unlayered on purpose: they must win over Fumadocs' Tailwind utilities.
  */
+
+/*
+ * The brand blue. This is the only place a blue is chosen; every other step is mixed from it,
+ * so changing --brand moves the whole site. #1A65FE is 4.8:1 on white (AA for text), but only
+ * 4.0:1 on the near-black background, so the dark theme uses --brand-lift (8.0:1) instead.
+ * The two files that cannot read CSS repeat the resolved hex with a pointer back here:
+ * app/icon.svg (#1A65FE) and lib/og.tsx (#1A65FE, #74A5FF).
+ */
+:root {
+  --brand: #1a65fe;
+  --brand-lift: color-mix(in oklab, var(--brand) 62%, #ffffff);
+}
+
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -16,13 +28,13 @@
   --color-fd-card: #f9f7f2;
   --color-fd-card-foreground: #1d1b16;
   --color-fd-border: #ebe8e3;
-  --color-fd-primary: #2563eb;
+  --color-fd-primary: var(--brand);
   --color-fd-primary-foreground: #ffffff;
   --color-fd-secondary: #f9f7f2;
   --color-fd-secondary-foreground: #1d1b16;
   --color-fd-accent: #f4f2ee;
   --color-fd-accent-foreground: #1d1b16;
-  --color-fd-ring: #2563eb;
+  --color-fd-ring: var(--brand);
   --prose-body: #45423e;
 }
 
@@ -36,13 +48,13 @@
   --color-fd-card: #151412;
   --color-fd-card-foreground: #f4f2ee;
   --color-fd-border: rgb(255 255 255 / 0.1);
-  --color-fd-primary: #60a5fa;
+  --color-fd-primary: var(--brand-lift);
   --color-fd-primary-foreground: #0d0c0b;
   --color-fd-secondary: #151412;
   --color-fd-secondary-foreground: #f4f2ee;
   --color-fd-accent: #23211d;
   --color-fd-accent-foreground: #f4f2ee;
-  --color-fd-ring: #60a5fa;
+  --color-fd-ring: var(--brand-lift);
   --prose-body: #a5a29e;
 }
 
@@ -145,3 +157,4 @@ details,
 #nd-toc a[data-active="true"] {
   font-weight: 500;
 }
+
