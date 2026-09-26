@@ -123,9 +123,9 @@ type DriverOperations = {
   ) => Promise<"released" | "already_gone">;
 };
 
-/** When a provider resource dies on its own. null: never. */
+/** When a provider resource dies on its own. null: never (a Docker container doesn't). */
 export type ProviderExpiry = {
-  readonly sandboxMs: number;
+  readonly sandboxMs: number | null;
   readonly snapshotMs: number | null;
 };
 

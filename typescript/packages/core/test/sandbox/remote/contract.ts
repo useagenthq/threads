@@ -18,6 +18,16 @@ export type Contract = {
   readonly world: World;
   /** Everything the adapter sent toward sandboxes (bodies, URLs), as text. */
   readonly sandboxTraffic: () => string;
+  /**
+   * What the provider records a process key under, when that isn't the key itself (docker
+   * only ever sends its hash into the container). Defaults to the key.
+   */
+  readonly processName?: (key: string) => string;
+  /**
+   * Whether the provider has snapshots at all. false when no snapshot of it can exist, so
+   * every restore is snapshot_missing (docker, until 16C's host trees). Defaults to true.
+   */
+  readonly snapshots?: boolean;
 };
 
 /** Whether the adapter declares a snapshot boundary it can confirm. */
@@ -145,20 +155,25 @@ export function contractSuite(name: string, make: () => Contract): void {
       expect(await terminated.promise).toBe("k-held");
     });
 
-    test("terminate kills what the provider tracks but never confirms it", async () => {
+    test("terminate kills what the provider tracks, and claims it only when confirmed", async () => {
       const { sandbox, world } = make();
-      expect(sandbox.info.termination).toBe("unconfirmed");
+      const confirmed = sandbox.info.termination === "confirmed";
       const box = await created(sandbox);
       const out = unwrap(await box.exec(["spawn"], CTX, { processKey: "k1" }));
-      expect(unwrap(await box.terminate("k1", CTX))).toBe("unknown");
+      expect(unwrap(await box.terminate("k1", CTX))).toBe(
+        confirmed ? "terminated" : "unknown",
+      );
       expect((await drained(out)).exit).toBe(137);
-      // The descendant outlived the kill: an empty answer would have been a lie.
-      expect(world.machine(box.id).procs.has("descendant")).toBe(true);
-      expect(unwrap(await box.terminate("k1", CTX))).toBe("unknown");
+      // Unconfirmed: the descendant outlived the kill, so an empty answer would have been a
+      // lie. Confirmed: the provider's own boundary took the whole group with it.
+      expect(world.machine(box.id).procs.has("descendant")).toBe(!confirmed);
+      expect(unwrap(await box.terminate("k1", CTX))).toBe(
+        confirmed ? "terminated" : "unknown",
+      );
     });
 
     test("a timeout is reported as one, and the process is killed best effort", async () => {
-      const { sandbox, world } = make();
+      const { sandbox, world, processName = (key: string) => key } = make();
       const box = await created(sandbox);
       // The kill runs in the background: wait for it to settle, not for a clock.
       const stopped = Promise.withResolvers<void>();
@@ -179,7 +194,7 @@ export function contractSuite(name: string, make: () => Contract): void {
       );
       expect(code(ran)).toBe("timeout");
       await stopped.promise;
-      expect(world.machine(box.id).procs.has("k2")).toBe(false);
+      expect(world.machine(box.id).procs.has(processName("k2"))).toBe(false);
     });
 
     test("upload and download round-trip bytes; paths fail typed", async () => {
@@ -226,10 +241,17 @@ export function contractSuite(name: string, make: () => Contract): void {
     });
 
     test("restore: the tree is verified, and the child is isolated", async () => {
-      const { sandbox, world } = make();
+      const { sandbox, world, snapshots } = make();
       const box = await created(sandbox);
       unwrap(await box.upload("a.txt", new TextEncoder().encode("one"), CTX));
       const ref = world.snapshot(box.id, "seed");
+      if (snapshots === false) {
+        // No snapshot of this provider can exist, so none is ever found (sandbox.ts).
+        expect(code(await sandbox.restore(ref, "", "op-2", CTX))).toBe(
+          "snapshot_missing",
+        );
+        return;
+      }
       const child = unwrap(
         await sandbox.restore(ref, world.hashOf(ref), "op-2", CTX),
       );
@@ -241,7 +263,8 @@ export function contractSuite(name: string, make: () => Contract): void {
     });
 
     test("a restored tree that fails the manifest is released", async () => {
-      const { sandbox, world } = make();
+      const { sandbox, world, snapshots } = make();
+      if (snapshots === false) return;
       const box = await created(sandbox);
       const ref = world.snapshot(box.id, "seed");
       const before = world.machines.size;

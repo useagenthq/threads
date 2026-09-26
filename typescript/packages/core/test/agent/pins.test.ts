@@ -46,6 +46,7 @@ const CONFIG_ERROR_CODES = [
   "egress_policy_unsupported",
   "transport_fence_unsupported",
   "handoff_in_team",
+  "docker_unreachable",
 ] as const satisfies readonly ConfigErrorCode[];
 
 test("RunErrorCode is host-api RunErrorCode", () => {

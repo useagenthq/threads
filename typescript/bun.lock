@@ -86,6 +86,17 @@
         "zod": "^4.6.5",
       },
     },
+    "packages/docker": {
+      "name": "@threads/docker",
+      "version": "0.0.0",
+      "dependencies": {
+        "@threads/core": "workspace:*",
+        "zod": "^4.6.5",
+      },
+      "devDependencies": {
+        "@threads/adapter-testkit": "workspace:*",
+      },
+    },
     "packages/e2b": {
       "name": "@threads/e2b",
       "version": "0.0.0",
@@ -322,6 +333,8 @@
     "@threads/core": ["@threads/core@workspace:packages/core"],
 
     "@threads/daytona": ["@threads/daytona@workspace:packages/daytona"],
+
+    "@threads/docker": ["@threads/docker@workspace:packages/docker"],
 
     "@threads/e2b": ["@threads/e2b@workspace:packages/e2b"],
 

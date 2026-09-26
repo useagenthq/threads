@@ -13,7 +13,8 @@ export type ConfigErrorCode =
   | "hosted_tool_unsupported"
   | "egress_policy_unsupported"
   | "transport_fence_unsupported"
-  | "handoff_in_team";
+  | "handoff_in_team"
+  | "docker_unreachable";
 
 /** Thrown at setup only. Every other expected failure is a value. */
 export class ConfigError extends Error {
