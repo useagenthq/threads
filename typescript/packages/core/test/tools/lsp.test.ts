@@ -118,8 +118,11 @@ describe("lsp through the in-sandbox driver", () => {
     // Like /opt/... or /workspace/node_modules/.bin/...: an absolute command is run as given.
     writeFileSync(join(root, "server.py"), SERVER);
     mkdirSync(join(root, "opt/bin"), { recursive: true });
-    symlinkSync(Bun.which("python3") ?? "python3", join(root, "opt/bin/py"));
-    const lsp = tool([join(root, "opt/bin/py"), join(root, "server.py")]);
+    symlinkSync(
+      Bun.which("python3") ?? "python3",
+      join(root, "opt/bin/python3"),
+    );
+    const lsp = tool([join(root, "opt/bin/python3"), join(root, "server.py")]);
     expect(
       await lsp.run({ operation: "symbols", path: "app.fake" }),
     ).toMatchObject({
