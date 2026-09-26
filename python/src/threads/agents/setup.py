@@ -114,6 +114,7 @@ async def _extension[D](e: Extension[D]) -> None:
 
 async def set_up[D](definition: Definition[D]) -> None:
     """Sets up `definition` and every agent it may start. Raises `ConfigError`."""
+    definition.policy()
     check_lookups((definition.model, *definition.fallback), definition.sandbox)
     for e in definition.extensions:
         await _once(e, partial(_extension, e))

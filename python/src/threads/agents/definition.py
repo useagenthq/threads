@@ -11,6 +11,7 @@ from threads.agents.bindings import DEFAULT_PERMISSIONS, AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
 from threads.agents.cache_ttl import agreed_cache_ttl
 from threads.agents.catalog import NO_CATALOG, Catalog
+from threads.agents.config import ConfigError
 from threads.agents.deferral import DeferTools, Pinned, pinned_tools
 from threads.agents.instructions import full_instructions
 from threads.agents.skills import Skill, pinned
@@ -25,8 +26,9 @@ from threads.loop.output import FINAL_OUTPUT
 from threads.memory.authority import MemoryWrite
 from threads.memory.protocol import KnowledgeProvider, MemoryProvider
 from threads.memory.setup import writes
+from threads.permissions.rules import parse_rule
 from threads.reduce.handlers import to_json
-from threads.result import Ok
+from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.team.ops import TeamLimits
 from threads.team.policy import MessagePolicyRule, team_tools
@@ -129,6 +131,11 @@ class Definition[D]:
         """The resolved runtime policy. Permissions, retry and context are always pinned
         complete, defaults included (spec/schema/README.md, "The pinned config"); an agent
         without output, budget or fallback pins no section for them."""
+        permissions = self.permissions or DEFAULT_PERMISSIONS
+        for text in (*permissions.allow, *permissions.ask, *permissions.deny):
+            parsed = parse_rule(text)
+            if isinstance(parsed, Err):
+                raise ConfigError("permission_rule_invalid", parsed.error)
         pinned: dict[str, JsonValue] = {"models": self._models()}
         if any(m.info.limits.price is not MISSING for m in (self.model, *self.fallback)):
             # Prices are nano-USD (spec/schema/README.md); without a currency cost() is None.
@@ -138,7 +145,7 @@ class Definition[D]:
         if self.output is not None:
             pinned["output"] = _output_policy(self.output, self.output_retries)
         sections = (
-            ("permissions", self.permissions or DEFAULT_PERMISSIONS),
+            ("permissions", permissions),
             ("budget", self.budget),
             ("retry", self.retry or RETRY),
             ("context", self._context()),
