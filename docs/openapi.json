@@ -5227,7 +5227,8 @@
           "path_exists",
           "bundle_incomplete",
           "schedule_conflict",
-          "io_error"
+          "io_error",
+          "docker_unreachable"
         ]
       },
       "events_Actor": {

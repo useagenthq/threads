@@ -1,0 +1,76 @@
+---
+title: "docker"
+description: "A Sandbox in a local Docker container."
+icon: "Plug"
+---
+
+Pass it as agent(&#123;sandbox: docker()&#125;). It is keyless: it talks to the Docker Engine over its unix socket and never sends registry credentials. Each container runs any Linux image with the threads supervisor injected, its root filesystem read-only, no network, every capability dropped but the four the supervisor needs, and commands as uid 1000 in a /workspace volume. Snapshots are core's host trees, so nothing is committed to an image.
+
+Import from `@threads/docker` (TypeScript) or `threads.docker` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function docker(options?: {
+  image?: string;
+  allowInternet?: boolean;
+  cpus?: number;
+  memoryMb?: number;
+  fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+}): Sandbox
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def docker(
+    *,
+    image: str = "node:22-bookworm@sha256:363e1587494626837fa7f9a23bdb453d13b0ff3c67c705c2805cfc69c2d2fad7",
+    allow_internet: bool = False,
+    cpus: float | None = None,
+    memory_mb: int | None = None,
+    transport: threads.adapters.sandboxes.docker.transport.MakeTransport | None = None,
+    name: str = "docker",
+) -> Sandbox
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="image" type={"string"} default={"node:22-bookworm@sha256:363e1587494626837fa7f9a23bdb453d13b0ff3c67c705c2805cfc69c2d2fad7"}>
+  The image a container runs, as a tag or a digest. Any linux/amd64 or linux/arm64 image with /bin/sh and env works; anything else is invalid_config naming its architecture. A missing image is pulled anonymously, so a private one must already be pulled. The default has bash, git, python3 and tar.
+</Field>
+
+<Field name="allowInternet / allow_internet" type={"boolean"} default={"false"}>
+  Puts the container on Docker's default network instead of none. Egress is then unenforced, so the agent must also set egress: "unenforced".
+</Field>
+
+<Field name="cpus" type={"number"}>
+  How many CPUs the container may use (Docker's NanoCpus). Greater than 0; anything else is invalid_config. Omitted: no CPU limit.
+</Field>
+
+<Field name="memoryMb / memory_mb" type={"number"}>
+  How much memory the container may use, in MiB, with swap held to the same value. An integer of at least 64; anything else is invalid_config. Omitted: no memory limit. A daemon that can't enforce a requested limit fails the create rather than running without it.
+</Field>
+
+<Field name="fetch" type={"(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}>
+  TypeScript only. Seam: the fetch every Engine API request goes through (a test server); the run's fence wraps it either way, and redirects are never followed. Omitted: the Engine API over the discovered unix socket.
+</Field>
+
+<Field name="transport" type={"threads.adapters.sandboxes.docker.transport.MakeTransport"}>
+  Python only. Seam: makes the httpx transport every Engine API request goes through (a test server). Omitted: the Engine API over the discovered unix socket; the fence checks every request either way.
+</Field>
+
+<Field name="name" type={"str"} default={"docker"}>
+  Python only. The provider name in SandboxInfo and the sandbox ledger ([a-z][a-z0-9_]*, else invalid_config); rows under another name are never touched.
+</Field>
+
+## Returns
+
+[`Sandbox`](/docs/reference/types/Sandbox)
+
+**Throws** `ConfigError` with one of these codes: `docker_unreachable`, `invalid_config`.

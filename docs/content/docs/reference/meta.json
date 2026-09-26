@@ -38,6 +38,7 @@
     "functions/brave",
     "functions/e2b",
     "functions/daytona",
+    "functions/docker",
     "functions/modal",
     "functions/devSandbox",
     "functions/mem0",
