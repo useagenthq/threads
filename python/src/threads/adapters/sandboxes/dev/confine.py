@@ -16,6 +16,11 @@ carries the call's environment as the spawn's.
 The two contain a write outside /workspace differently, and neither reaches the host. bwrap
 replaces the root with a private tmpfs, so such a write can succeed inside and is thrown away
 with the sandbox; sandbox-exec has no root to replace and refuses it.
+
+One name differs too: bwrap sets PWD to the directory it chdirs into, after it has processed the
+env options, so --unsetenv cannot take it back and a Linux command sees the call's environment
+plus PWD=/workspace. That is the sandbox's own working directory, never host state, and no host
+variable reaches the command on either platform (test_dev_confine.py).
 """
 
 import re
@@ -176,9 +181,6 @@ class Confinement:
             spec.cwd,
             "--clearenv",
             *env,
-            # bwrap sets PWD from --chdir. The contract is exactly the call's environment, and
-            # sandbox-exec adds nothing, so drop it to keep the two platforms telling one story.
-            *([] if "PWD" in spec.env else ["--unsetenv", "PWD"]),
             "--die-with-parent",
             "--new-session",
             "--cap-drop",
