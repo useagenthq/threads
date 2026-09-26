@@ -180,7 +180,13 @@ def run(args: argparse.Namespace) -> list[str]:
     errs += _baseline(args, gaps, lang)
     errs += check_changed(gaps, api, _base(args))
     if lang == "py":
-        entries = {k: str(obj(v).get("py")) for k, v in obj(obj(api).get("packages")).items()}
+        # A package absent from one language omits that key (schema/README, "The API surface
+        # gate"), and its members carry lang; there is no module to import for it.
+        entries = {
+            k: str(py)
+            for k, v in obj(obj(api).get("packages")).items()
+            if (py := obj(v).get("py")) is not None
+        }
         errs += check_python(contract, gaps, entries)
     coverage, more = _read(COVERAGE)
     decisions, also = _read(DECISIONS)

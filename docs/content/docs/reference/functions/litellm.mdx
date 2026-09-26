@@ -1,0 +1,68 @@
+---
+title: "litellm"
+description: "A model behind LiteLLM's openai/ route: any OpenAI-compatible endpoint, named through base_url."
+icon: "Plug"
+---
+
+Only that route sends through a transport threads can fence, so any other is transport_fence_unsupported at setup. There is no catalog behind the endpoint, so both limits are required. Pass it as agent(model=litellm("openai/my-model", base_url="http://localhost:4000", max_input_tokens=128000, max_output_tokens=8192)).
+
+Import from `threads.litellm` (Python).
+
+```python title="Python"
+def litellm(
+    name: str,
+    *,
+    max_input_tokens: int,
+    max_output_tokens: int,
+    max_tokens: int | None = None,
+    params: Mapping[str, pydantic.JsonValue] | None = None,
+    price: threads.log.Price | None = None,
+    cache_ttl_ms: int | Literal["none"] | None = None,
+    api_key: str | Secret | None = None,
+    base_url: str | None = None,
+) -> Model
+```
+
+## Parameters
+
+<Field name="name" type={"string"} required>
+  The LiteLLM model name. It must start with "openai/"; any other route is transport_fence_unsupported. The part after the prefix is the model id the endpoint expects.
+</Field>
+
+<Field name="maxInputTokens / max_input_tokens" type={"number"} required>
+  The most input tokens one request may carry; compaction and the input billing bound use it. Pinned as policy.models[].context_window. Required: the name doesn't identify the model behind base_url, so there is no catalog to read it from.
+</Field>
+
+<Field name="maxOutputTokens / max_output_tokens" type={"number"} required>
+  The most output tokens the model can produce in one response. Pinned in policy.models. Required for the same reason as max_input_tokens.
+</Field>
+
+<Field name="maxTokens / max_tokens" type={"number"}>
+  The per-request output cap, pinned as params.max_tokens (the pinned prompt prefix). Output-token budgets read it. Omitted: min(8192, max_output_tokens); a long answer continues in a new request. Above max_output_tokens is invalid_config.
+</Field>
+
+<Field name="params" type={""}>
+  Other completion request fields (temperature, reasoning and the like), pinned in the system prompt. A field the adapter derives from the render, or the cap, is invalid_config. Omitted: none.
+</Field>
+
+<Field name="price" type={""}>
+  Nano-currency units per token, pinned in policy.models; a cost budget needs it. Omitted: cost is unknown.
+</Field>
+
+<Field name="cacheTtlMs / cache_ttl_ms" type={"number | \"none\""}>
+  How long the provider keeps prompt-cache entries, in ms, or "none" when it doesn't cache; it becomes info.cache. threads can't see the provider behind base_url, so an agent using this model needs it or context.cache_ttl_ms. Anything else is invalid_config. Omitted: the lifetime is unknown.
+</Field>
+
+<Field name="apiKey / api_key" type={"string | Secret"}>
+  The key the endpoint expects: a secret() or a string. Omitted: secret("OPENAI_API_KEY"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. Never pinned or logged.
+</Field>
+
+<Field name="baseUrl / base_url" type={"string"}>
+  The OpenAI-compatible endpoint's base URL. Omitted: the SDK's default endpoint.
+</Field>
+
+## Returns
+
+[`Model`](/docs/reference/types/Model)
+
+**Throws** `ConfigError` with one of these codes: `invalid_config`, `missing_secret`, `transport_fence_unsupported`.

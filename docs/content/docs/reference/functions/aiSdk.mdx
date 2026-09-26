@@ -1,0 +1,72 @@
+---
+title: "aiSdk"
+description: "Any AI SDK v4 language model as a threads Model, for the providers with no adapter of their own."
+icon: "Plug"
+---
+
+There is no catalog behind an AI SDK model id, so both limits are required. Pass it as agent(&#123;model: aiSdk(&#123;model: (fetch) => yourProvider(&#123; fetch &#125;)("model-id"), maxInputTokens: 128000, maxOutputTokens: 8192&#125;)&#125;).
+
+Import from `@threads/ai-sdk` (TypeScript).
+
+```ts title="TypeScript"
+function aiSdk(options: {
+  model: ModelFactory;
+  maxInputTokens: number;
+  maxOutputTokens: number;
+  maxTokens?: number;
+  params?: JsonObject;
+  accepts?: readonly ("text" | "image_ref" | "document_ref" | "audio_ref")[];
+  inputBillingBound?: "context_window" | "none";
+  price?: Price;
+  cacheTtlMs?: number | "none";
+  fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+}): Model
+```
+
+## Parameters
+
+<Field name="model" type={"ModelFactory"} required>
+  Builds the model with threads' fetch, e.g. (fetch) => createOpenAI(&#123; fetch &#125;)("gpt-5"). The provider must send through that fetch: a model built without it, or a ready-made model, is transport_fence_unsupported at setup, never run behind a weaker fence. A model whose specificationVersion is not "v4" is invalid_config.
+</Field>
+
+<Field name="maxInputTokens / max_input_tokens" type={"number"} required>
+  The most input tokens one request may carry; compaction and the input billing bound use it. Pinned as policy.models[].context_window. Required: an AI SDK model id doesn't say which provider's model it is, so there is no catalog to read it from.
+</Field>
+
+<Field name="maxOutputTokens / max_output_tokens" type={"number"} required>
+  The most output tokens the model can produce in one response. Pinned in policy.models. Required for the same reason as max_input_tokens.
+</Field>
+
+<Field name="maxTokens / max_tokens" type={"number"}>
+  The per-request output cap, pinned as params.max_tokens (the pinned prompt prefix) and sent as maxOutputTokens. Output-token budgets read it. Omitted: min(8192, max_output_tokens); a long answer continues in a new request. Above max_output_tokens is invalid_config.
+</Field>
+
+<Field name="params" type={"JsonObject"}>
+  Other AI SDK call options (temperature, topP, topK, stopSequences, presencePenalty, frequencyPenalty, seed, reasoning, providerOptions), pinned in the system prompt. max_tokens here is invalid_config: pass maxTokens. Any other key is invalid_config. Omitted: none.
+</Field>
+
+<Field name="accepts" type={"readonly (\"text\" | \"image_ref\" | \"document_ref\" | \"audio_ref\")[]"}>
+  The input parts this model takes. A part it doesn't declare is content_unsupported before anything is dispatched. Omitted: text only, because an AI SDK model doesn't declare what it accepts.
+</Field>
+
+<Field name="inputBillingBound / input_billing_bound" type={"\"context_window\" | \"none\""} default={"none"}>
+  "context_window" only when the provider bounds billed input by the context window; the input billing bound uses it. Omitted: "none", since threads can't see the provider behind an AI SDK model.
+</Field>
+
+<Field name="price" type={"Price"}>
+  Nano-currency units per token, pinned in policy.models; a cost budget needs it. Omitted: cost is unknown.
+</Field>
+
+<Field name="cacheTtlMs / cache_ttl_ms" type={"number | \"none\""}>
+  How long the provider keeps prompt-cache entries, in ms, or "none" when it doesn't cache; it becomes info.cache. threads can't see the provider behind an AI SDK model, so an agent using this model needs it or context.cache_ttl_ms. Anything else is invalid_config. Omitted: the lifetime is unknown.
+</Field>
+
+<Field name="fetch" type={"(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}>
+  TypeScript only. Seam: the transport the fenced fetch wraps before it is handed to the model factory (a proxy, a test server). Omitted: globalThis.fetch.
+</Field>
+
+## Returns
+
+[`Model`](/docs/reference/types/Model)
+
+**Throws** `ConfigError` with one of these codes: `invalid_config`, `transport_fence_unsupported`.

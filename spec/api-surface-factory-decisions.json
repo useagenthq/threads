@@ -29,6 +29,12 @@
       "ts": ["typescript/packages/openai/src"],
       "py": ["python/src/threads/openai.py", "python/src/threads/adapters/models/openai"]
     },
+    "ai-sdk": {
+      "ts": ["typescript/packages/ai-sdk/src"]
+    },
+    "litellm": {
+      "py": ["python/src/threads/litellm.py", "python/src/threads/adapters/models/litellm"]
+    },
     "e2b": {
       "ts": ["typescript/packages/e2b/src"],
       "py": ["python/src/threads/e2b.py", "python/src/threads/adapters/sandboxes/e2b"]
@@ -68,8 +74,8 @@
     "postgres": { "owner": "27" },
     "anthropic": { "owner": "06" },
     "openai": { "owner": "06" },
-    "aiSdk": { "owner": "06", "pending": "Any AI SDK model (TypeScript only)." },
-    "litellm": { "owner": "06", "pending": "Models through LiteLLM (Python only)." },
+    "aiSdk": { "owner": "06" },
+    "litellm": { "owner": "06" },
     "e2b": { "owner": "15B" },
     "daytona": { "owner": "15B", "review_only": { "api_url": "The live endpoint is the network itself; tests point it at a fake.", "poll_ms": "Seam: a polling interval; no request differs by it.", "wait_ms": "Seam: a polling deadline, reached only when Daytona stalls." } },
     "modal": { "owner": "15B", "review_only": { "server_url": "Seam: the live endpoint is the network itself; tests pass a fake one." } },

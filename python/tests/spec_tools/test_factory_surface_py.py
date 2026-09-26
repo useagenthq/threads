@@ -58,6 +58,7 @@ def test_every_contracted_factory_is_checked() -> None:
         "zep",
         "anthropic",
         "openai",
+        "litellm",
         "e2b",
         "daytona",
         "modal",

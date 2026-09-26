@@ -36,6 +36,14 @@ HEADER = (
     "spec/api-surface-gaps.json. Do not edit."
 )
 MARKER = "__surfaceGap"
+
+
+def alias(package: str) -> str:
+    """The import name a package key takes in the generated file. A key may carry a hyphen
+    (`ai-sdk`); a JavaScript identifier may not."""
+    return re.sub(r"\W", "_", package)
+
+
 HELPERS = (
     "Assert", "Equals", "EveryOverloadSeen", "HasKey", "IsCallable", "IsMissing",
     "OptionPresent", "OptionRequired", "Req",
@@ -75,11 +83,11 @@ class Emitter:
         from its declared entry."""
         t, gap = self.contract[name], self.gaps.get(name)
         args = f"<{', '.join(['never'] * t.generics)}>" if t.generics else ""
-        return f"{gap.at if gap and gap.at else t.package}.{t.ts}{args}"
+        return f"{alias(gap.at if gap and gap.at else t.package)}.{t.ts}{args}"
 
     def callable_ref(self, m: Member) -> str:
         if m.role == "function":
-            return f"typeof {m.package}.{m.ts}"
+            return f"typeof {alias(m.package)}.{m.ts}"
         return f'{self.type_ref(m.parent)}["{m.ts}"]'
 
     def keyed(self, m: Member, owner: str) -> None:
@@ -123,7 +131,7 @@ class Emitter:
         elif m.role == "option":
             self.option(m)
         elif m.role == "function":
-            self.keyed(m, f"typeof {m.package}")
+            self.keyed(m, f"typeof {alias(m.package)}")
         else:
             self.keyed(m, self.type_ref(m.parent))
 
@@ -143,7 +151,8 @@ class Emitter:
             out += [f"  type {n} = {{ readonly {MARKER}: true }};" for n in sorted(names)]
             out.append("}")
             out += [
-                f'export type type_{n}_missing = Assert<Equals<keyof {package}.{n}, "{MARKER}">>;'
+                f"export type type_{n}_missing = "
+                f'Assert<Equals<keyof {alias(package)}.{n}, "{MARKER}">>;'
                 for n in sorted(names)
             ]
         return out
@@ -161,10 +170,15 @@ def render(api: Json, gaps_doc: Json) -> str:
     emitter = Emitter(contract, [g for g in gaps if g.lang == "ts"])
     for m in contract.values():
         emitter.member(m)
-    packages = {k: str(obj(v).get("ts")) for k, v in obj(obj(api).get("packages")).items()}
+    # A package absent from TypeScript has no module to import; its members carry lang.
+    packages = {
+        k: str(ts)
+        for k, v in obj(obj(api).get("packages")).items()
+        if (ts := obj(v).get("ts")) is not None
+    }
     helpers = ", ".join(HELPERS)
     head = [HEADER, f'import type {{ {helpers} }} from "../helpers";']
-    head += [f'import type * as {k} from "{v}";' for k, v in sorted(packages.items())]
+    head += [f'import type * as {alias(k)} from "{v}";' for k, v in sorted(packages.items())]
     return "\n".join([*head, "", *emitter.augmentations(packages), *emitter.lines, ""])
 
 

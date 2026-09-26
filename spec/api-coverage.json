@@ -644,6 +644,51 @@
       "tests/agents/test_api.py::test_readme_example"
     ]
   },
+  "aiSdk": {
+    "ts": [
+      "packages/ai-sdk/test/defaults.test.ts > aiSdk defaults > both limits are pinned as given"
+    ]
+  },
+  "aiSdk!invalid_config": {
+    "ts": [
+      "packages/ai-sdk/test/bridge.test.ts > refused before dispatch > bad call params fail setup"
+    ]
+  },
+  "aiSdk!transport_fence_unsupported": {
+    "ts": [
+      "packages/ai-sdk/test/fence.test.ts > fencing > a pre-built model is refused: its transport can't be fenced"
+    ]
+  },
+  "aiSdk.accepts=default": {
+    "ts": [
+      "packages/ai-sdk/test/defaults.test.ts > aiSdk defaults > accepts absent: text only"
+    ]
+  },
+  "aiSdk.input_billing_bound=default": {
+    "ts": [
+      "packages/ai-sdk/test/defaults.test.ts > aiSdk defaults > inputBillingBound absent: none"
+    ]
+  },
+  "aiSdk.max_input_tokens": {
+    "ts": [
+      "packages/ai-sdk/test/defaults.test.ts > aiSdk defaults > both limits are pinned as given"
+    ]
+  },
+  "aiSdk.max_output_tokens": {
+    "ts": [
+      "packages/ai-sdk/test/defaults.test.ts > aiSdk defaults > both limits are pinned as given"
+    ]
+  },
+  "aiSdk.max_tokens=default": {
+    "ts": [
+      "packages/ai-sdk/test/defaults.test.ts > aiSdk defaults > maxTokens absent: min(8192, maxOutputTokens), pinned as params.max_tokens"
+    ]
+  },
+  "aiSdk.model": {
+    "ts": [
+      "packages/ai-sdk/test/fence.test.ts > fencing > the provider's fetch re-checks the lease at its real send point"
+    ]
+  },
   "anthropic": {
     "ts": [
       "packages/anthropic/test/catalog.test.ts > anthropic(id) > a listed id needs no options: verified limits and the default cap"
@@ -995,6 +1040,46 @@
     ],
     "py": [
       "tests/host/test_channel_recovery.py::test_the_same_host_started_again_waits_for_its_new_recovery_pass"
+    ]
+  },
+  "litellm": {
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_litellm_takes_the_default_cap"
+    ]
+  },
+  "litellm!invalid_config": {
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_params_can_t_set_the_cap[litellm]"
+    ]
+  },
+  "litellm!missing_secret": {
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_missing_key_fails_check_as_a_value_and_the_run_before_any_append[litellm]"
+    ]
+  },
+  "litellm!transport_fence_unsupported": {
+    "py": [
+      "tests/adapters/test_litellm.py::test_a_route_it_cannot_fence_at_the_transport_is_refused_at_setup"
+    ]
+  },
+  "litellm.api_key=default": {
+    "py": [
+      "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[litellm]"
+    ]
+  },
+  "litellm.max_input_tokens": {
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_litellm_takes_the_default_cap"
+    ]
+  },
+  "litellm.max_output_tokens": {
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_litellm_takes_the_default_cap"
+    ]
+  },
+  "litellm.max_tokens=default": {
+    "py": [
+      "tests/adapters/test_model_catalog.py::test_litellm_takes_the_default_cap"
     ]
   },
   "localKnowledge": {

@@ -30,6 +30,8 @@
     "functions/zep",
     "functions/anthropic",
     "functions/openai",
+    "functions/aiSdk",
+    "functions/litellm",
     "functions/exa",
     "functions/tavily",
     "functions/brave",

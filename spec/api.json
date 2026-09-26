@@ -65,6 +65,18 @@
       "provider": "OpenAI",
       "doc": "OpenAI models on the official OpenAI SDK (Python extra openai). Every request goes through the run's fenced transport."
     },
+    "ai-sdk": {
+      "kind": "adapter",
+      "ts": "@threads/ai-sdk",
+      "provider": "AI SDK",
+      "doc": "Any AI SDK v4 language model as a threads Model (TypeScript only). The adapter calls the model's doStream directly, below the AI SDK's generate and stream helpers, so threads owns every attempt and the SDK adds no hidden retry. The model is built by a factory handed threads' fetch, so every provider request goes through the run's fenced transport."
+    },
+    "litellm": {
+      "kind": "adapter",
+      "py": "threads.litellm",
+      "provider": "LiteLLM",
+      "doc": "Models behind LiteLLM's openai/ route, that is any OpenAI-compatible endpoint (Python only, extra litellm). That route sends through the OpenAI SDK client threads hands it, so every request goes through the run's fenced transport; any other route is refused at setup."
+    },
     "e2b": {
       "kind": "adapter",
       "ts": "@threads/e2b",
@@ -1209,6 +1221,49 @@
       ],
       "returns": {"$ref": "#/types/Model"},
       "config_errors": [{"code": "invalid_config"}, {"code": "missing_secret"}, {"code": "hosted_tool_unsupported"}]
+    },
+    "aiSdk": {
+      "ts": "aiSdk",
+      "py": "aiSdk",
+      "package": "ai-sdk",
+      "lang": "ts",
+      "doc": "Any AI SDK v4 language model as a threads Model, for the providers with no adapter of their own. There is no catalog behind an AI SDK model id, so both limits are required. Pass it as agent({model: aiSdk({model: (fetch) => yourProvider({ fetch })(\"model-id\"), maxInputTokens: 128000, maxOutputTokens: 8192})}).",
+      "async": false,
+      "params": [
+        {"name": "model", "kind": "option", "type": {"platform": {"ts": "ModelFactory"}}, "required": true, "doc": "Builds the model with threads' fetch, e.g. (fetch) => createOpenAI({ fetch })(\"gpt-5\"). The provider must send through that fetch: a model built without it, or a ready-made model, is transport_fence_unsupported at setup, never run behind a weaker fence. A model whose specificationVersion is not \"v4\" is invalid_config."},
+        {"name": "max_input_tokens", "kind": "option", "type": {"prim": "integer"}, "required": true, "doc": "The most input tokens one request may carry; compaction and the input billing bound use it. Pinned as policy.models[].context_window. Required: an AI SDK model id doesn't say which provider's model it is, so there is no catalog to read it from."},
+        {"name": "max_output_tokens", "kind": "option", "type": {"prim": "integer"}, "required": true, "doc": "The most output tokens the model can produce in one response. Pinned in policy.models. Required for the same reason as max_input_tokens."},
+        {"name": "max_tokens", "kind": "option", "type": {"prim": "integer"}, "required": false, "default_doc": "min(8192, max_output_tokens)", "doc": "The per-request output cap, pinned as params.max_tokens (Render v1 line 0) and sent as maxOutputTokens. Output-token budgets read it. Omitted: min(8192, max_output_tokens); a long answer continues in a new request. Above max_output_tokens is invalid_config."},
+        {"name": "params", "kind": "option", "type": {"platform": {"ts": "JsonObject"}}, "required": false, "doc": "Other AI SDK call options (temperature, topP, topK, stopSequences, presencePenalty, frequencyPenalty, seed, reasoning, providerOptions), pinned in line 0. max_tokens here is invalid_config: pass maxTokens. Any other key is invalid_config. Omitted: none."},
+        {"name": "accepts", "kind": "option", "type": {"array": {"enum": ["text", "image_ref", "document_ref", "audio_ref"]}}, "required": false, "default_doc": "text only", "doc": "The input parts this model takes. A part it doesn't declare is content_unsupported before anything is dispatched. Omitted: text only, because an AI SDK model doesn't declare what it accepts."},
+        {"name": "input_billing_bound", "kind": "option", "type": {"enum": ["context_window", "none"]}, "required": false, "default": "none", "doc": "\"context_window\" only when the provider bounds billed input by the context window; the input billing bound uses it. Omitted: \"none\", since threads can't see the provider behind an AI SDK model."},
+        {"name": "price", "kind": "option", "type": {"platform": {"ts": "Price"}}, "required": false, "doc": "Nano-currency units per token, pinned in policy.models; a cost budget needs it. Omitted: cost is unknown."},
+        {"name": "cache_ttl_ms", "kind": "option", "type": {"union": [{"prim": "integer"}, {"literal": "none"}]}, "required": false, "doc": "How long the provider keeps prompt-cache entries, in ms, or \"none\" when it doesn't cache; it becomes info.cache. threads can't see the provider behind an AI SDK model, so an agent using this model needs it or context.cache_ttl_ms. Anything else is invalid_config. Omitted: the lifetime is unknown."},
+        {"name": "fetch", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}}, "required": false, "doc": "Seam: the transport the fenced fetch wraps before it is handed to the model factory (a proxy, a test server). Omitted: globalThis.fetch."}
+      ],
+      "returns": {"$ref": "#/types/Model"},
+      "config_errors": [{"code": "invalid_config"}, {"code": "transport_fence_unsupported"}]
+    },
+    "litellm": {
+      "ts": "litellm",
+      "py": "litellm",
+      "package": "litellm",
+      "lang": "py",
+      "doc": "A model behind LiteLLM's openai/ route: any OpenAI-compatible endpoint, named through base_url. Only that route sends through a transport threads can fence, so any other is transport_fence_unsupported at setup. There is no catalog behind the endpoint, so both limits are required. Pass it as agent(model=litellm(\"openai/my-model\", base_url=\"http://localhost:4000\", max_input_tokens=128000, max_output_tokens=8192)).",
+      "async": false,
+      "params": [
+        {"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The LiteLLM model name. It must start with \"openai/\"; any other route is transport_fence_unsupported. The part after the prefix is the model id the endpoint expects."},
+        {"name": "max_input_tokens", "kind": "option", "type": {"prim": "integer"}, "required": true, "doc": "The most input tokens one request may carry; compaction and the input billing bound use it. Pinned as policy.models[].context_window. Required: the name doesn't identify the model behind base_url, so there is no catalog to read it from."},
+        {"name": "max_output_tokens", "kind": "option", "type": {"prim": "integer"}, "required": true, "doc": "The most output tokens the model can produce in one response. Pinned in policy.models. Required for the same reason as max_input_tokens."},
+        {"name": "max_tokens", "kind": "option", "type": {"prim": "integer"}, "required": false, "default_doc": "min(8192, max_output_tokens)", "doc": "The per-request output cap, pinned as params.max_tokens (Render v1 line 0). Output-token budgets read it. Omitted: min(8192, max_output_tokens); a long answer continues in a new request. Above max_output_tokens is invalid_config."},
+        {"name": "params", "kind": "option", "type": {"platform": {"py": "Mapping[str, pydantic.JsonValue]"}}, "required": false, "doc": "Other completion request fields (temperature, reasoning and the like), pinned in line 0. A field the adapter derives from the render, or the cap, is invalid_config. Omitted: none."},
+        {"name": "price", "kind": "option", "type": {"platform": {"py": "threads.log.Price"}}, "required": false, "doc": "Nano-currency units per token, pinned in policy.models; a cost budget needs it. Omitted: cost is unknown."},
+        {"name": "cache_ttl_ms", "kind": "option", "type": {"union": [{"prim": "integer"}, {"literal": "none"}]}, "required": false, "doc": "How long the provider keeps prompt-cache entries, in ms, or \"none\" when it doesn't cache; it becomes info.cache. threads can't see the provider behind base_url, so an agent using this model needs it or context.cache_ttl_ms. Anything else is invalid_config. Omitted: the lifetime is unknown."},
+        {"name": "api_key", "kind": "option", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"OPENAI_API_KEY\")", "doc": "The key the endpoint expects: a secret() or a string. Omitted: secret(\"OPENAI_API_KEY\"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. Never pinned or logged."},
+        {"name": "base_url", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The OpenAI-compatible endpoint's base URL. Omitted: the SDK's default endpoint."}
+      ],
+      "returns": {"$ref": "#/types/Model"},
+      "config_errors": [{"code": "invalid_config"}, {"code": "missing_secret"}, {"code": "transport_fence_unsupported"}]
     },
     "exa": {
       "ts": "exa",

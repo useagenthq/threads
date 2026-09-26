@@ -188,8 +188,8 @@ def litellm(name: str, **options: Unpack[LiteLLMOptions]) -> LiteLLMModel:
     """A model behind LiteLLM's `openai/` route (any OpenAI-compatible endpoint via `base_url`).
     Both limits are required: the name doesn't identify the model behind `base_url`. `params`
     are completion fields; `max_tokens` defaults to min(8192, max_output_tokens). `api_key`
-    defaults to `secret("OPENAI_API_KEY")`, resolved at setup. Other routes raise ConfigError
-    `transport_fence_unsupported` (module docstring)."""
+    defaults to `secret("OPENAI_API_KEY")`, resolved at setup. Any other route is refused at
+    setup with `transport_fence_unsupported` (module docstring)."""
     if not name.startswith("openai/"):
         raise ConfigError(
             "transport_fence_unsupported",

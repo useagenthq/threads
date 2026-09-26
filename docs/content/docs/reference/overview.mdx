@@ -27,6 +27,8 @@ say so.
 | zep | `@threads/zep` | `threads.zep` |
 | anthropic | `@threads/anthropic` | `threads.anthropic` |
 | openai | `@threads/openai` | `threads.openai` |
+| ai-sdk | `@threads/ai-sdk` | — |
+| litellm | — | `threads.litellm` |
 | e2b | `@threads/e2b` | `threads.e2b` |
 | daytona | `@threads/daytona` | `threads.daytona` |
 | modal | `@threads/modal` | `threads.modal` |
@@ -71,6 +73,8 @@ A provider factory connects an agent to an outside service and returns one of th
 | [`zep`](/docs/reference/functions/zep) | `zep` | A MemoryProvider that stores records in Zep. |
 | [`anthropic`](/docs/reference/functions/anthropic) | `anthropic` | A Claude model through the Messages API. |
 | [`openai`](/docs/reference/functions/openai) | `openai` | An OpenAI model through the Responses API (stateless: store is false). |
+| [`aiSdk`](/docs/reference/functions/aiSdk) | `aiSdk` | Any AI SDK v4 language model as a threads Model, for the providers with no adapter of their own. |
+| [`litellm`](/docs/reference/functions/litellm) | `litellm` | A model behind LiteLLM's openai/ route: any OpenAI-compatible endpoint, named through base_url. |
 | [`exa`](/docs/reference/functions/exa) | `exa` | A web_search backend that searches with Exa (exa.ai). |
 | [`tavily`](/docs/reference/functions/tavily) | `tavily` | A web_search backend that searches with Tavily (tavily.com). |
 | [`brave`](/docs/reference/functions/brave) | `brave` | A web_search backend that searches with Brave (search.brave.com). |
@@ -84,8 +88,7 @@ A provider factory connects an agent to an outside service and returns one of th
 
 These providers exist but are not in the reference yet; their guides describe them: [Models](/docs/agents/models), [Sandboxes](/docs/sandboxes/overview), [Host server](/docs/host/overview) and [Memory](/docs/memory/memory).
 
-- `aiSdk`: Any AI SDK model (TypeScript only).
-- `litellm`: Models through LiteLLM (Python only).
+
 
 ## Types
 

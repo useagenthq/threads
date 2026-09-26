@@ -14,6 +14,7 @@ import type {
   ModelContext,
   ModelInfo,
   ModelRequest,
+  Price,
 } from "@threads/core/adapter";
 import {
   ConfigError,
@@ -41,6 +42,15 @@ import { decode, nameOf, StreamError } from "./stream";
 type Rejected = Extract<ModelChunk, { kind: "rejected" }>;
 type Media = ModelInfo["accepts"][number];
 
+// The platform types spec/api.json names for this package's factory.
+export type { JsonObject, Price } from "@threads/core/adapter";
+
+/**
+ * Builds the AI SDK model with threads' fetch, e.g.
+ * `(fetch) => createOpenAI({ fetch })("gpt-5")`. The provider must send through it.
+ */
+export type ModelFactory = (fetch: Fetch) => LanguageModelV4;
+
 /** The JSON call options line 0 pins; the prompt, tools and signal come from the render. */
 const CallParams = z.strictObject({
   // The output cap, pinned under the provider-neutral key budgets read; sent as maxOutputTokens.
@@ -67,11 +77,8 @@ const CallParams = z.strictObject({
 });
 
 export type AiSdkOptions = {
-  /**
-   * Builds the model with threads' fetch, e.g.
-   * `(fetch) => createOpenAI({ fetch })("gpt-5")`. The provider must send through it.
-   */
-  readonly model: (fetch: Fetch) => LanguageModelV4;
+  /** Builds the model with threads' fetch. The provider must send through it. */
+  readonly model: ModelFactory;
   /** The transport under the lease check. Defaults to the global fetch. */
   readonly fetch?: Fetch;
   /** The most input tokens one request may carry. Pinned as policy.models[].context_window. */
@@ -86,7 +93,7 @@ export type AiSdkOptions = {
   readonly accepts?: readonly Media[];
   /** "context_window" only when the provider bounds billed input by it; else unknown. */
   readonly inputBillingBound?: "context_window" | "none";
-  readonly price?: ModelInfo["limits"]["price"];
+  readonly price?: Price;
   /**
    * How long the provider keeps prompt-cache entries, in ms, or "none" when it doesn't cache.
    * threads can't see the provider behind an AI SDK model, so an agent using this model needs
