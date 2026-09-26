@@ -7,6 +7,7 @@ from threads.reduce import (
     rules_loaded,
     rules_misc,
     rules_phase2,
+    rules_remote,
     rules_requested,
     rules_team,
     rules_tools,
@@ -24,6 +25,7 @@ _HANDLERS: Mapping[type, Handler] = {
     **rules_requested.HANDLERS,
     **rules_wake.HANDLERS,
     **rules_loaded.HANDLERS,
+    **rules_remote.HANDLERS,
 }
 
 
@@ -38,7 +40,7 @@ def apply(fold: Fold, event: Event | UnknownEvent) -> ParseError | None:
     """Checks the envelope and semantic rules for the next event of the resolved chain, then
     folds it in. On an error the fold is unchanged. `seq` contiguity and the hash chain are
     checked by the reader of the bytes, before this."""
-    error = _envelope_error(fold, event)
+    error = _envelope_error(fold, event) or rules_remote.follows_call(fold, event)
     if error is None and not isinstance(event, UnknownEvent):
         handler = _HANDLERS.get(type(event))
         error = (
@@ -55,6 +57,7 @@ def apply(fold: Fold, event: Event | UnknownEvent) -> ParseError | None:
         fold.events.append(event)
         team_fold.advance(fold, event)
         rules_wake.advance(fold, event)
+        rules_remote.advance(fold, event)
     if not fold.pending and not fold.open_requests:
         fold.boundaries.add(event.seq)
     return None

@@ -91,6 +91,10 @@ export type Fold = {
   /** call_ids with a tool_call and no result yet, in call order. */
   readonly pending: Set<string>;
   readonly effects: Map<string, { callId: string; status: EffectStatus }>;
+  /** call_ids with a remote_call: a second one for the same call is refused (rule 58). */
+  readonly remoteCalls: Set<string>;
+  /** The remote_call whose effect_begin must come next, and nothing else (rule 56). */
+  remoteBegin: string | undefined;
   readonly parked: ParkAddress[];
   readonly snapshots: SnapshotPoint[];
   readonly usage: { input: number; output: number; unknown: number };
@@ -173,6 +177,8 @@ export function emptyFold(): Fold {
     calls: new Map(),
     pending: new Set(),
     effects: new Map(),
+    remoteCalls: new Set(),
+    remoteBegin: undefined,
     parked: [],
     snapshots: [],
     usage: { input: 0, output: 0, unknown: 0 },

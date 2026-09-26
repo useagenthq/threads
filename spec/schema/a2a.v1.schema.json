@@ -1,0 +1,792 @@
+{
+  "$defs": {
+    "APIKeySecurityScheme": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "location": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "location",
+        "name"
+      ],
+      "type": "object"
+    },
+    "AgentCapabilities": {
+      "additionalProperties": false,
+      "properties": {
+        "extendedAgentCard": {
+          "type": "boolean"
+        },
+        "extensions": {
+          "items": {
+            "$ref": "#/$defs/AgentExtension"
+          },
+          "type": "array"
+        },
+        "pushNotifications": {
+          "type": "boolean"
+        },
+        "streaming": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "AgentCard": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "$ref": "#/$defs/AgentCapabilities"
+        },
+        "defaultInputModes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "defaultOutputModes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "description": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "documentationUrl": {
+          "type": "string"
+        },
+        "iconUrl": {
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "provider": {
+          "$ref": "#/$defs/AgentProvider"
+        },
+        "security": {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        "securityRequirements": {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        "securitySchemes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SecurityScheme"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "signatures": {
+          "items": {
+            "$ref": "#/$defs/AgentCardSignature"
+          },
+          "type": "array"
+        },
+        "skills": {
+          "items": {
+            "$ref": "#/$defs/AgentSkill"
+          },
+          "type": "array"
+        },
+        "supportedInterfaces": {
+          "items": {
+            "$ref": "#/$defs/AgentInterface"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "version": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "supportedInterfaces",
+        "version",
+        "capabilities",
+        "defaultInputModes",
+        "defaultOutputModes",
+        "skills"
+      ],
+      "type": "object"
+    },
+    "AgentCardSignature": {
+      "additionalProperties": false,
+      "properties": {
+        "header": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "protected": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "signature": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "protected",
+        "signature"
+      ],
+      "type": "object"
+    },
+    "AgentExtension": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "uri": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "uri"
+      ],
+      "type": "object"
+    },
+    "AgentInterface": {
+      "additionalProperties": false,
+      "properties": {
+        "protocolBinding": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "protocolVersion": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        },
+        "url": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "protocolBinding",
+        "protocolVersion"
+      ],
+      "type": "object"
+    },
+    "AgentProvider": {
+      "additionalProperties": false,
+      "properties": {
+        "organization": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "url": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "organization"
+      ],
+      "type": "object"
+    },
+    "AgentSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "examples": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "inputModes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "outputModes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "securityRequirements": {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "tags"
+      ],
+      "type": "object"
+    },
+    "Artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifactId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "extensions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "metadata": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/Part"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "artifactId",
+        "parts"
+      ],
+      "type": "object"
+    },
+    "CancelTaskRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "tenant": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "GetTaskRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "historyLength": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "HTTPAuthSecurityScheme": {
+      "additionalProperties": false,
+      "properties": {
+        "bearerFormat": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "scheme": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "scheme"
+      ],
+      "type": "object"
+    },
+    "JsonObject": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "properties": {},
+      "type": "object"
+    },
+    "JsonValue": {
+      "description": "Any validated JSON value (tool input, model params, MCP payloads). Numbers follow.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "properties": {},
+          "type": "object"
+        }
+      ]
+    },
+    "ListTasksRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "contextId": {
+          "type": "string"
+        },
+        "historyLength": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "includeArtifacts": {
+          "type": "boolean"
+        },
+        "pageSize": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "pageToken": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TaskState"
+        },
+        "statusTimestampAfter": {
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ListTasksResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "nextPageToken": {
+          "type": "string"
+        },
+        "pageSize": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/Task"
+          },
+          "type": "array"
+        },
+        "totalSize": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tasks",
+        "nextPageToken",
+        "pageSize",
+        "totalSize"
+      ],
+      "type": "object"
+    },
+    "Message": {
+      "additionalProperties": false,
+      "properties": {
+        "contextId": {
+          "type": "string"
+        },
+        "extensions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "messageId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/Part"
+          },
+          "type": "array"
+        },
+        "referenceTaskIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        },
+        "taskId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "messageId",
+        "role",
+        "parts"
+      ],
+      "type": "object"
+    },
+    "Part": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "filename": {
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "raw": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Role": {
+      "enum": [
+        "ROLE_UNSPECIFIED",
+        "ROLE_USER",
+        "ROLE_AGENT"
+      ],
+      "type": "string"
+    },
+    "SecurityScheme": {
+      "additionalProperties": false,
+      "properties": {
+        "apiKeySecurityScheme": {
+          "$ref": "#/$defs/APIKeySecurityScheme"
+        },
+        "httpAuthSecurityScheme": {
+          "$ref": "#/$defs/HTTPAuthSecurityScheme"
+        },
+        "mtlsSecurityScheme": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "oauth2SecurityScheme": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "openIdConnectSecurityScheme": {
+          "$ref": "#/$defs/JsonObject"
+        }
+      },
+      "type": "object"
+    },
+    "SendMessageConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptedOutputModes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "historyLength": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "returnImmediately": {
+          "type": "boolean"
+        },
+        "taskPushNotificationConfig": {
+          "$ref": "#/$defs/JsonObject"
+        }
+      },
+      "type": "object"
+    },
+    "SendMessageRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "configuration": {
+          "$ref": "#/$defs/SendMessageConfiguration"
+        },
+        "message": {
+          "$ref": "#/$defs/Message"
+        },
+        "metadata": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "tenant": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "type": "object"
+    },
+    "SendMessageResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "$ref": "#/$defs/Message"
+        },
+        "task": {
+          "$ref": "#/$defs/Task"
+        }
+      },
+      "type": "object"
+    },
+    "StreamResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "artifactUpdate": {
+          "$ref": "#/$defs/TaskArtifactUpdateEvent"
+        },
+        "message": {
+          "$ref": "#/$defs/Message"
+        },
+        "statusUpdate": {
+          "$ref": "#/$defs/TaskStatusUpdateEvent"
+        },
+        "task": {
+          "$ref": "#/$defs/Task"
+        }
+      },
+      "type": "object"
+    },
+    "SubscribeToTaskRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tenant": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "Task": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "type": "array"
+        },
+        "contextId": {
+          "type": "string"
+        },
+        "history": {
+          "items": {
+            "$ref": "#/$defs/Message"
+          },
+          "type": "array"
+        },
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "status": {
+          "$ref": "#/$defs/TaskStatus"
+        }
+      },
+      "required": [
+        "id",
+        "status"
+      ],
+      "type": "object"
+    },
+    "TaskArtifactUpdateEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "append": {
+          "type": "boolean"
+        },
+        "artifact": {
+          "$ref": "#/$defs/Artifact"
+        },
+        "contextId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "lastChunk": {
+          "type": "boolean"
+        },
+        "metadata": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "taskId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "taskId",
+        "contextId",
+        "artifact"
+      ],
+      "type": "object"
+    },
+    "TaskState": {
+      "enum": [
+        "TASK_STATE_SUBMITTED",
+        "TASK_STATE_WORKING",
+        "TASK_STATE_COMPLETED",
+        "TASK_STATE_FAILED",
+        "TASK_STATE_CANCELED",
+        "TASK_STATE_INPUT_REQUIRED",
+        "TASK_STATE_REJECTED",
+        "TASK_STATE_AUTH_REQUIRED"
+      ],
+      "type": "string"
+    },
+    "TaskStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "$ref": "#/$defs/Message"
+        },
+        "state": {
+          "$ref": "#/$defs/TaskState"
+        },
+        "timestamp": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "type": "object"
+    },
+    "TaskStatusUpdateEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "contextId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "status": {
+          "$ref": "#/$defs/TaskStatus"
+        },
+        "taskId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "taskId",
+        "contextId",
+        "status"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:threads:schema:a2a:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Exported from the Zod source in typescript/packages/a2a/src/protocol/ by typescript/packages/a2a/scripts/export-schema.ts. Never edited by hand. Each $def is named after its message in spec/schema/a2a/a2a.proto.",
+  "title": "A2A 1.0, the subset threads parses"
+}

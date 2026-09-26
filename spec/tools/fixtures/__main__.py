@@ -12,6 +12,7 @@ import tempfile
 from typing import TYPE_CHECKING
 
 from . import (
+    a2a_vectors,
     agent_pins,
     agents,
     anthropic_requests,
@@ -61,6 +62,7 @@ from . import (
     questions,
     recovery,
     ref_team,
+    remote_rules,
     renders,
     rules,
     run_cases,
@@ -111,6 +113,7 @@ FAMILIES = (
     open_turn,
     forks,
     rules,
+    remote_rules,
     renders,
     host,
     channels,
@@ -300,6 +303,7 @@ def _write_all(
     questions.write()
     ui_vectors.write()
     pos_int_vector.write()
+    a2a_vectors.write()
     eval_vectors.write()
     eval_simulate_vectors.write()
     otel_parts = [(traces / part, otel.OTEL / part) for part in otel.PARTS]
@@ -335,6 +339,7 @@ def main() -> int:
             problems += anthropic_requests.check() + dynamic.check()
             problems += tool_search_vectors.check() + e2b_wire.check()
             problems += ui_vectors.check() + tar_vectors.check() + pos_int_vector.check()
+            problems += a2a_vectors.check()
             problems += workspace_exclude.check()
         for p in problems:
             print(f"coverage.json: {p}")

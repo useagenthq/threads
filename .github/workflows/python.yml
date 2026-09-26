@@ -55,6 +55,7 @@ jobs:
           uv run python ../spec/tools/gen_fixtures.py --check
           uv run python ../spec/tools/check_api.py
           uv run python ../spec/tools/check_model_catalog.py
+          uv run python ../spec/tools/check_a2a_pin.py
       - name: API surface base
         working-directory: .
         run: |

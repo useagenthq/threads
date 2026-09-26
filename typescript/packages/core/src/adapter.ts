@@ -90,3 +90,10 @@ export type {
 } from "./sandbox";
 /** The remote sandbox kit a sandbox provider package builds on. */
 export * from "./sandbox/remote";
+/** The host's network, for an adapter that owns its own bytes: SSRF-checked and address-pinned. */
+export {
+  liveTransport,
+  type Sent,
+  vet,
+  type WebTransport,
+} from "./tools/web-transport";

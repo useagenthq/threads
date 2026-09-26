@@ -147,6 +147,9 @@ const FRAMEWORK_EVENTS = [
   "answer_rejected",
   "tools_loaded",
   "supervisor_decided",
+  "remote_card",
+  "remote_call",
+  "remote_task_state",
 ] as const;
 const SCRIPTABLE_SOURCES = ["hook", "memory", "knowledge"] as const;
 const FRAMEWORK_SOURCES = [

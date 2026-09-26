@@ -158,6 +158,10 @@ class Fold:
     effects: dict[str, tuple[CallId, EffectStatus]] = field(
         default_factory=dict[str, tuple[CallId, EffectStatus]]
     )
+    remote_calls: set[CallId] = field(default_factory=set[CallId])
+    """call_ids with a remote_call: a second one for the same call is refused (rule 58)."""
+    remote_begin: CallId | None = None
+    """The remote_call whose effect_begin must come next, and nothing else (rule 56)."""
     results: dict[CallId, Result] = field(default_factory=dict[CallId, Result])
     deferred: set[CallId] = field(default_factory=set[CallId])
     last_cancel_seq: int = 0

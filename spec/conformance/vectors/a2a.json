@@ -1,0 +1,342 @@
+{
+  "errors": [
+    {
+      "name": "JSONParseError",
+      "code": -32700,
+      "status": 400
+    },
+    {
+      "name": "InvalidRequestError",
+      "code": -32600,
+      "status": 400
+    },
+    {
+      "name": "MethodNotFoundError",
+      "code": -32601,
+      "status": 404
+    },
+    {
+      "name": "InvalidParamsError",
+      "code": -32602,
+      "status": 400
+    },
+    {
+      "name": "InternalError",
+      "code": -32603,
+      "status": 500
+    },
+    {
+      "name": "TaskNotFoundError",
+      "code": -32001,
+      "status": 404
+    },
+    {
+      "name": "TaskNotCancelableError",
+      "code": -32002,
+      "status": 400
+    },
+    {
+      "name": "PushNotificationNotSupportedError",
+      "code": -32003,
+      "status": 400
+    },
+    {
+      "name": "UnsupportedOperationError",
+      "code": -32004,
+      "status": 400
+    },
+    {
+      "name": "ContentTypeNotSupportedError",
+      "code": -32005,
+      "status": 400
+    },
+    {
+      "name": "InvalidAgentResponseError",
+      "code": -32006,
+      "status": 500
+    },
+    {
+      "name": "ExtendedAgentCardNotConfiguredError",
+      "code": -32007,
+      "status": 400
+    },
+    {
+      "name": "ExtensionSupportRequiredError",
+      "code": -32008,
+      "status": 400
+    },
+    {
+      "name": "VersionNotSupportedError",
+      "code": -32009,
+      "status": 400
+    }
+  ],
+  "task_states": [
+    {
+      "name": "submitted",
+      "state": "TASK_STATE_SUBMITTED",
+      "accepted": true,
+      "terminal": false,
+      "interrupted": false
+    },
+    {
+      "name": "working",
+      "state": "TASK_STATE_WORKING",
+      "accepted": true,
+      "terminal": false,
+      "interrupted": false
+    },
+    {
+      "name": "completed",
+      "state": "TASK_STATE_COMPLETED",
+      "accepted": true,
+      "terminal": true,
+      "interrupted": false
+    },
+    {
+      "name": "failed",
+      "state": "TASK_STATE_FAILED",
+      "accepted": true,
+      "terminal": true,
+      "interrupted": false
+    },
+    {
+      "name": "canceled",
+      "state": "TASK_STATE_CANCELED",
+      "accepted": true,
+      "terminal": true,
+      "interrupted": false
+    },
+    {
+      "name": "input_required",
+      "state": "TASK_STATE_INPUT_REQUIRED",
+      "accepted": true,
+      "terminal": false,
+      "interrupted": true
+    },
+    {
+      "name": "rejected",
+      "state": "TASK_STATE_REJECTED",
+      "accepted": true,
+      "terminal": true,
+      "interrupted": false
+    },
+    {
+      "name": "auth_required",
+      "state": "TASK_STATE_AUTH_REQUIRED",
+      "accepted": true,
+      "terminal": false,
+      "interrupted": true
+    },
+    {
+      "name": "the proto's zero value, which is never an answer we can act on",
+      "state": "TASK_STATE_UNSPECIFIED",
+      "accepted": false
+    },
+    {
+      "name": "a state nobody defined",
+      "state": "TASK_STATE_PONDERING",
+      "accepted": false
+    }
+  ],
+  "versions": [
+    {
+      "name": "the header we send",
+      "header": "1.0",
+      "query": null,
+      "accepted": true
+    },
+    {
+      "name": "the query parameter instead, which the spec allows",
+      "header": null,
+      "query": "1.0",
+      "accepted": true
+    },
+    {
+      "name": "neither, which the spec reads as 0.3",
+      "header": null,
+      "query": null,
+      "accepted": false
+    },
+    {
+      "name": "a 0.3 peer",
+      "header": "0.3",
+      "query": null,
+      "accepted": false
+    },
+    {
+      "name": "a patch version, since only Major.Minor is compared",
+      "header": "1.0.1",
+      "query": null,
+      "accepted": true
+    },
+    {
+      "name": "the next major",
+      "header": "2.0",
+      "query": null,
+      "accepted": false
+    },
+    {
+      "name": "surrounding whitespace",
+      "header": "  1.0\t",
+      "query": null,
+      "accepted": true
+    }
+  ],
+  "paths": [
+    {
+      "name": "send",
+      "path": "/message:send",
+      "method": "SendMessage",
+      "id": null
+    },
+    {
+      "name": "stream",
+      "path": "/message:stream",
+      "method": "SendStreamingMessage",
+      "id": null
+    },
+    {
+      "name": "list",
+      "path": "/tasks",
+      "method": "ListTasks",
+      "id": null
+    },
+    {
+      "name": "get one task",
+      "path": "/tasks/abc",
+      "method": "GetTask",
+      "id": "abc"
+    },
+    {
+      "name": "cancel",
+      "path": "/tasks/abc:cancel",
+      "method": "CancelTask",
+      "id": "abc"
+    },
+    {
+      "name": "subscribe",
+      "path": "/tasks/abc:subscribe",
+      "method": "SubscribeToTask",
+      "id": "abc"
+    },
+    {
+      "name": "a percent-escaped slash in the task id",
+      "path": "/tasks/a%2Fb",
+      "method": "GetTask",
+      "id": "a/b"
+    },
+    {
+      "name": "a percent-escaped colon, so the suffix is part of the id",
+      "path": "/tasks/a%3Acancel",
+      "method": "GetTask",
+      "id": "a:cancel"
+    },
+    {
+      "name": "the root",
+      "path": "/",
+      "method": null,
+      "id": null
+    },
+    {
+      "name": "a task path with no id",
+      "path": "/tasks/",
+      "method": null,
+      "id": null
+    },
+    {
+      "name": "two id segments",
+      "path": "/tasks/a/b",
+      "method": null,
+      "id": null
+    },
+    {
+      "name": "something after a verb",
+      "path": "/message:send/extra",
+      "method": null,
+      "id": null
+    },
+    {
+      "name": "a verb we do not serve",
+      "path": "/message:resume",
+      "method": null,
+      "id": null
+    }
+  ],
+  "sse": [
+    {
+      "name": "one data line",
+      "raw": "data: hello\n\n",
+      "events": [
+        {
+          "id": null,
+          "data": "hello"
+        }
+      ]
+    },
+    {
+      "name": "several data lines join with a newline",
+      "raw": "data: a\ndata: b\n\n",
+      "events": [
+        {
+          "id": null,
+          "data": "a\nb"
+        }
+      ]
+    },
+    {
+      "name": "CRLF breaks",
+      "raw": "data: a\r\n\r\n",
+      "events": [
+        {
+          "id": null,
+          "data": "a"
+        }
+      ]
+    },
+    {
+      "name": "a bare CR breaks",
+      "raw": "data: a\r\r",
+      "events": [
+        {
+          "id": null,
+          "data": "a"
+        }
+      ]
+    },
+    {
+      "name": "a comment is ignored",
+      "raw": ":ping\ndata: a\n\n",
+      "events": [
+        {
+          "id": null,
+          "data": "a"
+        }
+      ]
+    },
+    {
+      "name": "an id carries to the events after it",
+      "raw": "id: 7\ndata: a\n\ndata: b\n\n",
+      "events": [
+        {
+          "id": "7",
+          "data": "a"
+        },
+        {
+          "id": "7",
+          "data": "b"
+        }
+      ]
+    },
+    {
+      "name": "an unterminated block is dropped",
+      "raw": "data: a\n\ndata: b\n",
+      "events": [
+        {
+          "id": null,
+          "data": "a"
+        }
+      ]
+    }
+  ]
+}

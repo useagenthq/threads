@@ -326,6 +326,12 @@ CREATE TABLE IF NOT EXISTS run_receipts (
   PRIMARY KEY (tenant_id, operation, idempotency_key)
 ) STRICT;
 
+-- A principal's receipts for one operation, in time order. The primary key is keyed by
+-- idempotency_key, so a lookup that starts from the caller instead of the key (an A2A partner's
+-- runs of an operation) needs its own index.
+CREATE INDEX IF NOT EXISTS run_receipts_principal
+  ON run_receipts (tenant_id, operation, principal_key, created_at);
+
 -- Deleted threads (threads delete): one transaction removes a thread's log rows
 -- and projections, moves its live resources to releasing, and writes this tombstone, which
 -- outlives them as the audit of the deletion.
@@ -544,5 +550,6 @@ CREATE INDEX IF NOT EXISTS observer_losses_unreported
 -- is refused). Version 6: lane 23's observers and observer_losses. Version 7: lane 27's
 -- branches_root, one root branch per thread. Version 8: Teams Phase 2's teams.kind with a
 -- nullable lead_thread_id and one host team per tenant, team_members' host_member role, mail's
--- to_kind and to_branch_id with the caller index, and asks' failed state.
-PRAGMA user_version = 8;
+-- to_kind and to_branch_id with the caller index, and asks' failed state. Version 9: lane 30's
+-- run_receipts_principal, the caller-side lookup of run receipts.
+PRAGMA user_version = 9;

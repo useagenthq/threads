@@ -1,0 +1,9 @@
+{
+  "name": "remote-task-state-without-commit-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A remote_task_state for a call whose effect has no commit: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}

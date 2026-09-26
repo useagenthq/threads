@@ -104,6 +104,28 @@ REQUESTED = Draft(
 )
 BEGIN = Draft("effect_begin", {"call_id": "call_1", "attempt": 1})
 CANCEL = Draft("cancel_requested", {"scope": "turn"}, actor=ALICE)
+REF: dict[str, JsonValue] = {
+    "sha256": "c" * 64,
+    "bytes": 12,
+    "media_type": "application/json",
+}
+REMOTE = Draft(
+    "remote_call",
+    {
+        "call_id": "call_1",
+        "remote": "partner",
+        "operation": "send_message",
+        "message_id": "msg-1",
+        "context_id": "ctx-1",
+        "request_ref": REF,
+    },
+)
+COMMIT = Draft("effect_commit", {"call_id": "call_1", "result_ref": REF})
+STATE = Draft(
+    "remote_task_state",
+    {"call_id": "call_1", "task_id": "task-1", "state": "TASK_STATE_WORKING"},
+    critical=False,
+)
 
 
 async def last_code(drafts: Sequence[Draft]) -> str | None:
@@ -153,6 +175,15 @@ async def last_code(drafts: Sequence[Draft]) -> str | None:
         ([call("send_email"), REQUESTED, approval("approval_granted"), BEGIN], None),
         ([call("send_email"), allow(), CANCEL, BEGIN], "invalid_transition"),
         ([call("read_file"), allow(), BEGIN], "invalid_transition"),
+        # Rule 56: the effect_begin of the call follows the remote_call, and nothing else does.
+        ([call("send_email"), allow(), REMOTE, BEGIN], None),
+        ([call("send_email"), allow(), REMOTE, result("sent")], "invalid_transition"),
+        # Rule 58: one remote_call per call_id, so a resend reuses the stored request bytes.
+        ([call("send_email"), allow(), REMOTE, BEGIN, REMOTE], "invalid_transition"),
+        # Rule 57: a task state needs the call's receipt.
+        ([call("send_email"), allow(), REMOTE, BEGIN, COMMIT, STATE], None),
+        ([call("send_email"), allow(), REMOTE, BEGIN, STATE], "invalid_transition"),
+        ([call("send_email"), allow(), BEGIN, COMMIT, STATE], "invalid_transition"),
     ],
 )
 def test_rule(drafts: list[Draft], code: str | None) -> None:

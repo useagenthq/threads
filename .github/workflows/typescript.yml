@@ -40,6 +40,9 @@ jobs:
       - name: Model catalogs are append-only
         working-directory: .
         run: python3 spec/tools/check_model_catalog.py
+      - name: The A2A subset matches the vendored proto
+        working-directory: .
+        run: python3 spec/tools/check_a2a_pin.py
       - name: API surface base
         working-directory: .
         run: |

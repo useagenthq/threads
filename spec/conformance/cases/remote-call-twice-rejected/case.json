@@ -1,0 +1,9 @@
+{
+  "name": "remote-call-twice-rejected",
+  "family": "log",
+  "kind": "reduce",
+  "description": "A second remote_call under one call_id: invalid_transition.",
+  "clock": {
+    "now": 1790000060000
+  }
+}
