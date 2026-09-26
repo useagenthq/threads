@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  realpathSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -12,7 +13,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConfigError } from "../../../src/agent/errors";
 import { err, ok } from "../../../src/result";
-import { devSandbox, type Sandbox, type SandboxContext, type SandboxSession } from "../../../src/sandbox";
+import {
+  devSandbox,
+  type Sandbox,
+  type SandboxContext,
+  type SandboxSession,
+} from "../../../src/sandbox";
+import { confinement, DEFAULT_TOOL } from "../../../src/sandbox/dev/confine";
 import type { Trees } from "../../../src/sandbox/protocol";
 import type { Tree } from "../../../src/sandbox/tree/tree";
 import { hashOnly, readTree } from "../../../src/sandbox/trees";
@@ -69,7 +76,13 @@ describe("devSandbox declarations", () => {
     expect(devSandbox({ allowInternet: true }).info.egress).toBe("unenforced");
   });
 
-  test("a confinement that can't run is capability_missing naming it", async () => {
+  test("the confinement program defaults to the platform's, and one that can't run is capability_missing", async () => {
+    const expected = DEFAULT_TOOL[process.platform];
+    if (expected === undefined)
+      throw new Error(`no confinement on ${process.platform}`);
+    const made = confinement(false, undefined);
+    expect(made.ok && made.value.tool).toBe(expected);
+
     const sandbox = devSandbox({
       root: root(),
       tool: "threads-no-such-confinement",
@@ -82,6 +95,19 @@ describe("devSandbox declarations", () => {
       throw new Error(`expected a ConfigError, got ${String(failed)}`);
     expect(failed.code).toBe("capability_missing");
     expect(failed.message).toContain("threads-no-such-confinement");
+  });
+
+  test("the sandbox directories live in threads-dev in the host's temp directory", async () => {
+    // /usr/bin/true stands in for the confinement, so this runs wherever the tests do.
+    const sandbox = devSandbox({ tool: "/usr/bin/true" });
+    const session = unwrap(await sandbox.create("op-default-root", CTX));
+    try {
+      expect(
+        existsSync(join(realpathSync(tmpdir()), "threads-dev", session.id)),
+      ).toBe(true);
+    } finally {
+      await session.close(CTX);
+    }
   });
 
   test("restore and release refuse: the dev sandbox has no snapshots", async () => {

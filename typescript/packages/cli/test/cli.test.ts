@@ -248,4 +248,20 @@ describe("threads dev", () => {
     expect(result.code).toBe(1);
     expect(result.err).toContain("must export default host");
   });
+
+  test("start refuses a host whose agent uses devSandbox(); dev serves it", async () => {
+    process.env["THREADS_TEST_STORE"] = temp();
+    process.env["THREADS_TEST_DEV_ROOT"] = temp();
+    const module = join(import.meta.dir, "dev-app.ts");
+    const refused = await cli(["start", module, "--port", "0"]);
+    expect(refused.code).toBe(2);
+    expect(refused.err).toContain("development only");
+
+    let served: Served | undefined;
+    const started = await cli(["dev", module, "--port", "0"], (s) => {
+      served = s;
+    });
+    expect(started.code).toBe(0);
+    await served?.stop();
+  });
 });

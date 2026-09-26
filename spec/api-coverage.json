@@ -853,6 +853,48 @@
       "tests/adapters/sandboxes/test_factory_defaults.py::test_daytona_defaults"
     ]
   },
+  "devSandbox": {
+    "ts": [
+      "packages/core/test/sandbox/dev/dev.test.ts > devSandbox declarations > no snapshots, a final create lookup, unconfirmed termination, egress enforced"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_dev.py::test_declarations_have_no_snapshots_a_final_lookup_and_denied_egress"
+    ]
+  },
+  "devSandbox!capability_missing": {
+    "ts": [
+      "packages/core/test/sandbox/dev/dev.test.ts > devSandbox declarations > the confinement program defaults to the platform's, and one that can't run is capability_missing"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_dev.py::test_the_confinement_defaults_to_the_platforms_and_one_that_cannot_run_is_refused"
+    ]
+  },
+  "devSandbox.allow_internet=default": {
+    "ts": [
+      "packages/core/test/sandbox/dev/dev.test.ts > devSandbox declarations > no snapshots, a final create lookup, unconfirmed termination, egress enforced",
+      "packages/core/test/sandbox/dev/dev.test.ts > devSandbox declarations > allowInternet declares egress unenforced"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_dev.py::test_declarations_have_no_snapshots_a_final_lookup_and_denied_egress",
+      "tests/adapters/sandboxes/test_dev.py::test_allow_internet_declares_egress_unenforced"
+    ]
+  },
+  "devSandbox.root=default": {
+    "ts": [
+      "packages/core/test/sandbox/dev/dev.test.ts > devSandbox declarations > the sandbox directories live in threads-dev in the host's temp directory"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_dev.py::test_the_sandbox_directories_live_in_threads_dev_in_the_hosts_temp_directory"
+    ]
+  },
+  "devSandbox.tool=default": {
+    "ts": [
+      "packages/core/test/sandbox/dev/dev.test.ts > devSandbox declarations > the confinement program defaults to the platform's, and one that can't run is capability_missing"
+    ],
+    "py": [
+      "tests/adapters/sandboxes/test_dev.py::test_the_confinement_defaults_to_the_platforms_and_one_that_cannot_run_is_refused"
+    ]
+  },
   "dynamicAgent": {
     "ts": [
       "packages/core/test/team/dynamic-start.test.ts > a lead defines a member of a dynamic agent > the choice is recorded on member_started and bound by the member's pin"

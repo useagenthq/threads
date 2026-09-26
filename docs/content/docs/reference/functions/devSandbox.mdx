@@ -1,0 +1,55 @@
+---
+title: "devSandbox / dev_sandbox"
+description: "A Sandbox in a local directory on the host, inside an OS confinement (bubblewrap on Linux, sandbox-exec on macOS)."
+icon: "Plug"
+---
+
+Pass it as agent(&#123;sandbox: devSandbox()&#125;). For development: `threads start` refuses a host whose agent uses it. Each sandbox is a directory named by its operation key, so a lost create answer is found by looking for that directory and lookup is final. It has no snapshots, its network is blocked, a command gets exactly the environment of its call and no home, and the host never follows a symlink inside the sandbox's files. Termination is unconfirmed, so an in-doubt call parks.
+
+Import from `@threads/core` (TypeScript) or `threads.dev` (Python).
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+function devSandbox(options?: {
+  root?: string;
+  allowInternet?: boolean;
+  tool?: string;
+}): Sandbox
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+def dev_sandbox(
+    *,
+    root: str | None = None,
+    allow_internet: bool = False,
+    tool: str | None = None,
+) -> Sandbox
+```
+
+</Tab>
+</Tabs>
+
+## Parameters
+
+<Field name="root" type={"string"}>
+  Where sandbox directories are made. Omitted: threads-dev in the host's temp directory. Each sandbox is &lt;root>/threads-dev-&lt;32 hex of its operation key>, and closing it removes that directory.
+</Field>
+
+<Field name="allowInternet / allow_internet" type={"boolean"} default={"false"}>
+  Lifts the confinement's network block. Egress is then unenforced, so the agent must also set egress: "unenforced".
+</Field>
+
+<Field name="tool" type={"string"}>
+  The confinement program to run. Omitted: bwrap on Linux and sandbox-exec on macOS. One that is missing, or that can't confine a command on this host, is capability_missing at setup, naming it.
+</Field>
+
+## Returns
+
+[`Sandbox`](/docs/reference/types/Sandbox)
+
+**Throws** `ConfigError` with one of these codes: `capability_missing`.

@@ -3,12 +3,15 @@ operations that never follow a symlink. Running a command is test_dev_confine.py
 
 import asyncio
 import os
+import sys
+import tempfile
 from pathlib import Path
 
 import pytest
 from sandbox_kit import OPEN, KitContext
 
 from threads.adapters.sandboxes.dev import DevSandbox
+from threads.adapters.sandboxes.dev.confine import DEFAULT_TOOL, confinement
 from threads.agents.config import ConfigError
 from threads.dev import dev_sandbox
 from threads.loop.model import Found, NotFound
@@ -75,12 +78,32 @@ def test_allow_internet_declares_egress_unenforced(tmp_path: Path) -> None:
     assert dev_sandbox(root=str(tmp_path), allow_internet=True).info.egress == "unenforced"
 
 
-def test_a_confinement_that_cannot_run_is_capability_missing_naming_it(tmp_path: Path) -> None:
+def test_the_confinement_defaults_to_the_platforms_and_one_that_cannot_run_is_refused(
+    tmp_path: Path,
+) -> None:
+    made = confinement(False, None)
+    assert isinstance(made, Ok)
+    assert made.value.tool == DEFAULT_TOOL[sys.platform]
+
     sandbox = dev_sandbox(root=str(tmp_path), tool="threads-no-such-confinement")
     with pytest.raises(ConfigError) as raised:
         asyncio.run(sandbox.setup())
     assert raised.value.code == "capability_missing"
     assert "threads-no-such-confinement" in raised.value.message
+
+
+def test_the_sandbox_directories_live_in_threads_dev_in_the_hosts_temp_directory() -> None:
+    async def main() -> None:
+        # /usr/bin/true stands in for the confinement, so this runs wherever the tests do.
+        sandbox = dev_sandbox(tool="/usr/bin/true")
+        session = await _opened(sandbox, "op-default-root")
+        try:
+            default = Path(os.path.realpath(tempfile.gettempdir())) / "threads-dev"
+            assert (default / session.id).is_dir()
+        finally:
+            await session.close(OPEN)
+
+    asyncio.run(main())
 
 
 def test_restore_release_and_snapshot_refuse_there_are_no_snapshots(tmp_path: Path) -> None:

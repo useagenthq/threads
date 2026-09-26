@@ -47,6 +47,10 @@
       "ts": ["typescript/packages/modal/src"],
       "py": ["python/src/threads/modal.py", "python/src/threads/adapters/sandboxes/modal"]
     },
+    "dev": {
+      "ts": ["typescript/packages/core/src/sandbox/dev"],
+      "py": ["python/src/threads/dev.py", "python/src/threads/adapters/sandboxes/dev"]
+    },
     "mem0": {
       "ts": ["typescript/packages/mem0/src"],
       "py": ["python/src/threads/mem0.py", "python/src/threads/adapters/memories/mem0.py"]
@@ -79,6 +83,7 @@
     "e2b": { "owner": "15B" },
     "daytona": { "owner": "15B", "review_only": { "api_url": "The live endpoint is the network itself; tests point it at a fake.", "poll_ms": "Seam: a polling interval; no request differs by it.", "wait_ms": "Seam: a polling deadline, reached only when Daytona stalls." } },
     "modal": { "owner": "15B", "review_only": { "server_url": "Seam: the live endpoint is the network itself; tests pass a fake one." } },
+    "devSandbox": { "owner": "16D3" },
     "mem0": { "owner": "15B" },
     "slack": { "owner": "15B", "review_only": { "api": "Seam: the live endpoint is the network itself; tests pass a fake one." } },
     "github": { "owner": "15B", "review_only": { "api": "Seam: the live endpoint is the network itself; tests pass a fake one." } },

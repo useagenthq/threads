@@ -62,6 +62,7 @@ def test_every_contracted_factory_is_checked() -> None:
         "e2b",
         "daytona",
         "modal",
+        "devSandbox",
         "postgres",
         "mem0",
         "slack",

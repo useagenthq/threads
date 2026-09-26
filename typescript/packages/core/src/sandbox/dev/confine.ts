@@ -219,10 +219,7 @@ export function confinement(
  * Runs the confinement over `true` in `dir`: what setup proves, so a missing bwrap, a kernel
  * with user namespaces disabled, or a refused profile is named before any agent runs.
  */
-export function probe(
-  confined: Confinement,
-  dir: string,
-): string | undefined {
+export function probe(confined: Confinement, dir: string): string | undefined {
   const argv = confined.wrap({
     dir,
     command: ["/usr/bin/true"],

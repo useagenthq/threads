@@ -208,8 +208,12 @@ function entryOf(dir: string, at: string, e: Dirent): Found | FileFailure {
   const stat = lstatSync(host);
   const mode = stat.mode & 0o7777;
   if (e.isDirectory()) return { path: at, kind: "dir", mode };
-  if (e.isFile()) return { path: at, kind: "file", mode, size: stat.size, host };
-  return { code: "invalid_path", message: `${host}: not a file, directory or symlink` };
+  if (e.isFile())
+    return { path: at, kind: "file", mode, size: stat.size, host };
+  return {
+    code: "invalid_path",
+    message: `${host}: not a file, directory or symlink`,
+  };
 }
 
 /**

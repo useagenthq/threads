@@ -112,8 +112,21 @@ def _eval_args(args: argparse.Namespace) -> evals.EvalArgs:
     )
 
 
+DEV_PROVIDER = "dev"
+"""`dev_sandbox()`'s provider name. It runs commands on the host inside an OS confinement, with
+no snapshots and no isolation between the host and a leak of the confinement, so `threads start`
+refuses it: it is for `threads dev` only."""
+
+
 def _serve(command: str, module: str, port: int) -> int:
     served = serve.load(module)
+    if command == "start" and any(s.info.provider == DEV_PROVIDER for s in served.sandboxes()):
+        print(
+            "threads start: dev_sandbox() is for development only; "
+            "use a provider sandbox in production, or run `threads dev`",
+            file=sys.stderr,
+        )
+        return 2
     bind = "127.0.0.1" if command == "dev" else "0.0.0.0"  # noqa: S104 - start serves the network
     base = f"http://localhost:{port}"
     for url in serve.webhook_urls(served, base):

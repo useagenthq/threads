@@ -36,7 +36,14 @@ const unavailable = (error: unknown) =>
  */
 const SYSTEM_PATH: readonly string[] =
   process.platform === "darwin"
-    ? ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+    ? [
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        "/usr/bin",
+        "/bin",
+        "/usr/sbin",
+        "/sbin",
+      ]
     : ["/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
 
 function resolveProgram(name: string): string | undefined {
@@ -57,7 +64,9 @@ function notFound(name: string): ExecOutput {
   const out = byteStream();
   const errors = byteStream();
   out.end();
-  errors.push(new TextEncoder().encode(`threads: command not found: ${name}\n`));
+  errors.push(
+    new TextEncoder().encode(`threads: command not found: ${name}\n`),
+  );
   errors.end();
   return {
     exit_code: Promise.resolve(127),
@@ -99,7 +108,9 @@ export function devSession(
   const fileOp = <T>(
     context: SandboxContext,
     path: string,
-    body: (parts: readonly string[]) => ReturnType<typeof ok<T>> | ReturnType<typeof err<FileFailure>>,
+    body: (
+      parts: readonly string[],
+    ) => ReturnType<typeof ok<T>> | ReturnType<typeof err<FileFailure>>,
   ) =>
     guarded<T, FileFailure>(
       context,
@@ -211,7 +222,10 @@ export function devSession(
     download: (path, context) =>
       fileOp<Uint8Array>(context, path, (parts) => readIn(dir, parts)),
     snapshot: (_operationKey, context) =>
-      guarded<SnapshotData, Failure<"not_quiescent" | "unavailable" | "timeout">>(
+      guarded<
+        SnapshotData,
+        Failure<"not_quiescent" | "unavailable" | "timeout">
+      >(
         context,
         async () =>
           err({

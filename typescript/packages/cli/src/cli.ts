@@ -162,6 +162,16 @@ async function loadHost(
   return undefined;
 }
 
+/**
+ * devSandbox()'s provider name. It runs commands on the host inside an OS confinement, with no
+ * snapshots and nothing between the host and a leak of that confinement, so `start` refuses it:
+ * it is for `dev` only.
+ */
+const DEV_PROVIDER = "dev";
+
+const NOT_IN_PRODUCTION =
+  "threads start: devSandbox() is for development only; use a provider sandbox in production, or run threads dev\n";
+
 /** `threads dev` / `start`: host().ready() and host().fetch on a local server. */
 async function serve(
   p: Parsed,
@@ -170,6 +180,13 @@ async function serve(
 ): Promise<number> {
   const h = await loadHost(p.args[0], io);
   if (h === undefined) return 1;
+  if (
+    p.command === "start" &&
+    hostSandboxes(h).some((s) => s.info.provider === DEV_PROVIDER)
+  ) {
+    io.err(NOT_IN_PRODUCTION);
+    return 2;
+  }
   await h.ready();
   const server = Bun.serve({ port: p.port, fetch: h.fetch });
   const base = `http://localhost:${server.port}`;

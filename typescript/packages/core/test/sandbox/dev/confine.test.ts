@@ -1,12 +1,12 @@
-import { spawn } from "node:child_process";
-import { createServer } from "node:net";
 import { describe, expect, test } from "bun:test";
+import { spawn } from "node:child_process";
 import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { devSandbox, type SandboxSession } from "../../../src/sandbox";
-import { joined } from "../../../src/sandbox/remote/bytes";
 import { confinement, probe } from "../../../src/sandbox/dev/confine";
+import { joined } from "../../../src/sandbox/remote/bytes";
 import { unwrap } from "../../store/helpers";
 import { CTX } from "../context";
 
@@ -28,7 +28,11 @@ const missing = (() => {
 
 const withConfinement = missing === undefined ? describe : describe.skip;
 
-type Ran = { readonly code: number; readonly out: string; readonly err: string };
+type Ran = {
+  readonly code: number;
+  readonly out: string;
+  readonly err: string;
+};
 
 const ran = (session: SandboxSession, script: string): Promise<Ran> =>
   ranWith(session, "/bin/sh", script);
@@ -104,7 +108,8 @@ withConfinement("a confined command", () => {
     const server = createServer((socket) => socket.end());
     await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
     const address = server.address();
-    const port = typeof address === "object" && address !== null ? address.port : 0;
+    const port =
+      typeof address === "object" && address !== null ? address.port : 0;
     try {
       // bash's /dev/tcp, because dash has none: the positive case proves the probe works.
       const connect = `exec 3<>/dev/tcp/127.0.0.1/${port} 2>/dev/null && echo open || echo closed`;
@@ -150,7 +155,9 @@ withConfinement("a confined command", () => {
 });
 
 const onLinux =
-  missing === undefined && process.platform === "linux" ? describe : describe.skip;
+  missing === undefined && process.platform === "linux"
+    ? describe
+    : describe.skip;
 
 onLinux("bubblewrap's own mounts", () => {
   test("/run and /tmp are private, and the pid namespace hides the host", async () => {
@@ -158,17 +165,19 @@ onLinux("bubblewrap's own mounts", () => {
     expect((await ran(session, "ls -A /run | wc -l")).out.trim()).toBe("0");
     expect((await ran(session, "ls -A /tmp | wc -l")).out.trim()).toBe("0");
     // PID 1 of the namespace is the wrapper itself, so the host's processes are not there.
-    expect((await ran(session, "ls /proc/1/ >/dev/null && echo ok")).out.trim()).toBe(
-      "ok",
-    );
-    expect((await ran(session, "ls -d /proc/[0-9]* | wc -l")).out.trim()).not.toBe(
-      "0",
-    );
+    expect(
+      (await ran(session, "ls /proc/1/ >/dev/null && echo ok")).out.trim(),
+    ).toBe("ok");
+    expect(
+      (await ran(session, "ls -d /proc/[0-9]* | wc -l")).out.trim(),
+    ).not.toBe("0");
   });
 });
 
 const onMac =
-  missing === undefined && process.platform === "darwin" ? describe : describe.skip;
+  missing === undefined && process.platform === "darwin"
+    ? describe
+    : describe.skip;
 
 onMac("sandbox-exec's own denials", () => {
   test("the host's temp directory outside the sandbox is unreadable", async () => {

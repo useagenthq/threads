@@ -105,3 +105,26 @@ def test_dev_loads_the_host_and_prints_its_webhook_urls(
     assert "webhook: http://localhost:8787/channels/slack/events" in capsys.readouterr().out
     ((loaded, bind, port),) = served
     assert (isinstance(loaded, Host), bind, port) == (True, "127.0.0.1", 8787)
+
+
+def test_start_refuses_a_host_whose_agent_uses_dev_sandbox(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    module = tmp_path / "devapp.py"
+    module.write_text(
+        "from threads import agent, scripted_model, sqlite\n"
+        "from threads.dev import dev_sandbox\n"
+        "from threads.host import host\n"
+        f"bot = agent(model=scripted_model({{'responses': []}}), "
+        f"sandbox=dev_sandbox(root={str(tmp_path / 'dev')!r}))\n"
+        "app = host(store=sqlite(':memory:'), agents={'support': bot})\n"
+    )
+    served: list[str] = []
+    usage_error = 2
+    monkeypatch.setattr(serve, "serve", lambda *_: served.append("served"))
+    # dev is what the dev sandbox is for; start is production and refuses it.
+    assert main(["start", str(module)]) == usage_error
+    assert "development only" in capsys.readouterr().err
+    assert served == []
+    assert main(["dev", str(module)]) == 0
+    assert served == ["served"]

@@ -5,8 +5,16 @@ import { logError } from "../../verify/error";
 import type { ExecOutput, Failure } from "../protocol";
 import { buildTar } from "../tree/build";
 import { readTar } from "../tree/tar";
-import type { Tree, TreeEntry } from "../tree/tree";
-import { type Found, failed, mkdirIn, readIn, symlinkIn, walkTree, writeIn } from "./walk";
+import { PERMISSIONS, type Tree, type TreeEntry } from "../tree/tree";
+import {
+  type Found,
+  failed,
+  mkdirIn,
+  readIn,
+  symlinkIn,
+  walkTree,
+  writeIn,
+} from "./walk";
 
 // The Trees capability directly on the sandbox's host directory: no archive tool runs, and no
 // symlink is followed (walk.ts). Modes are the directory's own; the builder masks setuid,
@@ -31,7 +39,10 @@ async function* none(): AsyncIterable<Uint8Array> {
 function treeOf(
   dir: string,
   found: readonly Found[],
-): Result<{ tree: Tree; at: ReadonlyMap<string, readonly string[]> }, Unavailable> {
+): Result<
+  { tree: Tree; at: ReadonlyMap<string, readonly string[]> },
+  Unavailable
+> {
   const entries: TreeEntry[] = [];
   const at = new Map<string, readonly string[]>();
   for (const e of found) {
@@ -61,11 +72,16 @@ function treeOf(
 }
 
 /** The directory as one tar archive, exactly as a remote sandbox's `tar -cf -` would answer. */
-export function exportDir(dir: string): Promise<Result<ExecOutput, Unavailable>> {
+export function exportDir(
+  dir: string,
+): Promise<Result<ExecOutput, Unavailable>> {
   return (async () => {
     const found = walkTree(dir);
     if (!found.ok)
-      return err({ code: "unavailable" as const, message: found.error.message });
+      return err({
+        code: "unavailable" as const,
+        message: found.error.message,
+      });
     const made = treeOf(dir, found.value);
     if (!made.ok) return made;
     const chunks: Uint8Array[] = [];
@@ -84,7 +100,10 @@ export function exportDir(dir: string): Promise<Result<ExecOutput, Unavailable>>
       (chunk) => chunks.push(chunk),
     );
     if (!built.ok)
-      return err({ code: "unavailable" as const, message: built.error.message });
+      return err({
+        code: "unavailable" as const,
+        message: built.error.message,
+      });
     let size = 0;
     for (const c of chunks) size += c.length;
     const whole = new Uint8Array(size);
@@ -101,6 +120,33 @@ export function exportDir(dir: string): Promise<Result<ExecOutput, Unavailable>>
   })();
 }
 
+/** One archive entry on disk; setuid, setgid and sticky bits never survive (PERMISSIONS). */
+async function place(
+  dir: string,
+  entry: TreeEntry,
+  artifacts: ReturnType<typeof memoryArtifacts>,
+): Promise<Result<void, Unavailable>> {
+  const parts = entry.path.split("/");
+  if (entry.kind === "dir")
+    return unavailableOf(mkdirIn(dir, parts, entry.mode & PERMISSIONS));
+  if (entry.kind === "symlink")
+    return unavailableOf(symlinkIn(dir, parts, entry.target));
+  const bytes = await artifacts.get(entry.sha256);
+  if (!bytes.ok)
+    return err({ code: "unavailable", message: bytes.error.message });
+  return unavailableOf(
+    writeIn(dir, parts, bytes.value, entry.mode & PERMISSIONS),
+  );
+}
+
+function unavailableOf(
+  written: Result<void, { readonly message: string }>,
+): Result<void, Unavailable> {
+  return written.ok
+    ? ok(undefined)
+    : err({ code: "unavailable", message: written.error.message });
+}
+
 /** Extracts a host-built archive into the directory, keeping modes and symlinks. */
 export async function importDir(
   dir: string,
@@ -110,23 +156,9 @@ export async function importDir(
   const tree = await readTar(tar, artifacts.sink);
   if (!tree.ok)
     return err({ code: "unavailable", message: tree.error.message });
-  for (const e of tree.value.entries) {
-    const parts = e.path.split("/");
-    if (e.kind === "dir") {
-      const made = mkdirIn(dir, parts, e.mode & 0o777);
-      if (!made.ok) return err({ code: "unavailable", message: made.error.message });
-      continue;
-    }
-    if (e.kind === "symlink") {
-      const made = symlinkIn(dir, parts, e.target);
-      if (!made.ok) return err({ code: "unavailable", message: made.error.message });
-      continue;
-    }
-    const bytes = await artifacts.get(e.sha256);
-    if (!bytes.ok) return err({ code: "unavailable", message: bytes.error.message });
-    const written = writeIn(dir, parts, bytes.value, e.mode & 0o777);
-    if (!written.ok)
-      return err({ code: "unavailable", message: written.error.message });
+  for (const entry of tree.value.entries) {
+    const placed = await place(dir, entry, artifacts);
+    if (!placed.ok) return placed;
   }
   return ok(undefined);
 }

@@ -32,6 +32,7 @@ say so.
 | e2b | `@threads/e2b` | `threads.e2b` |
 | daytona | `@threads/daytona` | `threads.daytona` |
 | modal | `@threads/modal` | `threads.modal` |
+| dev | `@threads/core` | `threads.dev` |
 | postgres | `@threads/postgres` | `threads.postgres` |
 | mem0 | `@threads/mem0` | `threads.mem0` |
 | slack | `@threads/slack` | `threads.slack` |
@@ -81,6 +82,7 @@ A provider factory connects an agent to an outside service and returns one of th
 | [`e2b`](/docs/reference/functions/e2b) | `e2b` | A Sandbox on an E2B cloud VM. |
 | [`daytona`](/docs/reference/functions/daytona) | `daytona` | A Sandbox on Daytona. |
 | [`modal`](/docs/reference/functions/modal) | `modal` | A Sandbox on Modal. |
+| [`devSandbox`](/docs/reference/functions/devSandbox) | `dev_sandbox` | A Sandbox in a local directory on the host, inside an OS confinement (bubblewrap on Linux, sandbox-exec on macOS). |
 | [`mem0`](/docs/reference/functions/mem0) | `mem0` | Mem0 memory: refused, since the mem0ai SDK sends outside any transport threads can fence (its constructor checks the key and it posts telemetry on its own). |
 | [`slack`](/docs/reference/functions/slack) | `slack` | A Slack channel. |
 | [`github`](/docs/reference/functions/github) | `github` | A GitHub channel. |

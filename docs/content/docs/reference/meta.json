@@ -38,6 +38,7 @@
     "functions/e2b",
     "functions/daytona",
     "functions/modal",
+    "functions/devSandbox",
     "functions/mem0",
     "functions/slack",
     "functions/github",

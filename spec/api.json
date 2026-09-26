@@ -98,6 +98,12 @@
       "provider": "Modal",
       "doc": "Sandboxes on Modal over the official SDK's gRPC protocol (Python extra modal), on channels fenced at every request. The TypeScript package always refuses: Modal's JS SDK sends commands over a transport threads can't fence."
     },
+    "dev": {
+      "kind": "adapter",
+      "ts": "@threads/core",
+      "py": "threads.dev",
+      "doc": "A local sandbox in a confined directory on the host: bubblewrap on Linux, sandbox-exec on macOS. No provider SDK, no snapshots and no new dependency, so it ships inside the core package. For development: `threads start` refuses a host whose agent uses it."
+    },
     "postgres": {
       "kind": "adapter",
       "ts": "@threads/postgres",
@@ -1365,6 +1371,20 @@
       ],
       "returns": {"$ref": "#/types/Sandbox"},
       "config_errors": [{"code": "transport_fence_unsupported", "lang": "ts"}, {"code": "invalid_config", "lang": "py"}, {"code": "missing_secret", "lang": "py"}]
+    },
+    "devSandbox": {
+      "ts": "devSandbox",
+      "py": "dev_sandbox",
+      "package": "dev",
+      "doc": "A Sandbox in a local directory on the host, inside an OS confinement (bubblewrap on Linux, sandbox-exec on macOS). Pass it as agent({sandbox: devSandbox()}). For development: `threads start` refuses a host whose agent uses it. Each sandbox is a directory named by its operation key, so a lost create answer is found by looking for that directory and lookup is final. It has no snapshots, its network is blocked, a command gets exactly the environment of its call and no home, and the host never follows a symlink inside the sandbox's files. Termination is unconfirmed, so an in-doubt call parks.",
+      "async": false,
+      "params": [
+        {"name": "root", "kind": "option", "type": {"prim": "string"}, "required": false, "default_doc": "threads-dev in the host's temp directory", "doc": "Where sandbox directories are made. Omitted: threads-dev in the host's temp directory. Each sandbox is <root>/threads-dev-<32 hex of its operation key>, and closing it removes that directory."},
+        {"name": "allow_internet", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "Lifts the confinement's network block. Egress is then unenforced, so the agent must also set egress: \"unenforced\"."},
+        {"name": "tool", "kind": "option", "type": {"prim": "string"}, "required": false, "default_doc": "bwrap on Linux, sandbox-exec on macOS", "doc": "The confinement program to run. Omitted: bwrap on Linux and sandbox-exec on macOS. One that is missing, or that can't confine a command on this host, is capability_missing at setup, naming it."}
+      ],
+      "returns": {"$ref": "#/types/Sandbox"},
+      "config_errors": [{"code": "capability_missing"}]
     },
     "mem0": {
       "ts": "mem0",
