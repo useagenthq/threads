@@ -206,15 +206,15 @@ describe("importThread", () => {
     }
   });
 
-  test("a thread another tenant owns is branch_exists, and openThread still can't see it", async () => {
+  test("the imported thread opens by id in the destination store", async () => {
     const { thread, ref } = await saved();
     const { root, path } = where();
     try {
       unwrap(await thread.export(path));
       const into = sqlite(":memory:");
       unwrap(await importThread(into, path));
-      const opened = await openThread(into, ref.id);
-      expect(opened.ok).toBe(true);
+      const opened = unwrap(await openThread(into, ref.id));
+      expect(opened.branch).toBe(ref.branch);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
