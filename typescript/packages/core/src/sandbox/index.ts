@@ -5,6 +5,7 @@ export {
   type VerifiedSnapshot,
 } from "./capture";
 export { cleanupContext, ownerContext } from "./context";
+export { type DevSandboxOptions, devSandbox } from "./dev/sandbox";
 export {
   type ExecFailure,
   type ExecResult,
