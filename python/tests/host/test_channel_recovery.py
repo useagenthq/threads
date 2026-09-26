@@ -4,7 +4,6 @@ channel_send from the log and issues it through the effect path, once."""
 
 import asyncio
 import json
-import logging
 import threading
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -257,41 +256,43 @@ def test_stop_waits_out_an_intake_task_whose_bookkeeping_is_still_queued() -> No
     assert not stopped.is_alive(), "drain spun on a finished task"
 
 
-def test_a_channel_setup_failure_retries_with_a_cap_and_leaves_the_item_for_a_new_host(
+def test_a_channel_setup_failure_retries_with_a_cap_and_after_the_same_host_restarts(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setattr(intake_module, "RETRY_S", 0.01)
-    store, channel, attempts = sqlite(":memory:"), Replies(), [0]
-    marker = "setup-secret-that-must-not-be-logged"
+    store, channel, attempts = sqlite(":memory:"), Replies(crash=True), [0]
 
-    async def fail() -> None:
-        attempts[0] += 1
-        raise RuntimeError(marker)
+    async def setup() -> None:
+        if channel.crash:
+            attempts[0] += 1
+            raise RuntimeError("setup-secret-that-must-not-be-logged")
 
-    model = scripted_model({"responses": []})
-    broken = agent(model=model, extensions=[extension(name="boot", setup=fail)])
+    boot = extension(name="boot", setup=setup)
+    bot = agent(model=scripted_model({"responses": [text("recovered")]}), extensions=[boot])
 
     async def main() -> None:
-        async with host(store=store, agents={"bot": broken}, channels={"fake": channel}) as served:
-            raw = webhook("d1", "m1", "private payload")
+        served = host(store=store, agents={"bot": bot}, channels={"fake": channel})
+        await served.ready()
+        raw = webhook("d1", "m1", "private payload")
+        await served.receive("fake", raw)
+        await until(lambda: _attempted(attempts, 3))
+        for _ in range(5):
             await served.receive("fake", raw)
-            await until(lambda: _attempted(attempts, 3))
-            for _ in range(5):
-                await served.receive("fake", raw)
-            await asyncio.sleep(0.05)
-            assert attempts == [3]
-            assert not await _consumed(store)
-        healthy = agent(model=scripted_model({"responses": [text("recovered")]}))
-        async with host(store=store, agents={"bot": healthy}, channels={"fake": channel}):
-            await until(lambda: _consumed(store))
-            types = [event.type for event in await events(store)]
-            assert types.count("channel_delivery") == types.count("user_input") == 1
+        await asyncio.sleep(0.05)
+        assert attempts == [3]
+        assert not await _consumed(store)
+        await served.stop()
+        channel.crash = False
+        await served.ready()
+        await until(lambda: _consumed(store))
+        types = [event.type for event in await events(store)]
+        assert types.count("channel_delivery") == types.count("user_input") == 1
+        await served.stop()
 
-    with caplog.at_level(logging.WARNING, logger="threads.host.intake"):
-        asyncio.run(main())
+    asyncio.run(main())
     said = "\n".join(record.getMessage() for record in caplog.records)
     assert said.count("retry cap reached") == 1
-    assert marker not in said
+    assert "setup-secret-that-must-not-be-logged" not in said
     assert "private payload" not in said
 
 
