@@ -1059,7 +1059,7 @@
   },
   "litellm!transport_fence_unsupported": {
     "py": [
-      "tests/adapters/test_litellm.py::test_a_route_it_cannot_fence_at_the_transport_is_refused_at_setup"
+      "tests/adapters/test_litellm.py::test_a_route_it_cannot_fence_at_the_transport_is_refused_when_constructed"
     ]
   },
   "litellm.api_key=default": {

@@ -168,9 +168,10 @@ def test_a_provider_rejection_is_a_rejected_chunk_after_one_attempt(
     assert len(script.sent) == 1
 
 
-def test_a_route_it_cannot_fence_at_the_transport_is_refused_at_setup() -> None:
+def test_a_route_it_cannot_fence_at_the_transport_is_refused_when_constructed() -> None:
     # A send can carry provider-hosted tools, so a stale send is never harmless: a route whose
-    # real transport isn't ours is refused, not shipped with a weaker fence.
+    # real transport isn't ours is refused by the factory itself, never shipped with a weaker
+    # fence and never left to fail at setup.
     with pytest.raises(ConfigError) as refused:
         litellm("bedrock/some-model", max_input_tokens=1000, max_output_tokens=8)
     assert refused.value.code == "transport_fence_unsupported"

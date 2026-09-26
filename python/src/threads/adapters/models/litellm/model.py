@@ -7,7 +7,8 @@ Fencing. Only the `openai/` route is supported: LiteLLM sends it through an Open
 the adapter supplies, whose transport awaits the fence at the real send. Every other route
 uses LiteLLM's own HTTP stack, which prepares the request in a thread executor before sending,
 so the fence can't sit at the real send. A send can carry provider-hosted tools, so those
-routes are refused at setup (`transport_fence_unsupported`), never run with a weaker fence.
+routes are refused when the model is constructed (`transport_fence_unsupported`), never run
+with a weaker fence.
 """
 
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable, Mapping
@@ -188,8 +189,8 @@ def litellm(name: str, **options: Unpack[LiteLLMOptions]) -> LiteLLMModel:
     """A model behind LiteLLM's `openai/` route (any OpenAI-compatible endpoint via `base_url`).
     Both limits are required: the name doesn't identify the model behind `base_url`. `params`
     are completion fields; `max_tokens` defaults to min(8192, max_output_tokens). `api_key`
-    defaults to `secret("OPENAI_API_KEY")`, resolved at setup. Any other route is refused at
-    setup with `transport_fence_unsupported` (module docstring)."""
+    defaults to `secret("OPENAI_API_KEY")`, resolved at setup. Any other route is refused here,
+    when the model is constructed, with `transport_fence_unsupported` (module docstring)."""
     if not name.startswith("openai/"):
         raise ConfigError(
             "transport_fence_unsupported",

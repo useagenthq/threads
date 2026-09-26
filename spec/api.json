@@ -75,7 +75,7 @@
       "kind": "adapter",
       "py": "threads.litellm",
       "provider": "LiteLLM",
-      "doc": "Models behind LiteLLM's openai/ route, that is any OpenAI-compatible endpoint (Python only, extra litellm). That route sends through the OpenAI SDK client threads hands it, so every request goes through the run's fenced transport; any other route is refused at setup."
+      "doc": "Models behind LiteLLM's openai/ route, that is any OpenAI-compatible endpoint (Python only, extra litellm). That route sends through the OpenAI SDK client threads hands it, so every request goes through the run's fenced transport; any other route is refused when the model is constructed."
     },
     "e2b": {
       "kind": "adapter",
@@ -1249,7 +1249,7 @@
       "py": "litellm",
       "package": "litellm",
       "lang": "py",
-      "doc": "A model behind LiteLLM's openai/ route: any OpenAI-compatible endpoint, named through base_url. Only that route sends through a transport threads can fence, so any other is transport_fence_unsupported at setup. There is no catalog behind the endpoint, so both limits are required. Pass it as agent(model=litellm(\"openai/my-model\", base_url=\"http://localhost:4000\", max_input_tokens=128000, max_output_tokens=8192)).",
+      "doc": "A model behind LiteLLM's openai/ route: any OpenAI-compatible endpoint, named through base_url. Only that route sends through a transport threads can fence, so any other is transport_fence_unsupported when the model is constructed. There is no catalog behind the endpoint, so both limits are required. Pass it as agent(model=litellm(\"openai/my-model\", base_url=\"http://localhost:4000\", max_input_tokens=128000, max_output_tokens=8192)).",
       "async": false,
       "params": [
         {"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The LiteLLM model name. It must start with \"openai/\"; any other route is transport_fence_unsupported. The part after the prefix is the model id the endpoint expects."},
