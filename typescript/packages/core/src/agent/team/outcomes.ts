@@ -81,7 +81,11 @@ async function outcomeOf(
         (e): e is EventOf<"message_received"> =>
           e.type === "message_received" && e.data.mail_id === outcome.reply,
       )?.data.envelope;
-      if (reply === undefined || "operator" in reply.from)
+      if (
+        reply === undefined ||
+        "operator" in reply.from ||
+        "caller" in reply.from
+      )
         throw new Error(`ask ${askId} was answered by no received reply`);
       const text = await bodyText(store, reply);
       return { status: "answered", askId, text, member: reply.from };
@@ -95,6 +99,10 @@ async function outcomeOf(
     case "timed_out":
     case "cancelled":
       return { status: outcome.status, askId };
+    case "failed":
+      throw new Error(
+        "ask_closed{failed} is Phase 2: validate_next refuses it",
+      );
     default:
       return assertNever(outcome);
   }

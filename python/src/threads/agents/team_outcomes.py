@@ -101,8 +101,10 @@ async def _outcome(sq: SqliteStore, events: Sequence[Event], closed: AskClosedEv
             return AskMemberEnded(ask_id, await hydrated(stored, sq.get_artifact))
         case "timed_out":
             return AskTimedOut(ask_id)
-        case _:
+        case "cancelled":
             return AskCancelled(ask_id)
+        case _:
+            raise AssertionError("ask_closed{failed} is Phase 2: validate_next refuses it")
 
 
 def _stored(raw: JsonValue) -> StoredMemberResult:
