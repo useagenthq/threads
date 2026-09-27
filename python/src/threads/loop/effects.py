@@ -58,7 +58,9 @@ async def dispatch(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None
     """Begins attempt n + 1 durably, then dispatches it and records what is known."""
     inv = invocation(rt, state, spec)
     # What this attempt must record with its begin, decided before anything is durable: a refusal
-    # here sends nothing and never begins, so the call closes with the reason instead.
+    # here sends nothing and never begins, so the call closes with the reason instead. Preparing may
+    # read (an A2A send fetches a partner's card), never send; what it stores is referenced only if
+    # the begin's own append commits, and a cancel that landed first still bars that append.
     before = await prepared(rt.tools, inv)
     if isinstance(before, Refused):
         return await close_call(rt, inv.call_id, "not_executed", before.why)

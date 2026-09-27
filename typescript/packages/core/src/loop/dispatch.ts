@@ -149,7 +149,9 @@ async function dispatch(
     (e) => e.type === "effect_begin" && e.data.call_id === callId,
   ).length;
   // What this attempt must record with its begin, decided before anything is durable: a refusal
-  // here sends nothing and never begins, so the call closes with the reason instead.
+  // here sends nothing and never begins, so the call closes with the reason instead. Preparing may
+  // read (an A2A send fetches a partner's card), never send; what it stores is referenced only if
+  // the begin's own append commits, and a cancel that landed first still bars that append.
   const prepared = await prepare(s, call);
   if (!prepared.ok) return closed(s, callId, prepared.error);
   const begun = await s.appendWork(
