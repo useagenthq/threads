@@ -365,4 +365,8 @@ async def _decided(store: Store) -> bool:
 
 
 async def _generations(store: Store, count: int) -> bool:
-    return len(await members_of(store)) >= count
+    """The restarted generation is materialized, not merely inserted. Waiting on the row count
+    alone races the tick that opens the new branch: the row exists as `starting` a moment before
+    it is `idle`, so a test that then reads state sees whichever the scheduler reached first."""
+    rows = await members_of(store)
+    return len(rows) >= count and all(r.state != "starting" for r in rows)

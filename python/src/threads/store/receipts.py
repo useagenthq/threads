@@ -42,7 +42,7 @@ START_RUN: Final = "start_run"
 UI: Final = "ui"
 """A UI route's run, keyed `<thread_id>:<client message id>` (spec/schema/ui/README.md)."""
 
-type Operation = Literal["start_run", "ui"]
+type Operation = Literal["start_run", "ui", "a2a_send"]
 """The two operations store.sql's CHECK admits. They are wire names: the other language reads a
 receipt by these exact bytes, so a spelling of our own would start the run a second time."""
 

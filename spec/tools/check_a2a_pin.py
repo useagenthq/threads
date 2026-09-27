@@ -207,8 +207,11 @@ def properties_of(node: Obj) -> set[str]:
 
 def required_of(node: Obj) -> set[str]:
     """The properties a `$def` always requires: required in every branch, not just in one."""
-    per_shape = [set(_strs(shape.get("required"))) for shape in shapes(node)]
-    return set.intersection(*per_shape) if per_shape else set()
+    always: set[str] | None = None
+    for shape in shapes(node):
+        here = set(_strs(shape.get("required")))
+        always = here if always is None else always & here
+    return set() if always is None else always
 
 
 def check_message(name: str, node: Obj, message: Message) -> list[str]:

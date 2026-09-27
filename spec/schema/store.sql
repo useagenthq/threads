@@ -318,7 +318,7 @@ CREATE INDEX IF NOT EXISTS questions_due ON questions (state, expires_at);
 -- the same Idempotency-Key look unused on a shared store and start a second run.
 CREATE TABLE IF NOT EXISTS run_receipts (
   tenant_id TEXT NOT NULL,
-  operation TEXT NOT NULL CHECK (operation IN ('start_run', 'ui')),
+  operation TEXT NOT NULL CHECK (operation IN ('start_run', 'ui', 'a2a_send')),
   idempotency_key TEXT NOT NULL,
   principal_key TEXT NOT NULL,
   body_hash TEXT NOT NULL,
@@ -557,6 +557,8 @@ CREATE INDEX IF NOT EXISTS observer_losses_unreported
 -- run_receipts.operation is checked against its two wire names. A version 8 store may hold rows
 -- under the Python spelling startRun, which no reader looks for now; refusing that store (as
 -- every older version is refused) is what keeps it from honouring fewer receipts than it did.
--- Version 9 also adds lane 30's run_receipts_principal index, the caller-side lookup of
--- run receipts; an added index changes no stored bytes, so it needs no version of its own.
-PRAGMA user_version = 9;
+-- Version 10: lane 30's a2a_send joins the operations run_receipts.operation admits, and its
+-- run_receipts_principal index carries the caller-side lookup. The index alone would have needed
+-- no version, but the CHECK does: a version 9 store refuses an a2a_send row, so an A2A host must
+-- not open one and think it can record a receipt.
+PRAGMA user_version = 10;
