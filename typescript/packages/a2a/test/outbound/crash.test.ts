@@ -172,7 +172,10 @@ test("a peer that answers slowly is working with its task id, and is not sent to
   const p = partner();
   const h = await drill(p);
   // The peer created the task and is still working on it when the deadline passes.
-  p.send = () => ({ kind: "task", task: task("task-17", "TASK_STATE_WORKING") });
+  p.send = () => ({
+    kind: "task",
+    task: task("task-17", "TASK_STATE_WORKING"),
+  });
   const w = unwrap(await h.store.acquire(ROOT, "owner", 30_000));
   await resume(w, h.artifacts, h.config(), { input: ASK });
   // Slow is not uncertain: the commit already happened, so we hold the peer's receipt.
