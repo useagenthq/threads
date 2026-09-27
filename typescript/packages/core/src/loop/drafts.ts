@@ -1,7 +1,7 @@
 import { CallId } from "../log";
 import type { EventDraft } from "../store";
 
-// Typed drafts for the events the loop appends. Every one here is critical (schema-pinned).
+// Typed drafts for the events the loop appends, each at the criticality its schema pins.
 
 type DraftOf<T extends EventDraft["type"]> = Extract<EventDraft, { type: T }>;
 type Data<T extends EventDraft["type"]> = DraftOf<T>["data"];
@@ -115,6 +115,17 @@ export const draft = {
   parked: (d: Data<"parked">, actor: Actor = HOST): EventDraft => ({
     ...base,
     type: "parked",
+    actor,
+    data: d,
+  }),
+  // Not critical: it notifies, and a reader that skips it still reduces the log to the same state.
+  parkEscalated: (
+    d: Data<"park_escalated">,
+    actor: Actor = HOST,
+  ): EventDraft => ({
+    type_version: 1,
+    critical: false,
+    type: "park_escalated",
     actor,
     data: d,
   }),

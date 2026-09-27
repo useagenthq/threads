@@ -12,7 +12,14 @@ from threads.agents.config import ConfigError
 from threads.log import JsonObject, ToolSpec
 from threads.loop.model import LookupResult, ModelInfo
 from threads.loop.stubs import StubGateway, Stubs
-from threads.loop.tools import Dispatched, Invocation, Termination, ToolRunner
+from threads.loop.tools import (
+    Dispatched,
+    Invocation,
+    Prepared,
+    Termination,
+    ToolRunner,
+    prepared,
+)
 from threads.tools import HOST, SANDBOX_TOOLS
 
 TEST_KIT = "scripted"
@@ -34,6 +41,9 @@ class Stubbed:
 
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
         return self._inner.invalid(spec, input)
+
+    async def begin(self, call: Invocation) -> Prepared:
+        return await prepared(self._for(call.spec.name), call)
 
     async def dispatch(self, call: Invocation) -> Dispatched:
         # A read_only call changes nothing anywhere: it runs for real, as in TypeScript.

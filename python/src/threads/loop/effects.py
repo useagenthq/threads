@@ -8,19 +8,18 @@ final lookup answers (`reconcilable`). Elapsed time and lease expiry prove nothi
 
 import asyncio
 from collections.abc import Coroutine
-from typing import TYPE_CHECKING, Final, Literal
+from typing import Final, Literal
 
-from threads.log import ToolSpec
+from pydantic import JsonValue
+
+from threads.log import ParkedEvent, ParkEscalatedEvent, ToolSpec
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.history import CallState, call_state
 from threads.loop.model import Found, NotFound, looked_up
-from threads.loop.results import As, result_draft, text_ref
+from threads.loop.results import As, close_call, result_draft, text_ref
 from threads.loop.runtime import Barred, Failed, Halt, Parked, Runtime, fence, lost
-from threads.loop.tools import Invocation, NotSent, Output, Uncertain
+from threads.loop.tools import Invocation, NotSent, Output, Refused, Uncertain, prepared
 from threads.result import Err
-
-if TYPE_CHECKING:
-    from pydantic import JsonValue
 
 DAY_MS: Final = 86_400_000
 """Default TTL of a parked effect."""
@@ -28,11 +27,26 @@ SKEW_MS: Final = 1000
 """The adapter's declared clock skew margin for dedup windows; doubled on the host clock."""
 MAX_SENDS: Final = 3
 """Attempts in total for a channel send refused rate_limited or transient (as TypeScript)."""
+ESCALATE_AFTER_MS: Final = 300_000
+"""How long a park a lookup keeps failing to settle waits before a person is called. Each new
+lease's recovery is another try (lane 30's "3 tries over 5 minutes"); we escalate on the first try
+past the floor rather than counting tries, because the wait is what a person notices and a counter
+would need an event of its own."""
 
 
-def invocation(state: CallState, spec: ToolSpec) -> Invocation:
+def invocation(rt: Runtime, state: CallState, spec: ToolSpec) -> Invocation:
     call = state.call
-    return Invocation(spec, call.data.call_id, call.data.input, _effect_key(state))
+    return Invocation(
+        spec,
+        call.data.call_id,
+        call.data.input,
+        _effect_key(state),
+        call.thread_id,
+        call.branch_id,
+        lambda: rt.events,
+        rt.put_artifact,
+        rt.read_artifact,
+    )
 
 
 def _effect_key(state: CallState) -> str:
@@ -42,9 +56,14 @@ def _effect_key(state: CallState) -> str:
 
 async def dispatch(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:
     """Begins attempt n + 1 durably, then dispatches it and records what is known."""
-    inv = invocation(state, spec)
+    inv = invocation(rt, state, spec)
+    # What this attempt must record with its begin, decided before anything is durable: a refusal
+    # here sends nothing and never begins, so the call closes with the reason instead.
+    before = await prepared(rt.tools, inv)
+    if isinstance(before, Refused):
+        return await close_call(rt, inv.call_id, "not_executed", before.why)
     begin = {"call_id": inv.call_id, "attempt": len(state.begins) + 1}
-    begun = await rt.append(draft("effect_begin", begin))
+    begun = await rt.append(*before, draft("effect_begin", begin))
     if isinstance(begun, Err):
         return lost(begun.error)
     if isinstance(begun, Barred):
@@ -74,12 +93,16 @@ async def _dispatched(rt: Runtime, inv: Invocation, spec: ToolSpec) -> Halt | No
 
 async def _commit(rt: Runtime, inv: Invocation, output: Output) -> Halt | None:
     ref = await text_ref(rt, output.text)
-    commit = draft("effect_commit", {"call_id": inv.call_id, "result_ref": ref})
+    committed: dict[str, JsonValue] = {"call_id": inv.call_id, "result_ref": ref}
+    if output.receipt is not None:
+        committed["provider_receipt"] = output.receipt
+    commit = draft("effect_commit", committed)
     how = As("executed", output.is_error)
     result = await result_draft(
         rt, inv.call_id, output.text, how, output.full_output, content=output.content
     )
-    done = await rt.append(commit, result)
+    # After the commit: an observation that names a receipt we now hold (semantic rule 57).
+    done = await rt.append(commit, *output.events, result)
     return lost(done.error) if isinstance(done, Err) else None
 
 
@@ -129,7 +152,7 @@ async def settle(
     made to a tool not in the set has no class to prove anything by, so it parks."""
     if spec is None:
         return await park_effect(rt, _effect_key(state), actor)
-    inv = invocation(state, spec)
+    inv = invocation(rt, state, spec)
     match spec.effect_class:
         case "sandbox_local":
             settled = await _terminate(rt, inv, reason, actor)
@@ -204,6 +227,9 @@ async def _reconcile(
 
 async def park_effect(rt: Runtime, effect_key: str, actor: ActorKind) -> Halt | None:
     address: JsonValue = {"kind": "effect", "id": effect_key}
+    if any(a.kind == "effect" and a.id == effect_key for a in rt.fold.parked):
+        halt = await _escalate(rt, effect_key, address, actor)
+        return halt if halt is not None else Parked("effect_unknown", tuple(rt.fold.parked))
     data: dict[str, JsonValue] = {
         "address": address,
         "reason": "effect_unknown",
@@ -213,6 +239,39 @@ async def park_effect(rt: Runtime, effect_key: str, actor: ActorKind) -> Halt | 
     if isinstance(done, Err):
         return lost(done.error)
     return Parked("effect_unknown", tuple(rt.fold.parked))
+
+
+async def _escalate(
+    rt: Runtime, effect_key: str, address: JsonValue, actor: ActorKind
+) -> Halt | None:
+    """A park this pass could not settle either: past the floor a person is called, once. Nothing
+    is resolved here — an escalation is a notification, and only a proof or a person settles the
+    effect (invariant 3)."""
+    since = _last_park(rt, effect_key)
+    if since is None or rt.clock() - since.time < ESCALATE_AFTER_MS:
+        return None
+    if any(
+        isinstance(e, ParkEscalatedEvent)
+        and e.seq > since.seq
+        and e.data.address.kind == "effect"
+        and e.data.address.id == effect_key
+        for e in rt.events
+    ):
+        return None
+    done = await rt.append(draft("park_escalated", {"address": address}, actor))
+    return lost(done.error) if isinstance(done, Err) else None
+
+
+def _last_park(rt: Runtime, effect_key: str) -> ParkedEvent | None:
+    """The parked event this address is waiting on, which the wait is measured from."""
+    found = [
+        e
+        for e in rt.events
+        if isinstance(e, ParkedEvent)
+        and e.data.address.kind == "effect"
+        and e.data.address.id == effect_key
+    ]
+    return found[-1] if found else None
 
 
 async def close_settled(rt: Runtime, state: CallState, actor: ActorKind) -> Halt | None:

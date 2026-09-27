@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { JsonObject, type KnownEvent, SandboxId } from "../../src/log";
 import type { ToolContext, ToolImpl, ToolRun } from "../../src/loop/types";
+import { contextReader } from "../../src/model/context";
 import { err, ok } from "../../src/result";
 import type { SandboxSession } from "../../src/sandbox/protocol";
 import { type ArtifactStore, memoryArtifacts } from "../../src/store/artifacts";
@@ -98,14 +99,35 @@ export function bound(
     ctx: Partial<ToolContext> = {},
   ) =>
     impl.run(JsonObject.parse(input), {
-      effectKey: `${ROOT}:c1`,
-      callId: "c1",
-      branchId: ROOT,
-      epoch: 1,
-      principal: { issuer: "api", tenant: "local", subject: "operator" },
-      signal: new AbortController().signal,
-      fence: async () => ok(undefined),
+      ...toolCtx(artifacts, events),
       ...ctx,
     });
   return { impl, artifacts, run };
+}
+
+/** The dispatch context a built-in's run and lookup are given. */
+export function toolCtx(
+  artifacts: ArtifactStore = memoryArtifacts(),
+  events: () => readonly KnownEvent[] = () => [],
+): ToolContext {
+  return {
+    effectKey: `${ROOT}:c1`,
+    callId: "c1",
+    branchId: ROOT,
+    epoch: 1,
+    principal: { issuer: "api", tenant: "local", subject: "operator" },
+    signal: new AbortController().signal,
+    fence: async () => ok(undefined),
+    events,
+    read: contextReader(artifacts),
+    store: async (bytes, media_type) => {
+      const data =
+        typeof bytes === "string" ? new TextEncoder().encode(bytes) : bytes;
+      return {
+        sha256: await artifacts.put(data),
+        bytes: data.length,
+        media_type,
+      };
+    },
+  };
 }

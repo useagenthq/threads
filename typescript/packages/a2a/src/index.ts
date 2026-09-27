@@ -12,6 +12,7 @@ export {
   type RemoteOptions,
   remote,
 } from "./a2a";
+export type { RemoteToolsOptions } from "./outbound/tools";
 export {
   A2A_ERRORS,
   A2A_VERSION,

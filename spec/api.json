@@ -1040,6 +1040,45 @@
           "required": false,
           "default": 120000,
           "doc": "How long one exchange may take. A timeout before the partner's task id is known leaves the outcome uncertain, so the call parks and nothing is re-sent; after the task id is known it means the task is still working, and the caller checks later. A value that is not a positive integer is invalid_config."
+        },
+        {
+          "name": "transport",
+          "kind": "option",
+          "lang": "ts",
+          "type": {
+            "platform": {
+              "ts": "WebTransport"
+            }
+          },
+          "required": false,
+          "default_doc": "the host's live web transport",
+          "doc": "Seam: where every call to this remote is sent, so a test drives a scripted partner and counts what was sent. Omitted: the host's live web transport, which resolves and vets each address before it connects."
+        },
+        {
+          "name": "transport",
+          "kind": "option",
+          "lang": "py",
+          "type": {
+            "platform": {
+              "py": "Transport"
+            }
+          },
+          "required": false,
+          "default_doc": "the host's live web transport",
+          "doc": "Seam: where every call to this remote is sent, so a test drives a scripted partner and counts what was sent. Omitted: the host's live web transport."
+        },
+        {
+          "name": "resolve",
+          "kind": "option",
+          "lang": "py",
+          "type": {
+            "platform": {
+              "py": "Resolve"
+            }
+          },
+          "required": false,
+          "default_doc": "the system resolver behind the SSRF guard",
+          "doc": "Seam: how a host name becomes the address the transport connects to, which Python resolves separately from sending. Omitted: the system resolver behind the SSRF guard."
         }
       ],
       "returns": {
@@ -4125,7 +4164,56 @@
       "kind": "interface",
       "package": "a2a",
       "role": "opaque",
-      "doc": "A partner's A2A agent, from remote(). Config only: it holds no connection and did no I/O, so the card it will be pinned against is fetched later."
+      "doc": "A partner's A2A agent, from remote(). Config only: it holds no connection and did no I/O, so the card it will be pinned against is fetched later.",
+      "methods": {
+        "tools": {
+          "ts": "tools",
+          "py": "tools",
+          "doc": "This remote as two pinned tools, to spread beside the thread's own tools. <name> sends one message and is reconcilable with nonfinal finality: an uncertain outcome parks and is settled by a lookup that finds the message, by the transport proving nothing was sent, or by a person, never by an automatic re-send, and a lookup that finds nothing never proves absence. <name>_status reads a task <name> created, is read_only and sends nothing, and still records each task state it observes in this conversation's log. The card is fetched and pinned at the thread's first call of the remote. A task id this conversation's own log does not hold is refused by both tools, and nothing is sent and nothing is read.",
+          "async": false,
+          "params": [
+            {
+              "name": "name",
+              "kind": "option",
+              "type": {
+                "prim": "string"
+              },
+              "required": true,
+              "doc": "The send tool's name, as the model sees it ([a-z][a-z0-9_]*, else invalid_config). The status tool is <name>_status."
+            },
+            {
+              "name": "description",
+              "kind": "option",
+              "type": {
+                "prim": "string"
+              },
+              "required": true,
+              "doc": "What the partner's agent does, in the model's words. The status tool's description is derived from it."
+            }
+          ],
+          "returns": {
+            "array": {
+              "$ref": "#/types/Tool",
+              "args": [
+                {
+                  "prim": "unknown"
+                },
+                {
+                  "prim": "unknown"
+                },
+                {
+                  "prim": "unknown"
+                }
+              ]
+            }
+          },
+          "config_errors": [
+            {
+              "code": "invalid_config"
+            }
+          ]
+        }
+      }
     },
     "A2aAuth": {
       "kind": "interface",

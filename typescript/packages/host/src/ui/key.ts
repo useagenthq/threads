@@ -1,9 +1,9 @@
 import {
+  derivedThreadId,
   type Principal,
   principalKey,
   type ThreadId,
 } from "@threads/core/host";
-import { derivedThreadId } from "../derive";
 
 // A browser's chat key names one thread per (principal, agent, key), by derivation: no lookup
 // table, and the key itself is never recorded (spec/schema/ui/README.md, "Chat key").

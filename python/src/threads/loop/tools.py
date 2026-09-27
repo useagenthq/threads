@@ -1,24 +1,59 @@
 """What the loop needs from whatever executes tool bodies: app tools on the host, a sandbox, or a
 test kit. Every answer about an operation that may have happened is a value."""
 
-from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Literal, Protocol
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass, field
+from typing import Literal, Protocol, runtime_checkable
 
-from threads.log import ArtifactRef, CallId, JsonObject, ResultPart, ToolSpec
+from threads.log import (
+    ArtifactRef,
+    BranchId,
+    CallId,
+    Event,
+    JsonObject,
+    ResultPart,
+    ThreadId,
+    ToolSpec,
+)
 from threads.loop.model import LookupResult
+from threads.store import Draft
 
 type Termination = Literal["terminated", "already_exited", "unknown"]
+
+type Put = Callable[[bytes | str, str], Awaitable[ArtifactRef]]
+"""Stores bytes before any event names them, and returns their ref. Text is redacted."""
+
+type Read = Callable[[ArtifactRef], Awaitable[bytes | None]]
+"""An artifact this branch's log names, with its hash and length verified; None when unreadable."""
+
+
+async def _nothing_stored(_data: bytes | str, _media_type: str) -> ArtifactRef:
+    raise AssertionError("this invocation stores nothing")
+
+
+async def _nothing_read(_ref: ArtifactRef) -> bytes | None:
+    return None
 
 
 @dataclass(frozen=True, slots=True)
 class Invocation:
-    """One dispatch of a validated call under its derived effect key."""
+    """One dispatch of a validated call under its derived effect key.
+
+    `events`, `put` and `read` are what a tool that derives its send from its own log needs: an
+    A2A send reads the card its thread pinned and replays the exact bytes its first attempt
+    stored, rather than keeping process state a crash would lose. `events` is read when it is
+    called, not when the invocation is built, so a dispatch sees the `remote_call` its own begin
+    appended."""
 
     spec: ToolSpec
     call_id: CallId
     input: JsonObject
     effect_key: str
+    thread_id: ThreadId | None = None
+    branch_id: BranchId | None = None
+    events: Callable[[], Sequence[Event]] = tuple
+    put: Put = field(default=_nothing_stored)
+    read: Read = field(default=_nothing_read)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +84,12 @@ class Output:
     content: tuple[ResultPart, ...] = ()
     """Ordered media and citation parts: when present, the model sees exactly these
     and `text` is their plain-text rendering for logs and channels."""
+    events: tuple[Draft, ...] = ()
+    """What this run observed, appended after the call's `effect_commit` and before its result, so
+    a rule that reads a receipt first (a `remote_task_state` after its commit) holds."""
+    receipt: str | None = None
+    """The provider's own id for the effect (an A2A task id), recorded as `effect_commit`'s
+    `provider_receipt`: the only thing that lets a later process resume without re-sending."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +121,26 @@ def unbound(spec: ToolSpec, _input: JsonObject) -> str | None:
     return f"unsupported: no schema binding for {spec.name}"
 
 
+@dataclass(frozen=True, slots=True)
+class Refused:
+    """A call refused before anything is durable: nothing begins and nothing is sent."""
+
+    why: str
+
+
+type Prepared = tuple[Draft, ...] | Refused
+"""What an attempt must make durable in the same append as its `effect_begin`."""
+
+
+@runtime_checkable
+class Begins(Protocol):
+    """A runner whose tools record something with their `effect_begin`: an A2A send's
+    `remote_card` and `remote_call` (semantic rules 56 and 58), written before any byte leaves.
+    Optional, and checked for, because it is one runner's concern and not every runner's."""
+
+    async def begin(self, call: Invocation) -> Prepared: ...
+
+
 class ToolRunner(Protocol):
     def invalid(self, spec: ToolSpec, input: JsonObject) -> str | None:
         """Why the arguments fail the tool's schema, or None when they parse."""
@@ -98,3 +159,8 @@ class ToolRunner(Protocol):
     def provider_now(self) -> int | None:
         """The provider's clock for dedup windows, or None to use the host clock."""
         ...
+
+
+async def prepared(runner: ToolRunner, call: Invocation) -> Prepared:
+    """The drafts this attempt begins with. A runner that records nothing prepares nothing."""
+    return await runner.begin(call) if isinstance(runner, Begins) else ()

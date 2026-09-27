@@ -1,4 +1,11 @@
-import { ConfigError, credential, type Secret } from "@threads/core/adapter";
+import type { Tool } from "@threads/core";
+import {
+  ConfigError,
+  credential,
+  type Secret,
+  type WebTransport,
+} from "@threads/core/adapter";
+import { type RemoteToolsOptions, remoteTools } from "./outbound/tools";
 
 // remote() and bearer(): what an app writes to name a partner's A2A agent. Neither does any I/O.
 // The card is fetched and pinned later — when a member starts, or when a thread first calls the
@@ -37,6 +44,8 @@ export type RemoteOptions = {
   readonly provenance?: Provenance;
   /** How long one exchange may take before its outcome is in doubt. Default 120_000. */
   readonly timeoutMs?: number;
+  /** The host network every call to this remote goes through; tests inject one. */
+  readonly transport?: WebTransport;
 };
 
 export type Remote = {
@@ -47,6 +56,15 @@ export type Remote = {
   readonly costPerMessage: number;
   readonly provenance: Provenance;
   readonly timeoutMs: number;
+  readonly transport: WebTransport | undefined;
+  /**
+   * This remote as two pinned tools — `name` sends one message, `name_status` reads a task it
+   * created — so it spreads next to the thread's own tools:
+   * `tools: [...refunds.tools({ name, description }), invoiceStatus]`.
+   */
+  readonly tools: (
+    o: RemoteToolsOptions,
+  ) => readonly Tool<unknown, unknown, unknown>[];
 };
 
 export const DEFAULT_TIMEOUT_MS = 120_000;
@@ -87,12 +105,15 @@ export function remote(
       "invalid_config",
       `remote ${name}: costPerMessage must be a whole number of nanos, as usd() gives`,
     );
-  return {
+  const it: Remote = {
     name,
     cardUrl,
     auth: options.auth,
     costPerMessage,
     provenance: options.provenance ?? "opaque",
     timeoutMs,
+    transport: options.transport,
+    tools: (o) => remoteTools(it, o),
   };
+  return it;
 }

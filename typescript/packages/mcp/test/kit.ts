@@ -118,6 +118,14 @@ export function ctx(stale = false): ToolContext {
       stale
         ? { ok: false, error: { code: "stale_epoch", message: "lease lost" } }
         : { ok: true, value: undefined },
+    // An MCP tool derives nothing from the log and stores nothing of its own.
+    events: () => [],
+    store: async () => ({
+      sha256: "0".repeat(64),
+      bytes: 0,
+      media_type: "text/plain",
+    }),
+    read: async () => ({ ok: true, value: new Uint8Array(0) }),
   };
 }
 

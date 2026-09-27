@@ -177,6 +177,8 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
         # Hooks and extension tools get the run's deps, as app tools do.
         ext = AppTools(extension_tools(definition.extensions), ctx)
         routes = gateways(definition.catalog, builtins, sq, fenced(writer))
+        # A remote's tools hold no per-run state: what they send comes off the invocation's log.
+        routes |= {t.name: t for t in definition.remotes}
         if definition.skills:
             routes[SKILL] = SkillLoader(definition.skills)
         app = AppTools(definition.tools, ctx)

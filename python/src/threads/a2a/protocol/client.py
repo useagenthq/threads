@@ -74,6 +74,10 @@ class Sending:
     timeout_ms: int
     authorization: str | None = None
     extensions: Sequence[str] = ()
+    body: str | None = None
+    """The exact request body to send, instead of serializing `params`: a re-dispatch replays the
+    bytes its first attempt stored, so a peer that deduplicates on `messageId` sees one message
+    (30-a2a decision H30-1). Ignored by an operation whose request has no body."""
     transport: Transport | None = None
     resolve: Resolve | None = None
     fence: Fence | None = None
@@ -107,7 +111,7 @@ async def call(
     request = Request(
         built.verb,
         _headers(built.accept, built.body is not None, sending),
-        None if built.body is None else built.body.encode(),
+        None if built.body is None else (sending.body or built.body).encode(),
     )
     sent = await transport.send(target.value, request, sending.fence or _always_fenced, MAX_BYTES)
     if isinstance(sent, Err):

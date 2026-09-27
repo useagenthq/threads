@@ -10,10 +10,11 @@ from pydantic import JsonValue
 from threads.log import ArtifactRef, CallId, ResultPart
 from threads.loop.defaults import context
 from threads.loop.drafts import ActorKind, draft
-from threads.loop.runtime import Runtime
+from threads.loop.runtime import Halt, Runtime, lost
 from threads.loop.tools import Reference
 from threads.redaction import redact_secrets
 from threads.reduce.handlers import to_json
+from threads.result import Err
 from threads.store import Draft
 
 type Origin = Literal[
@@ -41,6 +42,19 @@ async def text_ref(rt: Runtime, text: str) -> JsonValue:
     raw = redact_secrets(text).encode("utf-8")
     sha = await rt.store.put_artifact(raw)
     return {"sha256": sha, "bytes": len(raw), "media_type": "text/plain"}
+
+
+async def close_call(
+    rt: Runtime,
+    call_id: CallId,
+    origin: Literal["denied", "not_executed"],
+    why: str,
+    actor: ActorKind = "host",
+) -> Halt | None:
+    """Closes a call that never ran with an error result."""
+    result = await result_draft(rt, call_id, why, As(origin, True, actor))
+    done = await rt.append(result)
+    return lost(done.error) if isinstance(done, Err) else None
 
 
 def reference_drafts(references: Sequence[Reference]) -> list[Draft]:

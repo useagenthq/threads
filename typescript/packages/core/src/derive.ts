@@ -1,9 +1,11 @@
-import { sha256Hex, ThreadId } from "@threads/core/host";
+import { sha256Hex } from "./hash";
+import { ThreadId } from "./log";
 
 // Derived ids: a name that is a function of its fields, with no lookup table and nothing
-// recorded. One implementation, because the UI's chat key (spec/schema/ui/README.md) and A2A's
-// context (spec/schema/a2a/) derive the same way under different domain strings, and a byte of
-// difference between them would let one surface reach the other's thread.
+// recorded. One implementation, because the UI's chat key (spec/schema/ui/README.md), an
+// inbound A2A context and an outbound A2A message id (spec/schema/a2a/) derive the same way
+// under different domain strings, and a byte of difference between them would let one surface
+// reach the other's thread. In core, because the exposed side and the client side both use it.
 
 /** 4-byte big-endian UTF-8 length, then the bytes: no two field splits collide. */
 function lp(text: string): Uint8Array {

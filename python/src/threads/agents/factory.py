@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Final, Literal, Required, TypedDict, Unpack, o
 from pydantic import BaseModel
 
 from threads._json_schema import unchecked
+from threads.a2a.outbound.tools import RemoteTool
 from threads.agents import narrowing
 from threads.agents.agent import Agent
 from threads.agents.bindings import DEFAULT_PERMISSIONS, AppTool, ToolServer
@@ -107,13 +108,14 @@ class AgentOptions(_AgentCommon, total=False):
 
 
 class ServerAgentOptions(AgentOptions, total=False):
-    tools: Required[Sequence[ToolServer]]
-    """MCP servers only: their tools need no deps."""
+    tools: Required[Sequence[ToolServer | RemoteTool]]
+    """MCP servers and a remote's tools only: neither needs deps."""
 
 
 class ToolAgentOptions[D](_AgentCommon, total=False):
-    tools: Sequence[AppTool[D] | ToolServer]
-    """App tools and MCP servers (`threads.mcp.mcp`)."""
+    tools: Sequence[AppTool[D] | ToolServer | RemoteTool]
+    """App tools, MCP servers (`threads.mcp.mcp`) and a remote's tools
+    (`remote(...).tools(...)`)."""
     extensions: Sequence[Extension[D]]
     """Instructions, hooks and tools, run in this order; their contexts carry the run's deps."""
 
@@ -125,7 +127,7 @@ class OutputAgentOptions[O: BaseModel](AgentOptions, total=False):
 
 
 class ServerOutputAgentOptions[O: BaseModel](OutputAgentOptions[O], total=False):
-    tools: Required[Sequence[ToolServer]]
+    tools: Required[Sequence[ToolServer | RemoteTool]]
 
 
 class ToolOutputAgentOptions[D, O: BaseModel](ToolAgentOptions[D], total=False):
@@ -213,7 +215,8 @@ def agent[D](**options: Unpack[_Options[D]]) -> Agent[D, object] | Agent[None, o
         decode = partial(output.model_validate_json, strict=True)
     given = options.get("tools", ())
     servers = tuple(t for t in given if isinstance(t, ToolServer))
-    tools = tuple(t for t in given if not isinstance(t, ToolServer))
+    remotes = tuple(t for t in given if isinstance(t, RemoteTool))
+    tools = tuple(t for t in given if not isinstance(t, ToolServer | RemoteTool))
     team = None if "team" not in options else tuple(a.definition for a in options["team"])
     links = Links(
         team,
@@ -223,7 +226,7 @@ def agent[D](**options: Unpack[_Options[D]]) -> Agent[D, object] | Agent[None, o
     )
     extensions = tuple(options.get("extensions", ()))
     given = ((tools, servers), extensions)
-    definition = build_definition(options, options["model"], given, output, links)
+    definition = build_definition(options, options["model"], given, output, links, remotes)
     if needs_no_deps(definition):
         if team is None:
             return Agent(definition, (None,), decode)
@@ -300,12 +303,13 @@ class Links:
     handoffs: tuple[Definition[None], ...] = ()
 
 
-def build_definition[T](
+def build_definition[T](  # noqa: PLR0913, PLR0917 - what a definition is built from
     options: CommonOptions,
     model: Model,
     given: tuple[tuple[tuple[AppTool[T], ...], tuple[ToolServer, ...]], tuple[Extension[T], ...]],
     output: type[BaseModel] | None,
     links: Links,
+    remotes: tuple[RemoteTool, ...] = (),
 ) -> Definition[T]:
     """The definition agent() and dynamic_agent() describe; raises ConfigError."""
     (tools, servers), extensions = given
@@ -332,6 +336,7 @@ def build_definition[T](
         options.get("memory_write", "ask"),
         options.get("knowledge"),
         servers,
+        remotes,
         tuple(replace(a, member=True) for a in links.subagents),
         links.handoffs,
         team=links.team,

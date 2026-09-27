@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
+from threads.a2a.outbound.tools import RemoteTool
 from threads.agents.bindings import DEFAULT_PERMISSIONS, AppTool, ToolServer
 from threads.agents.builtins import Egress, egress_denied
 from threads.agents.cache_ttl import agreed_cache_ttl
@@ -65,6 +66,9 @@ class Definition[D]:
     knowledge: KnowledgeProvider | None = None
     servers: tuple[ToolServer, ...] = ()
     """Tool servers (MCP); their tools join `tools` when a run connects them."""
+    remotes: tuple[RemoteTool, ...] = ()
+    """A partner's A2A tools (`remote(...).tools(...)`). Pinned like an app tool, but dispatched
+    through their own runner: they derive what they send from this thread's log."""
     subagents: "tuple[Definition[None], ...]" = ()
     """What spawn_agent may start, by name."""
     handoffs: "tuple[Definition[None], ...]" = ()
@@ -225,7 +229,11 @@ class Definition[D]:
 
     def _user_tools(self) -> Pinned:
         ext = extension_tools(self.extensions)
-        pairs = [(t, t.spec()) for t in self.tools] + [(t, t.spec()) for t in ext]
+        pairs = (
+            [(t, t.spec()) for t in self.tools]
+            + [(t, t.spec()) for t in self.remotes]
+            + [(t, t.spec()) for t in ext]
+        )
         return pinned_tools(pairs, self.defer_tools())
 
     def spec_artifacts(self) -> tuple[bytes, ...]:

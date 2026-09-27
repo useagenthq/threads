@@ -1,6 +1,9 @@
 import { PROVENANCE } from "@threads/a2a/protocol";
 import {
   canonicalize,
+  derivedId,
+  derivedThreadId,
+  derivedUuid,
   type JsonObject,
   JsonValue,
   type Principal,
@@ -9,7 +12,6 @@ import {
   type ThreadId,
 } from "@threads/core/host";
 import type { z } from "zod";
-import { derivedId, derivedThreadId, derivedUuid } from "../derive";
 
 // The receipt key, the context → thread derivation, and the ids the exposed side derives rather
 // than generates. Nothing here is random: a frame, a task id and a status message must be the

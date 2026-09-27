@@ -1763,6 +1763,30 @@
       "tests/adapters/test_credentials.py::test_a_fixed_environment_is_picked_up_by_the_same_agent[zep]"
     ]
   },
+  "Remote.tools": {
+    "ts": [
+      "packages/a2a/test/outbound/tools.test.ts > the send is reconcilable and nonfinal; the status read is read_only"
+    ],
+    "py": [
+      "tests/a2a/test_outbound_tools.py::test_the_send_is_reconcilable_and_nonfinal_and_the_status_read_is_read_only"
+    ]
+  },
+  "Remote.tools.name": {
+    "ts": [
+      "packages/a2a/test/outbound/tools.test.ts > the send is reconcilable and nonfinal; the status read is read_only"
+    ],
+    "py": [
+      "tests/a2a/test_outbound_tools.py::test_the_send_is_reconcilable_and_nonfinal_and_the_status_read_is_read_only"
+    ]
+  },
+  "Remote.tools.description": {
+    "ts": [
+      "packages/a2a/test/outbound/tools.test.ts > a task this conversation did not create is refused before anything is sent"
+    ],
+    "py": [
+      "tests/a2a/test_outbound_tools.py::test_a_task_this_conversation_did_not_create_is_refused_before_anything_is_sent"
+    ]
+  },
   "remote": {
     "ts": [
       "packages/a2a/test/remote.test.ts > remote() > does no I/O, so a partner that is down does not stop a host starting"

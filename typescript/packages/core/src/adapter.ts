@@ -15,12 +15,14 @@ export {
   type RawResponse,
   VerifiedDelivery,
 } from "./channel/protocol";
+export { derivedId } from "./derive";
 export { responseText } from "./fold/state";
 export { sha256Hex } from "./hash";
 /** What a tool provider package (MCP) builds on: the dispatchable tool and its run context. */
 export type { EffectClass, ToolSpec } from "./log";
 export {
   type ArtifactRef,
+  canonicalize,
   type InputPart,
   type Json,
   JsonObject,
@@ -81,6 +83,7 @@ export {
   staleEpoch,
 } from "./model/transport";
 export { reference } from "./render/lines";
+export { err, ok, type Result } from "./result";
 export type {
   Sandbox,
   SandboxContext,
@@ -90,6 +93,8 @@ export type {
 } from "./sandbox";
 /** The remote sandbox kit a sandbox provider package builds on. */
 export * from "./sandbox/remote";
+/** The drafts an effect makes durable with its begin, and what it observed after its commit. */
+export type { EventDraft } from "./store/admit";
 /** The host's network, for an adapter that owns its own bytes: SSRF-checked and address-pinned. */
 export {
   liveTransport,

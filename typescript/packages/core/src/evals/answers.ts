@@ -100,9 +100,9 @@ function scripted(
     },
     reconcile: {
       finality: "final",
-      lookup: async (key): Promise<LookupResult<string>> => {
+      lookup: async (_input, ctx): Promise<LookupResult<string>> => {
         bump(counters.lookups, spec.name);
-        const answer = t.lookup?.[key];
+        const answer = t.lookup?.[ctx.effectKey];
         if (answer === undefined)
           return { status: "unknown", reason: "no answer" };
         if (answer.result === "not_found")

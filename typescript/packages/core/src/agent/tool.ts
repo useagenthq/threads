@@ -207,10 +207,10 @@ function bound<Input, Output, Deps>(
       : {
           reconcile: {
             finality: reconcile.finality,
-            lookup: async (key: string): Promise<LookupResult<string>> => {
+            lookup: async (_input, ctx): Promise<LookupResult<string>> => {
               const answer = await reconcile.lookup(
-                key,
-                context(undefined, key, new AbortController().signal),
+                ctx.effectKey,
+                context(undefined, ctx.effectKey, ctx.signal),
               );
               if (answer.status !== "found") return answer;
               const shown = done(answer.value, def.output);

@@ -7,7 +7,7 @@ The derivation itself is ../derive.py, shared with A2A's context so the two cann
 import re
 from typing import Final
 
-from threads.host.derive import derived_thread_id
+from threads.derive import derived_thread_id
 from threads.log import Principal, ThreadId
 from threads.log.keys import principal_key
 

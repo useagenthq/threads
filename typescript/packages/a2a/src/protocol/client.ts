@@ -40,6 +40,12 @@ export type Sending = {
   readonly authorization?: string;
   /** The extensions this request relies on, sent as `A2A-Extensions`. */
   readonly extensions?: readonly string[];
+  /**
+   * The exact request body to send, instead of serializing `params`: a re-dispatch replays the
+   * bytes its first attempt stored, so a peer that deduplicates on `messageId` sees one message
+   * (30-a2a decision H30-1). Ignored by an operation whose request has no body.
+   */
+  readonly body?: string;
   readonly signal: AbortSignal;
   readonly timeoutMs: number;
 };
@@ -77,7 +83,7 @@ export async function call(
     response = await transport.fetch(url.href, target.address, {
       method: built.verb,
       headers: headers(built.accept, built.body !== undefined, sending),
-      ...(built.body === undefined ? {} : { body: built.body }),
+      ...(built.body === undefined ? {} : { body: sending.body ?? built.body }),
       signal,
     });
   } catch (error) {

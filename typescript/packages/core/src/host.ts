@@ -50,6 +50,11 @@ export { onTeamLog } from "./agent/team/team-log";
 export { takeMail } from "./agent/team/units";
 export type { TeamWorker } from "./agent/team/worker";
 export { assertNever } from "./assert-never";
+export {
+  derivedId,
+  derivedThreadId,
+  derivedUuid,
+} from "./derive";
 export { caseNames } from "./evals/case-dir";
 export { caseLine } from "./evals/report";
 export {

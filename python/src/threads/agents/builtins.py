@@ -10,7 +10,14 @@ from threads.agents.bindings import AppTools
 from threads.log import BranchId, JsonObject, ParseError, ToolSpec
 from threads.loop.defaults import context
 from threads.loop.model import LookupResult
-from threads.loop.tools import Dispatched, Invocation, Termination, ToolRunner
+from threads.loop.tools import (
+    Dispatched,
+    Invocation,
+    Prepared,
+    Termination,
+    ToolRunner,
+    prepared,
+)
 from threads.memory.types import Outcome
 from threads.result import Err, Ok
 from threads.sandbox.ledger import (
@@ -209,6 +216,9 @@ class Routed:
             parsed = parse(spec.name, input)
             return parsed.error if isinstance(parsed, Err) else None
         return self._for(spec.name).invalid(spec, input)
+
+    async def begin(self, call: Invocation) -> Prepared:
+        return await prepared(self._for(call.spec.name), call)
 
     async def dispatch(self, call: Invocation) -> Dispatched:
         return await self._for(call.spec.name).dispatch(call)

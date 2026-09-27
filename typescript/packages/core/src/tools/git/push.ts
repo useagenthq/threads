@@ -165,7 +165,7 @@ export function gitPush(o: GitOptions): Builtin {
     // not_found is nonfinal: the remote may lag, or the head may have moved since. It parks.
     reconcile: (env) => ({
       finality: "nonfinal",
-      lookup: (key, input) => lookup(o, env, key, input),
+      lookup: (input, ctx) => lookup(o, env, ctx.effectKey, input),
     }),
   });
 }

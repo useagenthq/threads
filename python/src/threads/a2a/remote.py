@@ -6,10 +6,15 @@ that starts with an unreachable partner still starts."""
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Final, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from threads.agents.config import ConfigError
 from threads.secrets import Secret, credential
+from threads.web.guard import Resolve
+from threads.web.http import Transport
+
+if TYPE_CHECKING:
+    from threads.a2a.outbound.tools import RemoteTool
 
 type Provenance = Literal["opaque", "none"]
 
@@ -47,6 +52,21 @@ class Remote:
     Recorded as declared, never as measured: nothing here observes a partner's spend."""
     provenance: Provenance
     timeout_ms: int
+    transport: Transport | None = None
+    """The host network every call to this remote goes through; tests inject one."""
+    resolve: Resolve | None = None
+    """How a host name becomes the address the transport connects to; tests inject one. None: the
+    system resolver behind the SSRF guard."""
+
+    def tools(self, *, name: str, description: str) -> tuple["RemoteTool", "RemoteTool"]:
+        """This remote as two pinned tools — `name` sends one message, `name_status` reads a task it
+        created — so they spread next to the thread's own tools:
+        `tools=[*refunds.tools(name=..., description=...), invoice_status]`."""
+        # Imported here: the tools are built from a Remote, so a module-level import would be
+        # a cycle. remote() itself stays free of the outbound layer.
+        from threads.a2a.outbound.tools import remote_tools  # noqa: PLC0415
+
+        return remote_tools(self, name, description)
 
 
 def remote(  # noqa: PLR0913 - the remote's options
@@ -57,6 +77,8 @@ def remote(  # noqa: PLR0913 - the remote's options
     cost_per_message: int | None = None,
     provenance: Provenance | None = None,
     timeout_ms: int | None = None,
+    transport: Transport | None = None,
+    resolve: Resolve | None = None,
 ) -> Remote:
     if _NAME.match(name) is None:
         raise ConfigError("invalid_config", f"remote name {name!r} must match [a-z][a-z0-9_]*")
@@ -74,4 +96,4 @@ def remote(  # noqa: PLR0913 - the remote's options
             "invalid_config",
             f"remote {name}: cost_per_message must be a whole number of nanos, as usd() gives",
         )
-    return Remote(name, card_url, auth, cost, provenance or "opaque", deadline)
+    return Remote(name, card_url, auth, cost, provenance or "opaque", deadline, transport, resolve)

@@ -11,7 +11,7 @@ from typing import Final
 from pydantic import JsonValue
 
 from threads.a2a.protocol import PROVENANCE
-from threads.host.derive import derived_id, derived_thread_id, derived_uuid
+from threads.derive import derived_id, derived_thread_id, derived_uuid
 from threads.log import Principal, ThreadId
 from threads.log.digest import canonical_sha256
 from threads.log.keys import principal_key

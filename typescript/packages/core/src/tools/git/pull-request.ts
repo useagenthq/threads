@@ -168,7 +168,7 @@ export function openPullRequest(o: GitOptions): Builtin {
     // No pull request for (head, base) in any state means none was created: not_found is final.
     reconcile: () => ({
       finality: "final",
-      lookup: async (_key, raw) => {
+      lookup: async (raw) => {
         const input = OpenPullRequestInput.safeParse(raw);
         return input.success
           ? existing(o, input.data)

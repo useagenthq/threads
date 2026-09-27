@@ -2,6 +2,7 @@ import { assertNever } from "../assert-never";
 import { type EventOf, effectKey } from "../fold/state";
 import type { ArtifactRef } from "../log";
 import type { EventDraft } from "../store";
+import { toolContext } from "./dispatch";
 import { draft } from "./drafts";
 import { lookedUp } from "./lookup";
 import type { Session } from "./session";
@@ -13,6 +14,13 @@ import type { Halt, ToolImpl } from "./types";
 // anything else parks for a human. Nothing is ever auto-resolved.
 
 const DAY = 86_400_000;
+/**
+ * How long a park that a lookup keeps failing to settle waits before a person is called. Each new
+ * lease's recovery is another try (the contract's "3 tries over 5 minutes"); we escalate on the
+ * first try past the floor rather than counting tries, because the wait is what a person notices
+ * and a counter would need an event of its own.
+ */
+const ESCALATE_AFTER = 300_000;
 
 type Actor = { readonly kind: "host" | "recovery" };
 
@@ -103,8 +111,7 @@ async function reconcile(
   const fenced = await s.fence();
   if (fenced !== undefined) return fenced;
   const answer = await lookedUp(
-    () =>
-      contract.lookup(effectKey(s.fold, callId, s.branchId), call.data.input),
+    () => contract.lookup(call.data.input, toolContext(s, call)),
     (reason) => ({ status: "unknown" as const, reason }),
   );
   if (answer.status === "found") {
@@ -237,7 +244,7 @@ async function park(
 ): Promise<Halt | undefined> {
   const id = effectKey(s.fold, callId, s.branchId);
   if (s.fold.parked.some((a) => a.kind === "effect" && a.id === id))
-    return undefined;
+    return escalate(s, id, actor);
   return s.append(
     draft.parked(
       {
@@ -247,5 +254,36 @@ async function park(
       },
       actor,
     ),
+  );
+}
+
+/**
+ * A park this pass could not settle either: past the floor a person is called, once. Nothing is
+ * resolved here — an escalation is a notification, and only a proof or a person settles the
+ * effect (invariant 3).
+ */
+async function escalate(
+  s: Session,
+  id: string,
+  actor: Actor,
+): Promise<Halt | undefined> {
+  const since = s.events.findLast(
+    (e) =>
+      e.type === "parked" &&
+      e.data.address.kind === "effect" &&
+      e.data.address.id === id,
+  );
+  if (since === undefined || s.now() - since.time < ESCALATE_AFTER)
+    return undefined;
+  const called = s.events.some(
+    (e) =>
+      e.type === "park_escalated" &&
+      e.data.address.kind === "effect" &&
+      e.data.address.id === id &&
+      e.seq > since.seq,
+  );
+  if (called) return undefined;
+  return s.append(
+    draft.parkEscalated({ address: { kind: "effect", id } }, actor),
   );
 }

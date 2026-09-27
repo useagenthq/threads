@@ -30,7 +30,11 @@ from threads.loop.model import Model
 from threads.loop.team_runtime import TeamRuntime
 from threads.loop.tools import ToolRunner
 from threads.permissions import Decision
-from threads.redaction import SecretInProviderOutputError, SecretInStoredBytesError
+from threads.redaction import (
+    SecretInProviderOutputError,
+    SecretInStoredBytesError,
+    redact_secrets,
+)
 from threads.reduce import Fold
 from threads.render.artifacts import read_verified
 from threads.result import Err, Ok
@@ -217,6 +221,17 @@ class Runtime:
     @property
     def events(self) -> Sequence[Event]:
         return self.writer.fold.events
+
+    async def put_artifact(self, data: bytes | str, media_type: str) -> ArtifactRef:
+        """Stores bytes before an event names them, and returns their ref. Text is redacted (C5)."""
+        raw = redact_secrets(data).encode() if isinstance(data, str) else data
+        sha = await self.store.put_artifact(raw)
+        return ArtifactRef(sha256=sha, bytes=len(raw), media_type=media_type)
+
+    async def read_artifact(self, ref: ArtifactRef) -> bytes | None:
+        """An artifact this branch's log names, or None when it cannot be read."""
+        got = await self.store.get_artifact(ref.sha256)
+        return None if isinstance(got, Err) else got.value
 
     async def append(self, *drafts: Draft) -> Appended:
         """Appends one durable batch. Nothing is dispatched on its account until this returns."""

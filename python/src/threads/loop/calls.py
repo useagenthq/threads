@@ -5,7 +5,7 @@ A call that fails before `effect_begin` (unknown tool, bad arguments, a denial) 
 """
 
 from collections.abc import Awaitable, Callable, Mapping
-from typing import TYPE_CHECKING, Final, Literal
+from typing import TYPE_CHECKING, Final
 
 from pydantic import JsonValue
 
@@ -14,7 +14,7 @@ from threads.log.digest import canonical_sha256
 from threads.loop import effects, gates, output, questions, search, todos, tool_gates
 from threads.loop.drafts import ActorKind, draft
 from threads.loop.history import CallState, call_state, open_cancel
-from threads.loop.results import As, reference_drafts, result_draft
+from threads.loop.results import As, close_call, reference_drafts, result_draft
 from threads.loop.runtime import Failed, Halt, Parked, Runtime, fence, lost
 from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertain
 from threads.reduce.fold import call_spec
@@ -98,17 +98,8 @@ async def _effect(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:
             return await effects.close_settled(rt, state, "host")
 
 
-async def close(
-    rt: Runtime,
-    call_id: CallId,
-    origin: Literal["denied", "not_executed"],
-    why: str,
-    actor: ActorKind = "host",
-) -> Halt | None:
-    """Closes a call that never ran with an error result."""
-    result = await result_draft(rt, call_id, why, As(origin, True, actor))
-    done = await rt.append(result)
-    return lost(done.error) if isinstance(done, Err) else None
+close = close_call
+"""Closes a call that never ran with an error result (threads.loop.results)."""
 
 
 async def recheck(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:
@@ -196,7 +187,7 @@ def denial(state: CallState) -> str:
 
 async def _read_only(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | None:
     """A read_only call writes no effect events: it changes nothing, so it simply runs."""
-    inv = effects.invocation(state, spec)
+    inv = effects.invocation(rt, state, spec)
     stale = await fence(rt)
     if stale is not None:
         return stale
@@ -212,7 +203,9 @@ async def record_read(rt: Runtime, inv: Invocation, ran: Dispatched) -> Halt | N
         ):
             how = As("executed", is_error)
             result = await result_draft(rt, inv.call_id, text, how, full, content=parts)
-            references = reference_drafts(recalled)
+            # A read that observed a partner's task records what it saw, against the call that
+            # holds the receipt, before its own result (semantic rule 57).
+            references = [*ran.events, *reference_drafts(recalled)]
         case Uncertain(reason=reason):
             text = f"{reason}: the read did not finish"
             result = await result_draft(rt, inv.call_id, text, As("executed", True))

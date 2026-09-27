@@ -13,7 +13,7 @@ import { gitClone, gitFetch } from "../../src/tools/git/clone";
 import type { GitOptions } from "../../src/tools/git/host";
 import { forgeFetch, openPullRequest } from "../../src/tools/git/pull-request";
 import { gitPush } from "../../src/tools/git/push";
-import { bound, type LocalSession, localSession } from "./kit";
+import { bound, type LocalSession, localSession, toolCtx } from "./kit";
 
 // The git gateway (F11.12): host git with the credential, bundles in and out of
 // a sandbox that never sees it. The forge is a local bare repository: no network.
@@ -115,7 +115,7 @@ describe("git gateway", () => {
     const lookup = push.impl.reconcile;
     expect(lookup?.finality).toBe("nonfinal");
     expect(
-      await lookup?.lookup("k", { repo: "acme/api", branch: "fix-1" }),
+      await lookup?.lookup({ repo: "acme/api", branch: "fix-1" }, toolCtx()),
     ).toEqual({
       status: "found",
       value: `pushed ${head} to acme/api fix-1`,
@@ -125,7 +125,7 @@ describe("git gateway", () => {
     sh(dir, "add", ".");
     sh(dir, "commit", "--quiet", "-m", "two");
     expect(
-      await lookup?.lookup("k", { repo: "acme/api", branch: "fix-2" }),
+      await lookup?.lookup({ repo: "acme/api", branch: "fix-2" }, toolCtx()),
     ).toEqual({ status: "not_found" });
 
     // The canary (F11.2): no token in any sandbox file, argv or env.
@@ -321,7 +321,10 @@ describe("open_pull_request", () => {
       [LIST]: Response.json([{ ...pull, state: "closed" }]),
     });
     expect(
-      await bound(openPullRequest(later.o)).impl.reconcile?.lookup("k", PR),
+      await bound(openPullRequest(later.o)).impl.reconcile?.lookup(
+        PR,
+        toolCtx(),
+      ),
     ).toEqual({
       status: "found",
       value: "pull request #7 (closed): https://forge.test/acme/api/pull/7",

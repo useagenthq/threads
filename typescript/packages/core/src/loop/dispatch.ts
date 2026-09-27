@@ -3,7 +3,8 @@ import type { EventOf } from "../fold/state";
 import { effectKey } from "../fold/state";
 import { sha256Hex } from "../hash";
 import { canonicalize, type ResultPart } from "../log";
-import { err, ok } from "../result";
+import { contextReader } from "../model/context";
+import { err, ok, type Result } from "../result";
 import type { EventDraft } from "../store";
 import { authorize } from "./authorize";
 import { draft, TOOL } from "./drafts";
@@ -13,7 +14,7 @@ import type { Session } from "./session";
 import { settleUnknown } from "./settle";
 import { type Recorded, recordOutput } from "./spill";
 import { callSpec } from "./turn";
-import { BARRED, type Halt, type ToolRun } from "./types";
+import { BARRED, type Halt, type ToolContext, type ToolRun } from "./types";
 
 // Pending calls, in call order: authorization first, then the body. An effect's
 // effect_begin is durable (and fenced by the lease in the same transaction) before dispatch,
@@ -147,7 +148,12 @@ async function dispatch(
   const attempts = s.events.filter(
     (e) => e.type === "effect_begin" && e.data.call_id === callId,
   ).length;
+  // What this attempt must record with its begin, decided before anything is durable: a refusal
+  // here sends nothing and never begins, so the call closes with the reason instead.
+  const prepared = await prepare(s, call);
+  if (!prepared.ok) return closed(s, callId, prepared.error);
   const begun = await s.appendWork(
+    ...prepared.value,
     draft.effectBegin({ call_id: callId, attempt: attempts + 1 }),
   );
   // A cancel landed first: nothing is dispatched; the cancellation step closes the call.
@@ -158,6 +164,38 @@ async function dispatch(
   if (fenced !== undefined) return fenced;
   const run = await sent(s, call);
   return settle(s, callId, run);
+}
+
+/**
+ * The drafts the tool wants durable in the same append as its `effect_begin`. A tool with no
+ * `begin` prepares nothing, which is every tool but an A2A send.
+ */
+async function prepare(
+  s: Session,
+  call: EventOf<"tool_call">,
+): Promise<Result<readonly EventDraft[], string>> {
+  const begin = s.config.tools.get(call.data.name)?.begin;
+  if (begin === undefined) return ok([]);
+  try {
+    return await begin(call.data.input, toolContext(s, call));
+  } catch (error) {
+    // Nothing began, so a thrown preparation is a refusal, never uncertainty.
+    return err(error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** A call refused before it began: not executed, with the reason the model sees. */
+function closed(
+  s: Session,
+  callId: string,
+  preview: string,
+): Promise<Halt | undefined> {
+  return s.append(
+    draft.toolResult(
+      { call_id: callId, is_error: true, origin: "not_executed", preview },
+      { kind: "host" },
+    ),
+  );
 }
 
 /** A read_only call's result and its injections. */
@@ -171,7 +209,13 @@ export async function recordRead(
     run.kind === "done"
       ? run
       : { kind: "done", output: `failed: ${run.kind}`, isError: true };
-  return s.append(await result(s, callId, done), ...injections(done));
+  // A read that observed a partner's task records what it saw, against the call that holds the
+  // receipt, before its own result (rule 57).
+  return s.append(
+    ...(done.events ?? []),
+    await result(s, callId, done),
+    ...injections(done),
+  );
 }
 
 /** The body of a mediated operation, or its stub in stub mode. */
@@ -191,6 +235,30 @@ async function sent(
 }
 
 /** Runs the tool; `signal` is the run's, or a group's composed with it. */
+export function toolContext(
+  s: Session,
+  call: EventOf<"tool_call">,
+  signal: AbortSignal = s.config.signal ?? new AbortController().signal,
+): ToolContext {
+  return {
+    effectKey: effectKey(s.fold, call.data.call_id, s.branchId),
+    callId: call.data.call_id,
+    branchId: s.branchId,
+    epoch: s.epoch,
+    principal: s.config.principal,
+    signal,
+    fence: async () => {
+      const halted = await s.fence();
+      return halted === undefined
+        ? ok(undefined)
+        : err({ code: "stale_epoch", message: halted.message });
+    },
+    events: () => s.events,
+    store: (bytes, mediaType) => s.store(bytes, mediaType),
+    read: contextReader(s.artifacts),
+  };
+}
+
 export async function body(
   s: Session,
   call: EventOf<"tool_call">,
@@ -203,22 +271,8 @@ export async function body(
       output: `no implementation for ${call.data.name}`,
       isError: true,
     };
-  const key = effectKey(s.fold, call.data.call_id, s.branchId);
   try {
-    return await impl.run(call.data.input, {
-      effectKey: key,
-      callId: call.data.call_id,
-      branchId: s.branchId,
-      epoch: s.epoch,
-      principal: s.config.principal,
-      signal,
-      fence: async () => {
-        const halted = await s.fence();
-        return halted === undefined
-          ? ok(undefined)
-          : err({ code: "stale_epoch", message: halted.message });
-      },
-    });
+    return await impl.run(call.data.input, toolContext(s, call, signal));
   } catch {
     // Anything after dispatch but a result is uncertainty, never a plain error.
     return { kind: "unknown", reason: "transport_error" };
@@ -257,6 +311,8 @@ async function settle(
             ? {}
             : { provider_receipt: run.receipt }),
         }),
+        // After the commit: an observation that names a receipt we now hold (rule 57).
+        ...(run.events ?? []),
         resultOf(callId, run.isError, shown, contentOf(run)),
         ...injections(run),
       );

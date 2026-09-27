@@ -1,7 +1,8 @@
 """Derived ids: a name that is a function of its fields, with no lookup table and nothing recorded.
-One implementation, because the UI's chat key (spec/schema/ui/README.md) and A2A's context
-(spec/schema/a2a/) derive the same way under different domain strings, and a byte of difference
-between them would let one surface reach the other's thread."""
+One implementation, because the UI's chat key (spec/schema/ui/README.md), an inbound A2A context
+and an outbound A2A message id (spec/schema/a2a/) derive the same way under different domain
+strings, and a byte of difference between them would let one surface reach the other's thread.
+Below the host, because the exposed side and the client side both use it."""
 
 import hashlib
 import uuid

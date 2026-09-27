@@ -4,23 +4,20 @@ import type { LoopExtension } from "../hooks/types";
 import type {
   BranchId,
   EventId,
-  InjectedData,
   KnownEvent,
   Policy,
   Principal,
-  ResultPart,
   ThreadId,
   ToolSpec,
   Usage,
 } from "../log";
-import type { LookupResult, Model } from "../model";
-import type { Result } from "../result";
-import type { Stale } from "../sandbox/protocol";
+import type { Model } from "../model";
 import type { BudgetLedger } from "../store/budget";
 import type { Tx } from "../store/driver";
 import type { DynamicChoice } from "../team/dynamic";
 import type { MessagePolicyRule } from "../team/policy";
 import type { MemberRow } from "../team/rows";
+import type { ToolImpl } from "./tool";
 
 /**
  * RunResult failed.error.code: host-api RunErrorCode (spec/schema/host-api), closed. A test
@@ -55,69 +52,7 @@ export type Clock = {
   readonly sleepUntil: (time: number) => Promise<void>;
 };
 
-/** What one dispatch of a tool body established. Anything after dispatch but a result is uncertain. */
-export type ToolRun =
-  | {
-      readonly kind: "done";
-      readonly output: string;
-      readonly isError: boolean;
-      readonly receipt?: string;
-      /**
-       * The ordered parts the model sees instead of `output` (an image_ref
-       * screenshot, citations); `output` is then the plain-text preview for logs and channels.
-       */
-      readonly content?: readonly ResultPart[];
-      /**
-       * Model-visible context the result brings, appended with it (recalled memory, retrieved * knowledge: always untrusted reference).
-       */
-      readonly inject?: readonly z.infer<typeof InjectedData>[];
-    }
-  | { readonly kind: "unknown"; readonly reason: "timeout" | "transport_error" }
-  /** The adapter proves the request never left. */
-  | { readonly kind: "not_sent" };
-
-export type ToolContext = {
-  readonly effectKey: string;
-  readonly callId: string;
-  /** The fencing pair a gateway re-checks before an external operation. */
-  readonly branchId: string;
-  readonly epoch: number;
-  readonly principal: Principal;
-  readonly signal: AbortSignal;
-  /**
-   * Re-checks the lease at the tool's real send point, for a tool whose body
-   * reaches a remote service: run the transport inside `within(ctx, ...)`.
-   */
-  readonly fence: () => Promise<Result<void, Stale>>;
-};
-
-/** A dispatchable tool: its pinned spec, its body, and the recovery contract its class needs. */
-export type ToolImpl = {
-  readonly spec: ToolSpec;
-  /** The tool's own schema: arguments are parsed with it before anything is authorized. */
-  readonly input: z.ZodType;
-  readonly run: (
-    input: EventOf<"tool_call">["data"]["input"],
-    ctx: ToolContext,
-  ) => Promise<ToolRun>;
-  /** reconcilable: the adapter's lookup by effect key, and whether its not_found is final. */
-  readonly reconcile?: {
-    /** `input` is the call's recorded input, for a lookup keyed by what was asked. */
-    readonly lookup: (
-      effectKey: string,
-      input: EventOf<"tool_call">["data"]["input"],
-    ) => Promise<LookupResult<string>>;
-    readonly finality: "final" | "nonfinal";
-  };
-  /** sandbox_local: kill the call's process group and confirm it is gone. */
-  readonly terminate?: (
-    effectKey: string,
-  ) => Promise<"terminated" | "already_exited" | "unknown">;
-  /** idempotent: the provider's clock; absent means the host clock with a doubled skew margin. */
-  readonly providerNow?: () => number;
-  /** An app tool declared `concurrent: true`: it may run in a group (loop/groups.ts). */
-  readonly concurrent?: true;
-};
+export type { ToolContext, ToolImpl, ToolRun } from "./tool";
 
 /** A permission_decision the loop records for a new call (fold, hooks later). */
 export type Authorization = {

@@ -103,7 +103,7 @@ async def run_group(rt: Runtime, group: Sequence[CallId]) -> Halt | None:
 
 def _invocation(rt: Runtime, call_id: CallId) -> Invocation:
     state = call_state(rt.events, call_id)
-    return effects.invocation(state, calls.pending_spec(rt, call_id))
+    return effects.invocation(rt, state, calls.pending_spec(rt, call_id))
 
 
 async def _start(

@@ -17,6 +17,7 @@ function remote(name: string, cardUrl: string, options?: {
   costPerMessage?: number;
   provenance?: Provenance;
   timeoutMs?: number;
+  transport?: WebTransport;
 }): Remote
 ```
 
@@ -32,6 +33,8 @@ def remote(
     cost_per_message: int = 0,
     provenance: Provenance = "opaque",
     timeout_ms: int = 120000,
+    transport: Transport | None = None,
+    resolve: Resolve | None = None,
 ) -> Remote
 ```
 
@@ -62,6 +65,18 @@ def remote(
 
 <Field name="timeoutMs / timeout_ms" type={"number"} default={"120000"}>
   How long one exchange may take. A timeout before the partner's task id is known leaves the outcome uncertain, so the call parks and nothing is re-sent; after the task id is known it means the task is still working, and the caller checks later. A value that is not a positive integer is invalid_config.
+</Field>
+
+<Field name="transport" type={"WebTransport"}>
+  TypeScript only. Seam: where every call to this remote is sent, so a test drives a scripted partner and counts what was sent. Omitted: the host's live web transport, which resolves and vets each address before it connects.
+</Field>
+
+<Field name="transport" type={"Transport"}>
+  Python only. Seam: where every call to this remote is sent, so a test drives a scripted partner and counts what was sent. Omitted: the host's live web transport.
+</Field>
+
+<Field name="resolve" type={"Resolve"}>
+  Python only. Seam: how a host name becomes the address the transport connects to, which Python resolves separately from sending. Omitted: the system resolver behind the SSRF guard.
 </Field>
 
 ## Returns
