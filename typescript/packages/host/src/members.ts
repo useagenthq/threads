@@ -5,6 +5,7 @@ import {
   type RestartPolicy,
   type ToolSpec,
 } from "@threads/core/host";
+import { isPosInt } from "@threads/core/internal/pos-int";
 
 // host({members}) at setup (spec/api.json host.members): which host agents run as one long-lived
 // member per tenant, and every refusal that makes a shared member safe. Checked synchronously from
@@ -51,10 +52,13 @@ const refuse = (
   throw new ConfigError(code, why);
 };
 
-/** Every public positive-integer option takes the same check. */
+/**
+ * Every public positive-integer option takes the same check, the one `isPosInt` makes for a team
+ * option: a second copy of it here is how the two boundaries drift apart.
+ */
 function posInt(at: string, field: string, value: number | undefined): void {
   if (value === undefined) return;
-  if (!Number.isSafeInteger(value) || value < 1)
+  if (!isPosInt(value))
     refuse(
       "invalid_config",
       `${at}: ${field} is ${value}; give a positive integer`,

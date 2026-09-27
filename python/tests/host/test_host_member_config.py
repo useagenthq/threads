@@ -89,13 +89,20 @@ def test_within_ms_below_a_second_is_refused() -> None:
     assert "members.billing.within_ms is 999" in str(caught.value)
 
 
-@pytest.mark.parametrize("value", [0, -1, True, 1.5, "3"])
-def test_max_restarts_takes_the_pos_int_check(value: object) -> None:
-    options = HostMemberOptions(max_restarts=value)  # pyright: ignore[reportArgumentType]
+# Both options are the shared PosInt check, so this is the table TypeScript's
+# host-members.test.ts runs: True is an int subclass in Python, and past MAX_SAFE_INTEGER the wire
+# can't hold the value, which is where unbounded Python ints and JavaScript numbers drift apart.
+_NOT_POS_INT: list[object] = [0, -1, 1.5, 2**53, True, "3"]
+
+
+@pytest.mark.parametrize("field", ["max_restarts", "within_ms"])
+@pytest.mark.parametrize("value", _NOT_POS_INT)
+def test_a_member_option_takes_the_pos_int_check(field: str, value: object) -> None:
+    options = HostMemberOptions(**{field: value})  # pyright: ignore[reportArgumentType]
     with pytest.raises(ConfigError) as caught:
         serving({"billing": billing()}, {"billing": options})
     assert caught.value.code == "invalid_config"
-    assert "members.billing.max_restarts" in str(caught.value)
+    assert f"members.billing.{field} is {value!r}" in str(caught.value)
 
 
 @pytest.mark.parametrize("op", ["start", "monitor", "cancel"])

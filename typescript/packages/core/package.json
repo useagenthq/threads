@@ -9,6 +9,7 @@
     "./adapter": "./src/adapter.ts",
     "./host": "./src/host.ts",
     "./internal/feed": "./src/store/feed.ts",
+    "./internal/pos-int": "./src/pos-int.ts",
     "./store-driver": "./src/store-driver.ts"
   },
   "dependencies": {

@@ -143,17 +143,23 @@ describe("host({members}) at setup", () => {
     expect(bad.message).toContain("a restart window is at least 1000 ms");
   });
 
-  test("maxRestarts takes the positive-integer check", () => {
-    const bad = withMembers({ billing }, { billing: { maxRestarts: 0 } });
-    expect(bad.code).toBe("invalid_config");
-    expect(bad.message).toContain("maxRestarts is 0; give a positive integer");
-  });
+  // Both options are the shared PosInt check, so the table is the one Python's
+  // test_host_member_config.py runs: past MAX_SAFE_INTEGER the wire can't hold the value, and a
+  // string or a boolean is what an untyped caller really passes.
+  const NOT_POS_INT = [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, true, "3"];
 
-  test("withinMs takes the positive-integer check", () => {
-    const bad = withMembers({ billing }, { billing: { withinMs: 1.5 } });
-    expect(bad.code).toBe("invalid_config");
-    expect(bad.message).toContain("withinMs is 1.5; give a positive integer");
-  });
+  for (const field of ["maxRestarts", "withinMs"] as const)
+    test(`${field} takes the positive-integer check`, () => {
+      for (const value of NOT_POS_INT) {
+        // The computed key is what lets a boolean and a string through the checker, which is what
+        // an untyped caller really passes.
+        const bad = withMembers({ billing }, { billing: { [field]: value } });
+        expect(bad.code).toBe("invalid_config");
+        expect(bad.message).toContain(
+          `${field} is ${value}; give a positive integer`,
+        );
+      }
+    });
 
   test("a rule to a host member allowing monitor is refused", () => {
     const bad = withMembers({ support, billing }, { billing: {} }, [
