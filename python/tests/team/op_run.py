@@ -37,6 +37,7 @@ from threads.team.provenance import turn_provenance
 from threads.team.request import Request
 from threads.team.rows import TeamRow, team_of_log
 from threads.team.settle import AppendContext, Completed, SettleContext, Settlement, settle
+from threads.team.supervise import RestartPolicy, SuperviseContext, supervise
 from threads.team.turn_failed import fail_turn
 from threads.team.watch import WaitMode, monitor, open_wait, wait, wait_members
 
@@ -300,13 +301,55 @@ async def _turn_failure(w: Writer, v: Obj) -> JsonValue:
     return out[0]
 
 
+async def _supervise(w: Writer, v: Obj) -> JsonValue:
+    """The supervisor step (rule 51): the host team log's one decision on an ended generation,
+    with the restart's new thread minted before the append as a start's is."""
+    inp = obj(v["input"])
+    policy = obj(inp["policy"])
+    resolved = RestartPolicy(
+        "never" if policy["restart"] == "never" else "on_failure",
+        int(str(policy["max_restarts"])),
+        int(str(policy["within_ms"])),
+    )
+    out: list[JsonValue] = []
+
+    def decide(tx: DecideTx, batch: Batch) -> None:
+        team = team_of_log(tx.conn, w.branch_id)
+        assert team is not None, w.branch_id
+        thread = str(inp.get("thread_id", ""))
+        done = supervise(
+            SuperviseContext(tx.conn, tx.fold, batch, team, thread), str(inp["member"]), resolved
+        )
+        decided: dict[str, JsonValue] = {"status": done.status}
+        if done.action is not None:
+            decided["action"] = done.action
+            decided["restarts_in_window"] = done.restarts_in_window
+        out.append(decided)
+
+    await _decided(w, decide)
+    return out[0]
+
+
+_REQUESTED = frozenset({"send", "start", "ask", "wait", "cancel"})
+"""The ops an operator request can carry; a vector's input names its request_id."""
+
+_CALLED = frozenset({"send", "start", "ask", "reply", "wait", "monitor", "cancel"})
+"""The ops a member's own model call makes."""
+
+
 async def run_on(w: Writer, v: Obj) -> JsonValue:
     """The op under `w`: its outcome as the vector states it."""
-    match v["op"]:
-        case "send" | "start" | "ask" | "wait" | "cancel" if "request_id" in obj(v["input"]):
-            return await _operator(w, v)
-        case "send" | "start" | "ask" | "reply" | "wait" | "monitor" | "cancel":
-            return await _call(w, v)
+    op = str(v["op"])
+    if op in _REQUESTED and "request_id" in obj(v["input"]):
+        return await _operator(w, v)
+    if op in _CALLED:
+        return await _call(w, v)
+    return await _step(w, v, op)
+
+
+async def _step(w: Writer, v: Obj, op: str) -> JsonValue:
+    """An op that is neither a model call nor an operator request: one append of its own."""
+    match op:
         case "consume":
             return await _consume(w)
         case "deadline":
@@ -315,5 +358,7 @@ async def run_on(w: Writer, v: Obj) -> JsonValue:
             return await _settle(w, v)
         case "turn_failure":
             return await _turn_failure(w, v)
-        case op:
+        case "supervise":
+            return await _supervise(w, v)
+        case _:
             raise AssertionError(f"op {op} runs on a store, not a writer")

@@ -10661,9 +10661,9 @@
           "restart": "on_failure",
           "max_restarts": 3,
           "within_ms": 60000
-        }
+        },
+        "thread_id": "0192a000-0000-7000-8000-0000000000c2"
       },
-      "lane": "29E",
       "expect": {
         "outcome": {
           "status": "decided",
@@ -10725,7 +10725,6 @@
           "within_ms": 600000
         }
       },
-      "lane": "29E",
       "expect": {
         "outcome": {
           "status": "decided",
@@ -10767,7 +10766,6 @@
           "within_ms": 60000
         }
       },
-      "lane": "29E",
       "expect": {
         "outcome": {
           "status": "decided",
@@ -10809,7 +10807,6 @@
           "within_ms": 60000
         }
       },
-      "lane": "29E",
       "expect": {
         "outcome": {
           "status": "already_decided"

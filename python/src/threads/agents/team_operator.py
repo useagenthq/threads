@@ -42,6 +42,9 @@ class HandleEnv:
     limits: TeamLimits
     worker: WorkerEnv
     """How the handle drives the team while an ask or a wait is open."""
+    host: bool = False
+    """A host team's handle (`Host.team`): leadless, so its only start is an operator restart
+    (Teams Phase 2, E). TypeScript reads the absence of a lead for the same thing."""
     busy_bound_ms: int | None = None
     mint: Mint | None = None
 

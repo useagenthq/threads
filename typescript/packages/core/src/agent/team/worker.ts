@@ -1,37 +1,24 @@
-import { BranchId, type MailEnvelope, type TeamId } from "../../log";
+import { BranchId, type TeamId } from "../../log";
 import { knownEvents } from "../../reduce";
 import type { LogStore } from "../../store";
 import type { ArtifactStore } from "../../store/artifacts";
 import { reading, type StoreDriver } from "../../store/driver";
 import type { Mint } from "../../team/batch";
-import { claimMail } from "../../team/claim";
 import { TEAM_CONSTANTS } from "../../team/constants";
-import { mayResume } from "../../team/consume";
 import type { DynamicChoice } from "../../team/dynamic";
 import { type Rebind, recordedChoice } from "../../team/materialize";
-import {
-  cancelPendingFor,
-  type MemberRow,
-  memberRows,
-  ownRows,
-  pendingFor,
-} from "../../team/rows";
+import { cancelPendingFor, type MemberRow, memberRows } from "../../team/rows";
 import type { DeferTools } from "../defer";
 import type { MemberEntry } from "../registry";
 import type { Store } from "../sqlite";
 import { ancestorsOf, startedCap } from "./budgets";
 import { runHostMember } from "./host-member";
 import { takeTeamLogMail } from "./log-mail";
-import {
-  closed,
-  deadlineDue,
-  leaseFree,
-  principalOf,
-  teamsUnder,
-  WORKED,
-} from "./scan";
+import { closed, principalOf, teamsUnder, WORKED } from "./scan";
 import { materializeOrLater, rebindMember } from "./setup";
+import { type HostPin, type Supervision, superviseHost } from "./supervise";
 import { endUnbound, takeMail } from "./units";
+import { type Unit, type Work, workFor } from "./work";
 
 // The in-process team worker (spec/schema/README.md, "Teams"; decision 17): while a lead's run
 // is open, it materializes every starting member of the lead's team (and of each nested team),
@@ -59,12 +46,20 @@ export type WorkerEnv = {
   readonly deferTools?: DeferTools;
   /** How many setup failures in a row end a member setup_failed; tests inject fewer. */
   readonly setupAttempts?: number;
+  /**
+   * host({members})'s restart policy per host member name: the supervisor step's input. Absent
+   * for a lead's team, which supervises nothing (Teams Phase 2, E).
+   */
+  readonly supervision?: Supervision;
+  /** Each host member's pin as this host holds it now: what a restart starts the next one on. */
+  readonly hostPin?: HostPin;
 };
+
+/** A lead's team supervises nothing. */
+const EMPTY: Supervision = new Map();
 
 /** The first and the longest wait before a member whose unit did nothing is tried again. */
 const BACKOFF = { firstMs: 250, maxMs: TEAM_CONSTANTS.claimTtlMs } as const;
-
-type Unit = (signal: AbortSignal) => Promise<boolean>;
 
 export class TeamWorker {
   readonly #env: WorkerEnv;
@@ -167,6 +162,15 @@ export class TeamWorker {
         team,
         this.#env.mint,
       );
+      // Before the members are visited: a restart this step decides leaves a starting row that
+      // this same pass materializes.
+      await superviseHost(
+        this.#env.log,
+        team,
+        this.#env.supervision ?? EMPTY,
+        this.#env.mint,
+        this.#env.hostPin,
+      );
       for (const row of await reading(db, (tx) => memberRows(tx, team)))
         if (WORKED.has(row.role)) await this.#visit(db, row, recovering, now);
     }
@@ -190,82 +194,24 @@ export class TeamWorker {
     // A pending cancel is applied at once, backoff or not: it never needs the member's setup.
     const waiting = (this.#backoff.get(row.thread_id)?.at ?? 0) > now;
     if (waiting && !cancelled) return;
-    const work = await this.#work(db, row, recovering, cancelled);
+    const work = await workFor(this.#work(), db, row, {
+      recovering,
+      cancelled,
+    });
     if (work !== undefined) this.#launch(row.thread_id, work);
   }
 
-  /** What a member needs now, if anything. */
-  async #work(
-    db: StoreDriver,
-    row: MemberRow,
-    recovering: boolean,
-    cancelled: boolean,
-  ): Promise<Unit | undefined> {
-    // A closed team's members start or resume only to apply the lead's cancel.
-    if (row.state !== "ended" && (await closed(db, row.team_id)) && !cancelled)
-      return undefined;
-    if (row.state === "starting")
-      return (signal) => this.#materialize(row, signal);
-    const branch = row.branch_id;
-    if (branch === null) return undefined;
-    const pending = await reading(db, async (tx) =>
-      pendingFor(tx, await ownRows(tx, row.thread_id)),
-    );
-    const run: Unit = (signal) => this.#member(row, branch, signal);
-    // A parked member runs again at a run's start (what it waits on may be answered by now), for
-    // mail that may resume it, and once an ask or a wait it parked on is due. Waking on a due
-    // deadline or on mail to refuse waits for a free lease: its holder does that work, and a
-    // launch that can't acquire would relaunch at once, never yielding.
-    if (row.state === "parked") {
-      const wake = recovering || (await this.#wakesParked(db, branch, pending));
-      return wake ? run : undefined;
-    }
-    if (row.state === "ended") return this.#refusing(branch, pending);
-    // A turn left open with its lease free is resumed (hostless recovery).
-    const stranded =
-      row.state === "running" &&
-      (recovering || (await leaseFree(this.#env.log, branch)));
-    return (await this.#claim(db, pending)) || stranded ? run : undefined;
-  }
-
-  /** An ended member's pending mail is refused, once its lease is free. */
-  async #refusing(
-    branch: BranchId,
-    pending: readonly MailEnvelope[],
-  ): Promise<Unit | undefined> {
-    return pending.length > 0 && (await leaseFree(this.#env.log, branch))
-      ? async () => (await takeMail(this.#env, branch)) !== undefined
-      : undefined;
-  }
-
-  /** Mail that may resume the parked member, or, with its lease free, a due ask or wait. */
-  async #wakesParked(
-    db: StoreDriver,
-    branch: BranchId,
-    pending: readonly MailEnvelope[],
-  ): Promise<boolean> {
-    return (
-      (await this.#claim(db, pending.filter(mayResume))) ||
-      ((await leaseFree(this.#env.log, branch)) &&
-        (await deadlineDue(this.#env.log, branch)))
-    );
-  }
-
-  /**
-   * mail.claim (design §4.6) on the first row this worker would wake the member for: a live claim
-   * of another worker means that worker wakes it. Correctness never depends on it: the lease
-   * holder consumes.
-   */
-  async #claim(
-    db: StoreDriver,
-    mail: readonly MailEnvelope[],
-  ): Promise<boolean> {
-    const first = mail[0];
-    if (first === undefined) return false;
-    const now = this.#env.log.now();
-    const ttl = this.#env.claimTtlMs ?? TEAM_CONSTANTS.claimTtlMs;
-    const claim = await claimMail(db, first.mail_id, this.#token, now, ttl);
-    return claim === "claimed";
+  /** What the pass's decision reads, and the units it may hand back (work.ts). */
+  #work(): Work {
+    return {
+      log: this.#env.log,
+      token: this.#token,
+      claimTtlMs: this.#env.claimTtlMs,
+      materialize: (row) => (signal) => this.#materialize(row, signal),
+      run: (row, branch) => (signal) => this.#member(row, branch, signal),
+      take: (branch) => async () =>
+        (await takeMail(this.#env, branch)) !== undefined,
+    };
   }
 
   /**
@@ -307,8 +253,13 @@ export class TeamWorker {
       throw new Error(`materialize ${row.name}: ${got.error.message}`);
     this.notify();
     if (got.value.status !== "materialized") return true;
-    const branch = got.value.writer.lease.branchId;
-    return this.#member(row, branch, signal, holder);
+    const { writer } = got.value;
+    const ran = await this.#member(row, writer.lease.branchId, signal, holder);
+    // Nothing ran: a host member materializes with no mail of its own, which is every restart
+    // (its generation's end refused every pending row). The lease materialize took goes back
+    // now, or the first mail to the new generation waits out its whole TTL.
+    if (!ran) await writer.release();
+    return ran;
   }
 
   /** The member's definition rebound here (setup.ts), its setup failures counted. */

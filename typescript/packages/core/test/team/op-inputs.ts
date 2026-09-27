@@ -1,9 +1,11 @@
 import { z } from "zod";
 import type { EventOf } from "../../src/fold/state";
 import type { TurnFailure as TurnFailureSchema } from "../../src/log";
+import type { RestartPolicy } from "../../src/team/supervise";
 
-// The inputs of the op vectors that carry a turn end (spec/conformance/vectors/team-ops.json):
-// a host member's turn-only failure names its hop cap, its turn_completed and its TurnFailure.
+// The inputs of the op vectors that carry a turn end or a restart policy
+// (spec/conformance/vectors/team-ops.json): a host member's turn-only failure names its hop
+// cap, its turn_completed and its TurnFailure; the supervisor step names its members option.
 
 type TurnEndData = EventOf<"turn_completed">["data"];
 type HopData = Omit<
@@ -59,4 +61,10 @@ export const Failure: z.ZodType<TurnFailureSchema> = z.object({
     "interrupted",
   ]),
   message: z.string(),
+});
+
+export const Policy: z.ZodType<RestartPolicy> = z.object({
+  restart: z.enum(["on_failure", "never"]),
+  max_restarts: z.int(),
+  within_ms: z.int(),
 });

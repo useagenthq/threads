@@ -31,6 +31,7 @@ export type {
   TeamItem,
   TeamSource,
 } from "./agent/team/handle-types";
+export { pinHostMember } from "./agent/team/host-member";
 export { hostTeam } from "./agent/team/host-team-handle";
 export {
   type HostedTeam,
@@ -44,6 +45,7 @@ export {
 } from "./agent/team/hosted";
 export { renewTeam } from "./agent/team/runtime";
 export { leaseFree } from "./agent/team/scan";
+export type { HostPin, Supervision } from "./agent/team/supervise";
 export { onTeamLog } from "./agent/team/team-log";
 export { takeMail } from "./agent/team/units";
 export type { TeamWorker } from "./agent/team/worker";
@@ -129,6 +131,7 @@ export {
 export { type HostTeamIds, hostTeamIds } from "./team/host-team";
 export { checkMessagePolicy, rulesFrom } from "./team/policy";
 export { memberRows, pendingHere } from "./team/rows";
+export type { RestartPolicy } from "./team/supervise";
 export { bindTelemetry } from "./telemetry";
 export { cancelChildren } from "./thread/cancel";
 export { type Alongside, control, resumed } from "./thread/control";

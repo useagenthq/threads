@@ -14,8 +14,10 @@ import {
   finishWait,
 } from "./close";
 import { received, sent } from "./mail";
+import { turnProvenance } from "./provenance";
 import type { Request, Target } from "./request";
 import { refOf } from "./rows";
+import { settle } from "./settle";
 import { askOpen, openWaits, parksNow } from "./view";
 
 // cancel: durable intent, then application (spec/schema/README.md, "Teams"; design §4.14). The
@@ -76,6 +78,11 @@ type Principal = EventOf<"cancel_requested">["actor"]["principal"];
  * completes by ask.complete's decision (a pending reply or bounce still wins, else cancelled), a
  * wait takes the notices already committed for it and finishes with what settled, and a member
  * park resumes.
+ *
+ * A host member with no turn open ends here too (Teams Phase 2, E). A member with a task always
+ * has a turn for the barrier to close, so its end follows from that turn; a host member idles
+ * between callers, and nothing would ever close a barrier it took while idle. This is the same
+ * append §4.14 describes for a cancel that reaches a member before it starts.
  */
 export async function applyCancel(
   ctx: CloseContext,
@@ -111,4 +118,32 @@ export async function applyCancel(
         data: { address: park, cause_event_id: got },
       });
   }
+  await endedIdle(ctx, got);
+}
+
+/** An idle host member's end, in the cancel's own append: the barrier's answer and the end. */
+async function endedIdle(ctx: CloseContext, cause: string): Promise<void> {
+  const { fold } = ctx.chain;
+  if (!fold.team.host.hostMember || fold.turnOpen) return;
+  ctx.batch.add({
+    type: "cancelled",
+    type_version: 1,
+    critical: true,
+    actor: { kind: "host" },
+    data: { request_event_id: cause },
+  });
+  await settle(
+    {
+      tx: ctx.tx,
+      batch: ctx.batch,
+      threadId: ctx.threadId,
+      branchId: ctx.branchId,
+      provenance: await turnProvenance(ctx.tx, ctx.chain),
+      put: () => {
+        throw new Error("a cancelled member's result has no text");
+      },
+      takenAsks: fold.team.host.turnAsks,
+    },
+    { status: "cancelled" },
+  );
 }

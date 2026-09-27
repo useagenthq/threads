@@ -4,6 +4,7 @@ Its own module so a member path can take them without importing the worker (a cy
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from threads.agents.definition import Definition
 from threads.agents.store import Store
@@ -13,6 +14,10 @@ from threads.loop.team_runtime import TeamAgentPin
 from threads.store import SqliteStore
 from threads.team.batch import Mint
 from threads.team.constants import TEAM_CONSTANTS
+from threads.team.supervise import RestartPolicy
+
+if TYPE_CHECKING:
+    from threads.agents.team_supervise import HostPin
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,3 +54,8 @@ class WorkerEnv:
     claim_ttl_ms: int = TEAM_CONSTANTS.claim_ttl_ms
     setup_attempts: int = TEAM_CONSTANTS.setup_attempts
     """How many setup failures in a row end a member setup_failed; tests inject fewer."""
+    supervision: Mapping[str, RestartPolicy] = field(default_factory=dict[str, RestartPolicy])
+    """host(members=...)'s restart policy per host member name: the supervisor step's input.
+    Empty for a lead's team, which supervises nothing (Teams Phase 2, E)."""
+    host_pin: "HostPin | None" = None
+    """Each host member's pin as this host holds it now: what a restart starts the next one on."""

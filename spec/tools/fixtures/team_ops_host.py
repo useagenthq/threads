@@ -2,8 +2,8 @@
 """Team op vectors of Teams Phase 2 (spec/schema/README.md, "Teams Phase 2"): a caller's ask and
 send of a host member under the host rules, a host member's reply to a caller, the caller's
 consume, a host member's failed and hop-capped turns, the supervisor step, and deleting a caller.
-Supervision's vectors name their sub-lane (`lane`), and runtimes skip one until that build; lane
-29D's are built, so they carry none."""
+Every one of them is built now: 29D landed the caller and turn vectors, and 29E the supervisor's,
+so none carries a `lane` tag."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from .common import obj, text
 from .host_cases import asked, close_ask, replied
 from .host_pieces import (
     BILLING_BRANCHES,
+    BILLING_THREADS,
     POLICY,
     SUPPORT_BRANCH,
     billing,
@@ -255,10 +256,9 @@ def _supervision() -> list[Vec]:
             _world(team=team, billing=bill),
             "supervise",
             "team",
-            {"member": "billing", "policy": POLICY},
+            {"member": "billing", "policy": POLICY, "thread_id": BILLING_THREADS[2]},
             {"status": "decided", "action": "restart", "restarts_in_window": 0},
             {"team": ["supervisor_decided", "member_started"]},
-            lane="29E",
         ),
         _vec(
             "host-supervise-stop-at-cap",
@@ -270,7 +270,6 @@ def _supervision() -> list[Vec]:
             capped,
             {"status": "decided", "action": "stop", "restarts_in_window": 1},
             {"team": ["supervisor_decided"]},
-            lane="29E",
         ),
         _vec(
             "host-supervise-cancel-stops",
@@ -281,7 +280,6 @@ def _supervision() -> list[Vec]:
             {"member": "billing", "policy": POLICY},
             {"status": "decided", "action": "stop", "restarts_in_window": 0},
             {"team": ["supervisor_decided"]},
-            lane="29E",
         ),
         _vec(
             "host-supervise-already-decided",
@@ -293,7 +291,6 @@ def _supervision() -> list[Vec]:
             {"member": "billing", "policy": POLICY},
             {"status": "already_decided"},
             {},
-            lane="29E",
         ),
     ]
 

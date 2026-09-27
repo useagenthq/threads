@@ -126,15 +126,21 @@ async def host_member_pin(definition: Definition[None]) -> TeamAgentPin:
     return await member_pin(definition, host=True)
 
 
+async def pin_host_member(sq: SqliteStore, definition: Definition[None]) -> str:
+    """A host member's pin as this process holds it, with its canonical config and its deferred
+    tools' specs stored: the config_hash a `member_started` of it may name. The lazy open, the
+    supervisor's restart and an operator's all take it from here, so one definition change moves
+    all three together."""
+    pinned = await host_member_pin(definition)
+    for raw in (pinned.config, *pinned.specs):
+        await sq.put_artifact(raw)
+    return pinned.config_hash
+
+
 async def open_host_team(sq: SqliteStore, tenant: str, members: Sequence[Definition[None]]) -> None:
     """The tenant's host team, opened before a thread of it addresses a host member. Each
     member's pin is stored before the member_started that names it, as a start's is."""
-    configs: dict[str, str] = {}
-    for definition in members:
-        pinned = await host_member_pin(definition)
-        for raw in (pinned.config, *pinned.specs):
-            await sq.put_artifact(raw)
-        configs[definition.name] = pinned.config_hash
+    configs = {d.name: await pin_host_member(sq, d) for d in members}
     await ensure_host_team(sq, tenant, configs, holder=f"open-{uuid7(now_ms())}", clock=now_ms)
 
 

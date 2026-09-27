@@ -4,6 +4,7 @@ import { startRoom } from "../../loop/ledger";
 import { uuidv7 } from "../../store/encode";
 import { refTarget } from "../../team/operator";
 import { type StartPlan, send, start } from "../../team/ops";
+import { restart } from "../../team/supervise";
 import { ancestorsOf } from "./budgets";
 import { teamEvents } from "./feed";
 import type {
@@ -12,6 +13,7 @@ import type {
   TeamStartOptions,
   TeamStartResult,
 } from "./handle-types";
+import { pinHostMember } from "./host-member";
 import {
   type HandleEnv,
   isIn,
@@ -51,12 +53,16 @@ export function teamHandle(env: HandleEnv): Team {
 async function startMember(
   env: HandleEnv,
   agent: string,
-  task: string,
+  task: string | undefined,
   options: TeamStartOptions,
 ): Promise<TeamStartResult> {
-  // A host team is leadless: nothing starts a member in it (host({members}) does, and lane 29E
-  // restarts one). Refused before any writer, so nothing is recorded.
-  if (env.lead === undefined) return { status: "refused", code: "forbidden" };
+  // A host team is leadless: host({members}) starts its members, and the only start an operator
+  // makes there is the restart of one the supervisor stopped (Teams Phase 2, E).
+  if (env.lead === undefined)
+    return await restartMember(env, agent, options.idempotencyKey);
+  // A lead's member is its task: there is nothing to start it with. Before any writer, so
+  // nothing is recorded.
+  if (task === undefined) return { status: "refused", code: "invalid_request" };
   const lead0 = env.lead;
   const { idempotencyKey, budget, ...chosen } = options;
   const args = {
@@ -96,6 +102,36 @@ async function startMember(
       ...(done.detail === undefined ? {} : { detail: done.detail }),
     };
   throw new Error(`a start recorded ${done.status}`);
+}
+
+/**
+ * The operator's restart on a host team: the next generation of a host member the supervisor
+ * stopped, in a new empty thread, recorded as an operator request like any other (rule 51).
+ */
+async function restartMember(
+  env: HandleEnv,
+  name: string,
+  idempotencyKey: string | undefined,
+): Promise<TeamStartResult> {
+  const threadId = ThreadId.parse(uuidv7(env.log.now()));
+  // Re-pinned before the append: an operator restarts a stopped member to pick up the agent as
+  // it is registered now, which is the whole point of restarting it by hand.
+  const entry = env.agents?.get(name);
+  const configHash =
+    entry === undefined ? undefined : await pinHostMember(env.artifacts, entry);
+  const done = await operator(
+    env,
+    "start",
+    { agent: name },
+    idempotencyKey,
+    (req, _team, close) =>
+      restart(req, name, close.chain.fold, threadId, configHash),
+  );
+  if (done === BUSY) return { status: "refused", code: BUSY };
+  if (done.status === "started") return done;
+  if (done.status === "refused" && isIn(START_CODES, done.code))
+    return { status: "refused", code: done.code };
+  throw new Error(`a restart recorded ${done.status}`);
 }
 
 async function sendTo(

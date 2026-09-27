@@ -26,7 +26,7 @@ from threads.host import expiry, start, stream, team_stream
 from threads.host.channel import Challenged, ChannelAdapter, RawRequest, RawResponse
 from threads.host.host_team import HostTeam
 from threads.host.intake import ChannelIntake
-from threads.host.members import HostMemberOptions, check_members
+from threads.host.members import HostMemberOptions, check_members, restart_policy
 from threads.host.reopen import Reopening
 from threads.host.runs import Runner, RunTask
 from threads.host.schedules import Schedule, Scheduler
@@ -89,7 +89,8 @@ class Host:
         self._after: set[asyncio.Task[RunTask | None]] = set()
         """The reply sweeps after the runs that ended here, until each has looked."""
         self._host_team: HostTeam = HostTeam(
-            {name: self._runner.definition(name) for name in members}
+            {name: self._runner.definition(name) for name in members},
+            {name: restart_policy(options) for name, options in members.items()},
         )
         """The tenant-wide host members, bound through the policy-aware definitions."""
         self._scheduler = Scheduler(self._runner, schedules)

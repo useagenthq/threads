@@ -5314,7 +5314,7 @@
         "start": {
           "ts": "start",
           "py": "start",
-          "doc": "Starts a member from an agent the team lists, with task as its first input. Recorded in the team log as an operator request.",
+          "doc": "Starts a member from an agent the team lists, with task as its first input. On a host team (Host.team) it restarts a host member the supervisor stopped, as the next generation in a new empty thread, and takes no task. Recorded in the team log as an operator request.",
           "async": true,
           "params": [
             {
@@ -5324,7 +5324,7 @@
                 "$ref": "urn:threads:schema:events:v1#/$defs/Name"
               },
               "required": true,
-              "doc": "The agent to start, by name."
+              "doc": "The agent to start, by name. On a host team: the host member's name, which is its agent's."
             },
             {
               "name": "task",
@@ -5332,8 +5332,8 @@
               "type": {
                 "prim": "string"
               },
-              "required": true,
-              "doc": "The member's first input; it sees nothing else."
+              "required": false,
+              "doc": "The member's first input; it sees nothing else. Omitted on a host team, whose members have no task; omitting it in a lead's team is invalid_request. Omitted: none."
             },
             {
               "name": "budget",
@@ -5550,7 +5550,7 @@
         "cancel": {
           "ts": "cancel",
           "py": "cancel",
-          "doc": "Requests a member's cancel: durable at once, applied at the member's next step.",
+          "doc": "Requests a member's cancel: durable at once, applied at the member's next step. On a host team it is the operator's explicit stop: the member ends cancelled, and a cancel never restarts.",
           "async": true,
           "params": [
             {
@@ -6517,11 +6517,16 @@
                   },
                   {
                     "$ref": "#/types/OperatorRefusal"
+                  },
+                  {
+                    "enum": [
+                      "invalid_request"
+                    ]
                   }
                 ]
               },
               "required": true,
-              "doc": "Why it was refused."
+              "doc": "Why it was refused. forbidden on a host team: the name is no host member of it, its generation is still live, or the supervisor restarted it rather than stopping it. invalid_request (no task in a lead's team) is returned before any writer, so, like busy, it is never logged."
             },
             "detail": {
               "type": {

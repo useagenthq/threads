@@ -1,5 +1,10 @@
 import { ConfigError, type MessagePolicyRule } from "@threads/core";
-import { type DryPin, dryPin, type ToolSpec } from "@threads/core/host";
+import {
+  type DryPin,
+  dryPin,
+  type RestartPolicy,
+  type ToolSpec,
+} from "@threads/core/host";
 
 // host({members}) at setup (spec/api.json host.members): which host agents run as one long-lived
 // member per tenant, and every refusal that makes a shared member safe. Checked synchronously from
@@ -26,6 +31,15 @@ export type HostMember = {
   readonly maxRestarts: number;
   readonly withinMs: number;
 };
+
+/** The public option as the supervisor step and the log read it (rule 51's `policy`). */
+export function restartPolicy(member: HostMember): RestartPolicy {
+  return {
+    restart: member.restart,
+    max_restarts: member.maxRestarts,
+    within_ms: member.withinMs,
+  };
+}
 
 /** The shortest window a restart policy may name (api.json: less is invalid_config). */
 const MIN_WINDOW_MS = 1000;

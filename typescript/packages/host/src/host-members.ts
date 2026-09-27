@@ -2,6 +2,7 @@ import {
   ensureHostTeam,
   err,
   type HostMemberStart,
+  type HostPin,
   type HostTeamIds,
   hostTeam,
   hostTeamIds,
@@ -12,6 +13,7 @@ import {
   ok,
   onTeamLog,
   type Principal,
+  pinHostMember,
   type Result,
   reading,
   storeConnection,
@@ -45,6 +47,25 @@ function memberEntriesOf(
   );
 }
 
+/**
+ * Each configured host member's pin as this host holds it now: what the supervisor's restart and
+ * an operator's start the next generation on, so a definition that was changed or re-registered
+ * is picked up by the restart rather than repeated.
+ */
+export function hostPinOf(
+  ctx: HostContext,
+  members: readonly HostMember[],
+  tenant: string,
+): HostPin {
+  return async (name) => {
+    const hosted = [...ctx.agents.values()].find((a) => a.name === name);
+    if (hosted === undefined || !members.some((m) => m.agent === name))
+      return undefined;
+    const { artifacts } = await ctx.open(tenant);
+    return await pinHostMember(artifacts, hosted.runner.member);
+  };
+}
+
 /** The team limits a leadless host team's sends and asks are capped by (a lead's defaults). */
 const HOST_TEAM_LIMITS = { concurrent: 64, mailbox: 100 } as const;
 
@@ -71,12 +92,9 @@ export async function openHostTeam(
     // Pinned as a member, under the host's rules: a host member's team tools are reply plus what
     // its rules allow, and it inherits no lead's defer_tools (it has no lead). Its canonical bytes
     // and its deferred tools' specs are stored before the append that names its config_hash.
-    const pin = await hosted.runner.member.pinned(undefined);
-    await artifacts.put(new TextEncoder().encode(pin.config));
-    for (const bytes of pin.artifacts) await artifacts.put(bytes);
     starts.push({
       agent: member.agent,
-      configHash: pin.configHash,
+      configHash: await pinHostMember(artifacts, hosted.runner.member),
       threadId: ThreadId.parse(uuidv7(log.now())),
     });
   }

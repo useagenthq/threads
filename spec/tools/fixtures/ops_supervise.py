@@ -18,7 +18,8 @@ if TYPE_CHECKING:
 def supervise(w: World, label: str, inp: Obj) -> Obj:
     """One decision on the named member's ended generation, in the team log: restart when the
     policy is on_failure, the member failed and the window holds fewer restarts than the cap;
-    else stop. An end already decided is left alone (exactly once)."""
+    else stop. An end already decided is left alone (exactly once). A restart's new thread is
+    `thread_id`, minted before the append as a start's is."""
     name, policy = text(inp["member"]), obj(inp["policy"])
     row = w.member(name)
     if row is None or row["state"] != "ended":
@@ -52,7 +53,8 @@ def supervise(w: World, label: str, inp: Obj) -> Obj:
     }
     w.add(label, "supervisor_decided", data)
     if action == "restart":
-        w.add(label, "member_started", host_start(gen + 1, restart_of=gen))
+        started = host_start(gen + 1, restart_of=gen)
+        w.add(label, "member_started", started | {"thread_id": text(inp["thread_id"])})
     return {"status": "decided", "action": action, "restarts_in_window": count}
 
 

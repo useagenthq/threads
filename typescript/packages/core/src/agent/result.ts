@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { assertNever } from "../assert-never";
 import { type EventOf, type ParkAddress, responseText } from "../fold/state";
+import { mailRenders } from "../fold/team";
 import type { BranchId, KnownEvent, ThreadId } from "../log";
 import type { LoopEnd, RunErrorCode } from "../loop";
 import { failureOf } from "../loop/failure";
@@ -54,6 +55,9 @@ export type Decode<Output> = (
   accepted: z.core.util.JSONType | undefined,
 ) => Output;
 
+/** A monitor notice is never the run either; a settled set of none is enough here. */
+const SETTLED: ReadonlySet<string> = new Set();
+
 export function runResult<Output>(
   end: LoopEnd,
   events: readonly KnownEvent[],
@@ -70,11 +74,18 @@ export function runResult<Output>(
     return { status: "parked", reason, pending: parked, thread };
   }
   // A host member has no user_input of its own (Teams Phase 2): the run its last turn belongs to
-  // is the one the mail that opened that turn names as its root request.
+  // is the one the mail that opened that turn names as its root request. Only mail that renders
+  // counts: a control receipt (an operator's cancel, which is how a host member is stopped)
+  // opens no turn and is nobody's run.
+  const opened = events.findLast(
+    (e) =>
+      e.type === "message_received" && mailRenders(e.data.envelope, SETTLED),
+  );
   const request =
     events.findLast((e) => e.type === "user_input")?.event_id ??
-    events.findLast((e) => e.type === "message_received")?.data.envelope
-      .provenance.root_request.event_id;
+    (opened?.type === "message_received"
+      ? opened.data.envelope.provenance.root_request.event_id
+      : undefined);
   if (request === undefined) throw new Error("an idle run had an input");
   return endedRun(runEnd(events, request), thread, decode);
 }

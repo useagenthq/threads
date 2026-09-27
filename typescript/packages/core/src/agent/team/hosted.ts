@@ -9,6 +9,7 @@ import type { Store } from "../sqlite";
 import { rebound } from "./open";
 import { leadOf } from "./operator-request";
 import { agentsOf, memberEntries } from "./runtime";
+import type { HostPin, Supervision } from "./supervise";
 import { TeamWorker } from "./worker";
 
 // What a host needs to run lane 21's team worker for a team no run of its own opened (design
@@ -108,6 +109,13 @@ export type TeamWorkerEnv = {
   readonly team: TeamId;
   /** Aborted when the host stops: every member run in flight gives up on it. */
   readonly signal?: AbortSignal;
+  /**
+   * host({members})'s restart policy per host member name. Only a host team has one: a lead's
+   * team supervises nothing (Teams Phase 2, E).
+   */
+  readonly supervision?: Supervision;
+  /** Each host member's pin as this host holds it now: what a restart starts the next one on. */
+  readonly hostPin?: HostPin;
 };
 
 /** What a team's worker needs of its lead: pinning it is the costly part, so it is kept. */
@@ -141,5 +149,7 @@ export function teamWorkerFor(env: TeamWorkerEnv, lead: TeamLead): TeamWorker {
     agents: lead.agents,
     ...(env.signal === undefined ? {} : { signal: env.signal }),
     ...(lead.deferTools === undefined ? {} : { deferTools: lead.deferTools }),
+    ...(env.supervision === undefined ? {} : { supervision: env.supervision }),
+    ...(env.hostPin === undefined ? {} : { hostPin: env.hostPin }),
   });
 }

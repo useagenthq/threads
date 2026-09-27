@@ -10,6 +10,7 @@ import {
   pendingCallers,
   pendingHere,
   reading,
+  type Supervision,
   storeConnection,
   TEAM_CONSTANTS,
   type TeamLead,
@@ -19,8 +20,8 @@ import {
   teamWorkerFor,
 } from "@threads/core/host";
 import type { HostContext } from "./context";
-import { openHostTeams } from "./host-members";
-import type { HostMember } from "./members";
+import { hostPinOf, openHostTeams } from "./host-members";
+import { type HostMember, restartPolicy } from "./members";
 import type { Watch } from "./watch";
 
 // The host as a team worker (design §7 Phase 2, A): each tick drives lane 21's worker for every
@@ -89,11 +90,18 @@ export class Teams {
         artifacts,
         team: team.team_id,
         signal: this.#ctx.stopping,
+        supervision: this.#supervision(),
+        hostPin: hostPinOf(this.#ctx, this.#members, team.tenant_id),
       },
       { agents: this.#entries(), deferTools: undefined },
     );
     this.#workers.set(team.team_id, worker);
     worker.start();
+  }
+
+  /** Each configured host member's restart policy, by name: the supervisor step's input. */
+  #supervision(): Supervision {
+    return new Map(this.#members.map((m) => [m.agent, restartPolicy(m)]));
   }
 
   /** Each configured host member's policy-aware member entry, by agent name. */

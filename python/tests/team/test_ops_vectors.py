@@ -31,7 +31,8 @@ from threads.team.materialize import materialize
 from threads.team.materialize_types import MaterializeOptions, Rebind
 
 MINE = [v for v in vectors() if "lane" not in v]
-"""A vector tagged for a later lane waits for that sub-lane's build."""
+"""A vector tagged for a later lane waits for that sub-lane's build; 29E untagged the last
+four, so every vector in the file runs."""
 
 
 def _clock(v: Obj) -> Callable[[], int]:
@@ -108,11 +109,11 @@ def test_the_selection_covers_this_builds_ops() -> None:
         *("start", "send", "ask", "reply", "wait", "monitor", "cancel"),
         *("deadline", "consume"),
         *("materialize", "idle", "end"),
-        *("turn_failure", "delete"),
+        *("turn_failure", "supervise", "delete"),
     }
     # Pinned: a vector that drops out of the selection fails here, not silently.
-    assert len(MINE) == 118  # noqa: PLR2004 - the pinned selection size
-    assert sum(v["by"] == "team" for v in MINE) == 29  # noqa: PLR2004 - of them, the operator's
+    assert len(MINE) == 122  # noqa: PLR2004 - the pinned selection size
+    assert sum(v["by"] == "team" for v in MINE) == 33  # noqa: PLR2004 - of them, the operator's
 
 
 @pytest.mark.parametrize("v", MINE, ids=[str(v["name"]) for v in MINE])

@@ -193,14 +193,20 @@ def pending_callers(conn: Conn, team: str) -> list[tuple[str, str]]:
 
 
 def pending_for(conn: Conn, rows: Sequence[MemberRow]) -> list[MailEnvelope]:
-    """Pending mail to any of a thread's own rows (a nested lead has two), in one order."""
+    """Pending mail to any of a thread's own rows (a nested lead has two), in one order. Matched
+    by generation as well as name: a host member's ended generation shares its name with the one
+    the supervisor restarted, and mail bound to the live generation is not the ended one's to
+    refuse (Teams Phase 2, E)."""
     if not rows:
         return []
-    pairs = ", ".join("(?, ?)" for _ in rows)
-    params = [v for r in rows for v in (r.team_id, r.name)]
+    # Cast every value: Postgres types a VALUES row's parameters from nothing, and compares the
+    # bigint generation column against a text parameter (bigint = text) without them.
+    triples = ", ".join("(CAST(? AS TEXT), CAST(? AS TEXT), CAST(? AS BIGINT))" for _ in rows)
+    params = [v for r in rows for v in (r.team_id, r.name, r.generation)]
     found = conn.execute(
-        "SELECT envelope FROM mail WHERE state = 'pending' AND (team_id, to_name) IN"  # noqa: S608
-        f" (VALUES {pairs}) ORDER BY created_at, mail_id",
+        "SELECT envelope FROM mail WHERE state = 'pending' AND to_kind = 'member'"  # noqa: S608
+        f" AND (team_id, to_name, to_generation) IN (VALUES {triples})"
+        " ORDER BY created_at, mail_id",
         params,
     ).fetchall()
     return _envelopes(found)
@@ -209,7 +215,8 @@ def pending_for(conn: Conn, rows: Sequence[MemberRow]) -> list[MailEnvelope]:
 def cancel_pending_for(conn: Conn, thread: str) -> bool:
     """A cancel is pending for one of the thread's own rows."""
     found = conn.execute(
-        "SELECT 1 FROM mail m JOIN team_members t ON m.team_id = t.team_id AND m.to_name = t.name"
+        "SELECT 1 FROM mail m JOIN team_members t ON m.team_id = t.team_id"
+        " AND m.to_name = t.name AND m.to_generation = t.generation"
         " WHERE t.thread_id = ? AND m.kind = 'cancel' AND m.state = 'pending' LIMIT 1",
         (thread,),
     ).fetchone()

@@ -25,7 +25,7 @@ import {
 // through this runtime's own store ops reaches the reference's outcome, appends the same event
 // types per log and makes the same row changes; the team then replays.
 
-/** A vector tagged for a later lane is not run by this build; the 29D ones are untagged. */
+/** A vector tagged for a later lane is not run by this build; 29E untagged the last four. */
 const runs = (v: Vector): boolean => v.lane === undefined;
 
 async function materializeOp(fx: Fixture, v: Vector): Promise<unknown> {
@@ -112,12 +112,12 @@ describe("team op vectors, run by this runtime", () => {
         ...["start", "send", "ask", "reply", "wait", "monitor", "cancel"],
         ...["deadline", "consume"],
         ...["materialize", "idle", "end"],
-        ...["turn_failure", "delete"],
+        ...["turn_failure", "supervise", "delete"],
       ]),
     );
     // Pinned: a vector that drops out of the selection fails here, not silently.
-    expect(mine).toHaveLength(118);
-    expect(mine.filter((v) => v.by === "team")).toHaveLength(29);
+    expect(mine).toHaveLength(122);
+    expect(mine.filter((v) => v.by === "team")).toHaveLength(33);
   });
 
   for (const v of mine)

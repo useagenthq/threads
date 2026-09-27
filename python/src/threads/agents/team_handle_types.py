@@ -35,7 +35,9 @@ nothing was recorded; retrying with the same key is safe."""
 
 @dataclass(frozen=True, slots=True)
 class TeamStartRefused:
-    code: StartRefusal | OperatorRefusal
+    code: StartRefusal | OperatorRefusal | Literal["invalid_request"]
+    """Why it was refused. invalid_request (no task in a lead's team) is returned before any
+    writer, so, like busy, it is never logged."""
     status: Literal["refused"] = "refused"
     detail: InvalidDefinition | None = None
     """Present exactly when code is invalid_definition."""

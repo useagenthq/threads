@@ -132,7 +132,8 @@ class Teams:
         if host_team is None or not host_team.agents or team.team_id in self._workers:
             return
         store = self._runner.store(team.tenant_id)
-        worker = host_worker_for(store, await open_store(store), team, host_team.agents)
+        sq = await open_store(store)
+        worker = host_worker_for(store, sq, team, host_team.configured(sq))
         self._workers[team.team_id] = worker
         worker.start()
 

@@ -33,6 +33,7 @@ from threads.loop import runtime
 from threads.loop.history import turn_events
 from threads.loop.runtime import FAILED_CODES, FAILED_MESSAGES, Halt, RunErrorCode
 from threads.reduce.run_end import run_end
+from threads.reduce.team_fold import mail_renders
 from threads.result import Ok
 
 
@@ -69,12 +70,16 @@ def _latest_request(events: Sequence[Event]) -> EventId | None:
     """The run the log's last turn belongs to: its latest input. A host member has no user_input
     at all (Teams Phase 2), and only then is the run the one the mail that opened its turn names
     as its root request -- a later message_received in a thread that does take input is ordinary
-    mail of the input's own run, not a run of its own."""
+    mail of the input's own run, not a run of its own. Only mail that renders counts: a control
+    receipt (an operator's cancel, which is how a host member is stopped) opens no turn and is
+    nobody's run."""
     for event in reversed(events):
         if isinstance(event, UserInputEvent):
             return event.event_id
     for event in reversed(events):
-        if isinstance(event, MessageReceivedEvent):
+        if isinstance(event, MessageReceivedEvent) and mail_renders(
+            event.data.envelope, frozenset()
+        ):
             return EventId(event.data.envelope.provenance.root_request.event_id)
     return None
 

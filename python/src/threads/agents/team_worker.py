@@ -23,6 +23,7 @@ from threads.agents.team_host_member import HostMembers
 from threads.agents.team_log_mail import take_team_log_mail
 from threads.agents.team_rebind import bound, rebind
 from threads.agents.team_scan import closed, lease_free, members_under, principal_of
+from threads.agents.team_supervise import supervise_host
 from threads.agents.team_units import end_unbound, take_mail
 from threads.agents.team_worker_env import MemberRun, WorkerEnv
 from threads.log import (
@@ -146,7 +147,11 @@ class TeamWorker:
         rows = await self._env.sq.run(lambda c: members_under(c, team))
         for each in sorted({team, *(r.team_id for r in rows)}):
             await take_team_log_mail(self._env.sq, each, self._env.mint)
-        for row in rows:
+            await supervise_host(
+                self._env.sq, each, self._env.supervision, self._env.mint, self._env.host_pin
+            )
+        # Re-read: a restart the step just decided leaves a starting row this pass materializes.
+        for row in await self._env.sq.run(lambda c: members_under(c, team)):
             await self._visit(row, recovering=recovering)
 
     async def _visit(self, row: MemberRow, *, recovering: bool) -> None:
@@ -276,9 +281,15 @@ class TeamWorker:
             raise AssertionError(f"materialize {row.name}: {got.error.message}")
         self.notify()
         writer = got.value.writer
-        if got.value.status == "materialized" and writer is not None:
-            return await self._member(row, writer.branch_id, holder)
-        return True
+        if got.value.status != "materialized" or writer is None:
+            return True
+        ran = await self._member(row, writer.branch_id, holder)
+        # Nothing ran: a host member materializes with no mail of its own, which is every restart
+        # (its generation's end refused every pending row). The lease materialize took goes back
+        # now, or the first mail to the new generation waits out its whole TTL.
+        if not ran:
+            await writer.release()
+        return ran
 
     async def _settled_rebind(
         self, started: MemberStartedEvent, task: MailEnvelope | None

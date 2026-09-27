@@ -49,6 +49,7 @@ from threads.team.operator import ref_target
 from threads.team.ops import StartPlan, send, start
 from threads.team.request import Request
 from threads.team.rows import TeamRow, member_rows
+from threads.team.supervise import restart
 from threads.team.watch import WaitMode
 
 __all__ = ["HandleEnv", "Team"]
@@ -69,7 +70,7 @@ class Team:
     async def start(  # noqa: PLR0913 - the start's own fields, each optional
         self,
         agent: str,
-        task: str,
+        task: str | None = None,
         *,
         budget: Budget | None = None,
         label: str | None = None,
@@ -79,7 +80,9 @@ class Team:
         idempotency_key: str | None = None,
     ) -> TeamStartResult:
         """Starts a member from an agent the team lists, with task as its first input. budget is
-        the member's own, capped by policy; omitted, the agent's own budget."""
+        the member's own, capped by policy; omitted, the agent's own budget. On a host team
+        (`Host.team`) it restarts a host member the supervisor stopped, as the next generation in
+        a new empty thread, and takes no task."""
         chosen = Chosen(label, instructions, tools, model)
         return await _start(self._env, agent, task, chosen, budget, idempotency_key)
 
@@ -141,11 +144,19 @@ class Team:
 async def _start(  # noqa: PLR0913, PLR0917 - the start's own fields, each optional
     env: HandleEnv,
     agent: str,
-    task: str,
+    task: str | None,
     chosen: Chosen,
     budget: Budget | None,
     key: str | None,
 ) -> TeamStartResult:
+    # A host team is leadless: host(members=...) starts its members, and the only start an
+    # operator makes there is the restart of one the supervisor stopped (Teams Phase 2, E).
+    if env.host:
+        return await _restart(env, agent, key)
+    # A lead's member is its task: there is nothing to start it with. Before any writer, so
+    # nothing is recorded.
+    if task is None:
+        return TeamStartRefused("invalid_request")
     parent = await _lead_parent(env)
     got = await start_pin(env.pin, env.sq.put_artifact, agent, chosen, "operator")
     pinned = got.pinned
@@ -166,6 +177,29 @@ async def _start(  # noqa: PLR0913, PLR0917 - the start's own fields, each optio
         member = MemberRef.model_validate(done["member"])
         return Started(member)
     return TeamStartRefused(code_in(_START, done), detail=_detail(done.get("detail")))
+
+
+async def _restart(env: HandleEnv, name: str, key: str | None) -> TeamStartResult:
+    """The operator's restart on a host team: the next generation of a host member the supervisor
+    stopped, in a new empty thread, recorded as an operator request like any other (rule 51)."""
+    thread_id = uuid7(now_ms())
+    # Re-pinned before the append: an operator restarts a stopped member to pick up the agent as
+    # it is registered now, which is the whole point of restarting it by hand.
+    pinned = await env.pin(name, None)
+    config_hash = None if pinned is None else pinned.config_hash
+    if pinned is not None:
+        for raw in (pinned.config, *pinned.specs):
+            await env.sq.put_artifact(raw)
+
+    def decide(req: Request, _team: TeamRow, close: CloseContext) -> dict[str, JsonValue]:
+        return restart(req, name, close.fold, thread_id, config_hash)
+
+    done = await operator(env, "start", {"agent": name}, key, decide)
+    if done == BUSY:
+        return TeamStartRefused("busy")
+    if done.get("status") == "started":
+        return Started(MemberRef.model_validate(done["member"]))
+    return TeamStartRefused(code_in(_START, done))
 
 
 async def _send(env: HandleEnv, to: MemberRef, text: str, key: str | None) -> TeamSendResult:

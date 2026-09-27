@@ -45,7 +45,11 @@ export type TeamStartResult =
   | { readonly status: "started"; readonly member: MemberRef }
   | {
       readonly status: "refused";
-      readonly code: StartRefusal | OperatorRefusal;
+      /**
+       * Why it was refused. invalid_request (no task in a lead's team) is returned before any
+       * writer, so, like busy, it is never logged.
+       */
+      readonly code: StartRefusal | OperatorRefusal | "invalid_request";
       /** Present exactly when code is invalid_definition. */
       readonly detail?: InvalidDefinition;
     };
@@ -175,10 +179,14 @@ export type TeamStartOptions = Keyed & {
  */
 export type Team = {
   readonly ref: TeamRef;
-  /** Starts a member from an agent the team lists, with task as its first input. */
+  /**
+   * Starts a member from an agent the team lists, with task as its first input. On a host team
+   * (Host.team) it restarts a host member the supervisor stopped, as the next generation in a
+   * new empty thread, and takes no task.
+   */
   readonly start: (
     agent: string,
-    task: string,
+    task?: string,
     options?: TeamStartOptions,
   ) => Promise<TeamStartResult>;
   /** Sends a member a message: its next input, which wakes it if idle. */

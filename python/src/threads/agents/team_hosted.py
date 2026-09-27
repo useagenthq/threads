@@ -10,11 +10,13 @@ from threads.agents.definition import Definition
 from threads.agents.run import member_runner
 from threads.agents.store import Store
 from threads.agents.team_check import agents_of
+from threads.agents.team_supervise import HostPin
 from threads.agents.team_worker import TeamWorker, WorkerEnv
 from threads.agents.teams import host_member_pin, member_pin
 from threads.store import SqliteStore
 from threads.store.conn import Conn
 from threads.store.sql import text_of
+from threads.team.supervise import RestartPolicy
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,13 +78,31 @@ def host_teams(conn: Conn) -> list[HostTeamRow]:
     return [HostTeamRow(text_of(team), text_of(tenant)) for team, tenant in rows]
 
 
+@dataclass(frozen=True, slots=True)
+class Configured:
+    """host(members=...) as a host team's worker needs it: the agents it may run, how each is
+    supervised, and the pin a restart starts the next generation on."""
+
+    agents: Mapping[str, Definition[None]]
+    supervision: Mapping[str, RestartPolicy]
+    pin: HostPin
+
+
 def host_worker_for(
-    store: Store, sq: SqliteStore, team: HostTeamRow, agents: Mapping[str, Definition[None]]
+    store: Store, sq: SqliteStore, team: HostTeamRow, members: Configured
 ) -> TeamWorker:
     """A host team's worker: its members come from the host's own registry, pinned as host
-    members, since a host team has no lead to bind or inherit from."""
+    members, since a host team has no lead to bind or inherit from. It is the only worker that
+    supervises, because only a host team has members of its own to restart (rule 51)."""
     env = WorkerEnv(
-        store, sq, lambda: team.team_id, dict(agents), host_member_pin, member_runner(store)
+        store,
+        sq,
+        lambda: team.team_id,
+        dict(members.agents),
+        host_member_pin,
+        member_runner(store),
+        supervision=dict(members.supervision),
+        host_pin=members.pin,
     )
     return TeamWorker(env)
 

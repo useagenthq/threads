@@ -212,18 +212,28 @@ export async function pendingToCaller(
   );
 }
 
-/** Pending mail to any of a thread's own rows (a nested lead has two), in one order. */
+/**
+ * Pending mail to any of a thread's own rows (a nested lead has two), in one order. Matched by
+ * generation as well as name: a host member's ended generation shares its name with the one the
+ * supervisor restarted, and mail bound to the live generation is not the ended one's to refuse
+ * (Teams Phase 2, E).
+ */
 export async function pendingFor(
   tx: Tx,
   rows: readonly MemberRow[],
 ): Promise<readonly MailEnvelope[]> {
   if (rows.length === 0) return [];
-  const pairs = rows.map(() => "(?, ?)").join(", ");
+  // Cast every value: Postgres types a VALUES row's parameters from nothing, and compares the
+  // bigint generation column against a text parameter (bigint = text) without them.
+  const triples = rows
+    .map(() => "(CAST(? AS TEXT), CAST(? AS TEXT), CAST(? AS BIGINT))")
+    .join(", ");
   return z.array(MailRow).parse(
     await tx.all(
       `SELECT envelope FROM mail WHERE state = 'pending' AND to_kind = 'member'
-        AND (team_id, to_name) IN (VALUES ${pairs}) ORDER BY created_at, mail_id`,
-      rows.flatMap((r) => [r.team_id, r.name]),
+        AND (team_id, to_name, to_generation) IN (VALUES ${triples})
+        ORDER BY created_at, mail_id`,
+      rows.flatMap((r) => [r.team_id, r.name, r.generation]),
     ),
   );
 }
@@ -234,7 +244,8 @@ export async function cancelPendingFor(
   thread: ThreadId,
 ): Promise<boolean> {
   const found = await tx.all(
-    `SELECT 1 FROM mail m JOIN team_members t ON m.team_id = t.team_id AND m.to_name = t.name
+    `SELECT 1 FROM mail m JOIN team_members t
+        ON m.team_id = t.team_id AND m.to_name = t.name AND m.to_generation = t.generation
         WHERE t.thread_id = ? AND m.kind = 'cancel' AND m.state = 'pending' LIMIT 1`,
     [thread],
   );

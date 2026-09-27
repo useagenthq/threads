@@ -13,8 +13,10 @@ from threads.store.lines import Draft
 from threads.team.call import CallContext, Refusal, call_request, named
 from threads.team.close import CloseContext, committed_notices, complete_ask, finish_wait
 from threads.team.mail import received, sent
+from threads.team.provenance import turn_provenance
 from threads.team.request import Request, Target
 from threads.team.rows import ref_of
+from threads.team.settle import SettleContext, settle
 from threads.team.view import ask_open, open_waits, parks_now
 
 
@@ -52,7 +54,12 @@ def apply_cancel(ctx: CloseContext, env: MailEnvelope) -> None:
     """Applies a cancel: its receipt and the barrier, then every park it leaves released: an
     open ask completes by ask.complete's decision (a pending reply or bounce still wins, else
     cancelled), a wait takes the notices already committed for it and finishes with what settled,
-    and a member park resumes."""
+    and a member park resumes.
+
+    A host member with no turn open ends here too (Teams Phase 2, E). A member with a task always
+    has a turn for the barrier to close, so its end follows from that turn; a host member idles
+    between callers, and nothing would ever close a barrier it took while idle. This is the same
+    append §4.14 describes for a cancel that reaches a member before it starts."""
     got = ctx.batch.add(received(env))
     actor: dict[str, JsonValue] = {
         "kind": "host",
@@ -68,3 +75,28 @@ def apply_cancel(ctx: CloseContext, env: MailEnvelope) -> None:
         elif park.kind == "member":
             data: dict[str, JsonValue] = {"address": to_json(park), "cause_event_id": got}
             ctx.batch.add(Draft("resumed", data))
+    _ended_idle(ctx, got)
+
+
+def _ended_idle(ctx: CloseContext, cause: str) -> None:
+    """An idle host member's end, in the cancel's own append: the barrier's answer and the end."""
+    if not ctx.fold.host.host_member or ctx.fold.in_turn:
+        return
+    ctx.batch.add(Draft("cancelled", {"request_event_id": cause}))
+    cancelled: dict[str, JsonValue] = {"status": "cancelled"}
+    settle(
+        SettleContext(
+            ctx.conn,
+            ctx.batch,
+            ctx.thread_id,
+            ctx.branch_id,
+            turn_provenance(ctx.conn, ctx.fold.events),
+            _no_text,
+            tuple(ctx.fold.host.turn_asks),
+        ),
+        cancelled,
+    )
+
+
+def _no_text(_text: str) -> JsonValue:
+    raise AssertionError("a cancelled member's result has no text")

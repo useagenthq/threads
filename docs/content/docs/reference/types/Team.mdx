@@ -18,13 +18,13 @@ Every request is recorded in the team log as the principal it acts for; only bus
 
 ### start
 
-Starts a member from an agent the team lists, with task as its first input. Recorded in the team log as an operator request.
+Starts a member from an agent the team lists, with task as its first input. On a host team (Host.team) it restarts a host member the supervisor stopped, as the next generation in a new empty thread, and takes no task. Recorded in the team log as an operator request.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
 
 ```ts
-start(agent: Name, task: string, options?: {
+start(agent: Name, task?: string, options?: {
   budget?: Budget;
   label?: string;
   instructions?: string;
@@ -40,7 +40,7 @@ start(agent: Name, task: string, options?: {
 ```python
 async def start(
     agent: Name,
-    task: str,
+    task: str | None = None,
     *,
     budget: Budget | None = None,
     label: str | None = None,
@@ -55,11 +55,11 @@ async def start(
 </Tabs>
 
 <Field name="agent" type={"Name"} required>
-  The agent to start, by name.
+  The agent to start, by name. On a host team: the host member's name, which is its agent's.
 </Field>
 
-<Field name="task" type={"string"} required>
-  The member's first input; it sees nothing else.
+<Field name="task" type={"string"}>
+  The member's first input; it sees nothing else. Omitted on a host team, whose members have no task; omitting it in a lead's team is invalid_request. Omitted: none.
 </Field>
 
 <Field name="budget" type={"Budget"}>
@@ -225,7 +225,7 @@ async def wait(
 
 ### cancel
 
-Requests a member's cancel: durable at once, applied at the member's next step.
+Requests a member's cancel: durable at once, applied at the member's next step. On a host team it is the operator's explicit stop: the member ends cancelled, and a cancel never restarts.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">

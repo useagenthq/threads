@@ -16,6 +16,7 @@ from threads.log import Threshold2
 from threads.loop.defaults import CONTEXT
 from threads.pos_int import is_pos_int
 from threads.team.policy import MessagePolicyOp, MessagePolicyRule
+from threads.team.supervise import RestartPolicy
 
 WHOLE_WINDOW: Final = 1000
 """A compaction trigger in permille of the whole context window."""
@@ -35,6 +36,11 @@ class HostMemberOptions:
     restart: Literal["on_failure", "never"] = "on_failure"
     max_restarts: int = 3
     within_ms: int = 60_000
+
+
+def restart_policy(options: HostMemberOptions) -> RestartPolicy:
+    """The public option as the supervisor step and the log read it (rule 51's `policy`)."""
+    return RestartPolicy(options.restart, options.max_restarts, options.within_ms)
 
 
 def check_members(
