@@ -60,6 +60,26 @@ def test_a_host_member_that_turns_compaction_off_is_refused() -> None:
     assert "turns compaction off" in str(caught.value)
 
 
+def test_a_host_member_whose_token_trigger_is_past_its_window_is_refused() -> None:
+    """The other spelling of the same thing. Only the permille form was covered, in either
+    language, which is how TypeScript came to accept an agent this side refused."""
+    never = agent(
+        name="billing",
+        model=scripted_model({"responses": []}),
+        context={
+            "compact": {
+                "trigger": {"tokens": 10_000_000},
+                "keep_tail": {"tokens": 20_000},
+                "max_failures": 3,
+            }
+        },
+    )
+    with pytest.raises(ConfigError) as caught:
+        serving({"billing": never}, {"billing": HostMemberOptions()})
+    assert caught.value.code == "invalid_config"
+    assert "turns compaction off" in str(caught.value)
+
+
 class Note(BaseModel):
     text: str
 

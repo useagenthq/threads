@@ -133,15 +133,22 @@ function checkMemberAgent(
     );
 }
 
+/** A permille trigger at or past the whole window can never fire. */
+const WHOLE_WINDOW = 1000;
+
 /**
- * Compaction is off when its trigger can never be reached: the whole effective window. There is no
- * other way to turn it off, so this is the check.
+ * Compaction is off when its trigger can never be reached, and a Threshold says that two ways: a
+ * permille at the whole window, or a token count at or past the model's own window. Checking only
+ * the permille spelling accepted an agent Python refused, which is the parity this pair owes.
  */
 function compactionOff(pinned: DryPin): boolean {
-  const trigger = pinned.started.policy?.context?.compact.trigger;
-  return (
-    trigger !== undefined && "permille" in trigger && trigger.permille >= 1000
-  );
+  const policy = pinned.started.policy;
+  const trigger = policy?.context?.compact.trigger;
+  if (trigger === undefined) return false;
+  if ("permille" in trigger) return trigger.permille >= WHOLE_WINDOW;
+  // policy.models[0] is the primary; a fallback cannot widen the window the trigger is judged by.
+  const window = policy?.models?.[0]?.context_window;
+  return window !== undefined && trigger.tokens >= window;
 }
 
 /** A tool whose turn could stop for a human: a write of any kind, or ask_user itself. */

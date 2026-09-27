@@ -88,6 +88,25 @@ describe("host({members}) at setup", () => {
     expect(bad.message).toContain("members.never turns compaction off");
   });
 
+  // The other spelling of the same thing. Only the permille form was covered, in either language,
+  // which is how TypeScript came to accept an agent Python refused.
+  test("a host member whose token trigger is past its window is refused", () => {
+    const never = agent({
+      name: "never",
+      model: quiet(),
+      context: {
+        compact: {
+          trigger: { tokens: 10_000_000 },
+          keep_tail: { tokens: 20_000 },
+          max_failures: 3,
+        },
+      },
+    });
+    const bad = withMembers({ never }, { never: {} });
+    expect(bad.code).toBe("invalid_config");
+    expect(bad.message).toContain("members.never turns compaction off");
+  });
+
   test("a host member with a writing tool and no approvers is refused", () => {
     const writes = agent({
       name: "writes",
