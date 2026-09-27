@@ -75,6 +75,26 @@ test("an unauthenticated request is 401 with a Bearer challenge in both bindings
   expect(await faultName(http)).toBe("InvalidRequestError");
 });
 
+test("an unauthenticated caller never gets its body parsed", async () => {
+  // The guarantee, not the mechanism: a body that is not JSON at all still answers 401, which it
+  // could not do if the payload had been read first. /v1 settles the caller before the body too.
+  const on = await up();
+  const sent = await on.raw("POST", "/a2a/support", {
+    rawBody: "{ this is not json",
+  });
+  expect(sent.status).toBe(401);
+  expect(await faultName(sent)).toBe("InvalidRequestError");
+});
+
+test("a version this agent does not speak is refused before the body is read", async () => {
+  const on = await up();
+  const sent = await on.raw("POST", "/a2a/support", {
+    version: "0.3",
+    rawBody: "{ this is not json",
+  });
+  expect(await faultName(sent)).toBe("VersionNotSupportedError");
+});
+
 test("a host with no authenticate answers 401 on every principal route", async () => {
   const on = await serve({
     agents: { support: talker("hi") },

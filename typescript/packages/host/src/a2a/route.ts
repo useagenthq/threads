@@ -99,17 +99,22 @@ async function dispatch(
   authenticate: Authenticate | undefined,
   inbound: Inbound,
 ): Promise<Response> {
-  const parsed = await operation(inbound);
-  if (unnamed(parsed)) return refuse(parsed.envelope, parsed.fault);
-  const { envelope, method, params } = parsed;
+  // The version and the caller come from headers, so both are settled before the body is read: an
+  // unauthenticated caller never gets us to parse a payload. The cost is that these two refusals
+  // cannot echo a JSON-RPC id, which is only known once the body is parsed; a client that sent a
+  // bad version or no credential has its answer either way.
   const { header, query } = versionOf(inbound.url, inbound.request);
+  const bare = { binding: inbound.binding, id: undefined } as const;
   const wrong = checkVersion(header, query);
-  if (wrong !== undefined) return refuse(envelope, wrong);
+  if (wrong !== undefined) return refuse(bare, wrong);
   // authenticate is the app's own code, so its answer is parsed, never trusted as typed.
   const raw =
     authenticate === undefined ? null : await authenticate(inbound.request);
   const who = Principal.safeParse(raw);
-  if (raw === null || !who.success) return unauthenticated(envelope);
+  if (raw === null || !who.success) return unauthenticated(bare);
+  const parsed = await operation(inbound);
+  if (unnamed(parsed)) return refuse(parsed.envelope, parsed.fault);
+  const { envelope, method, params } = parsed;
   const agent = exposed.agents.get(inbound.name);
   if (agent === undefined) return notFound(inbound.binding);
   const request = requestOf(method, params);

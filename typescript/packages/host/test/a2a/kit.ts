@@ -17,6 +17,8 @@ import { authenticate } from "../kit";
 export type Options = {
   readonly as?: Principal;
   readonly body?: unknown;
+  /** Exact bytes, sent as they are: for a payload that must not be valid JSON. */
+  readonly rawBody?: string;
   /** Null sends no A2A-Version header at all; a string sends that one. Default: 1.0. */
   readonly version?: string | null;
   /** Sends the version as the query parameter the spec also allows instead of the header. */
@@ -103,10 +105,16 @@ function request(verb: string, path: string, o: Options): Request {
     headers: {
       ...(o.as === undefined ? {} : { "x-principal": JSON.stringify(o.as) }),
       ...(version === null ? {} : { [VERSION_HEADER]: version }),
-      ...(o.body === undefined ? {} : { "content-type": "application/json" }),
+      ...(o.body === undefined && o.rawBody === undefined
+        ? {}
+        : { "content-type": "application/json" }),
       ...o.headers,
     },
-    ...(o.body === undefined ? {} : { body: JSON.stringify(o.body) }),
+    ...(o.rawBody !== undefined
+      ? { body: o.rawBody }
+      : o.body === undefined
+        ? {}
+        : { body: JSON.stringify(o.body) }),
   });
 }
 

@@ -15,6 +15,8 @@ import { askText, type OpenAsk } from "./question";
 // hosts all answer the same thing. The outcome comes from the host's own run-slice readers, so
 // there is no second reducer to keep in step.
 
+type ParkedReason = Extract<RunOutcome, { status: "parked" }>["reason"];
+
 export type Slice = {
   readonly taskId: EventId;
   readonly contextId: string;
@@ -107,24 +109,32 @@ function ran(slice: Slice): boolean {
  */
 function parked(
   slice: Slice,
-  reason: string,
+  reason: ParkedReason,
 ): { readonly state: TaskState; readonly text: string } {
-  if (reason === "awaiting_input") {
-    const question = slice.question;
-    return {
-      state: "TASK_STATE_INPUT_REQUIRED",
-      text:
-        question === undefined ? "a question is open" : askText(question.ask),
-    };
+  switch (reason) {
+    case "awaiting_input": {
+      const question = slice.question;
+      return {
+        state: "TASK_STATE_INPUT_REQUIRED",
+        text:
+          question === undefined ? "a question is open" : askText(question.ask),
+      };
+    }
+    case "awaiting_approval":
+      return { state: "TASK_STATE_WORKING", text: "waiting for approval" };
+    case "effect_unknown":
+      return {
+        state: "TASK_STATE_WORKING",
+        text: "waiting for a person to resolve an uncertain action",
+      };
+    // Waiting on something inside this host, which a caller can neither see nor resolve. Working
+    // is the honest answer, and the reason is the most we can say without leaking what it is.
+    case "awaiting_resource":
+    case "awaiting_member":
+      return { state: "TASK_STATE_WORKING", text: reason };
+    default:
+      return assertNever(reason);
   }
-  if (reason === "awaiting_approval")
-    return { state: "TASK_STATE_WORKING", text: "waiting for approval" };
-  if (reason === "effect_unknown")
-    return {
-      state: "TASK_STATE_WORKING",
-      text: "waiting for a person to resolve an uncertain action",
-    };
-  return { state: "TASK_STATE_WORKING", text: reason };
 }
 
 /** A status message: role agent, the task's own ids, a derived id and one text part. */
