@@ -15,7 +15,6 @@ import { knowledgeSpecs, memorySpecs } from "../memory/tools";
 import type { Model } from "../model";
 import type { Sandbox } from "../sandbox";
 import type { EventDraft } from "../store";
-import { TEAM_TOOLS } from "../team/constants";
 import { type DynamicChoice, KEPT_TOOLS } from "../team/dynamic";
 import { type MessagePolicyRule, teamTools } from "../team/policy";
 import { builtins, type Capabilities, type Egress } from "../tools";
@@ -27,6 +26,12 @@ import { checkEnforceable } from "./enforceable";
 import { ConfigError, Unbound } from "./errors";
 import { DEFAULT_TIMEOUT_MS, type Extension, hookNames } from "./extension";
 import { instructions } from "./instructions";
+import {
+  agentTools,
+  byName,
+  checkTeamNames,
+  extensionTools,
+} from "./pin-tools";
 import { checkRetries, checkStyles, finalOutput, policy } from "./policy";
 import { checkSkills, type Skill, skillPins, skillSpecs } from "./skills";
 import type { Tool } from "./tool";
@@ -104,9 +109,6 @@ export type DynamicPin = DynamicChoice & { readonly template: string };
 
 /** spec/api.json agent memory_write. */
 export type MemoryWrite = "deny" | "ask" | "allow_principal" | "allow";
-
-const byName = (a: { readonly name: string }, b: { readonly name: string }) =>
-  a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
 
 /**
  * The pinned tool specs, the thread_started draft and the canonical config its config_hash names
@@ -326,80 +328,5 @@ function hashedOnly(o: PinOptions): Record<string, unknown> {
             policy: o.egress ?? [],
           },
         }),
-  };
-}
-
-const TEAM = [
-  "send_message",
-  "team_task_claim",
-  "team_task_create",
-  "team_task_update",
-];
-
-/**
- * todo_write always; ask_user for an answerer; spawn and task-board tools with subagents;
- * handoff with targets; the team tools `team` names (team/policy.ts teamTools).
- */
-function agentTools(
-  o: PinOptions,
-  subagent: boolean,
-  team: readonly string[],
-  answerer: boolean,
-): readonly string[] {
-  return [
-    "todo_write",
-    ...(answerer ? ["ask_user"] : []),
-    ...(o.subagents.length > 0 ? ["spawn_agent"] : []),
-    ...(o.subagents.length > 0 || subagent ? TEAM : []),
-    ...(o.handoffs.length > 0 ? ["handoff"] : []),
-    ...team,
-  ];
-}
-
-/** A team thread's own tools can't take a team tool's name, pinned yet or not. */
-function checkTeamNames(o: PinOptions): void {
-  const own = [...o.tools, ...extensionTools(o.extensions, o.mcp)].map(
-    (t) => t.name,
-  );
-  const taken = own.find((n) => TEAM_TOOLS.includes(n));
-  if (taken !== undefined)
-    throw new ConfigError(
-      "duplicate_name",
-      `tool ${taken}: an agent in a team can't have a tool named ${TEAM_TOOLS.join(", ")}; rename it`,
-    );
-}
-
-/**
- * Extension tools, namespaced <ext>__<tool>, with the MCP servers' mcp__<server>__<tool>,
- * sorted by that name.
- */
-export function extensionTools<Deps>(
-  extensions: readonly Extension<Deps>[],
-  mcp: readonly Tool<unknown, unknown, unknown>[],
-): readonly Tool<unknown, unknown, Deps>[] {
-  return [
-    ...extensions.flatMap((e) =>
-      (e.tools ?? []).map((t) => namespaced(t, e.name)),
-    ),
-    ...mcp,
-  ].toSorted(byName);
-}
-
-function namespaced<Deps>(
-  t: Tool<unknown, unknown, Deps>,
-  ext: string,
-): Tool<unknown, unknown, Deps> {
-  const name = `${ext}__${t.name}`;
-  // Not model-visible: line 0 leaves it out, config_hash covers it (drift reads it).
-  const origin = { extension: ext };
-  return {
-    name,
-    ...(t.concurrent === undefined ? {} : { concurrent: t.concurrent }),
-    ...(t.defer === undefined ? {} : { defer: t.defer }),
-    spec: () => ({ ...t.spec(), name, origin }),
-    bind: (env) => {
-      const impl = t.bind(env);
-      return { ...impl, spec: { ...impl.spec, name, origin } };
-    },
   };
 }

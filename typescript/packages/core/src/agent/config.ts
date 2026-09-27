@@ -14,7 +14,7 @@ import type { Model } from "../model";
 import { category, decide } from "../permissions";
 import type { BudgetLedger } from "../store";
 import { loopExtension } from "./extension";
-import { extensionTools } from "./pin";
+import { extensionTools } from "./pin-tools";
 import { withMemoryWrite } from "./providers";
 import { childFactory } from "./registry";
 import type { ThreadRef } from "./result";

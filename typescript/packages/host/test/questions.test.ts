@@ -115,7 +115,9 @@ describe("ask_user over a channel", () => {
     const s = await asked([say("Red then."), say("Hi Bob.")]);
     await s.post(hook("E2", [message("hello", "E2#0", bob)]));
     await s.post(hook("E3", [message("red", "E3#0")]));
-    await until(async () => s.slack.performed.length === 3);
+    // Two intakes and two turns behind this one, so it needs more than the default three seconds
+    // when the whole package shares a process: it timed out at 3027 ms in CI on nothing but load.
+    await until(async () => s.slack.performed.length === 3, 20_000);
     expect(texts(s.slack.performed).slice(1)).toEqual(["Red then.", "Hi Bob."]);
     const inputs = (await events(s.store)).filter(
       (e) => e.type === "user_input",
