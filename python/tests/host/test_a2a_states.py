@@ -154,7 +154,8 @@ def test_a_run_that_exhausts_its_budget_after_running_is_failed_with_budget_exha
     async def main() -> None:
         # One model request: the tool call is made, its second request is refused.
         options: A2aOptions = {
-            "expose": {"support": {"description": "Support.", "budget": {"max_model_requests": 1}}}
+            "base_url": "https://host.test",
+            "expose": {"support": {"description": "Support.", "budget": {"max_model_requests": 1}}},
         }
         async with served({"support": worker()}, options) as on:
             sent = task(await on.rpc("SendMessage", message("m1", "hello"), as_=ALICE))
@@ -188,12 +189,13 @@ def test_an_exposed_run_carries_the_configured_budget_when_the_config_states_one
     async def main() -> None:
         budget: JsonValue = {"max_turns": 3, "max_wall_ms": 5_000}
         options: A2aOptions = {
+            "base_url": "https://host.test",
             "expose": {
                 "support": {
                     "description": "Support.",
                     "budget": {"max_turns": 3, "max_wall_ms": 5_000},
                 }
-            }
+            },
         }
         async with served({"support": talker("hi")}, options) as on:
             task(await on.rpc("SendMessage", message("m1", "hello"), as_=ALICE))
@@ -207,12 +209,13 @@ def test_a_run_refused_before_its_first_model_request_is_rejected_not_failed() -
     async def main() -> None:
         # A budget too small for even one attempt: the run never gets to ask the model anything.
         options: A2aOptions = {
+            "base_url": "https://host.test",
             "expose": {
                 "support": {
                     "description": "Support.",
                     "budget": {"max_turns": 1, "max_cost_nanos": 1},
                 }
-            }
+            },
         }
         async with served({"support": reader("hi")}, options) as on:
             sent = task(await on.rpc("SendMessage", message("m1", "hello"), as_=ALICE))

@@ -30,12 +30,6 @@ from threads.log import Principal
 from threads.result import Err
 
 
-def _origin(request: Request) -> str:
-    """The origin the card was asked for: the card's interface URLs are its own, so there is no
-    base-URL option to configure and get wrong."""
-    return f"{request.url.scheme}://{request.url.netloc}"
-
-
 async def agent_card(host: Host, request: Request) -> Response:
     """GET /a2a/{agent}/.well-known/agent-card.json: discovery, so no version and no principal."""
     exposed = host.exposed
@@ -43,7 +37,7 @@ async def agent_card(host: Host, request: Request) -> Response:
     agent = None if exposed is None else exposed.agents.get(name)
     if exposed is None or agent is None:
         return not_found("HTTP+JSON")
-    return card_response(card_bytes(exposed, name, agent, _origin(request)))
+    return card_response(card_bytes(exposed, name, agent, exposed.base_url))
 
 
 async def sole_card(host: Host, request: Request) -> Response:
@@ -55,7 +49,7 @@ async def sole_card(host: Host, request: Request) -> Response:
     if exposed is None or len(only) != 1:
         return not_found("HTTP+JSON")
     name = only[0]
-    return card_response(card_bytes(exposed, name, exposed.agents[name], _origin(request)))
+    return card_response(card_bytes(exposed, name, exposed.agents[name], exposed.base_url))
 
 
 async def operation_route(host: Host, request: Request, binding: Binding) -> Response:

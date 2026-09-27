@@ -27,7 +27,14 @@ type Agents = Mapping[str, Agent[None, object]]
 
 ALICE: Final = Principal(issuer="partner", tenant="acme", subject="refunds.partner.example")
 BOB: Final = Principal(issuer="partner", tenant="acme", subject="billing.partner.example")
-ONE: Final[A2aOptions] = {"expose": {"support": {"description": "Support."}}}
+BASE_URL: Final = "https://host.test"
+"""Where these tests' cards say partners reach the host. Defaulted for every test, because only the
+card tests care what it is; a test that does care passes its own `base_url`."""
+
+ONE: Final[A2aOptions] = {
+    "base_url": BASE_URL,
+    "expose": {"support": {"description": "Support."}},
+}
 
 
 @dataclass(frozen=True, slots=True)

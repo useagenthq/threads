@@ -21,7 +21,11 @@ from threads.log import Principal
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 LEAD = Principal(issuer="api", tenant="acme", subject="support-leads@acme.example")
 ORIGIN = "https://acme.example"
-ONE: A2aOptions = {"expose": {"support": {"description": "Customer support for Acme orders."}}}
+BASE_URL = "https://host.test"
+ONE: A2aOptions = {
+    "base_url": BASE_URL,
+    "expose": {"support": {"description": "Customer support for Acme orders."}},
+}
 DAY_MS = 7 * 24 * 60 * 60 * 1000
 ONE_DOLLAR_NANOS = 1_000_000_000
 TEN_MINUTES_MS = 600_000
@@ -86,7 +90,10 @@ class TestTheApproversRule:
 class TestTheOtherSetupRefusals:
     def test_exposing_an_agent_the_host_does_not_run_is_refused(self) -> None:
         with pytest.raises(ConfigError) as raised:
-            expose_a2a({"expose": {"missing": {"description": "d"}}}, {"support": talker()})
+            expose_a2a(
+                {"base_url": BASE_URL, "expose": {"missing": {"description": "d"}}},
+                {"support": talker()},
+            )
         assert raised.value.code == "invalid_config"
         assert "a2a.expose.missing names no host agent" in raised.value.message
 
@@ -101,7 +108,10 @@ class TestTheOtherSetupRefusals:
 
     def test_an_empty_description_is_refused_because_the_card_requires_one(self) -> None:
         with pytest.raises(ConfigError) as raised:
-            expose_a2a({"expose": {"support": {"description": ""}}}, {"support": talker()})
+            expose_a2a(
+                {"base_url": BASE_URL, "expose": {"support": {"description": ""}}},
+                {"support": talker()},
+            )
         assert raised.value.code == "invalid_config"
 
 
@@ -115,7 +125,8 @@ class TestTheDefaultBudget:
 
     def test_an_operator_may_set_its_own(self) -> None:
         options: A2aOptions = {
-            "expose": {"support": {"description": "d", "budget": {"max_wall_ms": FIVE_SECONDS_MS}}}
+            "base_url": BASE_URL,
+            "expose": {"support": {"description": "d", "budget": {"max_wall_ms": FIVE_SECONDS_MS}}},
         }
         exposed = expose_a2a(options, {"support": talker()})
         assert exposed.agents["support"].budget.max_wall_ms == FIVE_SECONDS_MS
@@ -190,6 +201,7 @@ class TestTheCard:
             "bearer": {"httpAuthSecurityScheme": {"scheme": "bearer"}}
         }
         options: A2aOptions = {
+            "base_url": BASE_URL,
             "expose": {"support": {"description": "d"}},
             "security_schemes": {"corp": {"oauth2SecurityScheme": {}}},
         }
@@ -211,3 +223,64 @@ class TestTheCard:
     def test_the_same_config_and_origin_always_publish_the_same_bytes(self) -> None:
         bot = talker()
         assert self._bytes(bot) == self._bytes(bot)
+
+
+class TestTheBaseUrlACardPublishes:
+    """`a2a.base_url` is required and never derived from a request: a card is the document that
+    tells a partner where to send work, so an origin a caller controls is an origin a caller
+    substitutes.
+
+    Mirrors typescript/packages/host/test/a2a/setup.test.ts."""
+
+    @staticmethod
+    def _ready(base_url: object) -> ConfigError | None:
+        # An operator's options are a dict, so a missing or wrong-typed base_url is not a
+        # type error.
+        options: A2aOptions = {"expose": {"support": {"description": "Support."}}}  # type: ignore[typeddict-item] - proving the runtime check
+        if base_url is not None:
+            options = {**options, "base_url": base_url}  # type: ignore[typeddict-item] - same
+        try:
+            expose_a2a(options, {"support": talker()})
+        except ConfigError as error:
+            return error
+        return None
+
+    def test_an_absent_base_url_is_refused(self) -> None:
+        error = self._ready(None)
+        assert error is not None
+        assert error.code == "invalid_config"
+        assert "a2a.base_url" in error.message
+
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            "",
+            "agents.acme.example",
+            "ftp://agents.acme.example",
+            "https://agents.acme.example/under/a/path",
+            "https://agents.acme.example/?tenant=acme",
+            7,
+        ],
+    )
+    def test_a_base_url_that_is_not_a_scheme_and_host_is_refused(self, bad: object) -> None:
+        error = self._ready(bad)
+        assert error is not None
+        assert error.code == "invalid_config"
+
+    @pytest.mark.parametrize(
+        "good",
+        ["https://agents.acme.example", "https://agents.acme.example/", "http://localhost:8080"],
+    )
+    def test_a_scheme_and_host_is_accepted(self, good: str) -> None:
+        assert self._ready(good) is None
+
+    def test_the_checked_origin_is_what_the_card_is_built_from(self) -> None:
+        exposed = expose_a2a(
+            {
+                "base_url": "https://agents.acme.example/",
+                "expose": {"support": {"description": "Support."}},
+            },
+            {"support": talker()},
+        )
+        # The trailing slash is gone: the card builder appends /a2a/<name> to this.
+        assert exposed.base_url == "https://agents.acme.example"

@@ -55,9 +55,16 @@ export async function stopAll(): Promise<void> {
   for (const h of hosts.splice(0)) await h.stop();
 }
 
+/**
+ * Where these tests' cards say partners reach the host. Defaulted for every test, because only the
+ * card tests care what it is; a test that does care passes its own.
+ */
+export const BASE_URL = "https://host.test";
+
 export async function serve(options: {
   readonly agents: Readonly<Record<string, Agent<never, unknown>>>;
-  readonly a2a: A2aOptions;
+  /** `baseUrl` defaults to BASE_URL: it is required of an operator, not of every test. */
+  readonly a2a: Omit<A2aOptions, "baseUrl"> & { readonly baseUrl?: string };
   readonly store?: Store;
   /** Omitted: the host has no authenticate at all, so every principal route is 401. */
   readonly withAuth?: boolean;
@@ -66,7 +73,7 @@ export async function serve(options: {
   const h = host({
     store,
     agents: options.agents,
-    a2a: options.a2a,
+    a2a: { baseUrl: BASE_URL, ...options.a2a },
     ...(options.withAuth === false ? {} : { authenticate }),
   });
   hosts.push(h);

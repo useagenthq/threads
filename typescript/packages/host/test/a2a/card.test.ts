@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { A2A_JSON, AgentCard } from "@threads/a2a/protocol";
 import { reader, talker } from "./agents";
-import { serve, stopAll } from "./kit";
+import { BASE_URL, serve, stopAll } from "./kit";
 
 // The card is what we publish about an agent, so the failure to guard against is saying too much.
 // It carries no instructions, no tool names and no model name, its interface URLs come from the
@@ -30,10 +30,40 @@ test("the card is byte-exact for a fixture host", async () => {
   expect(version).toMatch(/^[0-9a-f]{64}$/);
   // Canonical JSON, so this is the card's exact bytes and not a shape that happens to match.
   expect(text).toBe(
-    '{"capabilities":{"extendedAgentCard":false,"extensions":[{"description":"A SendMessage that repeats a messageId from the same authenticated caller returns the original task and starts nothing.","params":{"window_ms":604800000},"uri":"https://threadsai.dev/a2a/ext/idempotent-send/v1"}],"pushNotifications":false,"streaming":true},"defaultInputModes":["text/plain","application/json"],"defaultOutputModes":["text/plain","application/json"],"description":"Answers questions about orders.","name":"support","securityRequirements":[{"schemes":{"bearer":{"list":[]}}}],"securitySchemes":{"bearer":{"httpAuthSecurityScheme":{"scheme":"bearer"}}},"skills":[{"description":"Answers questions about orders.","id":"support","name":"support","tags":["text"]}],"supportedInterfaces":[{"protocolBinding":"JSONRPC","protocolVersion":"1.0","url":"http://host.test/a2a/support"},{"protocolBinding":"HTTP+JSON","protocolVersion":"1.0","url":"http://host.test/a2a/support"}],"version":' +
+    '{"capabilities":{"extendedAgentCard":false,"extensions":[{"description":"A SendMessage that repeats a messageId from the same authenticated caller returns the original task and starts nothing.","params":{"window_ms":604800000},"uri":"https://threadsai.dev/a2a/ext/idempotent-send/v1"}],"pushNotifications":false,"streaming":true},"defaultInputModes":["text/plain","application/json"],"defaultOutputModes":["text/plain","application/json"],"description":"Answers questions about orders.","name":"support","securityRequirements":[{"schemes":{"bearer":{"list":[]}}}],"securitySchemes":{"bearer":{"httpAuthSecurityScheme":{"scheme":"bearer"}}},"skills":[{"description":"Answers questions about orders.","id":"support","name":"support","tags":["text"]}],"supportedInterfaces":[{"protocolBinding":"JSONRPC","protocolVersion":"1.0","url":"https://host.test/a2a/support"},{"protocolBinding":"HTTP+JSON","protocolVersion":"1.0","url":"https://host.test/a2a/support"}],"version":' +
       JSON.stringify(version) +
       "}",
   );
+});
+
+describe("where the card says to send work", () => {
+  test("the single-agent alias publishes the same configured base URL", async () => {
+    const on = await serve({
+      agents: { support: talker("hi") },
+      a2a: { baseUrl: "https://agents.acme.example", expose: ONE },
+    });
+    const card = AgentCard.parse(
+      await (await on.raw("GET", "/.well-known/agent-card.json")).json(),
+    );
+    expect(card.supportedInterfaces[0]?.url).toBe(
+      "https://agents.acme.example/a2a/support",
+    );
+  });
+
+  test("a base URL with a trailing slash publishes the same URLs", async () => {
+    const on = await serve({
+      agents: { support: talker("hi") },
+      a2a: { baseUrl: "https://agents.acme.example/", expose: ONE },
+    });
+    const card = AgentCard.parse(
+      await (
+        await on.raw("GET", "/a2a/support/.well-known/agent-card.json")
+      ).json(),
+    );
+    expect(card.supportedInterfaces[0]?.url).toBe(
+      "https://agents.acme.example/a2a/support",
+    );
+  });
 });
 
 describe("what the card says about authentication", () => {
@@ -147,10 +177,14 @@ test("the card parses as an A2A 1.0 agent card", async () => {
   );
 });
 
-test("the interface URLs come from the origin the card was asked for", async () => {
+test("the interface URLs are the configured base URL, whatever origin the request arrived on", async () => {
+  // A fetch server builds request.url from the request line and the Host header, both of which a
+  // caller writes. Behind a reverse proxy — the normal deployment — a card derived from the request
+  // advertises the internal origin and no partner can reach us; pointed at an attacker it is an
+  // origin a caller substitutes into the one document whose job is to say where work goes.
   const on = await serve({
     agents: { support: talker("hi") },
-    a2a: { expose: ONE },
+    a2a: { baseUrl: "https://agents.acme.example", expose: ONE },
   });
   const response = await on.host.fetch(
     new Request(
@@ -159,8 +193,8 @@ test("the interface URLs come from the origin the card was asked for", async () 
   );
   const card = AgentCard.parse(await response.json());
   expect(card.supportedInterfaces.map((i) => i.url)).toEqual([
-    "https://partner.example:8443/a2a/support",
-    "https://partner.example:8443/a2a/support",
+    "https://agents.acme.example/a2a/support",
+    "https://agents.acme.example/a2a/support",
   ]);
 });
 
@@ -189,8 +223,8 @@ test("the single-agent alias serves the one exposed agent's card", async () => {
   expect(card.name).toBe("support");
   // Found at the root, but the endpoints it names are still the agent's own absolute URLs.
   expect(card.supportedInterfaces.map((i) => i.url)).toEqual([
-    "http://host.test/a2a/support",
-    "http://host.test/a2a/support",
+    `${BASE_URL}/a2a/support`,
+    `${BASE_URL}/a2a/support`,
   ]);
 });
 

@@ -21,7 +21,7 @@ function host(options: {
   schedules?: readonly Schedule[];
   authenticate?: (request: Request) => Promise<Principal | null>;
   messagePolicy?: readonly MessagePolicyRule[];
-  a2a?: { expose: Record<string, { description: string; budget?: Budget }>; securitySchemes?: Record<string, SecurityScheme> };
+  a2a?: { expose: Record<string, { description: string; budget?: Budget }>; baseUrl: string; securitySchemes?: Record<string, SecurityScheme> };
   members?: Record<string, HostMemberOptions>;
 }): Host
 ```
@@ -40,7 +40,7 @@ def host(
     schedules: Sequence[Schedule] = (),
     authenticate: Callable[[starlette.requests.Request], Awaitable[Principal | None]] | None = None,
     message_policy: Sequence[MessagePolicyRule] = (),
-    a2a: {expose: Mapping[str, {description: str, budget?: Budget}], security_schemes?: Mapping[str, SecurityScheme]} | None = None,
+    a2a: {expose: Mapping[str, {description: str, budget?: Budget}], base_url: str, security_schemes?: Mapping[str, SecurityScheme]} | None = None,
     members: Mapping[str, HostMemberOptions] = {},
 ) -> Host
 ```
@@ -86,7 +86,7 @@ def host(
   Rules that let one host agent start, send to, ask, monitor or cancel another beyond what a team grants (wait is decided as monitor). They decide after a team's grant and before default deny, for every op of every sender, and only add. Each (from, to) pair appears once (a repeat is refused at setup with duplicate_name), so a logged decision names its rule by from and to. A from or to that names no host agent is refused at setup (invalid_config); so is an empty allow, a rule to a host member that allows start, monitor or cancel, and a rule between host members that allows anything but send or ask (invalid_config, naming the rule). An agent gets the team tools only for the ops some rule with it as from allows. A rule that allows start makes its from a lead; one whose rules target only host members makes it a caller, in no team. Default []: everything else is denied. Every decision is logged as message_policy_decided.
 </Field>
 
-<Field name="a2a" type={"{ expose: Record<string, { description: string; budget?: Budget }>; securitySchemes?: Record<string, SecurityScheme> }"}>
+<Field name="a2a" type={"{ expose: Record<string, { description: string; budget?: Budget }>; baseUrl: string; securitySchemes?: Record<string, SecurityScheme> }"}>
   Serves host agents as A2A 1.0 agents, checked at ready(); omitted, nothing A2A is served. A context is a thread and a task is a run, both derived from the authenticated caller, so two callers never share a thread and neither reaches the other's by guessing a contextId. A repeated messageId from the same caller returns the original task and starts no second run, even across two hosts on one store. A task waiting on an approval or an uncertain effect reads WORKING with a status message, never FAILED and never COMPLETED: no A2A operation decides one of our parks, and a person resolves it through threads. Push notifications, the extended card, gRPC and file parts are not served, and each says so by name.
 </Field>
 
@@ -100,6 +100,10 @@ def host(
 
 <Field name="a2a.expose.budget" type={"Budget"}>
   What one exposed task may spend, beside the host ceiling. A task that exhausts it ends FAILED with budget_exhausted. Default: $1.00 and ten minutes of wall clock.
+</Field>
+
+<Field name="a2a.baseUrl / a2a.base_url" type={"string"} required>
+  Where partners reach this host, as a scheme and authority (https://agents.acme.example). Every card's interface URLs are built from it. Required whenever a2a is set, and refused at ready() with invalid_config when it is absent, not a scheme and host, or carries a path, a query or a fragment. It is never derived from a request: a request's own URL comes from the request line and the Host header, so behind a reverse proxy a derived card advertises the internal origin and no partner can reach us, and pointed at an attacker it is an origin a caller substitutes into the one document whose job is to say where work goes.
 </Field>
 
 <Field name="a2a.securitySchemes / a2a.security_schemes" type={"Record<string, SecurityScheme>"}>

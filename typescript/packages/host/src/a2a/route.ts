@@ -37,8 +37,12 @@ export async function a2aRoute(
 ): Promise<Response | undefined> {
   if (exposed === undefined) return undefined;
   const url = new URL(request.url);
+  // The card's origin is the configured one, never the request's: a card is the document that says
+  // where a partner sends work, so an origin a caller controls is an origin a caller can substitute.
   if (url.pathname === "/.well-known/agent-card.json")
-    return request.method === "GET" ? soleCard(exposed, url.origin) : undefined;
+    return request.method === "GET"
+      ? soleCard(exposed, exposed.baseUrl)
+      : undefined;
   if (!url.pathname.startsWith("/a2a/")) return undefined;
   const rest = url.pathname.slice("/a2a".length);
   const slash = rest.indexOf("/", 1);
@@ -47,7 +51,7 @@ export async function a2aRoute(
   if (name === undefined) return notFound("HTTP+JSON");
   if (path === "/.well-known/agent-card.json")
     return request.method === "GET"
-      ? card(exposed, name, url.origin)
+      ? card(exposed, name, exposed.baseUrl)
       : notFound("HTTP+JSON");
   return dispatch(ctx, exposed, authenticate, {
     request,

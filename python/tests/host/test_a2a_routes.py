@@ -19,10 +19,11 @@ from threads.host.a2a.config import A2aOptions
 
 EVE: Final = "01a00000-0000-7000-8000-000000000000"
 TWO: Final[A2aOptions] = {
+    "base_url": "https://host.test",
     "expose": {
         "support": {"description": "Support."},
         "billing": {"description": "Billing."},
-    }
+    },
 }
 
 
@@ -198,11 +199,24 @@ class TestTheCards:
 
         run(main)
 
-    def test_the_interface_urls_come_from_the_origin_the_card_was_asked_for(self) -> None:
+    def test_the_interface_urls_are_the_configured_base_url_not_the_requests_origin(self) -> None:
+        # A request's own URL comes from the request line and the Host header, both of which a
+        # caller writes. Behind a reverse proxy - the normal deployment - a card derived from the
+        # request advertises the internal origin and no partner can reach us; pointed at an attacker
+        # it is an origin a caller substitutes into the one document whose job is to say where work
+        # goes.
         async def main() -> None:
-            async with served(_bot()) as on:
+            elsewhere: A2aOptions = {
+                "base_url": "https://agents.acme.example",
+                "expose": {"support": {"description": "Support."}},
+            }
+            async with served(_bot(), elsewhere) as on:
+                # The request itself goes to host.test, as every request in this kit does.
                 card = await on.raw("GET", "/a2a/support/.well-known/agent-card.json", version=None)
-                assert "https://host.test/a2a/support" in card.text
+                assert "https://agents.acme.example/a2a/support" in card.text
+                assert "host.test" not in card.text
+                alias = await on.raw("GET", "/.well-known/agent-card.json", version=None)
+                assert "https://agents.acme.example/a2a/support" in alias.text
 
         run(main)
 
