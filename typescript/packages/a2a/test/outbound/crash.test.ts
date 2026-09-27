@@ -168,6 +168,27 @@ test("the commit, what it observed and the result are one append", async () => {
   expect(p.sends()).toHaveLength(1);
 });
 
+test("a peer that answers slowly is working with its task id, and is not sent to again", async () => {
+  const p = partner();
+  const h = await drill(p);
+  // The peer created the task and is still working on it when the deadline passes.
+  p.send = () => ({ kind: "task", task: task("task-17", "TASK_STATE_WORKING") });
+  const w = unwrap(await h.store.acquire(ROOT, "owner", 30_000));
+  await resume(w, h.artifacts, h.config(), { input: ASK });
+  // Slow is not uncertain: the commit already happened, so we hold the peer's receipt.
+  expect(lastOf(events(w), "effect_commit")?.data.provider_receipt).toBe(
+    "task-17",
+  );
+  const result = lastOf(events(w), "tool_result")?.data;
+  expect(result?.is_error).toBe(false);
+  expect(result?.preview).toContain('"status":"working"');
+  expect(result?.preview).toContain("task-17");
+  expect(types(events(w))).not.toContain("effect_unknown");
+  expect(types(events(w))).not.toContain("parked");
+  // The model checks later with the status tool; nothing is re-sent.
+  expect(p.sends()).toHaveLength(1);
+});
+
 test("a refused connection is the one outcome that proves nothing left", async () => {
   const p = partner();
   const h = await drill(p);

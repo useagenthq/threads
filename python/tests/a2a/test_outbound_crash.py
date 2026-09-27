@@ -161,6 +161,31 @@ def test_the_commit_what_it_observed_and_the_result_are_one_append() -> None:
     assert len(d.partner.sends()) == 1
 
 
+def test_a_peer_that_answers_slowly_is_working_and_is_not_sent_to_again() -> None:
+    async def main() -> Drill:
+        p = Partner()
+        # The peer created the task and is still working on it when the deadline passes.
+        p.answer = Answer("task", task("task-17", "TASK_STATE_WORKING"))
+        d = await drill(p)
+        await drive(d.rt)
+        return d
+
+    d = asyncio.run(main())
+    # Slow is not uncertain: the commit already happened, so we hold the peer's receipt.
+    commit = d.last("effect_commit")
+    assert isinstance(commit, EffectCommitEvent)
+    assert commit.data.provider_receipt == "task-17"
+    result = d.last("tool_result")
+    assert isinstance(result, ToolResultEvent)
+    assert result.data.is_error is False
+    assert '"status":"working"' in result.data.preview
+    assert "task-17" in result.data.preview
+    assert "effect_unknown" not in d.kinds()
+    assert "parked" not in d.kinds()
+    # The model checks later with the status tool; nothing is re-sent.
+    assert len(d.partner.sends()) == 1
+
+
 def test_a_refused_connection_proves_nothing_left() -> None:
     async def main() -> Drill:
         p = Partner()
