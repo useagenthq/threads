@@ -1,5 +1,6 @@
 export { type Host, type HostOptions, host, hostSandboxes } from "./host";
 export type { Authenticate } from "./http";
+export type { HostMemberOptions } from "./members";
 export type { RunOutcome } from "./outcome";
 export type { RunAccepted, StartRunCode } from "./runs";
 export type { Schedule } from "./schedules";

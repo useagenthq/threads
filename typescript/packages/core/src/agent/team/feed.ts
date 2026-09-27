@@ -41,7 +41,9 @@ export async function feedHead(
   const [top] = z.array(HeadRow).parse(
     await reading(log.driver, (tx) =>
       tx.all(
-        `SELECT epoch, MAX(feed_offset) AS last,
+        // MAX(epoch), not a bare epoch: the WHERE pins one epoch, so the two are the same value,
+        // and Postgres refuses a bare column beside an aggregate with no GROUP BY.
+        `SELECT MAX(epoch) AS epoch, MAX(feed_offset) AS last,
           (SELECT closed_at FROM teams WHERE team_id = ?) AS closed_at
           FROM team_feed
           WHERE team_id = ? AND epoch = (SELECT MAX(epoch) FROM team_feed WHERE team_id = ?)`,

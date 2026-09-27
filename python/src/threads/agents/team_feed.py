@@ -49,8 +49,10 @@ class FeedHead:
 def _head(conn: Conn, team: str) -> FeedHead | None:
     """`closed_at` and the head from one snapshot, so a closed team's head already holds the
     items of the append that closed it."""
+    # MAX(epoch), not a bare epoch: the WHERE pins one epoch, so the two are the same value, and
+    # Postgres refuses a bare column beside an aggregate with no GROUP BY.
     row = conn.execute(
-        "SELECT epoch, MAX(feed_offset),"
+        "SELECT MAX(epoch), MAX(feed_offset),"
         " (SELECT closed_at FROM teams WHERE team_id = ?) FROM team_feed"
         " WHERE team_id = ? AND epoch = (SELECT MAX(epoch) FROM team_feed WHERE team_id = ?)",
         (team, team, team),
