@@ -13,7 +13,15 @@ everything after the first byte could have gone out. Treating a doubtful case as
 let an effect repeat silently (invariant 3), so we take that flag and never widen it.
 
 An unparsable answer is a **fault**, not uncertainty: the peer replied, so nothing is in doubt about
-whether it received us."""
+whether it received us.
+
+**As built: a stream is read whole, not incrementally.** `threads.web.http.Transport.send`
+answers a complete `Response`, so a streaming operation's whole SSE body arrives at once and is
+parsed here; one over `MAX_BYTES` is refused outright rather than delivered in part. A caller
+therefore sees every item together or none, and nothing is handed on before the peer has
+finished. Real incremental streaming needs a streaming transport, which is a lane of its own and
+not a patch to this file; `threads.a2a.protocol.sse.sse_events` is the chunk-wise reader waiting
+for it, and it already agrees with the TypeScript side about what a refusal is."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass

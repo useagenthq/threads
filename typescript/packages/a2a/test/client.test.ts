@@ -56,6 +56,21 @@ describe("the request provably never left", () => {
     expect(transport.sent).toHaveLength(0);
   });
 
+  test("a URL with credentials is not_sent, which is why one must never be pinned", async () => {
+    // The guard does catch this, but only at call time. Pinning such an interface is therefore an
+    // availability bug, not a way past the guard: every call on that remote answers not_sent
+    // forever. pin.test.ts is what keeps one from being pinned in the first place.
+    const transport = answering(() => json(TASK));
+    const answer = await call(
+      { url: "https://user:pass@partner.example/a2a", binding: "JSONRPC" },
+      "SendMessage",
+      { message: {} },
+      sending(transport),
+    );
+    expect(answer.kind).toBe("not_sent");
+    expect(transport.sent).toHaveLength(0);
+  });
+
   test("an address the SSRF guard refuses is not_sent, and nothing is dialled", async () => {
     const sent: { url: string }[] = [];
     const transport: WebTransport = {
