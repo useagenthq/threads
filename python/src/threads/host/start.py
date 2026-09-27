@@ -29,7 +29,6 @@ from threads.store import StoredEvent, receipts
 from threads.store.lines import uuid7
 from threads.thread.handle import Thread, open_thread
 
-OPERATION: Final = "startRun"
 MAX_KEY: Final = 255
 
 type Started = Ok[RunAccepted] | Err[ParseError]
@@ -49,7 +48,11 @@ async def start_run(
     if not isinstance(body, Ok):
         raise AssertionError("a parsed request always canonicalizes")
     key = receipts.Key(
-        principal.tenant, OPERATION, idempotency_key, principal_key(principal), body.value
+        principal.tenant,
+        receipts.START_RUN,
+        idempotency_key,
+        principal_key(principal),
+        body.value,
     )
     replayed = await _replay(store, key)
     if replayed is not None:

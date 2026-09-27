@@ -7,7 +7,7 @@ appends the run's user_input, so a lost response replays it and a crash leaves n
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Literal
 
 from pydantic import StrictStr, TypeAdapter, ValidationError
 from pydantic.experimental.missing_sentinel import MISSING
@@ -37,12 +37,22 @@ _FIELDS = ("tenant_id", "thread_id", "branch_id")
 _ROW: TypeAdapter[tuple[StrictStr, Uuid, Uuid]] = TypeAdapter(tuple[StrictStr, Uuid, Uuid])
 
 
+START_RUN: Final = "start_run"
+"""A `POST /v1/runs` run (`Host.start_run`)."""
+UI: Final = "ui"
+"""A UI route's run, keyed `<thread_id>:<client message id>` (spec/schema/ui/README.md)."""
+
+type Operation = Literal["start_run", "ui"]
+"""The two operations store.sql's CHECK admits. They are wire names: the other language reads a
+receipt by these exact bytes, so a spelling of our own would start the run a second time."""
+
+
 @dataclass(frozen=True, slots=True)
 class Key:
     """What an Idempotency-Key is bound to."""
 
     tenant_id: str
-    operation: str
+    operation: Operation
     idempotency_key: str
     principal_key: str
     body_hash: str
@@ -124,10 +134,6 @@ def insert(key: Key, now: int) -> Companion:
         return ParseError("idempotency_key_reused", "the key was taken by another request")
 
     return put
-
-
-UI: Final = "ui"
-"""A UI route's run, keyed `<thread_id>:<client message id>` (spec/schema/ui/README.md)."""
 
 
 def ui_key(thread_id: str, message_id: str) -> str:

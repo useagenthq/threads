@@ -79,7 +79,7 @@ def test_a_receipt_binds_the_key_once() -> None:
 
 async def _a_receipt_binds_the_key_once() -> None:
     sq, writer = await _writer()
-    key = receipts.Key("acme", "startRun", "k1", "api/acme/alice", "b" * 64)
+    key = receipts.Key("acme", "start_run", "k1", "api/acme/alice", "b" * 64)
     done = await writer.append([user("go")], receipts.insert(key, T0))
     assert isinstance(done, Ok)
     found = await sq.tables.receipt(key)

@@ -313,9 +313,12 @@ CREATE INDEX IF NOT EXISTS questions_due ON questions (state, expires_at);
 -- its binding: the same principal and body replay the receipt and start nothing, a different
 -- body is idempotency_key_reused, and a different principal is idempotency_key_principal_mismatch
 -- and never sees the receipt. run_id is the user_input's event_id.
+-- operation is a wire name, snake_case in both languages, and the CHECK is what keeps it one
+-- name: a receipt one language writes is read by the other, so a spelling of its own would make
+-- the same Idempotency-Key look unused on a shared store and start a second run.
 CREATE TABLE IF NOT EXISTS run_receipts (
   tenant_id TEXT NOT NULL,
-  operation TEXT NOT NULL,
+  operation TEXT NOT NULL CHECK (operation IN ('start_run', 'ui')),
   idempotency_key TEXT NOT NULL,
   principal_key TEXT NOT NULL,
   body_hash TEXT NOT NULL,
@@ -544,5 +547,8 @@ CREATE INDEX IF NOT EXISTS observer_losses_unreported
 -- is refused). Version 6: lane 23's observers and observer_losses. Version 7: lane 27's
 -- branches_root, one root branch per thread. Version 8: Teams Phase 2's teams.kind with a
 -- nullable lead_thread_id and one host team per tenant, team_members' host_member role, mail's
--- to_kind and to_branch_id with the caller index, and asks' failed state.
-PRAGMA user_version = 8;
+-- to_kind and to_branch_id with the caller index, and asks' failed state. Version 9:
+-- run_receipts.operation is checked against its two wire names. A version 8 store may hold rows
+-- under the Python spelling startRun, which no reader looks for now; refusing that store (as
+-- every older version is refused) is what keeps it from honouring fewer receipts than it did.
+PRAGMA user_version = 9;

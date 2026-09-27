@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { storeConnection } from "@threads/core/host";
+import { z } from "zod";
 import {
   alice,
   bob,
@@ -12,7 +13,7 @@ import {
   sseMessages,
   use,
 } from "./kit";
-import { sqlRun } from "./sql";
+import { sqlAll, sqlRun } from "./sql";
 
 // POST /v1/runs and its events stream (openapi.json startRun, subscribeRun; F12.11, F12.12).
 
@@ -29,6 +30,18 @@ function start(options: { readonly responses: readonly unknown[] }): Harness {
 
 const body = { agent: "support", input: "Hello" };
 const key = { "idempotency-key": "k-1" };
+/**
+ * The `run_receipts` operation of a run started through POST /v1/runs, as both languages write
+ * and read it. The Python twin (tests/host/test_receipt_wire.py) spells it out too, so neither
+ * can drift from store.sql on its own.
+ */
+const START_RUN = "start_run";
+const Receipt = z.strictObject({
+  operation: z.string(),
+  principal_key: z.string(),
+  body_hash: z.string(),
+  run_id: z.string(),
+});
 
 describe("authentication", () => {
   test("without authenticate every /v1 route is 401", async () => {
@@ -116,6 +129,51 @@ describe("POST /v1/runs", () => {
     });
     expect(other.status).toBe(409);
     expect((await other.json()).error.code).toBe("idempotency_key_reused");
+  });
+
+  test("a receipt row written by the other language is honoured and starts no second run", async () => {
+    const { call, store } = start({ responses: [say("Hi")] });
+    const first = await (
+      await call("POST", "/v1/runs", { as: alice, body, headers: key })
+    ).json();
+    const { db } = await storeConnection(store);
+    // Storage is a boundary: the row is parsed, never read as written.
+    const [written] = z
+      .array(Receipt)
+      .parse(
+        await sqlAll(
+          db,
+          "SELECT operation, principal_key, body_hash, run_id FROM run_receipts",
+        ),
+      );
+    if (written === undefined) throw new Error("no receipt");
+    // What this host stored is the wire name, so the other language's reader finds it.
+    expect(written.operation).toBe(START_RUN);
+    // The same run under another key, written as the other language writes it.
+    await sqlRun(
+      db,
+      `INSERT INTO run_receipts (tenant_id, operation, idempotency_key, principal_key, body_hash,
+        thread_id, branch_id, run_id, created_at)
+        VALUES ('acme', ?, 'k-2', ?, ?, ?, ?, ?, 1790000000000)`,
+      [
+        START_RUN,
+        written.principal_key,
+        written.body_hash,
+        first.thread_id,
+        first.branch_id,
+        written.run_id,
+      ],
+    );
+    const replayed = await call("POST", "/v1/runs", {
+      as: alice,
+      body,
+      headers: { "idempotency-key": "k-2" },
+    });
+    expect(replayed.status).toBe(202);
+    expect(await replayed.json()).toEqual(first);
+    // The store, not the answer: the branch took one input.
+    const log = await eventsOf(store, "acme", first.branch_id);
+    expect(log.filter((e) => e.type === "user_input")).toHaveLength(1);
   });
 
   test("another principal of the tenant with the same key is refused and learns nothing (F12.12)", async () => {

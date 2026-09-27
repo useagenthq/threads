@@ -78,7 +78,7 @@ def test_an_inbox_item_and_a_receipt_whose_commit_is_unknown_are_written_once(
     leg: Leg,
 ) -> None:
     item = Item("slack", "T1", "m-1", "d-1", "C1", b'{"text":"hi"}')
-    key = Key("local", "runs", "idem-1", "api/local/alice", "0" * 64)
+    key = Key("local", "start_run", "idem-1", "api/local/alice", "0" * 64)
 
     async def main() -> None:
         store, conn = await opened_with(leg, Dropping)
