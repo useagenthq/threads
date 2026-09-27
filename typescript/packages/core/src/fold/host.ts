@@ -45,6 +45,12 @@ export type HostFold = {
   agent: string | undefined;
   /** The latest generation of each host member this log started (rule 51). */
   readonly generations: Map<string, number>;
+  /** Each decided generation's action, by generationKey: one decision per end (rule 51). */
+  readonly decided: Map<string, string>;
+  /** The times of each name's `restart` decisions, for the window count (rule 51). */
+  readonly restarts: Map<string, number[]>;
+  /** The previous event's type: a supervised restart follows its decision directly (rule 51). */
+  lastType: string | undefined;
   /** A failed turn ended and its member_idle{turn_failed} is due (rule 53). */
   failing: boolean;
   /** That turn's error, once its first bounce named it (rule 53). */
@@ -67,6 +73,9 @@ export function emptyHost(): HostFold {
     hostMember: false,
     agent: undefined,
     generations: new Map(),
+    decided: new Map(),
+    restarts: new Map(),
+    lastType: undefined,
     failing: false,
     error: undefined,
     code: undefined,
@@ -75,6 +84,11 @@ export function emptyHost(): HostFold {
     turnClass: undefined,
     bouncesIn: new Map(),
   };
+}
+
+/** One host member generation, as a Map key (rule 51). */
+export function generationKey(name: string, generation: number): string {
+  return `${name}/${generation}`;
 }
 
 /**
@@ -91,8 +105,12 @@ export function senderClass(env: MailEnvelope): string {
 export function applyHost(host: HostFold, e: KnownEvent): void {
   // team_opened and thread_started are only ever the resolved chain's first event (rule 33).
   opened(host, e);
+  // Set before the branches: when the next event is checked this is the previous event's type,
+  // which is what rule 51's "directly follows its decision" reads.
+  host.lastType = e.type;
   if (e.type === "member_started")
     host.generations.set(e.data.member.name, e.data.member.generation);
+  else if (e.type === "supervisor_decided") decided(host, e);
   else if (e.type === "message_received") received(host, e.data.envelope);
   else if (e.type === "message_sent") sent(host, e.data.envelope);
   else if (e.type === "turn_completed") turnEnded(host, e.data);
@@ -102,6 +120,15 @@ export function applyHost(host: HostFold, e: KnownEvent): void {
   // A member_ended in a failed turn's append ends the member instead, so the asks it had taken
   // and left unanswered close at their deadlines (rule 53).
   else if (e.type === "member_ended") clearTurn(host);
+}
+
+function decided(host: HostFold, e: EventOf<"supervisor_decided">): void {
+  const { name, generation } = e.data.member;
+  host.decided.set(generationKey(name, generation), e.data.action);
+  if (e.data.action !== "restart") return;
+  const times = host.restarts.get(name);
+  if (times === undefined) host.restarts.set(name, [e.time]);
+  else times.push(e.time);
 }
 
 function opened(host: HostFold, e: KnownEvent): void {

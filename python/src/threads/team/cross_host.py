@@ -2,8 +2,8 @@
 host team's logs and its callers' logs together show. `cross` runs them with the Phase 1 clauses.
 The reference is spec/tools/fixtures/ref_host_cross.py.
 
-Rule 51's cross-log clause (a decision names its generation's member_ended) is supervision's,
-and waits for lane 29E, which reduces `supervisor_decided` at all.
+Rule 51's cross-log clause is `supervised` at the end of this module: only the host team's log and
+the member's own log together show that a decision named its own member's end.
 """
 
 from collections.abc import Mapping, Sequence
@@ -12,14 +12,18 @@ from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.log import (
+    BranchId,
     CallerAddress,
     Event,
     MailAddress,
     MailAddress1,
     MailEnvelope,
     MemberEndedEvent,
+    MemberRef,
     MemberStartedEvent,
     OperatorSender,
+    PosInt,
+    SupervisorDecidedEvent,
     ThreadId,
     ThreadStartedEvent,
     TurnCompletedEvent,
@@ -103,3 +107,35 @@ def ended_bounce(
         return None
     ok = env.provenance == ask.provenance and env.to == reply_address(ask)
     return None if ok else "a member_ended bounce goes back to its asker, with its provenance"
+
+
+def supervised(
+    e: SupervisorDecidedEvent, lines: Mapping[tuple[BranchId, PosInt], Event]
+) -> str | None:
+    """Rule 51 across the logs: a decision's `ended` is its own member's `member_ended`, and its
+    action is `restart` exactly when the policy allows it and that end's result is `failed`. A
+    position among no log given here proves nothing, so it passes.
+    Reference: spec/tools/fixtures/ref_host_cross.py::supervised."""
+    d = e.data
+    end = lines.get((d.ended.branch_id, d.ended.seq))
+    if end is None:
+        return None
+    if not isinstance(end, MemberEndedEvent):
+        return "a decision's ended names no member_ended"
+    if end.thread_id != _started_thread(d.member, lines):
+        return "a decision's ended is not its member's own member_ended"
+    failed = end.data.result.status == "failed"
+    allowed = d.policy.restart == "on_failure" and d.restarts_in_window < d.policy.max_restarts
+    if (d.action == "restart") != (allowed and failed):
+        return "restart exactly when allowed and failed"
+    return None
+
+
+def _started_thread(
+    member: MemberRef, lines: Mapping[tuple[BranchId, PosInt], Event]
+) -> ThreadId | None:
+    """The thread the `member_started` of this exact generation named."""
+    for line in lines.values():
+        if isinstance(line, MemberStartedEvent) and line.data.member == member:
+            return line.data.thread_id
+    return None

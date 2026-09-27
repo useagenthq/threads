@@ -7,7 +7,6 @@ from threads.reduce import (
     rules_host,
     rules_loaded,
     rules_misc,
-    rules_phase2,
     rules_requested,
     rules_team,
     rules_tools,
@@ -43,8 +42,7 @@ def apply(fold: Fold, event: Event | UnknownEvent) -> ParseError | None:
     if error is None and not isinstance(event, UnknownEvent):
         handler = _HANDLERS.get(type(event))
         error = (
-            rules_phase2.not_yet(event)
-            or rules_host.check(fold, event)
+            rules_host.check(fold, event)
             or rules_team.check(fold, event)
             or (None if handler is None else handler(fold, event))
         )

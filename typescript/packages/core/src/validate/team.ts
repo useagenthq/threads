@@ -21,6 +21,9 @@ const TEAM_LOG: ReadonlySet<KnownEvent["type"]> = new Set([
   "wait_started",
   "member_observed",
   "wait_finished",
+  // A host team's log is the only one that takes it, which rule 50 (host.ts) places; rule 33 only
+  // keeps it out of a member's own log.
+  "supervisor_decided",
 ]);
 
 /**

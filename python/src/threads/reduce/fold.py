@@ -115,8 +115,8 @@ class Team:
 
 @dataclass(slots=True)
 class Host:
-    """What one log's events leave for the Teams Phase 2 rules 50-55 (rules_host). Ids are the
-    wire's AskId and MemberName strings."""
+    """What one log's events leave for the Teams Phase 2 rules 50-55 (rules_host, and rule 51 in
+    rules_super). Ids are the wire's AskId and MemberName strings."""
 
     host_team: bool = False
     """The log starts with team_opened{kind: host} (rules 50 and 51)."""
@@ -126,8 +126,13 @@ class Host:
     agent: str = ""
     """thread_started.agent_name: the agent a caller's own mail names (rule 52)."""
     generations: dict[str, int] = field(default_factory=dict[str, int])
-    """Each host member name's latest generation (rule 51's first clause; lane 29E supervises
-    the rest)."""
+    """Each host member name's latest generation (rule 51)."""
+    decided: dict[str, str] = field(default_factory=dict[str, str])
+    """Each decided generation's action, by generation_key: one decision per end (rule 51)."""
+    restarts: dict[str, list[int]] = field(default_factory=dict[str, list[int]])
+    """The times of each name's restart decisions, for the window count (rule 51)."""
+    last_type: str = ""
+    """The previous event's type: a supervised restart follows its decision directly (rule 51)."""
     turn_asks: list[str] = field(default_factory=list[str])
     """Asks the open turn took and has not answered (rule 53)."""
     answered: set[str] = field(default_factory=set[str])

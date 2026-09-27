@@ -9,12 +9,13 @@ import type {
   ThreadId,
 } from "../log";
 import { bounce, replyToCaller } from "./cross-bounce";
+import { supervised } from "./cross-super";
 import { block, type Define, KEPT_TOOLS } from "./dynamic";
 import { sameJson } from "./json";
 
-// Semantic rules 43 and 46 (spec/schema/README.md, "Semantic rules"): what only a team's logs
+// Semantic rules 43, 46 and 51 (spec/schema/README.md, "Semantic rules"): what only a team's logs
 // together show, checked by the `team` runner and every index rebuild, never by one log's
-// validate_next.
+// validate_next. Rule 51's own clause is cross-super.ts's.
 
 /** One of a team's logs, read and verified. */
 export type TeamLogEvents = {
@@ -46,6 +47,8 @@ export type Facts = {
   readonly defined: ReadonlyMap<string, Defined>;
   /** Each host member thread's member_started, by thread (rule 43, Phase 2). */
   readonly hostStarts: ReadonlyMap<string, EventOf<"member_started">["data"]>;
+  /** Every event by `<branch_id>/<seq>`: what a decision's `ended` points at (rule 51). */
+  readonly lines: ReadonlyMap<string, KnownEvent>;
 };
 
 type Defined = { readonly define: Define; readonly starter: string };
@@ -69,6 +72,7 @@ function facts(logs: readonly TeamLogEvents[]): Facts {
     teamLogs: new Map<string, TeamLogRef>(),
     defined: new Map<string, Defined>(),
     hostStarts: new Map<string, EventOf<"member_started">["data"]>(),
+    lines: new Map<string, KnownEvent>(),
   };
   for (const log of logs) {
     // The starter a block names: operator in a team log, else the log's own agent.
@@ -88,12 +92,14 @@ function learn(
     readonly teamLogs: Map<string, TeamLogRef>;
     readonly defined: Map<string, Defined>;
     readonly hostStarts: Map<string, EventOf<"member_started">["data"]>;
+    readonly lines: Map<string, KnownEvent>;
   },
   log: TeamLogEvents,
   e: KnownEvent,
   starter: string,
 ): void {
   const own = known.identities.get(log.threadId);
+  known.lines.set(`${e.branch_id}/${e.seq}`, e);
   if (e.type === "message_sent")
     known.sent.set(e.data.envelope.mail_id, e.data.envelope);
   else if (e.type === "team_opened") own?.add(TEAM_LOG);
@@ -160,6 +166,10 @@ function firstBreak(
         seq: e.seq,
         message: why.startsWith("46: ") ? why : `43: ${why}`,
       };
+    const broke =
+      e.type === "supervisor_decided" ? supervised(e, known) : undefined;
+    if (broke !== undefined)
+      return { branchId: log.branchId, seq: e.seq, message: `51: ${broke}` };
   }
   return undefined;
 }

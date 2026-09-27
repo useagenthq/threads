@@ -3,9 +3,8 @@ team's and a host member's forms may appear, callers, a host member's turn failu
 ask. The reference is spec/tools/fixtures/ref_host.py; rule 43's cross-log clauses are
 team/cross.py's.
 
-Rule 51 (supervision) is lane 29E's: `supervisor_decided` and `member_started{restart_of}` are
-refused before this module sees them (rules_phase2). What stays here is its one clause every host
-member start of this lane takes: a first start is generation 1, once per name, with no
+Rule 51 (supervision) is rules_super's: this module's member_started and supervisor_decided cases
+call it, and keeps here only the clause a first start takes — generation 1, once per name, with no
 provenance."""
 
 from collections.abc import Callable, Mapping
@@ -25,10 +24,12 @@ from threads.log import (
     MessageSentEvent,
     OperatorSender,
     ParseError,
+    SupervisorDecidedEvent,
     TeamOpenedEvent,
     ThreadStartedEvent,
     TurnCompletedEvent,
 )
+from threads.reduce import rules_super
 from threads.reduce.fold import Fold, Host, reject
 from threads.reduce.handlers import Handler, on
 from threads.team.host_team import TURN_KEPT, host_team_ids, turn_failure_code
@@ -98,13 +99,22 @@ def _while_failing(event: Event) -> str | None:
 
 
 def _started(fold: Fold, event: MemberStartedEvent) -> ParseError | None:
-    """Rule 51's first clause: in a host team's log, a first host member start is generation 1,
-    once per name, with no provenance. A `restart_of` start is lane 29E's, refused before this."""
+    """Rule 51: in a host team's log, a first host member start is generation 1, once per name,
+    with no provenance; a start with `restart_of` is a restart (rules_super)."""
     if not fold.host.host_team:
         return None
     m, d = event.data.member, event.data
+    if d.restart_of is not MISSING:
+        why = rules_super.restarted(fold, event, d.restart_of)
+        return None if why is None else reject(event, why)
     first = m.generation == 1 and m.name not in fold.host.generations and d.provenance is MISSING
     return None if first else reject(event, "51: a first host member start is generation 1, once")
+
+
+def _decided(fold: Fold, event: SupervisorDecidedEvent) -> ParseError | None:
+    """Rule 51: one decision per ended generation, with the logged count and the policy."""
+    why = rules_super.decided(fold, event)
+    return None if why is None else reject(event, why)
 
 
 def _sent(fold: Fold, event: MessageSentEvent) -> ParseError | None:
@@ -201,6 +211,7 @@ _CHECKS: Mapping[type, Handler] = dict(
         on(MessageReceivedEvent, _received),
         on(MemberIdleEvent, _idle),
         on(AskClosedEvent, _ask_closed),
+        on(SupervisorDecidedEvent, _decided),
     ]
 )
 
@@ -213,6 +224,9 @@ def advance(fold: Fold, event: Event) -> None:
     host = fold.host
     if len(fold.events) == 1:
         _first(host, event)
+    # Set before the step: when the next event is checked this holds the previous event's type,
+    # which is what rule 51's "directly follows its decision" reads.
+    host.last_type = event.type
     step = _FOLDS.get(type(event))
     if step is not None:
         step(host, event)
@@ -298,5 +312,6 @@ _FOLDS: Mapping[type, _Step] = dict(
         _step(TurnCompletedEvent, _fold_turn_end),
         _step(MemberIdleEvent, _fold_idle),
         _step(MemberEndedEvent, _fold_ended),
+        _step(SupervisorDecidedEvent, rules_super.advance),
     ]
 )

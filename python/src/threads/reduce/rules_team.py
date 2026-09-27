@@ -54,8 +54,11 @@ TEAM_LOG = frozenset(
         "wait_started",
         "member_observed",
         "wait_finished",
+        "supervisor_decided",
     }
 )
+"""Rule 33's events. A host team's log is the only one that takes supervisor_decided, which rule
+50 (rules_host) places; rule 33 only keeps it out of a member's own log."""
 _ENDED = "an ended or cancelled member's log opens a turn"
 
 

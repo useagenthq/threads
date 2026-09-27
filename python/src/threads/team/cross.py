@@ -29,6 +29,8 @@ from threads.log import (
     MessageSentEvent,
     Parent,
     Parent1,
+    PosInt,
+    SupervisorDecidedEvent,
     TeamOpenedEvent,
     ThreadId,
     ThreadStartedEvent,
@@ -40,6 +42,7 @@ from threads.team.cross_host import (
     ended_bounce,
     host_member_thread,
     reply_to_caller,
+    supervised,
     turn_failed_bounce,
 )
 from threads.team.dynamic import KEPT, OPERATOR, block
@@ -74,6 +77,8 @@ class _Team:
     """Each team's log (thread, branch), as its lead's thread_started names it."""
     starters: Mapping[ThreadId, str]
     """Each member's starter: operator for a start in a team log, else the lead's agent name."""
+    lines: Mapping[tuple[BranchId, PosInt], Event]
+    """Every event by (branch_id, seq): what a decision's `ended` points at (rule 51)."""
 
 
 def check_team_logs(
@@ -101,6 +106,9 @@ def _first_break(log: TeamLogEvents, team: _Team, team_id: str | None) -> CrossF
         why = _dynamic(e, team)
         if why is not None:
             return CrossFailure(log.branch_id, e.seq, f"46: {why}")
+        why = supervised(e, team.lines) if isinstance(e, SupervisorDecidedEvent) else None
+        if why is not None:
+            return CrossFailure(log.branch_id, e.seq, f"51: {why}")
     return None
 
 
@@ -186,7 +194,8 @@ def _team(logs: Sequence[TeamLogEvents]) -> _Team:
         if isinstance(e, MessageSentEvent)
     }
     frozen = {t: frozenset(i) for t, i in identities.items()}
-    return _Team(sent, started, frozen, team_logs, starters)
+    lines = {(e.branch_id, e.seq): e for _, e in events}
+    return _Team(sent, started, frozen, team_logs, starters, lines)
 
 
 def _check(e: Event, log: TeamLogEvents, mine: frozenset[Identity], team: _Team) -> str | None:

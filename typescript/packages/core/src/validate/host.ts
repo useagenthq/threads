@@ -4,12 +4,13 @@ import type { EventOf, Fold } from "../fold/state";
 import type { KnownEvent, MailEnvelope } from "../log";
 import { hostTeamPart } from "../team/host-team";
 import { sameJson } from "../team/json";
+import { checkRestarted } from "./supervision";
 import { invalid, type Violation } from "./violation";
 
 // Semantic rules 50 and 52-55 on one log (spec/schema/README.md, "Teams Phase 2"): host team
-// logs, callers, a host member's turn failures and the failed ask. Rule 51 (supervision) is lane
-// 29E's; rule 43's Phase 2 clauses are cross-log (team/cross.ts). Reference:
-// spec/tools/fixtures/ref_host.py.
+// logs, callers, a host member's turn failures and the failed ask. Rule 51's own checks are in
+// supervision.ts, which this module's member_started case calls; rule 43's Phase 2 clauses and
+// rule 51's cross-log clause are in team/cross.ts. Reference: spec/tools/fixtures/ref_host.py.
 
 /** Rule 50: a host team's log is at the thread, branch and team id its tenant derives. */
 function openedAtDerivedIds(e: EventOf<"team_opened">): boolean {
@@ -58,8 +59,8 @@ export function checkHostPlacement(fold: Fold, e: KnownEvent): Violation {
 }
 
 /**
- * Rule 51's live clause: a first host member start is generation 1, once per name, with no
- * provenance. A restart (`restart_of`) is lane 29E's, refused before this by checkNotYetPhase2.
+ * Rule 51: in a host team's log, a first host member start is generation 1, once per name, with
+ * no provenance; a start with `restart_of` is a supervised or operator restart (supervision.ts).
  */
 export function checkHostStarted(
   fold: Fold,
@@ -67,6 +68,8 @@ export function checkHostStarted(
 ): Violation {
   const { host } = fold.team;
   if (!host.hostTeam) return undefined;
+  const restartOf = e.data.restart_of;
+  if (restartOf !== undefined) return checkRestarted(fold, e, restartOf);
   const { name, generation } = e.data.member;
   const first =
     generation === 1 &&

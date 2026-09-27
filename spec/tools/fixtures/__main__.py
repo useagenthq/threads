@@ -166,6 +166,7 @@ FAMILIES = (
     host_cases,
     host_rules,
     host_ends,
+    host_super,
     ui_cases,
     ui_cases_live,
 )
@@ -201,10 +202,11 @@ def _build(out: pathlib.Path) -> None:
 # moved legacy_run and legacy_wake_rows; lane 21D (team run completion) moved run_cases; lane 21E
 # (cancel application) moved team_cancel_rule. None is staged now.
 STAGED_PHASE_1: tuple[Callable[[pathlib.Path], None], ...] = ()
-# Teams Phase 2 (lane 29): its own directory, since both runtimes refuse its forms until the build
-# (unsupported_critical_event) and so can't read these logs as they read staged/. Lane 29D's build
-# moved host_cases, host_rules and host_ends into FAMILIES; supervision waits for 29E.
-STAGED_PHASE_2 = (host_super.build,)
+# Teams Phase 2 (lane 29) staged its families in their own directory while both runtimes refused
+# their forms (unsupported_critical_event) and so could not read these logs as they read staged/.
+# Lane 29D's build moved host_cases, host_rules and host_ends into FAMILIES, and 29E's moved
+# host_super, the supervision family. Nothing is staged now.
+STAGED_PHASE_2: tuple[Callable[[pathlib.Path], None], ...] = ()
 
 
 def _build_staged(out: pathlib.Path) -> None:
