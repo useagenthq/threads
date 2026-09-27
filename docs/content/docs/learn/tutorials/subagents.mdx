@@ -24,7 +24,7 @@ plain answer, `call` for a tool call.
 <Tab value="TypeScript">
 
 ```ts title="support.ts"
-import { agent, scriptedModel, sqlite, tool } from "@threads/core";
+import { agent, scriptedModel, sqlite, tool } from "threadsai";
 import { z } from "zod";
 
 const usage = { input_tokens: 10, output_tokens: 2 };
@@ -89,8 +89,8 @@ import asyncio
 
 from pydantic import BaseModel, JsonValue
 
-from threads import RunContext, agent, scripted_model, sqlite, tool
-from threads.result import Err
+from threadsai import RunContext, agent, scripted_model, sqlite, tool
+from threadsai.result import Err
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

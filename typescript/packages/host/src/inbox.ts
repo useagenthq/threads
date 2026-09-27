@@ -1,4 +1,4 @@
-import { Inbound } from "@threads/core";
+import { Inbound } from "threadsai";
 import {
   type Alongside,
   Int,
@@ -9,7 +9,7 @@ import {
   type Sql,
   ThreadId,
   type Tx,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 
 // store.sql inbox and channel_threads: the durable intake a run consumes from under the branch

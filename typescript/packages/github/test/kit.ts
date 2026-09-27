@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { type RawRequest, secret } from "@threads/core/adapter";
+import { type RawRequest, secret } from "threadsai/adapter";
 import { github } from "../src";
 
 export const WEBHOOK = "whsec-test";

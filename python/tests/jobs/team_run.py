@@ -16,15 +16,15 @@ from jobs.stores import OnStatement, drill_store
 from jobs.worker import reached
 from pydantic import JsonValue
 
-from threads import Agent, Principal, agent, scripted_model
-from threads.agents.run import RunOptions, execute
-from threads.agents.store import open_store
-from threads.log import ThreadId
-from threads.result import Ok
-from threads.store import sqlite_driver
-from threads.store.conn import Params, SqliteConn
-from threads.store.sql import text_of
-from threads.thread.handle import Thread
+from threadsai import Agent, Principal, agent, scripted_model
+from threadsai.agents.run import RunOptions, execute
+from threadsai.agents.store import open_store
+from threadsai.log import ThreadId
+from threadsai.result import Ok
+from threadsai.store import sqlite_driver
+from threadsai.store.conn import Params, SqliteConn
+from threadsai.store.sql import text_of
+from threadsai.thread.handle import Thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 START: JsonValue = {

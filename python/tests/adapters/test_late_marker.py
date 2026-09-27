@@ -8,11 +8,11 @@ import pytest
 from fakes import FakeContext, line
 from pydantic import JsonValue
 
-from threads.adapters.models.anthropic.request import build as anthropic_build
-from threads.adapters.models.litellm.request import build as litellm_build
-from threads.adapters.models.openai.request import build as openai_build
-from threads.adapters.models.render import Request, parse
-from threads.loop.model import ModelContext
+from threadsai.adapters.models.anthropic.request import build as anthropic_build
+from threadsai.adapters.models.litellm.request import build as litellm_build
+from threadsai.adapters.models.openai.request import build as openai_build
+from threadsai.adapters.models.render import Request, parse
+from threadsai.loop.model import ModelContext
 
 MARKER = "[late tool result: call_id=call_0]"
 

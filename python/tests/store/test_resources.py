@@ -7,11 +7,11 @@ from typing import get_args
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from threads.log import BranchId, ThreadId
-from threads.result import Err, Ok
-from threads.store import SqliteStore, Writer
-from threads.store.lease import TTL_MS
-from threads.store.resources import (
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore, Writer
+from threadsai.store.lease import TTL_MS
+from threadsai.store.resources import (
     MOVES,
     Answer,
     Move,

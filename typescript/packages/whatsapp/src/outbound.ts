@@ -4,7 +4,7 @@ import {
   FenceRefused,
   type Fetch,
   sandboxFetch,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { z } from "zod";
 
 // Sends over the Graph API with fetch. Meta publishes no maintained official JS SDK for the

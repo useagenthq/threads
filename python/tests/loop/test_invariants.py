@@ -15,21 +15,21 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from kit import T0, Tools, open_store, spec, start, text, use
 
-from threads.log import EffectBeginEvent, ModelRequestEvent, TextPart, Usage
-from threads.loop.drive import drive
-from threads.loop.model import (
+from threadsai.log import EffectBeginEvent, ModelRequestEvent, TextPart, Usage
+from threadsai.loop.drive import drive
+from threadsai.loop.model import (
     ModelChunk,
     ModelContext,
     ModelRequest,
     ModelResponse,
     StaleEpoch,
 )
-from threads.loop.runtime import Failed, Idle, Runtime, WriterContext
-from threads.loop.scripted import ScriptedModel, scripted_model
-from threads.loop.tools import Dispatched, Invocation, Output
-from threads.render.verify import verify_requests
-from threads.result import Err, Ok
-from threads.store import MemoryArtifacts, SqliteStore, StoredEvent
+from threadsai.loop.runtime import Failed, Idle, Runtime, WriterContext
+from threadsai.loop.scripted import ScriptedModel, scripted_model
+from threadsai.loop.tools import Dispatched, Invocation, Output
+from threadsai.render.verify import verify_requests
+from threadsai.result import Err, Ok
+from threadsai.store import MemoryArtifacts, SqliteStore, StoredEvent
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

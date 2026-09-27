@@ -9,14 +9,14 @@ from itertools import chain, repeat
 import pytest
 from pydantic import JsonValue
 
-from threads import agent, extension, scripted_model, sqlite
-from threads.agents.agent import Agent
-from threads.agents.store import Store, now_ms, open_store
-from threads.host import Schedule
-from threads.host.runs import Runner
-from threads.host.schedules import Scheduler
-from threads.result import Ok
-from threads.store import Draft
+from threadsai import agent, extension, scripted_model, sqlite
+from threadsai.agents.agent import Agent
+from threadsai.agents.store import Store, now_ms, open_store
+from threadsai.host import Schedule
+from threadsai.host.runs import Runner
+from threadsai.host.schedules import Scheduler
+from threadsai.result import Ok
+from threadsai.store import Draft
 
 REPLY: JsonValue = {
     "content": [{"type": "text", "text": "ok"}],

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { drain, renderBody } from "@threads/adapter-testkit";
-import { memoryContext } from "@threads/core/adapter";
+import { drain, renderBody } from "@threadsai/adapter-testkit";
+import { memoryContext } from "threadsai/adapter";
 import { type AiSdkOptions, aiSdk } from "../src";
 
 // Live gate: the bridge is qualified per provider package, which this repo

@@ -10,13 +10,13 @@ from eval_kit import ALLOW, priced, saved_turns, say, use, verdicts_reply
 from pydantic import BaseModel, JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads import Agent, EvalReport, Live, RunContext, agent, run_evals, scripted_model, sqlite
-from threads import tool as make_tool
-from threads.agents.store import Store, scoped
-from threads.log import Budget, ModelRequestEvent, ThreadId, ToolResultEvent, UserInputEvent
-from threads.result import Ok
-from threads.thread.case_simulate import Simulate
-from threads.thread.handle import open_thread
+from threadsai import Agent, EvalReport, Live, RunContext, agent, run_evals, scripted_model, sqlite
+from threadsai import tool as make_tool
+from threadsai.agents.store import Store, scoped
+from threadsai.log import Budget, ModelRequestEvent, ThreadId, ToolResultEvent, UserInputEvent
+from threadsai.result import Ok
+from threadsai.thread.case_simulate import Simulate
+from threadsai.thread.handle import open_thread
 
 RUBRIC = ("The agent stays inside the refund policy",)
 BUDGET = Budget(max_model_requests=40)

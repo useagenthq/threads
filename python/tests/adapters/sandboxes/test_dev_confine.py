@@ -22,10 +22,10 @@ from pathlib import Path
 import pytest
 from sandbox_kit import OPEN
 
-from threads.adapters.sandboxes.dev.confine import confinement, probe
-from threads.dev import dev_sandbox
-from threads.result import Err, Ok
-from threads.sandbox.protocol import SandboxError, SandboxSession
+from threadsai.adapters.sandboxes.dev.confine import confinement, probe
+from threadsai.dev import dev_sandbox
+from threadsai.result import Err, Ok
+from threadsai.sandbox.protocol import SandboxError, SandboxSession
 
 _ROOT = tempfile.mkdtemp(prefix="threads-dev-confine-")
 

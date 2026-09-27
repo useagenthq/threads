@@ -12,20 +12,20 @@ from compact_kit import kinds, logged
 from corpus import Clock
 from kit import Tools, open_store, start
 
-from threads import agent, sqlite
-from threads.agents.store import now_ms
-from threads.agents.store import open_store as open_store_of
-from threads.log import CancelRequestedEvent, Context, Event, TurnCompletedEvent
-from threads.loop import drive as drive_module
-from threads.loop.drive import drive
-from threads.loop.runtime import Halt, Idle, Runtime
-from threads.result import Ok
-from threads.secrets import credential
-from threads.store import Draft
-from threads.thread.control import LOCAL_OPERATOR
+from threadsai import agent, sqlite
+from threadsai.agents.store import now_ms
+from threadsai.agents.store import open_store as open_store_of
+from threadsai.log import CancelRequestedEvent, Context, Event, TurnCompletedEvent
+from threadsai.loop import drive as drive_module
+from threadsai.loop.drive import drive
+from threadsai.loop.runtime import Halt, Idle, Runtime
+from threadsai.result import Ok
+from threadsai.secrets import credential
+from threadsai.store import Draft
+from threadsai.thread.control import LOCAL_OPERATOR
 
 if TYPE_CHECKING:
-    from threads.thread.handle import Thread
+    from threadsai.thread.handle import Thread
 
 
 def leaking(key: str, leak: int, cancel: Cancel, reported: int = 10) -> CancelAt:

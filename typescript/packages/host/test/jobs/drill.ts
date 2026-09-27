@@ -7,13 +7,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LogStore, memoryArtifacts } from "@threads/core";
+import { LogStore, memoryArtifacts } from "threadsai";
 import {
   type KnownEvent,
   knownEvents,
   ThreadId,
   type VerifiedLog,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { sqlAll, sqlRun } from "../sql";
 import { drillDriver } from "./stores";

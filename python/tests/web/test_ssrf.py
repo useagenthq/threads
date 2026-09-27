@@ -10,12 +10,12 @@ from typing import Final
 import pytest
 from pydantic import TypeAdapter
 
-from threads.git.forge import GitHub, Refused
-from threads.result import Err, Ok
-from threads.web.fetch import Moved, get
-from threads.web.guard import Target, blocked, vet
-from threads.web.http import Fence, Request, Response, StdlibTransport, WebError
-from threads.web.search import SearchHit, admitted
+from threadsai.git.forge import GitHub, Refused
+from threadsai.result import Err, Ok
+from threadsai.web.fetch import Moved, get
+from threadsai.web.guard import Target, blocked, vet
+from threadsai.web.http import Fence, Request, Response, StdlibTransport, WebError
+from threadsai.web.search import SearchHit, admitted
 
 PUBLIC = "93.184.216.34"
 

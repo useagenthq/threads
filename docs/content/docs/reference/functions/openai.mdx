@@ -6,7 +6,7 @@ icon: "Plug"
 
 OpenAI caches prompts automatically; its info.cache declares &#123;ttl_ms: 86400000&#125; when params.prompt_cache_retention is "24h", else &#123;ttl_ms: 300000&#125;, the documented in-memory lower bound. openai("gpt-5.5") needs no limits: they come from spec/models/openai.v1.json, read from OpenAI's model pages. Pass it as agent(&#123;model: openai("gpt-5.5")&#125;).
 
-Import from `@threads/openai` (TypeScript) or `threads.openai` (Python).
+Import from `@threadsai/openai` (TypeScript) or `threadsai.openai` (Python).
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -36,7 +36,7 @@ def openai(
     max_output_tokens: int | None = None,
     max_tokens: int | None = None,
     params: Mapping[str, pydantic.JsonValue] | None = None,
-    price: threads.log.Price | None = None,
+    price: threadsai.log.Price | None = None,
     hosted_tools: Sequence[Mapping[str, pydantic.JsonValue]] | None = None,
     api_key: str | Secret | None = None,
     base_url: str | None = None,

@@ -3,13 +3,8 @@ import {
   Inbound,
   type RawRequest,
   VerifiedDelivery,
-} from "@threads/core";
-import {
-  canonicalize,
-  storeConnection,
-  type Tx,
-  uuidv7,
-} from "@threads/core/host";
+} from "threadsai";
+import { canonicalize, storeConnection, type Tx, uuidv7 } from "threadsai/host";
 import type { HostContext } from "./context";
 import { failure } from "./errors";
 import { threadFor } from "./inbox";

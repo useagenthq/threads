@@ -11,8 +11,8 @@ from pathlib import Path
 
 from pydantic import JsonValue
 
-from threads import Completed, fake_sandbox, scripted_model, sqlite
-from threads.coding import coding_agent
+from threadsai import Completed, fake_sandbox, scripted_model, sqlite
+from threadsai.coding import coding_agent
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

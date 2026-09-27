@@ -7,14 +7,14 @@ from collections.abc import Callable
 
 from pydantic import JsonValue, TypeAdapter
 
-from threads import Store
-from threads.agents.store import open_store
-from threads.log import ThreadId
-from threads.log.digest import sha256_hex
-from threads.log.jcs import canonicalize
-from threads.result import Ok
-from threads.store.conn import Conn, one
-from threads.store.sql import blob_of, int_of
+from threadsai import Store
+from threadsai.agents.store import open_store
+from threadsai.log import ThreadId
+from threadsai.log.digest import sha256_hex
+from threadsai.log.jcs import canonicalize
+from threadsai.result import Ok
+from threadsai.store.conn import Conn, one
+from threadsai.store.sql import blob_of, int_of
 
 type Line = dict[str, JsonValue]
 _LINE: TypeAdapter[Line] = TypeAdapter(Line)

@@ -3,7 +3,7 @@ import {
   type KnownEvent,
   runEnd,
   type ThreadId,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { HostedAgent } from "../context";
 import { failure, routeFailure } from "../errors";
 import type { Call } from "../threads";

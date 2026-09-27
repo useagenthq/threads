@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { agent, type Store, scriptedModel, sqlite } from "@threads/core";
+import { agent, type Store, scriptedModel, sqlite } from "threadsai";
 import {
   type BranchId,
   deleteThread,
@@ -10,7 +10,7 @@ import {
   ThreadId,
   tenantStore,
   type Writer,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { HostContext } from "../src/context";
 import { Recovery } from "../src/recovery";

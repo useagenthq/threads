@@ -8,14 +8,14 @@ from collections.abc import AsyncIterable, AsyncIterator, Awaitable
 from sandbox_kit import OPEN
 from tree_contract import BODY, EXECUTABLE, sample_tree
 
-from threads.redaction import register
-from threads.result import Err, Ok
-from threads.sandbox import FakeSandbox, Trees, fake_sandbox
-from threads.sandbox.protocol import ExecOutput, SandboxContext, SandboxError
-from threads.sandbox.tree.tree import Tree, TreeFile
-from threads.sandbox.trees import HashOnly, Misplaced, place_tree, read_tree
-from threads.store import SqliteStore
-from threads.store.artifacts import ArtifactSink, MemoryArtifacts
+from threadsai.redaction import register
+from threadsai.result import Err, Ok
+from threadsai.sandbox import FakeSandbox, Trees, fake_sandbox
+from threadsai.sandbox.protocol import ExecOutput, SandboxContext, SandboxError
+from threadsai.sandbox.tree.tree import Tree, TreeFile
+from threadsai.sandbox.trees import HashOnly, Misplaced, place_tree, read_tree
+from threadsai.store import SqliteStore
+from threadsai.store.artifacts import ArtifactSink, MemoryArtifacts
 
 FAILED = 2
 

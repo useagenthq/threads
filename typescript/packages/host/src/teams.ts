@@ -13,7 +13,7 @@ import {
   TeamId,
   type TeamItem,
   teamEvents,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import type { HostContext } from "./context";
 import { type Failure, failure } from "./errors";

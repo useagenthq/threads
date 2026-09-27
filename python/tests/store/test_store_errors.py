@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from threads.result import Err
-from threads.store import StoreError
-from threads.store.artifacts import FileArtifacts
-from threads.store.worker import Worker
+from threadsai.result import Err
+from threadsai.store import StoreError
+from threadsai.store.artifacts import FileArtifacts
+from threadsai.store.worker import Worker
 
 pytestmark = pytest.mark.sqlite_only
 

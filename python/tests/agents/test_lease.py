@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 import pytest
 from pydantic import BaseModel, JsonValue
 
-from threads import (
+from threadsai import (
     Completed,
     ConfigError,
     Failed,
@@ -20,13 +20,13 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.agents import run as run_module
-from threads.agents.store import open_store
-from threads.log import ModelResponseEvent
-from threads.loop.model import ModelChunk, ModelInfo
-from threads.loop.scripted import ScriptedModel, scripted_model
-from threads.result import Ok
-from threads.store.lease import TTL_MS
+from threadsai.agents import run as run_module
+from threadsai.agents.store import open_store
+from threadsai.log import ModelResponseEvent
+from threadsai.loop.model import ModelChunk, ModelInfo
+from threadsai.loop.scripted import ScriptedModel, scripted_model
+from threadsai.result import Ok
+from threadsai.store.lease import TTL_MS
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 FIRST_RUN_SEND = 2

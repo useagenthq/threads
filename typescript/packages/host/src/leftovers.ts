@@ -1,11 +1,11 @@
-import type { ChannelAdapter } from "@threads/core";
+import type { ChannelAdapter } from "threadsai";
 import type {
   ArtifactStore,
   BranchId,
   KnownEvent,
   VerifiedLog,
   Writer,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { sendOp } from "./deliver";
 
 // The host's own sends whose source is no longer due (a question answered or expired, a card

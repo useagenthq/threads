@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sqlite } from "@threads/core";
+import { sqlite } from "threadsai";
 import { run } from "../src";
 import { connects, support } from "./fixtures/eval-agents";
 import { support as simulated } from "./fixtures/eval-simulated";

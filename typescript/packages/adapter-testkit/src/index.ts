@@ -8,7 +8,7 @@ import {
   type ModelContext,
   type ModelInfo,
   memoryContext,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 
 export { type CredentialCase, credentialCases } from "./credentials";
 export { type DryPinCase, dryPinCases } from "./dry-pin";

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { Inbound, secret } from "@threads/core/adapter";
+import { Inbound, secret } from "threadsai/adapter";
 import { github } from "../src";
 import { adapter, alice, CHALLENGE, commentPayload, request } from "./kit";
 

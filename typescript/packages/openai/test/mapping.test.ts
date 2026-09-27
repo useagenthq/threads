@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { renderBody, renderCase } from "@threads/adapter-testkit";
-import { memoryContext, parseRender } from "@threads/core/adapter";
+import { renderBody, renderCase } from "@threadsai/adapter-testkit";
+import { memoryContext, parseRender } from "threadsai/adapter";
 import { openai } from "../src";
 import { toOpenAI } from "../src/request";
 

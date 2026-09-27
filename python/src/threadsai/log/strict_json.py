@@ -1,0 +1,86 @@
+"""JSON decoding under the RFC 8785 admission rules.
+
+`json.loads` alone accepts duplicate keys (last wins), `NaN`/`Infinity`, overflowing floats,
+lone surrogates and integers TypeScript can't represent. Each of those would let the two
+implementations read the same bytes differently, so they are rejected here.
+"""
+
+import json
+import math
+from collections import Counter
+from collections.abc import Sequence
+
+from pydantic import JsonValue
+
+from threadsai.log.jcs import MAX_DEPTH, MAX_SAFE_INTEGER, has_lone_surrogate
+from threadsai.result import Err, Ok
+
+
+class _InadmissibleError(ValueError):
+    pass
+
+
+def parse_json(text: str) -> Ok[JsonValue] | Err[str]:
+    try:
+        value: JsonValue = json.loads(
+            text,
+            object_pairs_hook=_object_without_duplicates,
+            parse_constant=_reject_constant,
+            parse_float=_finite_float,
+            parse_int=_safe_int,
+        )
+        _check_strings_and_depth(value)
+    except RecursionError:
+        return Err("JSON nests too deeply")
+    except ValueError as error:  # JSONDecodeError and _InadmissibleError
+        return Err(str(error))
+    return Ok(value)
+
+
+def _object_without_duplicates(pairs: Sequence[tuple[str, JsonValue]]) -> dict[str, JsonValue]:
+    obj = dict(pairs)
+    if len(obj) != len(pairs):
+        counts = Counter(key for key, _ in pairs)
+        duplicate = next(key for key, count in counts.items() if count > 1)
+        raise _InadmissibleError(f"duplicate key {duplicate!r}")
+    return obj
+
+
+def _reject_constant(name: str) -> float:
+    raise _InadmissibleError(f"non-finite number {name}")
+
+
+def _finite_float(text: str) -> float:
+    value = float(text)
+    if not math.isfinite(value):
+        raise _InadmissibleError(f"non-finite number {text}")
+    if value.is_integer() and abs(value) > MAX_SAFE_INTEGER:
+        raise _InadmissibleError(f"integral value {text} is outside the safe integer range")
+    return value
+
+
+def _safe_int(text: str) -> int:
+    value = int(text)
+    if abs(value) > MAX_SAFE_INTEGER:
+        raise _InadmissibleError(f"integer {text} is outside the safe integer range")
+    return value
+
+
+def _check_strings_and_depth(value: JsonValue) -> None:
+    # Iterative, so hostile nesting can't exhaust the stack here. json.loads joins escaped
+    # surrogate pairs, so any surrogate left is unpaired.
+    strings: list[str] = []
+    stack: list[tuple[JsonValue, int]] = [(value, 1)]
+    while stack:
+        item, depth = stack.pop()
+        if isinstance(item, str):
+            strings.append(item)
+        elif isinstance(item, list | dict) and depth > MAX_DEPTH:
+            raise _InadmissibleError(f"nesting deeper than {MAX_DEPTH} levels")
+        elif isinstance(item, list):
+            stack.extend((child, depth + 1) for child in item)
+        elif isinstance(item, dict):
+            strings.extend(item)
+            stack.extend((child, depth + 1) for child in item.values())
+    if any(has_lone_surrogate(s) for s in strings):
+        raise _InadmissibleError("lone surrogate in a string")

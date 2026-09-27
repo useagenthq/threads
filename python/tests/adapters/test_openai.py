@@ -9,10 +9,10 @@ import pytest
 from fakes import FakeContext, Script, collect, golden, line, render_case, sse
 from pydantic import JsonValue
 
-from threads.adapters.models.openai.model import OpenAIModel
-from threads.log import CallId, ReasoningPart, TextPart, ToolUsePart, Usage
-from threads.loop.model import Delta, Done, ModelChunk, PartChunk, Rejected
-from threads.openai import openai
+from threadsai.adapters.models.openai.model import OpenAIModel
+from threadsai.log import CallId, ReasoningPart, TextPart, ToolUsePart, Usage
+from threadsai.loop.model import Delta, Done, ModelChunk, PartChunk, Rejected
+from threadsai.openai import openai
 
 type Ev = tuple[str | None, JsonValue]
 WINDOW = 400_000

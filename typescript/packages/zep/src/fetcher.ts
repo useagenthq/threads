@@ -1,5 +1,5 @@
 import type { ZepClient } from "@getzep/zep-cloud";
-import { type Fetch, sandboxFetch } from "@threads/core/adapter";
+import { type Fetch, sandboxFetch } from "threadsai/adapter";
 
 // The Zep SDK's transport hook is a whole `fetcher` (its default one reads the global fetch and
 // retries inside). This is that hook over the fenced fetch: one request per call, no hidden

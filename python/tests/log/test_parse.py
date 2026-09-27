@@ -5,7 +5,7 @@ import json
 import pytest
 from pydantic import JsonValue
 
-from threads.log import (
+from threadsai.log import (
     Head,
     Header,
     ParseError,
@@ -13,9 +13,9 @@ from threads.log import (
     UserInputEvent,
     parse_log_line,
 )
-from threads.log.jcs import canonicalize
-from threads.log.parse import MAX_LINE_BYTES
-from threads.result import Err, Ok
+from threadsai.log.jcs import canonicalize
+from threadsai.log.parse import MAX_LINE_BYTES
+from threadsai.result import Err, Ok
 
 THREAD = "0192a000-0000-7000-8000-000000000001"
 BRANCH = "0192b000-0000-7000-8000-000000000001"

@@ -7,14 +7,14 @@ from dataclasses import replace
 from team.team_kit import CASES, verified
 from team.writes import draft_of
 
-from threads import agent, scripted_model, sqlite
-from threads.agents.store import now_ms, open_store
-from threads.host.runs import Runner
-from threads.host.schedule_pass import Pass
-from threads.host.schedule_threads import reserve_due
-from threads.result import Err, Ok
-from threads.store.lines import uuid7
-from threads.store.schedules import Due
+from threadsai import agent, scripted_model, sqlite
+from threadsai.agents.store import now_ms, open_store
+from threadsai.host.runs import Runner
+from threadsai.host.schedule_pass import Pass
+from threadsai.host.schedule_threads import reserve_due
+from threadsai.result import Err, Ok
+from threadsai.store.lines import uuid7
+from threadsai.store.schedules import Due
 
 
 def test_a_new_thread_the_hooks_refuse_reserves_nothing_and_is_the_refusal() -> None:

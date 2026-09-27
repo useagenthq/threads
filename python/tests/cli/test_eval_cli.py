@@ -9,9 +9,9 @@ import pytest
 from cli.eval_modules.eval_agents import CONNECTS, support
 from cli.eval_modules.eval_simulated import support as simulated
 
-from threads import CaseExpectation, sqlite
-from threads.cli import main
-from threads.result import Ok
+from threadsai import CaseExpectation, sqlite
+from threadsai.cli import main
+from threadsai.result import Ok
 
 MODULES = Path(__file__).resolve().parent / "eval_modules"
 NOTE = " (framework checks only; pass --agent to detect changes to your agents)"

@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from store.test_writer import DONE, ROOT, Clock, started, user
 
-from threads.result import Ok
-from threads.store import SqliteStore
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
 
 pytestmark = pytest.mark.sqlite_only
 APPENDS = 40

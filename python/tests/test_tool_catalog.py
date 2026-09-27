@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue, ValidationError
 
-from threads._generated import tools_v1
+from threadsai._generated import tools_v1
 
 SPEC = Path(__file__).resolve().parents[2] / "spec"
 VECTOR: dict[str, JsonValue] = json.loads(

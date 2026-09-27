@@ -1,4 +1,4 @@
-import { sha256Hex } from "@threads/core/adapter";
+import { sha256Hex } from "threadsai/adapter";
 
 // What a container and its volumes are called, and the key hash the supervisor validates.
 // The name is derived from the operation key, so a second create under the same key is a 409

@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING
 import pytest
 from team.run_kit import Watched, call, say, start
 
-from threads import agent, scripted_model, sqlite
-from threads.agents.team_worker import TeamWorker
-from threads.log import BranchId
-from threads.team.rows import MemberRow
+from threadsai import agent, scripted_model, sqlite
+from threadsai.agents.team_worker import TeamWorker
+from threadsai.log import BranchId
+from threadsai.team.rows import MemberRow
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

@@ -6,12 +6,12 @@ from collections.abc import Callable
 import pytest
 from pydantic import JsonValue
 
-from threads.log import BranchId, ThreadId
-from threads.redaction import register
-from threads.result import Ok
-from threads.store import Draft, SqliteStore, Writer
-from threads.store.conn import Conn
-from threads.store.worker import Worker
+from threadsai.log import BranchId, ThreadId
+from threadsai.redaction import register
+from threadsai.result import Ok
+from threadsai.store import Draft, SqliteStore, Writer
+from threadsai.store.conn import Conn
+from threadsai.store.worker import Worker
 
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
 ROOT = BranchId("0192b000-0000-7000-8000-000000000001")

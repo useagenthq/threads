@@ -7,8 +7,8 @@ import {
   openThread,
   type Store,
   type SyncReport,
-} from "@threads/core";
-import { openBunSqlite } from "@threads/core/bun-sqlite";
+} from "threadsai";
+import { openBunSqlite } from "threadsai/bun-sqlite";
 import {
   BranchId,
   deleteThread,
@@ -16,8 +16,8 @@ import {
   type StoreDriver,
   storeOf,
   ThreadId,
-} from "@threads/core/host";
-import { Feed } from "@threads/core/internal/feed";
+} from "threadsai/host";
+import { Feed } from "threadsai/internal/feed";
 import { CTX } from "../../core/test/sandbox/context";
 import {
   ROOT,

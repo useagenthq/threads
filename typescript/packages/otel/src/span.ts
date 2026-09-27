@@ -1,4 +1,4 @@
-import type { KnownEvent } from "@threads/core/internal/feed";
+import type { KnownEvent } from "threadsai/internal/feed";
 
 // A span while the walk builds it, and the closed span it becomes (spec/otel/README.md).
 

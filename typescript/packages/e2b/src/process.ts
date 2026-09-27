@@ -1,4 +1,4 @@
-import type { Sinks, Started } from "@threads/core/adapter";
+import type { Sinks, Started } from "threadsai/adapter";
 import { z } from "zod";
 import { E2bError, parsed } from "./wire";
 

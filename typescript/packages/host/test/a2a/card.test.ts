@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { A2A_JSON, AgentCard } from "@threads/a2a/protocol";
+import { A2A_JSON, AgentCard } from "@threadsai/a2a/protocol";
 import { reader, talker } from "./agents";
 import { BASE_URL, serve, stopAll } from "./kit";
 

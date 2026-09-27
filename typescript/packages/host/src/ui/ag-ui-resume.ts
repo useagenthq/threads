@@ -4,7 +4,7 @@ import {
   ok,
   type Principal,
   type Result,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { z } from "zod";
 import type { HostContext } from "../context";
 import { answerQuestion, decideChallenge, resumeThread } from "../decisions";

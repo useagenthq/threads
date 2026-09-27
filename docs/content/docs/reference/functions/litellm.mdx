@@ -6,7 +6,7 @@ icon: "Plug"
 
 Only that route sends through a transport threads can fence, so any other is transport_fence_unsupported when the model is constructed. There is no catalog behind the endpoint, so both limits are required. Pass it as agent(model=litellm("openai/my-model", base_url="http://localhost:4000", max_input_tokens=128000, max_output_tokens=8192, cache_ttl_ms="none")). threads cannot see the provider behind base_url, so cache_ttl_ms is needed too: the real lifetime in milliseconds when the endpoint caches prompts, "none" when it does not. Without it check() and the first run fail with invalid_config.
 
-Import from `threads.litellm` (Python).
+Import from `threadsai.litellm` (Python).
 
 ```python title="Python"
 def litellm(
@@ -16,7 +16,7 @@ def litellm(
     max_output_tokens: int,
     max_tokens: int | None = None,
     params: Mapping[str, pydantic.JsonValue] | None = None,
-    price: threads.log.Price | None = None,
+    price: threadsai.log.Price | None = None,
     cache_ttl_ms: int | Literal["none"] | None = None,
     api_key: str | Secret | None = None,
     base_url: str | None = None,

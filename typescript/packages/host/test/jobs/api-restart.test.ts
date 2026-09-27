@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { LogStore, memoryArtifacts } from "@threads/core";
-import { BranchId, type KnownEvent, knownEvents } from "@threads/core/host";
+import { LogStore, memoryArtifacts } from "threadsai";
+import { BranchId, type KnownEvent, knownEvents } from "threadsai/host";
 import { z } from "zod";
 import { sqlAll } from "../sql";
 import { TENANT } from "./api-worker";

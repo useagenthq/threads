@@ -9,11 +9,11 @@ from collections.abc import Awaitable, Callable
 from sandbox_backend import Box, FakeBackend
 from sandbox_contract import Make
 
-from threads.log import BranchId, ThreadId
-from threads.result import Err, Ok
-from threads.sandbox import Sandbox, SandboxError, SandboxSession
-from threads.sandbox.fake import FakeCrashError
-from threads.sandbox.ledger import (
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.sandbox import Sandbox, SandboxError, SandboxSession
+from threadsai.sandbox.fake import FakeCrashError
+from threadsai.sandbox.ledger import (
     Fenced,
     Tracked,
     abandon,
@@ -22,10 +22,10 @@ from threads.sandbox.ledger import (
     release_session,
     session_lookup,
 )
-from threads.store import SqliteStore, Writer
-from threads.store.lease import TTL_MS
-from threads.store.resources import Resource
-from threads.thread.snapshot import take_snapshot
+from threadsai.store import SqliteStore, Writer
+from threadsai.store.lease import TTL_MS
+from threadsai.store.resources import Resource
+from threadsai.thread.snapshot import take_snapshot
 
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
 ROOT = BranchId("0192b000-0000-7000-8000-000000000001")

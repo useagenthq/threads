@@ -8,9 +8,9 @@ from corpus import Clock
 from kit import T0, Tools, open_store, start
 from pydantic import JsonValue
 
-from threads.log import ArtifactRef, ParseError, TextPart, Usage
-from threads.loop.drive import drive
-from threads.loop.model import (
+from threadsai.log import ArtifactRef, ParseError, TextPart, Usage
+from threadsai.loop.drive import drive
+from threadsai.loop.model import (
     ModelChunk,
     ModelContext,
     ModelRequest,
@@ -18,10 +18,10 @@ from threads.loop.model import (
     Rejected,
     RejectReason,
 )
-from threads.loop.runtime import Failed, Halt, Idle
-from threads.loop.scripted import ScriptedModel
-from threads.reduce.handlers import to_json
-from threads.result import Err, Ok
+from threadsai.loop.runtime import Failed, Halt, Idle
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Err, Ok
 
 USAGE = Usage(input_tokens=5, output_tokens=1)
 

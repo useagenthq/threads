@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { sha256Hex } from "@threads/core/adapter";
+import { sha256Hex } from "threadsai/adapter";
 import { unavailable } from "./wire";
 
 // Where the supervisor comes from, and the sha256 it must hash to before a byte of it is
@@ -35,7 +35,7 @@ export function supervisorIn(
         );
       } catch {
         throw unavailable(
-          `@threads/docker ships no supervisor for linux-${arch}: run scripts/build-supervisor.sh`,
+          `@threadsai/docker ships no supervisor for linux-${arch}: run scripts/build-supervisor.sh`,
         );
       }
       if (sha256Hex(bytes) !== pins[arch])

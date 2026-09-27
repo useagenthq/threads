@@ -1,5 +1,5 @@
-import type { ModelChunk, Usage } from "@threads/core/adapter";
-import { assertNever, JsonObject } from "@threads/core/adapter";
+import type { ModelChunk, Usage } from "threadsai/adapter";
+import { assertNever, JsonObject } from "threadsai/adapter";
 import { z } from "zod";
 import { type ItemContext, itemParts } from "./items";
 

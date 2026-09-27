@@ -3,8 +3,8 @@ import {
   AgentCard,
   type AgentInterface,
   IDEMPOTENT_SEND,
-} from "@threads/a2a/protocol";
-import { canonicalize } from "@threads/core/host";
+} from "@threadsai/a2a/protocol";
+import { canonicalize } from "threadsai/host";
 import type { Exposed, ExposedAgent } from "./config";
 
 // The agent card, a pure function of the config and the request's own origin. A card is what we

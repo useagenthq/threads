@@ -10,20 +10,20 @@ import pytest
 from otel_collector_kit import Collector, collector
 from otel_store_kit import CASES, cursors, imported, losses, query
 
-from threads import sqlite
-from threads._generated.store_sql import STORE_VERSION
-from threads.agents.store import Store, open_store
-from threads.log import BranchId, ThreadId
-from threads.log.digest import sha256_hex
-from threads.otel import otel
-from threads.otel.ids import span_id
-from threads.result import Ok
-from threads.store import SqliteStore
-from threads.store._feed import Checkpoint, Feed
-from threads.store.conn import Conn, one
-from threads.store.deletion import delete_thread
-from threads.store.sql import blob_of
-from threads.telemetry import SyncReport
+from threadsai import sqlite
+from threadsai._generated.store_sql import STORE_VERSION
+from threadsai.agents.store import Store, open_store
+from threadsai.log import BranchId, ThreadId
+from threadsai.log.digest import sha256_hex
+from threadsai.otel import otel
+from threadsai.otel.ids import span_id
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
+from threadsai.store._feed import Checkpoint, Feed
+from threadsai.store.conn import Conn, one
+from threadsai.store.deletion import delete_thread
+from threadsai.store.sql import blob_of
+from threadsai.telemetry import SyncReport
 
 GOLDENS = sorted(p.name for p in CASES.iterdir())
 PARENT = "0192b000-0000-7000-8000-000000000001"

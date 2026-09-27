@@ -14,11 +14,11 @@ from daytona_server import API_KEY, DaytonaServer
 from pydantic import JsonValue
 from sandbox_backend import FakeBackend
 
-from threads import Agent, agent, scripted_model
-from threads.adapters.loop_resources import holding
-from threads.adapters.sandboxes.daytona import DaytonaSandbox
-from threads.log import Permissions
-from threads.sandbox.protocol import Sandbox
+from threadsai import Agent, agent, scripted_model
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.sandboxes.daytona import DaytonaSandbox
+from threadsai.log import Permissions
+from threadsai.sandbox.protocol import Sandbox
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 BYPASS = Permissions.model_validate(

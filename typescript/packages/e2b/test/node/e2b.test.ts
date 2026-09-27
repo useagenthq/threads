@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer, type IncomingMessage } from "node:http";
 import { after, test } from "node:test";
-import type { Fetch, SandboxContext } from "@threads/core/adapter";
+import type { Fetch, SandboxContext } from "threadsai/adapter";
 import { e2b } from "../../src";
 
 // e2b() on Node, against a fake E2B on a real socket, through Node's own fetch (undici): the

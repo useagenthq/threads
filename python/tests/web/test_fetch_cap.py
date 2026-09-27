@@ -15,11 +15,11 @@ from typing import Final
 import pytest
 from pydantic import TypeAdapter
 
-from threads._generated.limits import WEB_FETCH_MAX_BYTES
-from threads.result import Err, Ok
-from threads.web.fetch import get
-from threads.web.guard import Target
-from threads.web.http import Fence, Request, Response, StdlibTransport, WebError
+from threadsai._generated.limits import WEB_FETCH_MAX_BYTES
+from threadsai.result import Err, Ok
+from threadsai.web.fetch import get
+from threadsai.web.guard import Target
+from threadsai.web.http import Fence, Request, Response, StdlibTransport, WebError
 
 _FILE = Path(__file__).resolve().parents[3] / "spec/conformance/vectors/web-fetch-cap.json"
 _VECTOR = json.loads(_FILE.read_text())

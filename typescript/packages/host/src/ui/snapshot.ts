@@ -1,4 +1,4 @@
-import { type EventOf, inputText, type KnownEvent } from "@threads/core/host";
+import { type EventOf, inputText, type KnownEvent } from "threadsai/host";
 import { agUiEvents, MODEL_STEP, started } from "./ag-ui";
 import { foldAgUi, type UserTurn } from "./ag-ui-fold";
 import { RunFacts } from "./facts";

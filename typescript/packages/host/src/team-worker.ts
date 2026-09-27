@@ -18,7 +18,7 @@ import {
   takeMail,
   teamLeadOf,
   teamWorkerFor,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { HostContext } from "./context";
 import { hostPinOf, openHostTeams } from "./host-members";
 import { type HostMember, restartPolicy } from "./members";

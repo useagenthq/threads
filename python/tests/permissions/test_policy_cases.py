@@ -13,10 +13,10 @@ from typing import ClassVar, Literal
 import pytest
 from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter
 
-from threads import agent, scripted_model
-from threads.log import PermissionMode, PermissionRuleAddedData, Permissions
-from threads.permissions import Call, Category, Decision, Source, Verdict, decide, decide_capped
-from threads.result import Err
+from threadsai import agent, scripted_model
+from threadsai.log import PermissionMode, PermissionRuleAddedData, Permissions
+from threadsai.permissions import Call, Category, Decision, Source, Verdict, decide, decide_capped
+from threadsai.result import Err
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 MIN_POLICY_CASES = 4

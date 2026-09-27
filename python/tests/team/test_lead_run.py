@@ -10,10 +10,10 @@ from pydantic.experimental.missing_sentinel import MISSING
 from team.run_kit import USAGE, call, events, member_events, receipts, say, sq_of, start, types
 from team.team_kit import assert_team_replays
 
-from threads import Agent, Completed, Failed, agent, scripted_model, sqlite
-from threads.log import MessageSentEvent, ToolResultEvent, UserInputEvent
-from threads.team.constants import TEAM_CONSTANTS
-from threads.team.rows import team_row
+from threadsai import Agent, Completed, Failed, agent, scripted_model, sqlite
+from threadsai.log import MessageSentEvent, ToolResultEvent, UserInputEvent
+from threadsai.team.constants import TEAM_CONSTANTS
+from threadsai.team.rows import team_row
 
 
 def _researcher(answer: str) -> Agent[None, str]:

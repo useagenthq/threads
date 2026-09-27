@@ -18,9 +18,9 @@ from team.team_kit import (
 )
 from team.writes import HOLDER, ReplayClock, reappend
 
-from threads.log import BranchId, ThreadId
-from threads.result import Ok
-from threads.store import ForkRequest, SqliteStore
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Ok
+from threadsai.store import ForkRequest, SqliteStore
 
 FORK = BranchId("0192b000-0000-7000-8000-0000000000f1")
 DATA = {"reason": "snapshot", "sandbox_id": "sbx_child_01", "knowledge_policy": "pinned"}

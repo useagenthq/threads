@@ -7,7 +7,7 @@ import {
   openThread,
   scriptedModel,
   sqlite,
-} from "@threads/core";
+} from "threadsai";
 import type { KnownEvent } from "../../core/src/log";
 import { logOf } from "../../core/test/agent/kit";
 import { unwrap } from "../../core/test/store/helpers";

@@ -8,10 +8,10 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from tar_kit import chunked
 
-from threads.result import Err, Ok
-from threads.sandbox.tree.build import Owner, build_tar
-from threads.sandbox.tree.tar import ArchiveInvalid, read_tar
-from threads.sandbox.tree.tree import (
+from threadsai.result import Err, Ok
+from threadsai.sandbox.tree.build import Owner, build_tar
+from threadsai.sandbox.tree.tar import ArchiveInvalid, read_tar
+from threadsai.sandbox.tree.tree import (
     Tree,
     TreeDir,
     TreeEntry,
@@ -22,7 +22,7 @@ from threads.sandbox.tree.tree import (
     parse_tree,
     sorted_tree,
 )
-from threads.store.artifacts import MemoryArtifacts
+from threadsai.store.artifacts import MemoryArtifacts
 
 NAMES = st.sampled_from(["a", "b", "é", "\U0001f600", "", "a b", "x\\y", "n" * 90])
 

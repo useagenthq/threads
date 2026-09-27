@@ -11,7 +11,7 @@ those, so this module rewrites them without changing which values are accepted:
 - `allOf` and `$ref`-with-siblings are merged into single objects;
 - rules no type can hold (`if`/`then`/`else`, `not`, `minProperties`, and `oneOf` over `required`)
   move verbatim to `x-allOf`, which the generator copies into `json_schema_extra["allOf"]` and the
-  runtime base model evaluates (`threads._strict_model`).
+  runtime base model evaluates (`threadsai._strict_model`).
 """
 
 from collections.abc import Iterable

@@ -15,7 +15,7 @@ from pydantic import BaseModel, JsonValue
 from team.run_kit import call, member_events, say, sq_of, types
 from team.team_kit import assert_team_replays
 
-from threads import (
+from threadsai import (
     Completed,
     Parked,
     RunContext,
@@ -25,13 +25,13 @@ from threads import (
     sqlite,
     tool,
 )
-from threads._generated.host_api_v1 import Member
-from threads.agents.bindings import AppTool, Fence
-from threads.agents.dynamic_agent import member_definition
-from threads.log import Budget, MemberDefine, MemberEndedEvent, ThreadId
-from threads.result import Ok
-from threads.team.rows import member_rows
-from threads.thread.handle import open_thread
+from threadsai._generated.host_api_v1 import Member
+from threadsai.agents.bindings import AppTool, Fence
+from threadsai.agents.dynamic_agent import member_definition
+from threadsai.log import Budget, MemberDefine, MemberEndedEvent, ThreadId
+from threadsai.result import Ok
+from threadsai.team.rows import member_rows
+from threadsai.thread.handle import open_thread
 
 
 class _Doc(BaseModel):

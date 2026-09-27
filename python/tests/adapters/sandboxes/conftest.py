@@ -4,8 +4,8 @@ import pathlib
 
 import pytest
 
-from threads.adapters.sandboxes.docker import create
-from threads.log.digest import sha256_hex
+from threadsai.adapters.sandboxes.docker import create
+from threadsai.log.digest import sha256_hex
 
 BUILDS = ("linux-amd64", "linux-arm64")
 

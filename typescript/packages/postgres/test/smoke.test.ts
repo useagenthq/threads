@@ -1,5 +1,5 @@
 import { expect } from "bun:test";
-import { BranchId, ThreadId } from "@threads/core/host";
+import { BranchId, ThreadId } from "threadsai/host";
 import { LogStore } from "../../core/src/store";
 import { pgArtifacts } from "../src/artifacts";
 import { openPg } from "../src/driver";

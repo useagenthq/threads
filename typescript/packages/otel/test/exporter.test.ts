@@ -6,8 +6,8 @@ import {
   scriptedModel,
   sqlite,
   tool,
-} from "@threads/core";
-import { storeConnection } from "@threads/core/host";
+} from "threadsai";
+import { storeConnection } from "threadsai/host";
 import { z } from "zod";
 import { credential } from "../../core/src/agent/secret";
 import { otel } from "../src";

@@ -11,16 +11,16 @@ import os
 
 import pytest
 
-from threads.log import ArtifactRef, CitationPart
-from threads.log.digest import sha256_hex
-from threads.memory.fence import bound
-from threads.result import Err, Ok
-from threads.search import HttpSearch, brave, exa, tavily
-from threads.secrets import secret
-from threads.web.fetch import Page, get
-from threads.web.guard import system_resolve
-from threads.web.http import StdlibTransport
-from threads.web.results import page_output
+from threadsai.log import ArtifactRef, CitationPart
+from threadsai.log.digest import sha256_hex
+from threadsai.memory.fence import bound
+from threadsai.result import Err, Ok
+from threadsai.search import HttpSearch, brave, exa, tavily
+from threadsai.secrets import secret
+from threadsai.web.fetch import Page, get
+from threadsai.web.guard import system_resolve
+from threadsai.web.http import StdlibTransport
+from threadsai.web.results import page_output
 
 pytestmark = pytest.mark.live
 

@@ -6,11 +6,11 @@ from typing import Literal
 
 from pg_kit import Leg, admin, schema_url
 
-from threads.postgres.driver import PgConn, raw_connector
-from threads.postgres.opening import open_postgres
-from threads.result import Ok
-from threads.store import SqliteStore
-from threads.store.conn import CommitUnknownError, Cursor, Params, RetryableError
+from threadsai.postgres.driver import PgConn, raw_connector
+from threadsai.postgres.opening import open_postgres
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
+from threadsai.store.conn import CommitUnknownError, Cursor, Params, RetryableError
 
 
 class DrillConn(PgConn):

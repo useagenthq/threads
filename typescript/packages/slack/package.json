@@ -1,5 +1,5 @@
 {
-  "name": "@threads/slack",
+  "name": "@threadsai/slack",
   "version": "0.0.0",
   "license": "Apache-2.0",
   "type": "module",
@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@threads/core": "workspace:*",
+    "threadsai": "workspace:*",
     "zod": "^4.6.5",
     "@slack/web-api": "8.1.1"
   }

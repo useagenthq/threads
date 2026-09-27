@@ -1,12 +1,12 @@
-import { anthropic } from "@threads/anthropic";
+import { anthropic } from "@threadsai/anthropic";
+import { docker } from "@threadsai/docker";
 import {
   type Agent,
   type AgentOptions,
   agent,
   localMemory,
   type TeamAgent,
-} from "@threads/core";
-import { docker } from "@threads/docker";
+} from "threadsai";
 
 // codingAgent() (spec/api.json): agent() with five options already chosen. It has no runtime
 // concept of its own and no second code path, so a thread it starts and a thread from the

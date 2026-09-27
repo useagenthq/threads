@@ -16,12 +16,12 @@ from http import HTTPStatus
 from host.test_http import served, start, text
 from pydantic import JsonValue
 
-from threads import agent, scripted_model, sqlite
-from threads.agents.store import open_store, scoped
-from threads.log import UserInputEvent
-from threads.result import Ok
-from threads.store.conn import Conn, Row
-from threads.store.sql import text_of
+from threadsai import agent, scripted_model, sqlite
+from threadsai.agents.store import open_store, scoped
+from threadsai.log import UserInputEvent
+from threadsai.result import Ok
+from threadsai.store.conn import Conn, Row
+from threadsai.store.sql import text_of
 
 START_RUN = "start_run"
 """The `run_receipts` operation of a run started through POST /v1/runs, as both languages write

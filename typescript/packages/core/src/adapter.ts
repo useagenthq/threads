@@ -1,4 +1,4 @@
-// @threads/core/adapter: what a model adapter package builds on. Core never imports adapters.
+// threadsai/adapter: what a model adapter package builds on. Core never imports adapters.
 
 export { ConfigError } from "./agent/errors";
 export { credential, type Secret, secret } from "./agent/secret";

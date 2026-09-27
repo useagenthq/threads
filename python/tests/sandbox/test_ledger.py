@@ -10,14 +10,14 @@ from pathlib import Path
 from partial_sandbox import CreateLookupOnly, NoLookups, SnapshotLookupOnly
 from pydantic import JsonValue
 
-from threads.log import BranchId, ThreadId
-from threads.result import Err, Ok
-from threads.sandbox import FakeSandbox, LookupSupport, SandboxSession, fake_sandbox
-from threads.sandbox.ledger import Fenced, Tracked, abandon, acquire, gc, release_session
-from threads.sandbox.manifest import manifest_hash
-from threads.store import SqliteStore, Writer
-from threads.store.lease import TTL_MS
-from threads.store.resources import Kind, Resource
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.sandbox import FakeSandbox, LookupSupport, SandboxSession, fake_sandbox
+from threadsai.sandbox.ledger import Fenced, Tracked, abandon, acquire, gc, release_session
+from threadsai.sandbox.manifest import manifest_hash
+from threadsai.store import SqliteStore, Writer
+from threadsai.store.lease import TTL_MS
+from threadsai.store.resources import Kind, Resource
 
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
 ROOT = BranchId("0192b000-0000-7000-8000-000000000001")

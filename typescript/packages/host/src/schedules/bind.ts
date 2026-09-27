@@ -1,5 +1,5 @@
-import type { Input } from "@threads/core";
-import { Name } from "@threads/core/host";
+import type { Input } from "threadsai";
+import { Name } from "threadsai/host";
 import type { HostContext, HostedAgent } from "../context";
 import { type Cron, parseCron } from "../cron";
 

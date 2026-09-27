@@ -8,17 +8,17 @@ import pytest
 from corpus import CASES, cases
 from pydantic import JsonValue
 
-from threads import agent, scripted_model
-from threads._generated.host_api_v1 import SettingsChange
-from threads.agents.store import Store, now_ms, open_store, sqlite
-from threads.log import BranchId, ModelRef, ModelRequestEvent, ThreadId
-from threads.loop.drafts import draft
-from threads.loop.scripted import ScriptedModel
-from threads.result import Err, Ok
-from threads.store import verify_export
-from threads.store.lines import uuid7
-from threads.thread.control import LOCAL_OPERATOR
-from threads.thread.handle import Thread, open_thread
+from threadsai import agent, scripted_model
+from threadsai._generated.host_api_v1 import SettingsChange
+from threadsai.agents.store import Store, now_ms, open_store, sqlite
+from threadsai.log import BranchId, ModelRef, ModelRequestEvent, ThreadId
+from threadsai.loop.drafts import draft
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.result import Err, Ok
+from threadsai.store import verify_export
+from threadsai.store.lines import uuid7
+from threadsai.thread.control import LOCAL_OPERATOR
+from threadsai.thread.handle import Thread, open_thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 STARTED: dict[str, JsonValue] = {

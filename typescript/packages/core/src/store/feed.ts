@@ -1,4 +1,4 @@
-// @threads/core/internal/feed: the store reader a telemetry exporter builds on. Not public: not in
+// threadsai/internal/feed: the store reader a telemetry exporter builds on. Not public: not in
 // spec/api.json, not documented, and it may change in any release. It never takes a lease and
 // never appends: its only writes are observer bookkeeping.
 

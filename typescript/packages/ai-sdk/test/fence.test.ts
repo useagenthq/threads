@@ -4,8 +4,8 @@ import {
   recordingFetch,
   renderBody,
   sse,
-} from "@threads/adapter-testkit";
-import { ConfigError, type Fetch, memoryContext } from "@threads/core/adapter";
+} from "@threadsai/adapter-testkit";
+import { ConfigError, type Fetch, memoryContext } from "threadsai/adapter";
 import { aiSdk } from "../src";
 import { fakeModel, offline } from "./fake";
 

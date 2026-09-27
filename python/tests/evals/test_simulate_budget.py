@@ -9,16 +9,16 @@ from typing import TYPE_CHECKING
 from eval_kit import priced, saved_turns, say, support, use, verdicts_reply
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads import Agent, EvalReport, Live, run_evals, sqlite
-from threads.agents.store import Store, scoped
-from threads.evals.remaining_budget import Spent, remaining_budget
-from threads.log import Budget, ThreadId, UserInputEvent
-from threads.result import Ok
-from threads.thread.case_simulate import Simulate
+from threadsai import Agent, EvalReport, Live, run_evals, sqlite
+from threadsai.agents.store import Store, scoped
+from threadsai.evals.remaining_budget import Spent, remaining_budget
+from threadsai.log import Budget, ThreadId, UserInputEvent
+from threadsai.result import Ok
+from threadsai.thread.case_simulate import Simulate
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
-from threads.thread.handle import open_thread
+from threadsai.thread.handle import open_thread
 
 RUBRIC = ("The agent stays inside the refund policy",)
 

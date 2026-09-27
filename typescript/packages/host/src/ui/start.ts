@@ -14,7 +14,7 @@ import {
   type ThreadId,
   uiBodyHash,
   uuidv7,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { type HostContext, type HostedAgent, samePin } from "../context";
 import { findReceipt, UI_RUN } from "../receipts";
 import {

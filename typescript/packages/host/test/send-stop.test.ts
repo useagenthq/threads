@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { agent, type Store, scriptedModel, sqlite } from "@threads/core";
-import { sandboxFetch } from "@threads/core/adapter";
-import { openStore, storeConnection, tenantStore } from "@threads/core/host";
+import { agent, type Store, scriptedModel, sqlite } from "threadsai";
+import { sandboxFetch } from "threadsai/adapter";
+import { openStore, storeConnection, tenantStore } from "threadsai/host";
 import { z } from "zod";
 import { type Host, host } from "../src";
 import { hostTicked } from "../src/host";

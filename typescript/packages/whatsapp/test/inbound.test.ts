@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { secret } from "@threads/core/adapter";
+import { secret } from "threadsai/adapter";
 import { unwrap } from "../../core/test/store/helpers";
 import { whatsapp } from "../src";
 import {

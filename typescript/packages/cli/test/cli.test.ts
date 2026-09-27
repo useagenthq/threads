@@ -11,8 +11,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agent, openThread, scriptedModel, sqlite } from "@threads/core";
-import { storeConnection, tenantStore } from "@threads/core/host";
+import { agent, openThread, scriptedModel, sqlite } from "threadsai";
+import { storeConnection, tenantStore } from "threadsai/host";
 import { sqlAll, sqlRun } from "../../host/test/sql";
 import { run, type Served } from "../src";
 

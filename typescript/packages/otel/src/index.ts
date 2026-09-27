@@ -1,4 +1,4 @@
-import type { Exporter, Store } from "@threads/core";
+import type { Exporter, Store } from "threadsai";
 import { resolve } from "./env";
 import { OtelExporter } from "./exporter";
 

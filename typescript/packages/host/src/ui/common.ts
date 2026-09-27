@@ -1,4 +1,4 @@
-import { openThread, type Thread } from "@threads/core";
+import { openThread, type Thread } from "threadsai";
 import {
   type KnownEvent,
   knownEvents,
@@ -6,7 +6,7 @@ import {
   type ParkAddress,
   storeConnection,
   type ThreadId,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { HostContext, HostedAgent } from "../context";
 import { failure } from "../errors";
 import { uiReceipts } from "../receipts";

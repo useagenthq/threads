@@ -6,8 +6,8 @@ import {
   type Store,
   scriptedModel,
   tool,
-} from "@threads/core";
-import { markTestKit } from "@threads/core/adapter";
+} from "threadsai";
+import { markTestKit } from "threadsai/adapter";
 import {
   type EventOf,
   knownEvents,
@@ -15,7 +15,7 @@ import {
   type Principal,
   type ThreadId,
   tenantStore,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import type { Chunk } from "../../src/ui/frame";
 import { say, use } from "../kit";

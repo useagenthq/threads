@@ -36,14 +36,14 @@ from team.team_kit import (
     rebuild_all,
 )
 
-from threads.agents.store import Store, open_store
-from threads.cli import main
-from threads.log import ThreadId
-from threads.result import Err, Ok
-from threads.store.conn import one
-from threads.store.deletion import DeleteError, delete_tenant, delete_thread
-from threads.store.sql import text_of
-from threads.team.rebuild import rebuild_team_index
+from threadsai.agents.store import Store, open_store
+from threadsai.cli import main
+from threadsai.log import ThreadId
+from threadsai.result import Err, Ok
+from threadsai.store.conn import one
+from threadsai.store.deletion import DeleteError, delete_tenant, delete_thread
+from threadsai.store.sql import text_of
+from threadsai.team.rebuild import rebuild_team_index
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

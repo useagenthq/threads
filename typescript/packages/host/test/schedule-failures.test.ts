@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { agent, extension, scriptedModel, sqlite } from "@threads/core";
+import { agent, extension, scriptedModel, sqlite } from "threadsai";
 import {
   openStore,
   storeConnection,
   ThreadId,
   tenantStore,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { HostContext } from "../src/context";
 import { bindSchedules, tick } from "../src/schedules";

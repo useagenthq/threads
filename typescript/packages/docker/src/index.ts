@@ -1,4 +1,4 @@
-import type { ProviderSandbox } from "@threads/core/adapter";
+import type { ProviderSandbox } from "threadsai/adapter";
 import { SHIPPED } from "./pins";
 import { type DockerOptions, dockerSandbox } from "./sandbox";
 

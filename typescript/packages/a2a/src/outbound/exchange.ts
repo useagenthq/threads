@@ -1,4 +1,4 @@
-import { canonicalize } from "@threads/core/adapter";
+import { canonicalize } from "threadsai/adapter";
 import {
   type A2aFault,
   type Answer,

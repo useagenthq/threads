@@ -20,8 +20,8 @@ An agent is a model, instructions and tools. Running it is one call.
 <Tab value="TypeScript">
 
 ```ts
-import { anthropic } from "@threads/anthropic";
-import { agent, sqlite, tool } from "@threads/core";
+import { anthropic } from "@threadsai/anthropic";
+import { agent, sqlite, tool } from "threadsai";
 import { z } from "zod";
 
 const getWeather = tool({
@@ -48,8 +48,8 @@ const result = await weather.run("What is the weather in Paris?", { store: sqlit
 ```python
 from pydantic import BaseModel
 
-from threads import RunContext, agent, sqlite, tool
-from threads.anthropic import anthropic
+from threadsai import RunContext, agent, sqlite, tool
+from threadsai.anthropic import anthropic
 
 
 class WeatherInput(BaseModel):

@@ -10,14 +10,14 @@ from contextlib import closing
 import pytest
 from pg_kit import Leg, admin, need_postgres, schema_url
 
-from threads._generated.store_pg_sql import STORE_VERSION
-from threads.log import ParseError
-from threads.postgres.driver import PgConn, connector, raw_connector
-from threads.postgres.opening import lock_key, open_postgres
-from threads.result import Err, Ok
-from threads.store import SqliteStore
-from threads.store.conn import Cursor, Params
-from threads.store.sql import text_of
+from threadsai._generated.store_pg_sql import STORE_VERSION
+from threadsai.log import ParseError
+from threadsai.postgres.driver import PgConn, connector, raw_connector
+from threadsai.postgres.opening import lock_key, open_postgres
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore
+from threadsai.store.conn import Cursor, Params
+from threadsai.store.sql import text_of
 
 OPENERS = 8
 
@@ -112,7 +112,7 @@ def test_postgres_before_16_is_unsupported_format_naming_the_version(leg: Leg) -
 
 
 def _sqlite_tables() -> dict[str, list[tuple[str, str, bool]]]:
-    from threads._generated.store_sql import STORE_SQL  # noqa: PLC0415
+    from threadsai._generated.store_sql import STORE_SQL  # noqa: PLC0415
 
     with closing(sqlite3.connect(":memory:")) as conn:
         conn.executescript(STORE_SQL)

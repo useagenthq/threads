@@ -9,8 +9,8 @@ import pytest
 from pydantic import JsonValue
 from schema_check import CASE_ID, valid
 
-from threads.log import parse_log_line
-from threads.result import Ok
+from threadsai.log import parse_log_line
+from threadsai.result import Ok
 
 SPEC = Path(__file__).resolve().parents[3] / "spec"
 STAGED = SPEC / "conformance" / "staged"

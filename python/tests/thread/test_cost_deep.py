@@ -6,14 +6,14 @@ import asyncio
 
 from pydantic import JsonValue
 
-from threads import sqlite
-from threads.agents.store import now_ms, open_store
-from threads.log import BranchId, ThreadId
-from threads.result import Err, Ok
-from threads.store import Draft
-from threads.store.lines import uuid7
-from threads.thread.read import read_log
-from threads.thread.usage import tree_cost
+from threadsai import sqlite
+from threadsai.agents.store import now_ms, open_store
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.store import Draft
+from threadsai.store.lines import uuid7
+from threadsai.thread.read import read_log
+from threadsai.thread.usage import tree_cost
 
 DEPTH = 10_000
 STARTED: dict[str, JsonValue] = {

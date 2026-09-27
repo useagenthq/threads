@@ -7,10 +7,10 @@ from collections.abc import Sequence
 
 from store.test_writer import DONE, ROOT, Clock, run, started, user
 
-from threads.result import Ok
-from threads.store import Draft, SqliteStore
-from threads.store.conn import Conn, transaction
-from threads.store.writer import DecideTx, Refusal
+from threadsai.result import Ok
+from threadsai.store import Draft, SqliteStore
+from threadsai.store.conn import Conn, transaction
+from threadsai.store.writer import DecideTx, Refusal
 
 APPENDS = 50
 

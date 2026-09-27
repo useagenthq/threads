@@ -12,14 +12,14 @@ import pytest
 from host.test_api_recovery import ALICE, expire_leases, fold, has, start, text, until
 from pydantic import JsonValue
 
-from threads import RunContext, Store, agent, extension, scripted_model, sqlite
-from threads._generated.host_api_v1 import RunAccepted
-from threads.agents import run as run_module
-from threads.hooks.types import ModelGate
-from threads.host import Host, host, reopen
-from threads.host.app import recovered
-from threads.log import ModelAttemptAbandonedEvent, ModelRequestEvent, TurnCompletedEvent
-from threads.loop.model import (
+from threadsai import RunContext, Store, agent, extension, scripted_model, sqlite
+from threadsai._generated.host_api_v1 import RunAccepted
+from threadsai.agents import run as run_module
+from threadsai.hooks.types import ModelGate
+from threadsai.host import Host, host, reopen
+from threadsai.host.app import recovered
+from threadsai.log import ModelAttemptAbandonedEvent, ModelRequestEvent, TurnCompletedEvent
+from threadsai.loop.model import (
     LookupResult,
     ModelChunk,
     ModelContext,
@@ -27,10 +27,10 @@ from threads.loop.model import (
     ModelResponse,
     StaleEpoch,
 )
-from threads.loop.scripted import ScriptedModel
-from threads.reduce.state import ReducedState
-from threads.result import Err, Ok
-from threads.store import SqliteStore, StoreError
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.reduce.state import ReducedState
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore, StoreError
 
 FEWEST, MOST = 3, 14
 """Store failures seen in 0.6 s while backing off from 10 ms to at most 80 ms."""
@@ -126,7 +126,7 @@ def test_a_lasting_store_error_backs_off_is_said_once_and_the_run_goes_on_when_i
 
             monkeypatch.setattr(run_module, "open_store", broken)
             await expire_leases(store)
-            with caplog.at_level(logging.WARNING, logger="threads"):
+            with caplog.at_level(logging.WARNING, logger="threadsai"):
                 await asyncio.sleep(0.6)
             # Once every 10 ms would be about 60; backing off to 80 ms it is about 10.
             assert FEWEST <= attempts <= MOST
@@ -163,7 +163,7 @@ def test_a_lookup_that_fails_an_assertion_is_a_bug_and_is_not_retried(
         store = sqlite(":memory:")
         first, late, run = await _crashed(store)
         model = Lookups(text("done"), fault=lambda: AssertionError("lookup broke"))
-        with caplog.at_level(logging.WARNING, logger="threads"):
+        with caplog.at_level(logging.WARNING, logger="threadsai"):
             async with support_of(store, model) as second:
                 await recovered(second)
                 await asyncio.sleep(0.2)
@@ -198,7 +198,7 @@ def test_an_artifact_write_that_fails_is_a_store_error_and_the_same_host_complet
         artifacts.write_bytes(b"")
         opened = asyncio.Event()
         opened.set()
-        with caplog.at_level(logging.WARNING, logger="threads"):
+        with caplog.at_level(logging.WARNING, logger="threadsai"):
             second = gated(store, Lookups(text("done")), opened, asyncio.Event())
             async with second:
                 await recovered(second)

@@ -10,27 +10,27 @@ from typing import TYPE_CHECKING
 import pytest
 from compact_kit import SUMMARY, body, logged, request_of, requests, text
 
-from threads import Agent, agent, scripted_model, sqlite
-from threads.agents.context import RunContext
-from threads.agents.run import execute
-from threads.agents.store import now_ms, open_store
-from threads.hooks.extension import extension
-from threads.hooks.types import CompactGate
-from threads.log import (
+from threadsai import Agent, agent, scripted_model, sqlite
+from threadsai.agents.context import RunContext
+from threadsai.agents.run import execute
+from threadsai.agents.store import now_ms, open_store
+from threadsai.hooks.extension import extension
+from threadsai.hooks.types import CompactGate
+from threadsai.log import (
     CompactedEvent,
     CompactionFailedEvent,
     CompactionRequestedEvent,
     ContextEditedEvent,
     EventId,
 )
-from threads.log.digest import sha256_hex
-from threads.loop.drafts import draft
-from threads.loop.scripted import ScriptedModel
-from threads.reduce.state import ReducedState
-from threads.result import Ok
-from threads.store import Draft, SqliteStore, Writer
-from threads.thread.control import LOCAL_OPERATOR
-from threads.thread.handle import Thread
+from threadsai.log.digest import sha256_hex
+from threadsai.loop.drafts import draft
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.reduce.state import ReducedState
+from threadsai.result import Ok
+from threadsai.store import Draft, SqliteStore, Writer
+from threadsai.thread.control import LOCAL_OPERATOR
+from threadsai.thread.handle import Thread
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

@@ -18,11 +18,11 @@ from team.team_kit import (
     rechain,
 )
 
-from threads.agents.store import open_store
-from threads.result import Err, Ok
-from threads.store.conn import Conn
-from threads.store.deletion import delete_tenant
-from threads.team.rebuild import rebuild_team_index
+from threadsai.agents.store import open_store
+from threadsai.result import Err, Ok
+from threadsai.store.conn import Conn
+from threadsai.store.deletion import delete_tenant
+from threadsai.team.rebuild import rebuild_team_index
 
 
 def test_a_member_whose_lead_line_does_not_parse_stays_with_its_lead() -> None:

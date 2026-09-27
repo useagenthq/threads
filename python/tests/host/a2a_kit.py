@@ -13,14 +13,14 @@ from typing import Final
 import httpx
 from pydantic import JsonValue
 
-from threads import Agent, Store, sqlite
-from threads.a2a.protocol import A2A_VERSION, VERSION_HEADER, error_by_code
-from threads.agents.store import open_store, scoped
-from threads.host import Host, host
-from threads.host.a2a.config import A2aOptions
-from threads.log import BranchId, Principal, UserInputEvent
-from threads.result import Ok
-from threads.store.conn import Conn
+from threadsai import Agent, Store, sqlite
+from threadsai.a2a.protocol import A2A_VERSION, VERSION_HEADER, error_by_code
+from threadsai.agents.store import open_store, scoped
+from threadsai.host import Host, host
+from threadsai.host.a2a.config import A2aOptions
+from threadsai.log import BranchId, Principal, UserInputEvent
+from threadsai.result import Ok
+from threadsai.store.conn import Conn
 
 type Agents = Mapping[str, Agent[None, object]]
 """One host's agents, as `served` takes them."""

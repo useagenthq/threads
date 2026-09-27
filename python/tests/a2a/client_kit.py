@@ -10,15 +10,15 @@ from dataclasses import dataclass, field
 
 from pydantic import JsonValue, TypeAdapter
 
-from threads.a2a.protocol import (
+from threadsai.a2a.protocol import (
     A2aErrorName,
     Sending,
     Wire,
     error_info,
 )
-from threads.result import Err, Ok
-from threads.web.guard import Resolve, Target
-from threads.web.http import Fence, Request, Response, Transport, WebError, WebErrorCode
+from threadsai.result import Err, Ok
+from threadsai.web.guard import Resolve, Target
+from threadsai.web.http import Fence, Request, Response, Transport, WebError, WebErrorCode
 
 RPC = Wire("https://partner.example/a2a/refunds", "JSONRPC")
 REST = Wire("https://partner.example/a2a/refunds", "HTTP+JSON")

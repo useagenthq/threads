@@ -11,13 +11,13 @@ import pytest
 from otel_collector_kit import Collector, collector
 from otel_store_kit import looping
 
-from threads import Completed, sqlite
-from threads.host import host
-from threads.host.telemetry import Telemetry, Timing
-from threads.log import BranchId, ThreadId
-from threads.otel import otel
-from threads.result import Err, Ok
-from threads.telemetry import SkippedBranch, SyncError, SyncReport
+from threadsai import Completed, sqlite
+from threadsai.host import host
+from threadsai.host.telemetry import Telemetry, Timing
+from threadsai.log import BranchId, ThreadId
+from threadsai.otel import otel
+from threadsai.result import Err, Ok
+from threadsai.telemetry import SkippedBranch, SyncError, SyncReport
 
 
 async def _until(c: Collector, count: int, within_s: float = 5.0) -> None:
@@ -109,7 +109,7 @@ def test_a_skipped_branch_is_logged_once_per_streak(caplog: pytest.LogCaptureFix
             await asyncio.sleep(0.005)
         running.cancel()
 
-    with caplog.at_level(logging.WARNING, logger="threads.host.telemetry"):
+    with caplog.at_level(logging.WARNING, logger="threadsai.host.telemetry"):
         asyncio.run(main())
     logged = [r.getMessage() for r in caplog.records if "skipped branch" in r.getMessage()]
     # Once for head 5, once more after the head moved to 6.
@@ -134,7 +134,7 @@ def test_a_failing_collector_is_logged_once_per_streak(caplog: pytest.LogCapture
         await telemetry.last()
         assert stub.calls == before + 1  # the last sync ran too
 
-    with caplog.at_level(logging.WARNING, logger="threads.host.telemetry"):
+    with caplog.at_level(logging.WARNING, logger="threadsai.host.telemetry"):
         asyncio.run(main())
     logged = [r for r in caplog.records if "collector_unavailable" in r.getMessage()]
     assert len(logged) == 2  # noqa: PLR2004 - counted spans

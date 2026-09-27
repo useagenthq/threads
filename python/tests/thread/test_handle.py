@@ -13,20 +13,20 @@ from pydantic import JsonValue
 from sandbox_kit import OPEN
 from schema_check import CASE_ID, valid
 
-from threads.agents.store import HOLDER, Store, now_ms, open_store, sqlite
-from threads.evals.run import run_evals
-from threads.log import BranchId, ForkEvent, SnapshotEvent, ThreadId
-from threads.loop.drafts import draft
-from threads.loop.drive import drive
-from threads.loop.runtime import Runtime, serving
-from threads.loop.scripted import scripted_model
-from threads.result import Err, Ok
-from threads.sandbox import FakeSandbox, SandboxSession, fake_sandbox
-from threads.store import ForkRequest, SqliteStore, Writer, verify_export
-from threads.store.lines import uuid7
-from threads.thread.case import CaseExpectation
-from threads.thread.handle import Thread, open_thread
-from threads.thread.snapshot import take_snapshot
+from threadsai.agents.store import HOLDER, Store, now_ms, open_store, sqlite
+from threadsai.evals.run import run_evals
+from threadsai.log import BranchId, ForkEvent, SnapshotEvent, ThreadId
+from threadsai.loop.drafts import draft
+from threadsai.loop.drive import drive
+from threadsai.loop.runtime import Runtime, serving
+from threadsai.loop.scripted import scripted_model
+from threadsai.result import Err, Ok
+from threadsai.sandbox import FakeSandbox, SandboxSession, fake_sandbox
+from threadsai.store import ForkRequest, SqliteStore, Writer, verify_export
+from threadsai.store.lines import uuid7
+from threadsai.thread.case import CaseExpectation
+from threadsai.thread.handle import Thread, open_thread
+from threadsai.thread.snapshot import take_snapshot
 
 STARTED: dict[str, JsonValue] = {
     "agent_name": "test",

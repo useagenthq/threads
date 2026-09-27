@@ -1,4 +1,4 @@
-// The bun:sqlite driver is the `@threads/core/bun-sqlite` subpath, so core never imports a
+// The bun:sqlite driver is the `threadsai/bun-sqlite` subpath, so core never imports a
 // runtime-specific module.
 export {
   type ArtifactStore,

@@ -10,7 +10,7 @@ import {
   secret,
   sqlite,
   tool,
-} from "@threads/core";
+} from "threadsai";
 import {
   type KnownEvent,
   knownEvents,
@@ -18,7 +18,7 @@ import {
   type Principal,
   Principal as PrincipalSchema,
   tenantStore,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { type Host, type HostOptions, host } from "../src";
 

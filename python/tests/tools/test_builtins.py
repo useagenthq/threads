@@ -11,15 +11,15 @@ from local_sandbox import LocalSession
 from pydantic import JsonValue
 from sandbox_kit import KitContext
 
-from threads._generated import tools_v1
-from threads.adapters.loop_resources import holding
-from threads.log import CallId, JsonObject, Spill, ToolSpec
-from threads.log.digest import sha256_hex
-from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertain
-from threads.result import Ok
-from threads.store import SqliteStore
-from threads.tools import SandboxTools, specs
-from threads.tools.specs import GATED, MEMBERS, Writes, agent_tools
+from threadsai._generated import tools_v1
+from threadsai.adapters.loop_resources import holding
+from threadsai.log import CallId, JsonObject, Spill, ToolSpec
+from threadsai.log.digest import sha256_hex
+from threadsai.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertain
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
+from threadsai.tools import SandboxTools, specs
+from threadsai.tools.specs import GATED, MEMBERS, Writes, agent_tools
 
 LIMITS = Spill(threshold_bytes=64, head_bytes=16, tail_bytes=8, request_budget_bytes=4096)
 DAY_MS = 86_400_000

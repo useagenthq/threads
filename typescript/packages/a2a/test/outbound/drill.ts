@@ -4,7 +4,7 @@ import {
   type KnownEvent,
   sha256Hex,
   type ToolSpec,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import type { EventDraft, Writer } from "../../../core/src/store";
 import { type Harness, harness } from "../../../core/test/loop/harness";
 import { ROOT, THREAD, unwrap } from "../../../core/test/store/helpers";

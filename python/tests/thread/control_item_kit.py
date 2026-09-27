@@ -9,12 +9,12 @@ from pathlib import Path
 from corpus import Clock
 from kit import Tools, allow_all
 
-from threads.log import BranchId
-from threads.loop.model import Model
-from threads.loop.runtime import Runtime, serving
-from threads.result import Ok
-from threads.store import SqliteStore
-from threads.store.sql import int_of, text_of
+from threadsai.log import BranchId
+from threadsai.loop.model import Model
+from threadsai.loop.runtime import Runtime, serving
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
+from threadsai.store.sql import int_of, text_of
 
 
 @dataclass(frozen=True, slots=True)

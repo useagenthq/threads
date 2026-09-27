@@ -5,7 +5,7 @@ import {
   StoreError,
   sha256Hex,
   verified,
-} from "@threads/core/store-driver";
+} from "threadsai/store-driver";
 import { z } from "zod";
 import type { PgDriver } from "./driver";
 

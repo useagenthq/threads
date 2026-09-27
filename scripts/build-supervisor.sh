@@ -20,7 +20,7 @@ printf '{\n  "linux-amd64": "%s",\n  "linux-arm64": "%s"\n}\n' \
   "$(hash_of "$out/linux-arm64/supervise")" > "$src/binaries.json"
 
 # Both packages ship the binaries; each checks the sha before every injection.
-for dest in "$root/typescript/packages/docker/bin" "$root/python/src/threads/adapters/sandboxes/docker/bin"; do
+for dest in "$root/typescript/packages/docker/bin" "$root/python/src/threadsai/adapters/sandboxes/docker/bin"; do
   mkdir -p "$dest"
   cp "$out/linux-amd64/supervise" "$dest/supervise-linux-amd64"
   cp "$out/linux-arm64/supervise" "$dest/supervise-linux-arm64"
@@ -34,7 +34,7 @@ drift=0
 for arch in amd64 arm64; do
   want="$(hash_of "$out/linux-$arch/supervise")"
   for pinned in "$root/typescript/packages/docker/src/pins.ts" \
-    "$root/python/src/threads/adapters/sandboxes/docker/create.py"; do
+    "$root/python/src/threadsai/adapters/sandboxes/docker/create.py"; do
     if [ -f "$pinned" ] && ! grep -q "$want" "$pinned"; then
       echo "stale pin: $pinned does not carry the linux-$arch sha256 $want" >&2
       drift=1

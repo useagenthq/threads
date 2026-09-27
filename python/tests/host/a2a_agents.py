@@ -12,12 +12,12 @@ from typing import Final
 
 from pydantic import BaseModel, JsonValue
 
-from threads import Agent, RunContext, agent, scripted_model, tool
-from threads.agents.tool import Tool
-from threads.log import Model as ModelLimits
-from threads.log import ModelRef, Principal
-from threads.loop.model import ModelInfo
-from threads.loop.scripted import SCRIPTED_INFO, ScriptedModel
+from threadsai import Agent, RunContext, agent, scripted_model, tool
+from threadsai.agents.tool import Tool
+from threadsai.log import Model as ModelLimits
+from threadsai.log import ModelRef, Principal
+from threadsai.loop.model import ModelInfo
+from threadsai.loop.scripted import SCRIPTED_INFO, ScriptedModel
 
 USAGE: Final[JsonValue] = {"input_tokens": 10, "output_tokens": 2}
 PRICE: Final[JsonValue] = {"input": 1, "output": 1}

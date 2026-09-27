@@ -9,12 +9,12 @@ from urllib.parse import quote
 import pytest
 from pydantic import JsonValue
 
-from threads.github import github
-from threads.host import Decision, Message, RawRequest
-from threads.result import Err, Ok
-from threads.secrets import secret
-from threads.slack import slack
-from threads.whatsapp import whatsapp
+from threadsai.github import github
+from threadsai.host import Decision, Message, RawRequest
+from threadsai.result import Err, Ok
+from threadsai.secrets import secret
+from threadsai.slack import slack
+from threadsai.whatsapp import whatsapp
 
 SECRET = "shh-signing"  # noqa: S105 - a test signing secret
 NOW = 1_790_000_000

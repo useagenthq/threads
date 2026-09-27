@@ -5,8 +5,8 @@ import {
   type SseFrame,
   type StreamResponse,
   type Task,
-} from "@threads/a2a/protocol";
-import type { Principal } from "@threads/core/host";
+} from "@threadsai/a2a/protocol";
+import type { Principal } from "threadsai/host";
 import type { HostContext } from "../context";
 import { type Located, slicesOf } from "./read";
 import { artifactsOf, type Slice, taskOf } from "./state";

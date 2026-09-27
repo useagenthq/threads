@@ -1,4 +1,4 @@
-import { openStore, type Store, tenantStore } from "@threads/core/host";
+import { openStore, type Store, tenantStore } from "threadsai/host";
 import { TeamId } from "../../core/src/log";
 import { assertTeamReplays } from "../../core/test/team/kit";
 import { knownEventsOf } from "./kit";

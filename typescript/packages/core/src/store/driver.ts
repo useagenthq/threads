@@ -8,7 +8,7 @@ export type SqlValue = string | number | Uint8Array | null;
  * Postgres connection, a serialization failure that outlived its retries; the disk under the
  * artifacts), thrown where the store meets them: a later try may not meet it again. A SQL bug
  * (a syntax error, a constraint) is never one: it throws as itself. Internal: exported from
- * `@threads/core/host` only.
+ * `threadsai/host` only.
  */
 export class StoreError extends Error {
   override readonly name: string = "StoreError";
@@ -72,7 +72,7 @@ export type TransactionOptions = {
 /**
  * The store's connection: every statement runs inside `transaction`, never alone. A write is
  * one IMMEDIATE (SQLite) or SERIALIZABLE (Postgres) transaction; a throw rolls it back. Internal:
- * `@threads/core/store-driver` exports it for the in-repo Postgres package only.
+ * `threadsai/store-driver` exports it for the in-repo Postgres package only.
  */
 export type StoreDriver = {
   readonly dialect: Dialect;

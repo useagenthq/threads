@@ -10,13 +10,13 @@ from pathlib import Path
 from pydantic import JsonValue, TypeAdapter
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads._json_schema import holds
-from threads.log import JsonObject, ParseError, ToolSpec
-from threads.loop.model import Found, LookupResult, LookupUnknown, NotFound, NotFoundNonfinal
-from threads.loop.tools import Dispatched, Invocation, Output, Termination
-from threads.reduce.handlers import to_json
-from threads.result import Err, Ok
-from threads.store import MemoryArtifacts, SqliteStore, StoredEvent, VerifiedLog, verify_export
+from threadsai._json_schema import holds
+from threadsai.log import JsonObject, ParseError, ToolSpec
+from threadsai.loop.model import Found, LookupResult, LookupUnknown, NotFound, NotFoundNonfinal
+from threadsai.loop.tools import Dispatched, Invocation, Output, Termination
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Err, Ok
+from threadsai.store import MemoryArtifacts, SqliteStore, StoredEvent, VerifiedLog, verify_export
 
 CASES = Path(__file__).resolve().parents[2] / "spec" / "conformance" / "cases"
 IMPL = "threads-py"

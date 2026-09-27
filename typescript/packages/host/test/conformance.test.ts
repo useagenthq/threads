@@ -1,19 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  agent,
-  type ChannelAdapter,
-  scriptedModel,
-  sqlite,
-} from "@threads/core";
+import { agent, type ChannelAdapter, scriptedModel, sqlite } from "threadsai";
 import {
   knownEvents,
   openStore,
   Principal,
   storeConnection,
   tenantStore,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import {
   CASE_NAMES,

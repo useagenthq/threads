@@ -12,10 +12,10 @@ from collections.abc import Callable, Coroutine
 import pytest
 from sandbox_kit import OPEN
 
-from threads.adapters.sandboxes.posix import collect
-from threads.e2b import E2BSandbox, e2b
-from threads.result import Err, Ok
-from threads.sandbox import SandboxSession
+from threadsai.adapters.sandboxes.posix import collect
+from threadsai.e2b import E2BSandbox, e2b
+from threadsai.result import Err, Ok
+from threadsai.sandbox import SandboxSession
 
 pytestmark = pytest.mark.live
 

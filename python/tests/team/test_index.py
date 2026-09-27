@@ -22,16 +22,16 @@ from team.team_kit import (
     verified,
 )
 
-from threads.log import (
+from threadsai.log import (
     BranchId,
     Event,
 )
-from threads.result import Err, Ok
-from threads.store import sql
-from threads.store.conn import Conn
-from threads.team import rebuild
-from threads.team.index import TeamLog, change_rows, insert_rows, turn_openers
-from threads.team.rebuild import rebuild_team_index
+from threadsai.result import Err, Ok
+from threadsai.store import sql
+from threadsai.store.conn import Conn
+from threadsai.team import rebuild
+from threadsai.team.index import TeamLog, change_rows, insert_rows, turn_openers
+from threadsai.team.rebuild import rebuild_team_index
 
 WITH_INDEX = [
     c for c in team_cases() if "index" in json.loads((CASES / c / "expected.json").read_text())

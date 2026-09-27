@@ -1,4 +1,4 @@
-import { type A2aFault, fault, type Task } from "@threads/a2a/protocol";
+import { type A2aFault, fault, type Task } from "@threadsai/a2a/protocol";
 import {
   type BranchId,
   type EventId,
@@ -8,7 +8,7 @@ import {
   type Principal,
   type ThreadId,
   threadHandle,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { HostContext } from "../context";
 import { outcomeFromLog } from "../outcome";
 import { endOf } from "../subscribe";

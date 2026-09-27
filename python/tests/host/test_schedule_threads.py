@@ -11,12 +11,12 @@ from typing import Literal
 import pytest
 from pydantic import BaseModel, ConfigDict, JsonValue
 
-from threads import agent, scripted_model, sqlite
-from threads.agents.store import Store, now_ms, open_store
-from threads.host import Schedule
-from threads.host.runs import Runner
-from threads.host.schedules import Scheduler
-from threads.log import (
+from threadsai import agent, scripted_model, sqlite
+from threadsai.agents.store import Store, now_ms, open_store
+from threadsai.host import Schedule
+from threadsai.host.runs import Runner
+from threadsai.host.schedules import Scheduler
+from threadsai.log import (
     BranchId,
     ScheduleFiredEvent,
     ScheduleSkippedEvent,
@@ -24,10 +24,10 @@ from threads.log import (
     ThreadStartedEvent,
     UserInputEvent,
 )
-from threads.result import Ok
-from threads.store import Draft, SqliteStore, Writer
-from threads.store.deletion import delete_thread
-from threads.store.sql import int_of, text_of
+from threadsai.result import Ok
+from threadsai.store import Draft, SqliteStore, Writer
+from threadsai.store.deletion import delete_thread
+from threadsai.store.sql import int_of, text_of
 
 VECTOR = Path(__file__).resolve().parents[3] / "spec/conformance/vectors/schedule-threads.json"
 REPLY: JsonValue = {

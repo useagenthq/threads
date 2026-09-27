@@ -5,14 +5,14 @@ import {
   LogStore,
   memoryArtifacts,
   type Store,
-} from "@threads/core";
-import { openBunSqlite } from "@threads/core/bun-sqlite";
+} from "threadsai";
+import { openBunSqlite } from "threadsai/bun-sqlite";
 import {
   openStore,
   type StoreDriver,
   sha256Hex,
   storeOf,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import type { Golden } from "./goldens";
 

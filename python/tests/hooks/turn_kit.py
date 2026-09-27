@@ -21,19 +21,19 @@ from each_kit import (
 )
 from pydantic import JsonValue
 
-from threads import RunContext, agent, scripted_model, sqlite, tool
-from threads.hooks.extension import Extension
-from threads.hooks.types import (
+from threadsai import RunContext, agent, scripted_model, sqlite, tool
+from threadsai.hooks.extension import Extension
+from threadsai.hooks.types import (
     InputDecision,
     ModelGate,
     ResponseGate,
     Source,
     StopGate,
 )
-from threads.log import Event, ModelResponseData, Principal, Retry, UserInputData
-from threads.reduce.state import ReducedState
-from threads.result import Ok
-from threads.thread.handle import open_thread
+from threadsai.log import Event, ModelResponseData, Principal, Retry, UserInputData
+from threadsai.reduce.state import ReducedState
+from threadsai.result import Ok
+from threadsai.thread.handle import open_thread
 
 QUICK = quick()
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")

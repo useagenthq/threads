@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { secret, sqlite } from "@threads/core";
-import { whatsapp } from "@threads/whatsapp";
+import { whatsapp } from "@threadsai/whatsapp";
+import { secret, sqlite } from "threadsai";
 import { host } from "../src";
 import { fakeChannel, mailer } from "./kit";
 

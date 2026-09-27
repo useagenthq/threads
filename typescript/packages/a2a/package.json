@@ -1,5 +1,5 @@
 {
-  "name": "@threads/a2a",
+  "name": "@threadsai/a2a",
   "version": "0.0.0",
   "license": "Apache-2.0",
   "type": "module",
@@ -8,7 +8,7 @@
     "./protocol": "./src/protocol/index.ts"
   },
   "dependencies": {
-    "@threads/core": "workspace:*",
+    "threadsai": "workspace:*",
     "zod": "^4.6.5"
   }
 }

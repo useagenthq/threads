@@ -9,9 +9,9 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel, JsonValue, TypeAdapter
 
-from threads import RunContext, agent, scripted_model, sqlite, tool
-from threads.agents.store import Store, open_store, scoped
-from threads.host import (
+from threadsai import RunContext, agent, scripted_model, sqlite, tool
+from threadsai.agents.store import Store, open_store, scoped
+from threadsai.host import (
     ChannelCapabilities,
     DeliveryOutcome,
     Inbound,
@@ -21,7 +21,7 @@ from threads.host import (
     VerifiedDelivery,
     host,
 )
-from threads.log import (
+from threadsai.log import (
     ApprovalGrantedEvent,
     ApprovalRequestedEvent,
     Event,
@@ -31,10 +31,10 @@ from threads.log import (
     Principal,
     UserInputEvent,
 )
-from threads.loop.model import LookupResult, LookupUnknown
-from threads.result import Err, Ok
-from threads.secrets import Secret
-from threads.store.sql import text_of
+from threadsai.loop.model import LookupResult, LookupUnknown
+from threadsai.result import Err, Ok
+from threadsai.secrets import Secret
+from threadsai.store.sql import text_of
 
 TEAM = "T1"
 REQUESTER = Principal(issuer="fake:T1", tenant=TEAM, subject="U1")

@@ -1,4 +1,4 @@
-import { assertNever } from "@threads/core/host";
+import { assertNever } from "threadsai/host";
 import type { RunOutcome } from "../outcome";
 import { subagent } from "./ai-sdk";
 import type { RunFacts } from "./facts";

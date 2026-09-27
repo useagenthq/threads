@@ -6,7 +6,7 @@ icon: "SquareFunction"
 
 Every agent() option is accepted and replaces the preset's value for that key, whole; the options below are the ones whose default the preset sets, and every other option keeps agent()'s own default (compaction, todo_write, memory_write "ask", no web, git, lsp, MCP, skills, subagents or budget). A thread from codingAgent() and a thread from the equivalent agent() call have the same config_hash: the preset is those five defaults and nothing else. Pass workspace: &#123;localDir&#125; to copy a directory in; /workspace starts empty otherwise, and the agent's edits come back as a unified diff at the end of its answer.
 
-Import from `@threads/coding` (TypeScript) or `threads.coding` (Python).
+Import from `@threadsai/coding` (TypeScript) or `threadsai.coding` (Python).
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">

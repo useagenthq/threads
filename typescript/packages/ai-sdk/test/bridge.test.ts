@@ -5,8 +5,8 @@ import {
   drain,
   renderBody,
   renderCase,
-} from "@threads/adapter-testkit";
-import { type Json, memoryContext, parseRender } from "@threads/core/adapter";
+} from "@threadsai/adapter-testkit";
+import { type Json, memoryContext, parseRender } from "threadsai/adapter";
 import { aiSdk } from "../src";
 import { toPrompt } from "../src/prompt";
 import { type Entry, fakeModel, offline, unknownUsage, usage } from "./fake";

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { agent } from "@threads/core";
+import { agent } from "threadsai";
 import { z } from "zod";
 import { uiThreadId } from "../../src/ui/key";
 import { alice, type Harness, harness, mailer, say, use } from "../kit";

@@ -4,7 +4,7 @@ import {
   type Fetch,
   type RawRequest,
   secret,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { whatsapp } from "../src";
 
 // Shared fixtures for the whatsapp tests: a signed Cloud API webhook and a fake fetch.

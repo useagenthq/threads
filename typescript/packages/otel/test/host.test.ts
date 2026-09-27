@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { sqlite } from "@threads/core";
-import { knownEvents, openStore } from "@threads/core/host";
-import { host } from "@threads/host";
+import { host } from "@threadsai/host";
+import { sqlite } from "threadsai";
+import { knownEvents, openStore } from "threadsai/host";
 import { Telemetry } from "../../host/src/telemetry";
 import { otel } from "../src";
 import { accepted, type Collector, collector } from "./collector";

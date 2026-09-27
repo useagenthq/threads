@@ -8,16 +8,16 @@ from typing import TYPE_CHECKING
 
 from redaction_kit import ROOT, T0, escaping_marker, opened, started, user, writer
 
-from threads import Failed, agent, scripted_model, sqlite
-from threads.agents.bindings import AppTool, Fence
-from threads.log.digest import sha256_hex
-from threads.memory.conformance import A
-from threads.memory.local_knowledge import LocalKnowledge
-from threads.memory.types import Binding, KnowledgeSource
-from threads.redaction import register
-from threads.result import Err, Ok
-from threads.secrets import credential
-from threads.store import verify_export
+from threadsai import Failed, agent, scripted_model, sqlite
+from threadsai.agents.bindings import AppTool, Fence
+from threadsai.log.digest import sha256_hex
+from threadsai.memory.conformance import A
+from threadsai.memory.local_knowledge import LocalKnowledge
+from threadsai.memory.types import Binding, KnowledgeSource
+from threadsai.redaction import register
+from threadsai.result import Err, Ok
+from threadsai.secrets import credential
+from threadsai.store import verify_export
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

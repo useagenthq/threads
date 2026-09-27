@@ -4,8 +4,8 @@ import pytest
 from pydantic import JsonValue, ValidationError
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads._generated.events_v1 import BudgetExceededData
-from threads._json_schema import holds
+from threadsai._generated.events_v1 import BudgetExceededData
+from threadsai._json_schema import holds
 
 THREAD = "0192a000-0000-7000-8000-000000000001"
 RULE_IF: JsonValue = {

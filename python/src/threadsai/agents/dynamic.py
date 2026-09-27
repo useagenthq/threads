@@ -1,0 +1,63 @@
+"""`dynamic_agent()` (spec/api.json `dynamicAgent`): a template for team members the lead defines
+at start, within what this code pins. Pure, like `agent()`."""
+
+import re
+from collections.abc import Mapping, Sequence
+from dataclasses import replace
+from typing import Final, Required, Unpack
+
+from pydantic import BaseModel
+
+from threadsai.agents.bindings import AppTool, ToolServer
+from threadsai.agents.config import ConfigError
+from threadsai.agents.dynamic_agent import DynamicAgent
+from threadsai.agents.factory import CommonOptions, Links, build_definition, output_model
+from threadsai.hooks.extension import Extension
+from threadsai.loop.model import Model
+
+_KEY: Final = re.compile(r"[a-z][a-z0-9_]{0,63}")
+_REFUSED: Final = frozenset({"team", "team_limits", "subagents", "handoffs"})
+
+
+class DynamicAgentOptions(CommonOptions, total=False):
+    models: Required[Mapping[str, Model]]
+    """The models a starter may choose from, by key, in order: the first is the default."""
+    tools: Sequence[AppTool[None] | ToolServer]
+    """The most a member may be given: a start chooses a subset."""
+    output: type[BaseModel]
+    """The structured final output every member returns."""
+    extensions: Sequence[Extension[None]]
+    """Instructions, hooks and tools, run in this order; they read no deps."""
+
+
+def dynamic_agent(**options: Unpack[DynamicAgentOptions]) -> DynamicAgent[None, object]:
+    """spec/api.json `dynamicAgent`. Pure: no I/O. Raises ConfigError invalid_config for missing,
+    empty or badly keyed models, and for team, subagents or handoffs."""
+    nested = next((k for k in sorted(_REFUSED) if k in options), None)
+    if nested is not None:
+        why = f"{nested}: a dynamic agent can't start or hand off to other agents"
+        raise ConfigError("invalid_config", why)
+    if "workspace" in options:
+        why = "workspace: a dynamic agent's members share the thread's sandbox, not their own"
+        raise ConfigError("invalid_config", why)
+    if "model" in options:
+        why = "a dynamic agent takes models, not model: models={key: model}, the first the default"
+        raise ConfigError("invalid_config", why)
+    models = tuple(options.get("models", {}).items())
+    if not models:
+        why = "models: a dynamic agent needs at least one model, by key; the first is the default"
+        raise ConfigError("invalid_config", why)
+    bad = next((k for k, _ in models if not _KEY.fullmatch(k)), None)
+    if bad is not None:
+        why = (
+            f"models: key {bad!r} must be lowercase letters, digits and underscores, starting "
+            "with a letter"
+        )
+        raise ConfigError("invalid_config", why)
+    tools = options.get("tools", ())
+    servers = tuple(t for t in tools if isinstance(t, ToolServer))
+    own = tuple(t for t in tools if not isinstance(t, ToolServer))
+    output = output_model(options.get("output"))
+    given = ((own, servers), tuple(options.get("extensions", ())))
+    template = build_definition(options, models[0][1], given, output, Links())
+    return DynamicAgent(replace(template, models=models))

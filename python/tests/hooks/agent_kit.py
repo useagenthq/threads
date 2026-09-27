@@ -20,11 +20,11 @@ from each_kit import (
 )
 from pydantic import JsonValue
 
-from threads import RunContext, agent, scripted_model, sqlite
-from threads.hooks.extension import Extension
-from threads.hooks.types import CompactGate, StopGate, SwitchGate
-from threads.log import AgentFinishedData, Event, ModelSettings, ToolCallData
-from threads.reduce.state import ReducedState
+from threadsai import RunContext, agent, scripted_model, sqlite
+from threadsai.hooks.extension import Extension
+from threadsai.hooks.types import CompactGate, StopGate, SwitchGate
+from threadsai.log import AgentFinishedData, Event, ModelSettings, ToolCallData
+from threadsai.reduce.state import ReducedState
 
 SMALL: Mapping[str, JsonValue] = {
     "compact": {"trigger": {"tokens": 5}, "keep_tail": {"tokens": 1}, "max_failures": 3}

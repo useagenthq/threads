@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ChainEvent } from "@threads/core/internal/feed";
+import type { ChainEvent } from "threadsai/internal/feed";
 import { spans } from "../src/spans";
 import { goldens } from "./goldens";
 

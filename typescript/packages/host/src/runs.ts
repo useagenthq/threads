@@ -16,7 +16,7 @@ import {
   storeConnection,
   ThreadId,
   uuidv7,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { type HostContext, type HostedAgent, samePin } from "./context";
 import type { Failure } from "./errors";
 import { findReceipt, insertReceipt, type Keyed, START_RUN } from "./receipts";

@@ -5,7 +5,7 @@ import {
   type ProviderSandbox,
   remoteSandbox,
   type Secret,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { e2bDriver } from "./driver";
 
 // e2b(): E2B sandboxes, spoken to directly over E2B's REST API and each sandbox's envd

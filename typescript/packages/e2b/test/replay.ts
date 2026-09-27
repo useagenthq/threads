@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import type { Sinks } from "@threads/core/adapter";
-import { within } from "@threads/core/adapter";
+import type { Sinks } from "threadsai/adapter";
+import { within } from "threadsai/adapter";
 import { z } from "zod";
 import { envd, envdUrl } from "../src/envd";
 import { control } from "../src/rest";

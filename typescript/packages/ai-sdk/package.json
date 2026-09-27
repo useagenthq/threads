@@ -1,5 +1,5 @@
 {
-  "name": "@threads/ai-sdk",
+  "name": "@threadsai/ai-sdk",
   "version": "0.0.0",
   "license": "Apache-2.0",
   "type": "module",
@@ -8,11 +8,11 @@
   },
   "dependencies": {
     "@ai-sdk/provider": "4.0.17",
-    "@threads/core": "workspace:*",
+    "threadsai": "workspace:*",
     "@types/json-schema": "7.0.15",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@threads/adapter-testkit": "workspace:*"
+    "@threadsai/adapter-testkit": "workspace:*"
   }
 }

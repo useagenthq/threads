@@ -8,11 +8,11 @@ from collections.abc import Sequence
 
 from store.test_writer import ROOT, TTL, Clock, run, started, user
 
-from threads.result import Err, Ok
-from threads.store import Draft, SqliteStore, Writer
-from threads.store.conn import Conn, one
-from threads.store.sql import int_of
-from threads.store.writer import Decide, DecideTx, Refusal
+from threadsai.result import Err, Ok
+from threadsai.store import Draft, SqliteStore, Writer
+from threadsai.store.conn import Conn, one
+from threadsai.store.sql import int_of
+from threadsai.store.writer import Decide, DecideTx, Refusal
 
 
 def _wakes(conn: Conn) -> int:

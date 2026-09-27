@@ -2,7 +2,7 @@
   "packages": {
     "core": {
       "kind": "core",
-      "ts": "@threads/core",
+      "ts": "threadsai",
       "doc": "Replaced by the test with the core source path."
     },
     "fix": {

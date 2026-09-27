@@ -10,13 +10,13 @@ import pytest
 from fakes import FakeContext, Script, collect, line, sse
 from pydantic import JsonValue
 
-from threads.adapters.models.anthropic.model import AnthropicModel
-from threads.adapters.models.openai.model import OpenAIModel
-from threads.agents.config import ConfigError
-from threads.anthropic import anthropic
-from threads.log import CitationPart, HostedToolPart, TextPart
-from threads.loop.model import PartChunk
-from threads.openai import openai
+from threadsai.adapters.models.anthropic.model import AnthropicModel
+from threadsai.adapters.models.openai.model import OpenAIModel
+from threadsai.agents.config import ConfigError
+from threadsai.anthropic import anthropic
+from threadsai.log import CitationPart, HostedToolPart, TextPart
+from threadsai.loop.model import PartChunk
+from threadsai.openai import openai
 
 WEB_SEARCH: dict[str, JsonValue] = {"type": "web_search_20250305", "name": "web_search"}
 

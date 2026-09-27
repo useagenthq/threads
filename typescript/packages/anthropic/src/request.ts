@@ -7,14 +7,14 @@ import type {
   RenderLine,
   RenderRequest,
   ResultPart,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import {
   assertNever,
   JsonObject,
   loadedTools,
   readOrRefuse,
   Unsendable,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { z } from "zod";
 import { cacheControl, type Ttl } from "./caching";
 

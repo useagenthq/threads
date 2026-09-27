@@ -12,18 +12,18 @@ from corpus import Clock
 from kit import Tools, kinds, open_store, start, text
 from team.crash_kit import OPERATOR
 
-from threads._generated.host_api_v1 import Appended, CancelAccepted
-from threads.agents.store import now_ms, sqlite
-from threads.log import Principal, ThreadId
-from threads.loop.drive import drive
-from threads.loop.model import ModelChunk, ModelContext, ModelRequest
-from threads.loop.runtime import Runtime
-from threads.loop.scripted import ScriptedModel, scripted_model
-from threads.result import Err, Ok
-from threads.store import SqliteStore
-from threads.thread.control import Accepted
-from threads.thread.control_items import API_CHANNEL
-from threads.thread.handle import Thread
+from threadsai._generated.host_api_v1 import Appended, CancelAccepted
+from threadsai.agents.store import now_ms, sqlite
+from threadsai.log import Principal, ThreadId
+from threadsai.loop.drive import drive
+from threadsai.loop.model import ModelChunk, ModelContext, ModelRequest
+from threadsai.loop.runtime import Runtime
+from threadsai.loop.scripted import ScriptedModel, scripted_model
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore
+from threadsai.thread.control import Accepted
+from threadsai.thread.control_items import API_CHANNEL
+from threadsai.thread.handle import Thread
 
 STRANGER = Principal(issuer="api", tenant="other", subject="mallory")
 

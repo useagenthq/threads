@@ -7,7 +7,7 @@ import asyncio
 from partial_sandbox import CreateLookupOnly, NoLookups, SnapshotLookupOnly
 from pydantic import JsonValue
 
-from threads import (
+from threadsai import (
     Completed,
     LooksUpSandbox,
     LooksUpSnapshot,
@@ -17,14 +17,14 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads.adapters.channels.whatsapp import WhatsAppChannel
-from threads.adapters.sandboxes.daytona.sandbox import DaytonaSandbox
-from threads.adapters.sandboxes.e2b.sandbox import E2BSandbox
-from threads.adapters.sandboxes.modal.sandbox import ModalSandbox
-from threads.host import Challenged
-from threads.log import Permissions
-from threads.result import Err, Ok
-from threads.sandbox import LookupSupport
+from threadsai.adapters.channels.whatsapp import WhatsAppChannel
+from threadsai.adapters.sandboxes.daytona.sandbox import DaytonaSandbox
+from threadsai.adapters.sandboxes.e2b.sandbox import E2BSandbox
+from threadsai.adapters.sandboxes.modal.sandbox import ModalSandbox
+from threadsai.host import Challenged
+from threadsai.log import Permissions
+from threadsai.result import Err, Ok
+from threadsai.sandbox import LookupSupport
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 BYPASS = Permissions(

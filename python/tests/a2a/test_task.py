@@ -8,8 +8,8 @@ Mirrors typescript/packages/a2a/test/task.test.ts."""
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from threads._generated.a2a_v1 import Artifact, DataPart, Message, Part, Role, TaskStatus
-from threads.a2a.protocol import text_of
+from threadsai._generated.a2a_v1 import Artifact, DataPart, Message, Part, Role, TaskStatus
+from threadsai.a2a.protocol import text_of
 
 _PART: TypeAdapter[Part] = TypeAdapter(Part)
 _ROLE: TypeAdapter[Role] = TypeAdapter(Role)

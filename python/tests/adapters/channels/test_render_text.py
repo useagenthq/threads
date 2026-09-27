@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from threads.github import github
-from threads.secrets import secret
-from threads.slack import slack
-from threads.whatsapp import whatsapp
+from threadsai.github import github
+from threadsai.secrets import secret
+from threadsai.slack import slack
+from threadsai.whatsapp import whatsapp
 
 if TYPE_CHECKING:
-    from threads.host import ChannelAdapter
+    from threadsai.host import ChannelAdapter
 
 TEXT = "Which color?\n\n1. red\n2. blue"
 

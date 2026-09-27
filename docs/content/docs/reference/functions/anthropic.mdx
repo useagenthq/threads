@@ -6,7 +6,7 @@ icon: "Plug"
 
 anthropic("claude-sonnet-5") needs no limits: they come from spec/models/anthropic.v1.json, verified against the Anthropic Models API. Pass it as agent(&#123;model: anthropic("claude-sonnet-5")&#125;). Prompt caching is on (5 minutes) unless prompt_cache is false; its info.cache declares the cache lifetime: &#123;ttl_ms: 300000&#125; for "5m", &#123;ttl_ms: 3600000&#125; for "1h", "none" for false.
 
-Import from `@threads/anthropic` (TypeScript) or `threads.anthropic` (Python).
+Import from `@threadsai/anthropic` (TypeScript) or `threadsai.anthropic` (Python).
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -38,7 +38,7 @@ def anthropic(
     max_output_tokens: int | None = None,
     max_tokens: int | None = None,
     params: Mapping[str, pydantic.JsonValue] | None = None,
-    price: threads.log.Price | None = None,
+    price: threadsai.log.Price | None = None,
     hosted_tools: Sequence[Mapping[str, pydantic.JsonValue]] | None = None,
     prompt_cache: Literal["5m", "1h"] | Literal[False] = "5m",
     citations: bool = False,

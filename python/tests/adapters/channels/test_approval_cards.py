@@ -14,16 +14,16 @@ import httpx
 import pytest
 from pydantic import JsonValue
 
-from threads.github import github
-from threads.host import ChannelAdapter, Decision, Message, RawRequest, Sent
-from threads.log import ApprovalRequestedEvent, JsonObject
-from threads.log.jcs import canonicalize
-from threads.memory.fence import bound
-from threads.result import Ok
-from threads.secrets import secret
-from threads.slack import slack
-from threads.store.lines import parse_log_line
-from threads.whatsapp import whatsapp
+from threadsai.github import github
+from threadsai.host import ChannelAdapter, Decision, Message, RawRequest, Sent
+from threadsai.log import ApprovalRequestedEvent, JsonObject
+from threadsai.log.jcs import canonicalize
+from threadsai.memory.fence import bound
+from threadsai.result import Ok
+from threadsai.secrets import secret
+from threadsai.slack import slack
+from threadsai.store.lines import parse_log_line
+from threadsai.whatsapp import whatsapp
 
 SECRET = "shh-signing"  # noqa: S105 - a test signing secret
 CHALLENGE = "0192c000-0000-7000-8000-00000000000a"

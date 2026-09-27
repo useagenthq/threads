@@ -8,11 +8,11 @@ from typing import Literal, Self
 
 from sandbox_backend import Box, FakeBackend, LostAnswerError, UnavailableError
 
-from threads.adapters.loop_resources import holding
-from threads.adapters.sandboxes import fence
-from threads.loop.model import Found, LookupUnknown, NotFoundNonfinal
-from threads.sandbox.protocol import NO_ENV, ExecOutput, SandboxError
-from threads.sandbox.remote.driver import (
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.sandboxes import fence
+from threadsai.loop.model import Found, LookupUnknown, NotFoundNonfinal
+from threadsai.sandbox.protocol import NO_ENV, ExecOutput, SandboxError
+from threadsai.sandbox.remote.driver import (
     Capture,
     Confirmed,
     FileError,
@@ -22,7 +22,7 @@ from threads.sandbox.remote.driver import (
     Unconfirmed,
     Unmade,
 )
-from threads.sandbox.remote.sandbox import RemoteInfo, RemoteSandbox
+from threadsai.sandbox.remote.sandbox import RemoteInfo, RemoteSandbox
 
 
 def classify(error: Exception) -> SandboxError | None:

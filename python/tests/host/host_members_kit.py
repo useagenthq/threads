@@ -10,17 +10,17 @@ from host.test_http import as_, bearer, sse, start, text, use
 from pydantic import TypeAdapter
 from team.run_kit import answers, reply_to, say
 
-from threads import MessagePolicyRule, Principal, agent, scripted_model, sqlite
-from threads.agents.store import Store, open_store, scoped
-from threads.host import host
-from threads.host.members import HostMemberOptions
-from threads.log import BranchId, Event
-from threads.result import Ok
+from threadsai import MessagePolicyRule, Principal, agent, scripted_model, sqlite
+from threadsai.agents.store import Store, open_store, scoped
+from threadsai.host import host
+from threadsai.host.members import HostMemberOptions
+from threadsai.log import BranchId, Event
+from threadsai.result import Ok
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
-    from threads.agents.factory import Agent
+    from threadsai.agents.factory import Agent
 
 ALICE = Principal(issuer="api", tenant="acme", subject="alice")
 

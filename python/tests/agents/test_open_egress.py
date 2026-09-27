@@ -11,10 +11,10 @@ import pytest
 from local_sandbox import LocalSandbox, LocalSession
 from pydantic import JsonValue
 
-from threads import Parked, agent, scripted_model, sqlite
-from threads.log import Permissions, ThreadStartedEvent
-from threads.result import Err, Ok
-from threads.sandbox.protocol import NO_ENV, ExecOutput, SandboxContext, SandboxError
+from threadsai import Parked, agent, scripted_model, sqlite
+from threadsai.log import Permissions, ThreadStartedEvent
+from threadsai.result import Err, Ok
+from threadsai.sandbox.protocol import NO_ENV, ExecOutput, SandboxContext, SandboxError
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 NOTEBOOK: JsonValue = {

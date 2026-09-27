@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from threads.result import Ok
-from threads.store import verify_export
-from threads.store.project_rows import project_rows
+from threadsai.result import Ok
+from threadsai.store import verify_export
+from threadsai.store.project_rows import project_rows
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 FAR_FUTURE = 4_000_000_000_000

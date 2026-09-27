@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from threads.store.sqlite_driver import connect
+from threadsai.store.sqlite_driver import connect
 
-SRC = Path(__file__).resolve().parents[2] / "src" / "threads"
+SRC = Path(__file__).resolve().parents[2] / "src" / "threadsai"
 EXEMPT = {
     SRC / "store" / "sqlite_driver.py",
     SRC / "store" / "conn.py",

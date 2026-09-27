@@ -9,18 +9,18 @@ from collections.abc import Sequence
 import pytest
 from host.test_channel_recovery import text
 
-from threads import agent, extension, scripted_model, sqlite
-from threads._generated.host_api_v1 import StartRunRequest
-from threads.agents.context import RunContext
-from threads.agents.store import Store, open_store
-from threads.host import host
-from threads.host import start as host_start
-from threads.host.runs import Bound, Runner
-from threads.log import BranchId, Principal, ThreadId, UserInputEvent
-from threads.result import Err, Ok
-from threads.store.sql import text_of
-from threads.thread import tree
-from threads.thread.handle import Thread
+from threadsai import agent, extension, scripted_model, sqlite
+from threadsai._generated.host_api_v1 import StartRunRequest
+from threadsai.agents.context import RunContext
+from threadsai.agents.store import Store, open_store
+from threadsai.host import host
+from threadsai.host import start as host_start
+from threadsai.host.runs import Bound, Runner
+from threadsai.log import BranchId, Principal, ThreadId, UserInputEvent
+from threadsai.result import Err, Ok
+from threadsai.store.sql import text_of
+from threadsai.thread import tree
+from threadsai.thread.handle import Thread
 
 ALICE = Principal(issuer="api", tenant="acme", subject="alice")
 

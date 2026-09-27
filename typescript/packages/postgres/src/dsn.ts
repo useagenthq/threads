@@ -1,4 +1,4 @@
-import { ConfigError } from "@threads/core/adapter";
+import { ConfigError } from "threadsai/adapter";
 
 // The connection URL holds a password (DATABASE_URL): no error may carry it. A string that isn't
 // a postgres:// URL is refused without echoing it; the driver's own errors are scrubbed of the

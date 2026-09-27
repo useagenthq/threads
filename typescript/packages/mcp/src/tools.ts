@@ -6,7 +6,7 @@ import {
   type ReadResourceResult,
   type Tool as ServerTool,
 } from "@modelcontextprotocol/sdk/types.js";
-import type { Tool } from "@threads/core";
+import type { Tool } from "threadsai";
 import {
   ConfigError,
   type Dispatched,
@@ -18,7 +18,7 @@ import {
   type ToolImpl,
   type ToolRun,
   type ToolSpec,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { z } from "zod";
 import { argumentsSchema } from "./schema";
 

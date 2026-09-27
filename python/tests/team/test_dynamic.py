@@ -13,7 +13,7 @@ from pydantic import BaseModel, JsonValue, TypeAdapter
 from team.run_kit import call, events, member_events, say, sq_of, types
 from team.team_kit import assert_team_replays
 
-from threads import (
+from threadsai import (
     Completed,
     ConfigError,
     DynamicAgent,
@@ -26,17 +26,17 @@ from threads import (
     tool,
     usd,
 )
-from threads.agents.dynamic_agent import member_definition
-from threads.log import (
+from threadsai.agents.dynamic_agent import member_definition
+from threadsai.log import (
     MemberDefine,
     MemberStartedEvent,
     ThreadStartedData,
     ThreadStartedEvent,
     ToolResultEvent,
 )
-from threads.loop.scripted import ScriptedModel
-from threads.result import Err
-from threads.team.dynamic import KEPT, block
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.result import Err
+from threadsai.team.dynamic import KEPT, block
 
 
 class _Invoice(BaseModel):
@@ -89,7 +89,7 @@ def start_specialist(cid: str, **fields: JsonValue) -> JsonValue:
 
 
 async def _started(store: Store, thread: object) -> MemberStartedEvent | None:
-    from threads import Thread  # noqa: PLC0415 - test-local
+    from threadsai import Thread  # noqa: PLC0415 - test-local
 
     assert isinstance(thread, Thread)
     return next((e for e in await events(store, thread) if isinstance(e, MemberStartedEvent)), None)

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import type { HttpAgent } from "@ag-ui/client";
-import { agent } from "@threads/core";
+import { agent } from "threadsai";
 import { z } from "zod";
 import { uiThreadId } from "../../src/ui/key";
 import { alice, bob, type Harness, harness, mailer, say, use } from "../kit";

@@ -1,0 +1,345 @@
+"""spawn_agent: a subagent runs in a child thread with its own log.
+
+`agent_spawned` is durable before the child's `thread_started`, so cancellation and recovery can
+always find the child. A foreground child's one `agent_finished` feeds the call's result; a
+background child's call gets a `deferred` placeholder at once and its result later as
+`tool_result_late`. A crash mid-child resumes the same child thread by the id `agent_spawned`
+recorded: it is never started twice.
+"""
+
+import asyncio
+from typing import Final
+
+from pydantic import JsonValue
+
+from threadsai._generated.tools_v1 import SpawnAgentInput
+from threadsai.agents import stops
+from threadsai.agents.background import Background
+from threadsai.agents.bindings import permissions
+from threadsai.agents.children import finished, shown
+from threadsai.agents.definition import Definition
+from threadsai.agents.launch import Launch, Team
+from threadsai.agents.results import Failed, Parked, RunResult
+from threadsai.agents.scope import Scope
+from threadsai.agents.store import LIVE
+from threadsai.hooks.runner import STOP, SWITCH, Ran, decision_draft
+from threadsai.log import (
+    AgentFinishedData,
+    AgentFinishedEvent,
+    AgentSpawnedEvent,
+    CallId,
+    HookDecisionEvent,
+    ThreadId,
+)
+from threadsai.loop.budget import inherited_by
+from threadsai.loop.drafts import draft
+from threadsai.loop.gates import MAX_STOP_CONTINUES, said, verdict
+from threadsai.loop.history import CallState, open_cancel
+from threadsai.loop.results import As, result_draft, text_ref
+from threadsai.loop.runtime import Failed as HaltFailed
+from threadsai.loop.runtime import Halt, Runtime, lost
+from threadsai.result import Err, Ok
+from threadsai.store import Draft
+from threadsai.store.lines import uuid7
+
+type Ended = tuple[dict[str, JsonValue], str]
+"""A child's agent_finished data and the spawn call's result text."""
+
+_DEFERRED: Final = "started in background"
+
+
+async def spawn[D](scope: Scope[D], rt: Runtime, state: CallState, bg: Background) -> Halt | None:
+    call_id = state.call.data.call_id
+    args = SpawnAgentInput.model_validate(dict(state.call.data.input))
+    spawned = _spawned(rt, call_id)
+    if spawned is None:
+        child = _child(scope, args.agent)
+        why = _refusal(scope, child, args) or _running(rt, args.agent)
+        if why is not None or child is None:
+            return await _close(rt, call_id, why or f"unknown agent {args.agent}")
+        halt = await _start(scope, rt, state, child, args)
+        spawned = _spawned(rt, call_id)
+        if halt is not None or spawned is None:
+            return halt
+    child = _child(scope, spawned.data.agent_name)
+    if child is None:
+        return await _close(rt, call_id, f"agent {spawned.data.agent_name} is not configured")
+    if spawned.data.mode == "background":
+        start_background(scope, rt, spawned, bg)
+        return None
+    return await _foreground(rt, spawned, await _outcome(scope, rt, spawned, child, args.prompt))
+
+
+async def _foreground(
+    rt: Runtime, spawned: AgentSpawnedEvent, ended: Ended | Parked | HaltFailed
+) -> Halt | None:
+    """A foreground child's end: its agent_finished and the call's result, or the park."""
+    if isinstance(ended, HaltFailed):
+        return ended
+    if isinstance(ended, Parked):
+        return await stops.park(rt, spawned, ended)
+    data, text = ended
+    status = As("executed", data["status"] != "completed")
+    result = await result_draft(rt, spawned.data.call_id, text, status)
+    done = await rt.append(draft("agent_finished", data), result)
+    return lost(done.error) if isinstance(done, Err) else None
+
+
+def _spawned(rt: Runtime, call_id: str) -> AgentSpawnedEvent | None:
+    return next(
+        (e for e in rt.events if isinstance(e, AgentSpawnedEvent) and e.data.call_id == call_id),
+        None,
+    )
+
+
+def _child[D](scope: Scope[D], name: str) -> Definition[None] | None:
+    return next((d for d in scope.definition.subagents if d.name == name), None)
+
+
+def _refusal[D](
+    scope: Scope[D], child: Definition[None] | None, args: SpawnAgentInput
+) -> str | None:
+    """Pre-effect: an unlisted agent, or an isolation this child can't have."""
+    if child is None:
+        return f"unknown agent {args.agent}: not one of this agent's subagents"
+    wanted = _isolation(child, args)
+    if wanted not in ("none", "shared_sandbox"):
+        return f"isolation {wanted} is not supported yet"
+    if (wanted == "shared_sandbox") != (child.sandbox is not None):
+        return f"isolation {wanted} doesn't fit agent {child.name}"
+    if wanted == "shared_sandbox" and scope.shared is None:
+        return "shared_sandbox needs the parent's sandbox"
+    return None
+
+
+def _running(rt: Runtime, name: str) -> str | None:
+    """A member is its agent name: never two unfinished instances of one name (spec, Team tools)."""
+    ended = {e.data.child_thread_id for e in rt.events if isinstance(e, AgentFinishedEvent)}
+    live = any(
+        isinstance(e, AgentSpawnedEvent)
+        and e.data.agent_name == name
+        and e.data.child_thread_id not in ended
+        for e in rt.events
+    )
+    return f"member_active: {name} is still running" if live else None
+
+
+def _isolation(child: Definition[None], args: SpawnAgentInput) -> str:
+    if isinstance(args.isolation, str):
+        return args.isolation
+    return "none" if child.sandbox is None else "shared_sandbox"
+
+
+async def _close(rt: Runtime, call_id: CallId, why: str) -> Halt | None:
+    done = await rt.append(await result_draft(rt, call_id, why, As("not_executed", True)))
+    return lost(done.error) if isinstance(done, Err) else None
+
+
+async def _start[D](
+    scope: Scope[D], rt: Runtime, state: CallState, child: Definition[None], args: SpawnAgentInput
+) -> Halt | None:
+    """subagent_start gates the spawn; its decision and agent_spawned are one batch."""
+    call_id = state.call.data.call_id
+    ids = {"call_id": call_id}
+    # The first answer that isn't allow decides; later extensions aren't asked.
+    ran = await rt.hooks.run(
+        "subagent_start", SWITCH, state.call.data, until=lambda r: verdict(r) != "allow"
+    )
+    drafts = [
+        decision_draft("subagent_start", r, verdict(r), said(r, "reason"), **ids) for r in ran
+    ]
+    if ran and verdict(ran[-1]) != "allow":
+        # The parent's model is shown the hook's reason (or its decision when it gave none).
+        last = ran[-1]
+        why = last.failure or said(last, "reason") or verdict(last)
+        drafts.append(await result_draft(rt, call_id, why, As("denied", True, "host")))
+        done = await rt.append(*drafts)
+        return lost(done.error) if isinstance(done, Err) else None
+    background = args.background is True
+    data: dict[str, JsonValue] = {
+        "call_id": call_id,
+        "child_thread_id": uuid7(rt.clock()),
+        "agent_name": child.name,
+        "mode": "background" if background else "foreground",
+        "isolation": _isolation(child, args),
+    }
+    if child.budget is not None:
+        data["budget"] = child.budget.model_dump(mode="json")
+    drafts.append(draft("agent_spawned", data))
+    if background:
+        drafts.append(await result_draft(rt, call_id, _DEFERRED, As("deferred")))
+    done = await rt.append(*drafts)
+    return lost(done.error) if isinstance(done, Err) else None
+
+
+_RUNNING: "dict[ThreadId, asyncio.Future[Ended | Parked | HaltFailed]]" = {}
+"""Background child runs in flight in this process, by child thread id."""
+
+
+async def _held[D](
+    scope: Scope[D], child: ThreadId, running: "asyncio.Future[Ended | Parked | HaltFailed]"
+) -> bool:
+    """An earlier run of this child in this process that still holds its lease: one to adopt,
+    so this run waits for it and never starts a second run on its busy lease."""
+    if running.get_loop() is not asyncio.get_running_loop():
+        return False
+    root = await scope.sq.root(child)
+    writer = None if isinstance(root, Err) else LIVE.get(root.value)
+    return writer is not None and isinstance(await writer.fence(), Ok)
+
+
+def start_background[D](
+    scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, bg: Background
+) -> None:
+    """Runs the child beside the parent; the loop records its end as tool_result_late at a step
+    boundary (threadsai.agents.background). Also restarts a background child a crash
+    interrupted: the same child thread, never a second one."""
+    child_id = spawned.data.child_thread_id
+    child = _child(scope, spawned.data.agent_name)
+    if bg.has(child_id) or child is None:
+        return
+    prompt = SpawnAgentInput.model_validate(dict(rt.fold.calls[spawned.data.call_id].data.input))
+
+    async def body() -> None:
+        # A child an earlier run of this process left running (it returned on a cancel) is
+        # adopted: this run waits for that same run of the child, never a second one on its
+        # busy lease.
+        running = _RUNNING.get(child_id)
+        if running is None or not await _held(scope, child_id, running):
+            running = asyncio.ensure_future(_outcome(scope, rt, spawned, child, prompt.prompt))
+            _RUNNING[child_id] = running
+        try:
+            ended = await running
+        finally:
+            if _RUNNING.get(child_id) is running:
+                del _RUNNING[child_id]
+        if isinstance(ended, Parked):
+            await stops.park(rt, spawned, ended)
+        elif isinstance(ended, HaltFailed):
+            bg.ended[child_id] = (spawned, ended)
+        else:
+            data, text = ended
+            late = await result_draft(rt, spawned.data.call_id, text, As("executed"))
+            fields = {k: v for k, v in late.data.items() if k != "origin"}
+            fields["is_error"] = data["status"] != "completed"
+            bg.ended[child_id] = (spawned, (data, fields))
+        # Only now: the lead never sees a child neither running nor ended (nor its park).
+        del bg.running[child_id]
+
+    bg.running[child_id] = asyncio.create_task(body())
+
+
+async def _outcome[D](
+    scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, child: Definition[None], prompt: str
+) -> Ended | Parked | HaltFailed:
+    """The child's terminal record, or its park. Under the parent's barrier the child is barred
+    before it runs on, and one whose thread was never created is recorded cancelled."""
+    barrier = open_cancel(rt.events)
+    if barrier is not None and not await stops.bar(scope, spawned, barrier):
+        return await stops.never_started(rt, spawned)
+    return await _run(scope, rt, spawned, child, prompt)
+
+
+async def once[D](scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent) -> RunResult[str]:
+    """The child run once more with what it already has: it appends nothing it holds."""
+    child = _child(scope, spawned.data.agent_name)
+    if child is None:
+        raise AssertionError("a parked child is a configured subagent")
+    inputs = len(_continues(rt, spawned.data.call_id)) + 1
+    return await scope.execute(child, "", await _launch(scope, rt, spawned, inputs))
+
+
+async def _run[D](
+    scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, child: Definition[None], prompt: str
+) -> Ended | Parked | HaltFailed:
+    """The child to its terminal result, or its park; subagent_stop may send it on, at most
+    MAX_STOP_CONTINUES times, counted from the parent's log. A cancel is final: a cancelled
+    child, or one whose parent is under a barrier, is never sent on."""
+    call_id = spawned.data.call_id
+    while True:
+        reasons = _continues(rt, call_id)
+        text = reasons[-1] if reasons else prompt
+        result = await scope.execute(
+            child, text, await _launch(scope, rt, spawned, len(reasons) + 1)
+        )
+        if isinstance(result, Parked):
+            return result
+        halt = busy(result)
+        if halt is not None:
+            return halt
+        data, output = await finished(scope.sq, spawned.data.child_thread_id, result)
+        data["output_ref"] = await text_ref(rt, output)
+        if not rt.hooks.has("subagent_stop"):
+            return data, shown(str(data["status"]), output)
+        # A continue that can't take effect (a cancel is final, or past the cap) is recorded as
+        # the stop it amounts to; the first continue that does take effect ends the gate.
+        barred = data["status"] == "cancelled" or open_cancel(rt.events) is not None
+        limit = "cancelled" if barred else None
+        if limit is None and len(reasons) >= MAX_STOP_CONTINUES:
+            limit = "continuation limit"
+        ran = await rt.hooks.run(
+            "subagent_stop",
+            STOP,
+            AgentFinishedData.model_validate(data),
+            until=lambda r, limit=limit: limit is None and verdict(r, "stop") == "continue",
+        )
+        await rt.append(*(_stop_decision(r, limit, call_id) for r in ran))
+        if limit is not None or all(verdict(r, "stop") != "continue" for r in ran):
+            return data, shown(str(data["status"]), output)
+
+
+def _stop_decision(ran: Ran[object], limit: str | None, call_id: str) -> Draft:
+    """One subagent_stop answer as recorded: a continue past `limit` is the stop it amounts to."""
+    decision = verdict(ran, "stop")
+    if decision == "continue" and limit is not None:
+        return decision_draft("subagent_stop", ran, "stop", limit, call_id=call_id)
+    return decision_draft("subagent_stop", ran, decision, said(ran, "reason"), call_id=call_id)
+
+
+def busy(result: RunResult[str]) -> HaltFailed | None:
+    """A child whose lease another process holds (or took) is not finished: the parent halts
+    branch_busy and a later run collects it."""
+    if isinstance(result, Failed) and result.error.code == "branch_busy":
+        return HaltFailed("branch_busy", result.error.message)
+    return None
+
+
+def _continues(rt: Runtime, call_id: str) -> list[str]:
+    """The reasons subagent_stop sent this child on with, in order."""
+    return [
+        e.data.reason if isinstance(e.data.reason, str) else ""
+        for e in rt.events
+        if isinstance(e, HookDecisionEvent)
+        and e.data.hook == "subagent_stop"
+        and e.data.decision == "continue"
+        and e.data.call_id == call_id
+    ]
+
+
+async def _launch[D](
+    scope: Scope[D], rt: Runtime, spawned: AgentSpawnedEvent, inputs: int
+) -> Launch:
+    fold = rt.fold
+    thread_id = fold.thread_id
+    if thread_id is None:
+        raise AssertionError("an acquired branch has a thread")
+    parent: dict[str, JsonValue] = {
+        "thread_id": thread_id,
+        "branch_id": rt.writer.branch_id,
+        "event_id": spawned.event_id,
+        "relation": "subagent",
+    }
+    own = permissions(fold).model_copy(update={"mode": fold.mode})
+    shared = scope.shared if spawned.data.isolation == "shared_sandbox" else None
+    return Launch(
+        spawned.data.child_thread_id,
+        parent,
+        "parent_agent",
+        scope.principal,
+        inputs,
+        tuple(await inherited_by(rt)),
+        (own, *scope.ceilings),
+        shared,
+        (),
+        Team(scope.lead(rt), spawned.data.agent_name, scope.team_names()),
+    )

@@ -11,8 +11,8 @@ from a2a_kit import ALICE, message, reaches, recorded_inputs, served, state_of, 
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.a2a.protocol import PROVENANCE
-from threads.log.keys import principal_key
+from threadsai.a2a.protocol import PROVENANCE
+from threadsai.log.keys import principal_key
 
 
 def run(main: Callable[[], Coroutine[object, object, None]]) -> None:

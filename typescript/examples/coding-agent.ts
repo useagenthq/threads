@@ -7,8 +7,8 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { codingAgent } from "@threads/coding";
-import { fakeSandbox, scriptedModel, sqlite } from "@threads/core";
+import { codingAgent } from "@threadsai/coding";
+import { fakeSandbox, scriptedModel, sqlite } from "threadsai";
 
 const usage = { input_tokens: 10, output_tokens: 2 };
 const call = (name: string, input: Record<string, unknown>, id: string) => ({

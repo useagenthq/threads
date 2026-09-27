@@ -3,9 +3,9 @@ rest keep their defaults (spec/api.json agent, a partial of each Policy section)
 
 import pytest
 
-from threads import ConfigError, agent, scripted_model
-from threads.agents.bindings import DEFAULT_PERMISSIONS
-from threads.loop.defaults import CONTEXT, RETRY
+from threadsai import ConfigError, agent, scripted_model
+from threadsai.agents.bindings import DEFAULT_PERMISSIONS
+from threadsai.loop.defaults import CONTEXT, RETRY
 
 
 def test_a_partial_section_is_merged_over_the_defaults() -> None:

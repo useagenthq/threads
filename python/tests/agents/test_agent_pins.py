@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Literal, cast, override
 import pytest
 from pydantic import JsonValue, TypeAdapter
 
-from threads import (
+from threadsai import (
     Agent,
     DynamicAgent,
     RunContext,
@@ -25,22 +25,22 @@ from threads import (
     local_memory,
     scripted_model,
 )
-from threads.agents.bindings import DEFAULT_PERMISSIONS
-from threads.agents.definition import Definition
-from threads.agents.dynamic_agent import member_definition
-from threads.agents.teams import member_pin
-from threads.agents.workspace import with_workspace
-from threads.hooks.extension import Extension
-from threads.log import Budget, Context, Event, MemberDefine, ModelRef, Permissions, Retry
-from threads.loop.defaults import CONTEXT, RETRY
-from threads.loop.model import ModelInfo
-from threads.loop.scripted import SCRIPTED_INFO, ScriptedModel
+from threadsai.agents.bindings import DEFAULT_PERMISSIONS
+from threadsai.agents.definition import Definition
+from threadsai.agents.dynamic_agent import member_definition
+from threadsai.agents.teams import member_pin
+from threadsai.agents.workspace import with_workspace
+from threadsai.hooks.extension import Extension
+from threadsai.log import Budget, Context, Event, MemberDefine, ModelRef, Permissions, Retry
+from threadsai.loop.defaults import CONTEXT, RETRY
+from threadsai.loop.model import ModelInfo
+from threadsai.loop.scripted import SCRIPTED_INFO, ScriptedModel
 
 if TYPE_CHECKING:
-    from threads.agents.dynamic import DynamicAgentOptions
-    from threads.agents.factory import AgentOptions
-    from threads.hooks.types import Hooks
-    from threads.workspace import Workspace
+    from threadsai.agents.dynamic import DynamicAgentOptions
+    from threadsai.agents.factory import AgentOptions
+    from threadsai.hooks.types import Hooks
+    from threadsai.workspace import Workspace
 
 type Obj = dict[str, JsonValue]
 _OBJ: TypeAdapter[Obj] = TypeAdapter(Obj)

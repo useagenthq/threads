@@ -11,14 +11,14 @@ from dataclasses import dataclass, field
 import pytest
 from sandbox_kit import KitContext
 
-from threads._generated.tools_v1 import ComputerInput, ComputerScreenshotInput
-from threads.log import ArtifactRef, ImagePart, JsonObject, TextPart
-from threads.log.digest import sha256_hex
-from threads.loop.tools import Dispatched, Output, Uncertain
-from threads.result import Err, Ok
-from threads.sandbox.protocol import ExecResult, SandboxContext, SandboxError, SandboxSession
-from threads.secrets import credential
-from threads.tools.desktop import act, invalid_action, invalid_screenshot, png_size, screenshot
+from threadsai._generated.tools_v1 import ComputerInput, ComputerScreenshotInput
+from threadsai.log import ArtifactRef, ImagePart, JsonObject, TextPart
+from threadsai.log.digest import sha256_hex
+from threadsai.loop.tools import Dispatched, Output, Uncertain
+from threadsai.result import Err, Ok
+from threadsai.sandbox.protocol import ExecResult, SandboxContext, SandboxError, SandboxSession
+from threadsai.secrets import credential
+from threadsai.tools.desktop import act, invalid_action, invalid_screenshot, png_size, screenshot
 
 
 def png(width: int, height: int) -> bytes:

@@ -1,4 +1,4 @@
-import { credentialCases } from "@threads/adapter-testkit";
+import { credentialCases } from "@threadsai/adapter-testkit";
 import { openai } from "../src";
 
 // Lane 09: the credential defaults to secret("OPENAI_API_KEY") and is resolved at setup.

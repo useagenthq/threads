@@ -6,8 +6,8 @@ import {
   scriptedModel,
   sqlite,
   tool,
-} from "@threads/core";
-import { markTestKit } from "@threads/core/adapter";
+} from "threadsai";
+import { markTestKit } from "threadsai/adapter";
 import {
   type BranchId,
   type EventId,
@@ -19,7 +19,7 @@ import {
   type ThreadId,
   tenantStore,
   type VerifiedLog,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { type Host, host } from "../src";
 import { hostTicked } from "../src/host";

@@ -12,12 +12,12 @@ from collections.abc import Mapping, Sequence
 from sandbox_contract import Check, Harness, session
 from sandbox_kit import OPEN
 
-from threads.log import SnapshotData, Spill
-from threads.loop.tools import Termination
-from threads.result import Err, Ok
-from threads.sandbox import Command, SandboxSession, run_exec
-from threads.sandbox.protocol import NO_ENV, ExecOutput, SandboxContext, SandboxError, SandboxId
-from threads.store import SqliteStore
+from threadsai.log import SnapshotData, Spill
+from threadsai.loop.tools import Termination
+from threadsai.result import Err, Ok
+from threadsai.sandbox import Command, SandboxSession, run_exec
+from threadsai.sandbox.protocol import NO_ENV, ExecOutput, SandboxContext, SandboxError, SandboxId
+from threadsai.store import SqliteStore
 
 LIMITS = Spill(threshold_bytes=100, head_bytes=10, tail_bytes=5, request_budget_bytes=1000)
 _DEADLINE_MS = 50

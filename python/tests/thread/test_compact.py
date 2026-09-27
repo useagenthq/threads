@@ -8,12 +8,12 @@ import pytest
 from compact_kit import SUMMARY, body, kinds, logged, rejected, request_of, requests, text
 from pydantic import BaseModel, JsonValue
 
-from threads import Agent, Completed, Parked, RunContext, agent, scripted_model, sqlite, tool
-from threads._generated.host_api_v1 import SettingsChange
-from threads.agents.store import now_ms, open_store
-from threads.hooks.extension import extension
-from threads.hooks.types import CompactGate
-from threads.log import (
+from threadsai import Agent, Completed, Parked, RunContext, agent, scripted_model, sqlite, tool
+from threadsai._generated.host_api_v1 import SettingsChange
+from threadsai.agents.store import now_ms, open_store
+from threadsai.hooks.extension import extension
+from threadsai.hooks.types import CompactGate
+from threadsai.log import (
     BranchId,
     Budget,
     CompactedEvent,
@@ -24,12 +24,12 @@ from threads.log import (
     Principal,
     ThreadId,
 )
-from threads.loop.drafts import draft
-from threads.reduce.state import ReducedState
-from threads.result import Err, Ok
-from threads.store.lines import uuid7
-from threads.thread.control import LOCAL_OPERATOR
-from threads.thread.handle import open_thread
+from threadsai.loop.drafts import draft
+from threadsai.reduce.state import ReducedState
+from threadsai.result import Err, Ok
+from threadsai.store.lines import uuid7
+from threadsai.thread.control import LOCAL_OPERATOR
+from threadsai.thread.handle import open_thread
 
 OP = LOCAL_OPERATOR
 OTHER_TENANT = Principal(issuer="api", tenant="acme", subject="operator")

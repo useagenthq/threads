@@ -5,9 +5,9 @@ import pytest
 from otel_goldens_kit import read_json
 from pydantic import BaseModel, ConfigDict
 
-from threads.agents.config import ConfigError
-from threads.otel.env import Options, configure
-from threads.otel.ids import loss_ids, nonzero, span_id, trace_id
+from threadsai.agents.config import ConfigError
+from threadsai.otel.env import Options, configure
+from threadsai.otel.ids import loss_ids, nonzero, span_id, trace_id
 
 
 class _Strict(BaseModel):

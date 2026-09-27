@@ -1,5 +1,5 @@
 {
-  "name": "@threads/zep",
+  "name": "@threadsai/zep",
   "version": "0.0.0",
   "license": "Apache-2.0",
   "type": "module",
@@ -7,11 +7,11 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@threads/core": "workspace:*",
+    "threadsai": "workspace:*",
     "@getzep/zep-cloud": "3.28.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@threads/adapter-testkit": "workspace:*"
+    "@threadsai/adapter-testkit": "workspace:*"
   }
 }

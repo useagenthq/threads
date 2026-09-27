@@ -20,7 +20,7 @@ import {
   type Team,
   ThreadId,
   uuidv7,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import type { HostContext } from "./context";
 import type { HostMember } from "./members";

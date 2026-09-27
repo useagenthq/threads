@@ -12,11 +12,11 @@ from pg_drill import DrillConn, opened_with
 from pg_kit import Leg, admin, need_postgres, schema_url
 from store.test_writer import DONE, ROOT, T0, TTL, Clock, started, user
 
-from threads.postgres.opening import open_postgres
-from threads.result import Err, Ok
-from threads.store import MemoryArtifacts, SqliteStore, StoreError, verify_export
-from threads.store.conn import Cursor, Params
-from threads.store.retention import referenced
+from threadsai.postgres.opening import open_postgres
+from threadsai.result import Err, Ok
+from threadsai.store import MemoryArtifacts, SqliteStore, StoreError, verify_export
+from threadsai.store.conn import Cursor, Params
+from threadsai.store.retention import referenced
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 SKEW_MS = 60_000

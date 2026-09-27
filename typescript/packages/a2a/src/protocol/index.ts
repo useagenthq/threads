@@ -1,4 +1,4 @@
-// @threads/a2a/protocol: A2A 1.0 as bytes. No threads concepts live here — no log, no store, no
+// @threadsai/a2a/protocol: A2A 1.0 as bytes. No threads concepts live here — no log, no store, no
 // effects — so both the exposed side and the client side parse and format with one implementation.
 // The pinned protocol is spec/schema/a2a/.
 

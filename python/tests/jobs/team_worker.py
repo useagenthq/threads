@@ -20,9 +20,9 @@ from jobs.stores import OnStatement, drill_open
 from jobs.worker import reached
 from pydantic import JsonValue
 
-from threads.log import BranchId, ThreadId
-from threads.result import Ok
-from threads.store import Draft, SqliteStore
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Ok
+from threadsai.store import Draft, SqliteStore
 
 TENANT: Final = "acme"
 TEAM: Final = "0192c000-0000-7000-8000-000000000001"

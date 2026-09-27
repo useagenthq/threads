@@ -1,5 +1,5 @@
-import type { Json, JsonObject, ModelInfo, Price } from "@threads/core/adapter";
-import { ConfigError } from "@threads/core/adapter";
+import type { Json, JsonObject, ModelInfo, Price } from "threadsai/adapter";
+import { ConfigError } from "threadsai/adapter";
 
 // Prompt caching: the factory's promptCache option becomes adapter setting prompt_cache (line 0),
 // and the request carries cache controls derived from that setting alone. One TTL per request,

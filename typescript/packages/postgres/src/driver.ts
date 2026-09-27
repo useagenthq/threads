@@ -1,3 +1,4 @@
+import pg from "pg";
 import {
   type Commits,
   CommitUnknown,
@@ -8,8 +9,7 @@ import {
   StoreError,
   type TransactionOptions,
   type Tx,
-} from "@threads/core/store-driver";
-import pg from "pg";
+} from "threadsai/store-driver";
 import { postgresUrl, scrubbed } from "./dsn";
 import {
   checkout,

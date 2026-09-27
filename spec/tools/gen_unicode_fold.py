@@ -18,7 +18,7 @@ from pathlib import Path
 from fixtures.ucd import VERSION, tables
 
 ROOT = Path(__file__).resolve().parents[2]
-PYTHON = ROOT / "python" / "src" / "threads" / "_generated" / "fold_table.py"
+PYTHON = ROOT / "python" / "src" / "threadsai" / "_generated" / "fold_table.py"
 TYPESCRIPT = (
     ROOT / "typescript" / "packages" / "core" / "src" / "tools" / "generated" / "fold-table.ts"
 )

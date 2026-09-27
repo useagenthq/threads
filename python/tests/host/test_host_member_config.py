@@ -8,12 +8,12 @@ import pytest
 from host.host_members_kit import billing, rule, serving, support
 from pydantic import BaseModel
 
-from threads import RunContext, agent, scripted_model, tool
-from threads.agents.config import ConfigError
-from threads.host.members import HostMemberOptions
+from threadsai import RunContext, agent, scripted_model, tool
+from threadsai.agents.config import ConfigError
+from threadsai.host.members import HostMemberOptions
 
 if TYPE_CHECKING:
-    from threads.agents.factory import Agent
+    from threadsai.agents.factory import Agent
 
 
 def test_members_naming_an_agent_the_host_does_not_define_is_refused() -> None:

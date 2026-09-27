@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 import pytest
 from pydantic import BaseModel, JsonValue
 
-from threads import (
+from threadsai import (
     Completed,
     ConfigError,
     EventItem,
@@ -22,10 +22,10 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.log import Permissions, ThreadStartedEvent, ToolResultEvent
-from threads.loop.model import ModelChunk
-from threads.loop.scripted import SCRIPTED_INFO
-from threads.result import Ok
+from threadsai.log import Permissions, ThreadStartedEvent, ToolResultEvent
+from threadsai.loop.model import ModelChunk
+from threadsai.loop.scripted import SCRIPTED_INFO
+from threadsai.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALLOW_ECHO = Permissions(

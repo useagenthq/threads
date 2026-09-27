@@ -7,11 +7,11 @@ from typing import Protocol
 from sandbox_backend import FakeBackend
 from sandbox_kit import OPEN, KitContext
 
-from threads.result import Err, Ok
-from threads.sandbox import Sandbox, SandboxSession, Trees
-from threads.sandbox.tree.tree import Tree, TreeDir, TreeFile, TreeSymlink, sorted_tree
-from threads.sandbox.trees import Misplaced, place_tree
-from threads.store.artifacts import MemoryArtifacts
+from threadsai.result import Err, Ok
+from threadsai.sandbox import Sandbox, SandboxSession, Trees
+from threadsai.sandbox.tree.tree import Tree, TreeDir, TreeFile, TreeSymlink, sorted_tree
+from threadsai.sandbox.trees import Misplaced, place_tree
+from threadsai.store.artifacts import MemoryArtifacts
 
 BODY = b"#!/bin/sh\necho hi\n"
 EXECUTABLE = 0o755

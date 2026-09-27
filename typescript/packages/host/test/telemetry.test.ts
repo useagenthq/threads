@@ -4,8 +4,8 @@ import {
   type SyncError,
   type SyncReport,
   sqlite,
-} from "@threads/core";
-import { BranchId, err, ok, type Result, ThreadId } from "@threads/core/host";
+} from "threadsai";
+import { BranchId, err, ok, type Result, ThreadId } from "threadsai/host";
 import { Telemetry } from "../src/telemetry";
 
 // The host's telemetry loop with a scripted exporter: what it logs, once per streak, and how it

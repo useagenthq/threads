@@ -10,8 +10,8 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { type EventDraft, LogStore, memoryArtifacts } from "@threads/core";
-import { BranchId, ThreadId } from "@threads/core/host";
+import { type EventDraft, LogStore, memoryArtifacts } from "threadsai";
+import { BranchId, ThreadId } from "threadsai/host";
 import { beforeRun } from "../sql";
 import { drillDriver } from "./stores";
 import { reached } from "./worker";

@@ -7,11 +7,11 @@ from corpus import Clock
 from kit import T0, Tools, kinds, open_store, spec, start, text, use
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.log import ToolResultEvent
-from threads.loop.drive import drive
-from threads.loop.runtime import Idle, Parked
-from threads.loop.scripted import scripted_model
-from threads.loop.tools import Output, Uncertain
+from threadsai.log import ToolResultEvent
+from threadsai.loop.drive import drive
+from threadsai.loop.runtime import Idle, Parked
+from threadsai.loop.scripted import scripted_model
+from threadsai.loop.tools import Output, Uncertain
 
 TAIL = ["model_request", "model_response", "turn_completed"]
 SENT_TWICE = 2

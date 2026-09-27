@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { LogStore, memoryArtifacts } from "@threads/core";
+import { LogStore, memoryArtifacts } from "threadsai";
 import {
   type KnownEvent,
   knownEvents,
   type StoreDriver,
   ThreadId,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { sqlAll } from "../sql";
 import { finish, go, logged, reap, scratch, spawn } from "./drill";

@@ -9,12 +9,12 @@ import pytest
 from host.test_api_recovery import ALICE, fold, has, start, text, until
 from pydantic import JsonValue
 
-from threads import agent, scripted_model, sqlite
-from threads.host import host, reopen
-from threads.log import ModelAttemptAbandonedEvent, TurnCompletedEvent
-from threads.loop.model import Delta, ModelChunk, ModelContext, ModelRequest
-from threads.loop.scripted import ScriptedModel
-from threads.store import StoreError
+from threadsai import agent, scripted_model, sqlite
+from threadsai.host import host, reopen
+from threadsai.log import ModelAttemptAbandonedEvent, TurnCompletedEvent
+from threadsai.loop.model import Delta, ModelChunk, ModelContext, ModelRequest
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.store import StoreError
 
 
 class Blinks(ScriptedModel):
@@ -41,7 +41,7 @@ def test_met_mid_stream_the_run_fails_and_the_host_runs_it_on_after_a_wait(
     async def main() -> None:
         store = sqlite(":memory:")
         model = Blinks(text("done"), text("done"))
-        with caplog.at_level(logging.WARNING, logger="threads"):
+        with caplog.at_level(logging.WARNING, logger="threadsai"):
             async with host(store=store, agents={"support": agent(model=model)}) as served:
                 run = await start(served, ALICE)
                 await until(has(store, ALICE, run, TurnCompletedEvent))

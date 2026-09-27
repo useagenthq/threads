@@ -5,10 +5,10 @@ branch's primary key and the other gets `already_open`. It prints `opened` and e
 import asyncio
 import sys
 
-from threads import sqlite
-from threads.agents.store import now_ms, open_store, scoped
-from threads.result import Ok
-from threads.team.host_open import ensure_host_team
+from threadsai import sqlite
+from threadsai.agents.store import now_ms, open_store, scoped
+from threadsai.result import Ok
+from threadsai.team.host_open import ensure_host_team
 
 TENANT = "acme"
 CONFIG = "5800e46921bd898ffefe26cbb45e8038fd946b9719bd1f0e155c1d94aa9f459b"

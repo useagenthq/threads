@@ -17,10 +17,10 @@ from modal_proto import api_pb2
 from modal_proto import task_command_router_pb2 as pb
 from sandbox_backend import Box, FakeBackend, LostAnswerError, Proc, UnavailableError
 
-from threads.adapters.loop_resources import holding
-from threads.adapters.sandboxes.modal import ModalSandbox, channel, modal
-from threads.adapters.sandboxes.modal.sandbox import SERVER_URL
-from threads.adapters.sandboxes.modal.session import DOWNLOAD, UPLOAD
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.sandboxes.modal import ModalSandbox, channel, modal
+from threadsai.adapters.sandboxes.modal.sandbox import SERVER_URL
+from threadsai.adapters.sandboxes.modal.session import DOWNLOAD, UPLOAD
 
 TOKEN_ID, TOKEN_SECRET = "ak-test-token-id", "as-test-token-secret"
 ROUTER_URL = "https://router.modal.test"

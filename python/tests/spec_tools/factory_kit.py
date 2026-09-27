@@ -14,8 +14,8 @@ def api(*, config_errors: Json = None, params: Json = None) -> Obj:
     """A core package plus an adapter package `web` with one factory, `fetcher`."""
     return {
         "packages": {
-            "core": {"ts": "@threads/core", "py": "threads", "kind": "core", "doc": "Core."},
-            "web": {"ts": "@threads/core", "py": "threads", "kind": "adapter", "doc": "In core."},
+            "core": {"ts": "threadsai", "py": "threadsai", "kind": "core", "doc": "Core."},
+            "web": {"ts": "threadsai", "py": "threadsai", "kind": "adapter", "doc": "In core."},
         },
         "functions": {
             "agent": {"ts": "agent", "py": "agent"},

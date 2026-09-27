@@ -1,4 +1,4 @@
-# @threads/daytona
+# @threadsai/daytona
 
 `daytona()`: Daytona sandboxes as a threads `Sandbox`, over Daytona's official generated API clients (`@daytona/api-client`, `@daytona/toolbox-api-client`). What it declares and why is in `src/index.ts`; this file records what the adapter relies on outside its own code.
 
@@ -24,7 +24,7 @@ Every sandbox is created with:
 - `autoStopInterval: autoStopMinutes` (default 60, a positive integer) and `autoDeleteInterval` of the same minutes: an idle sandbox stops, and a stopped one is deleted. This is only a backstop for a leak; the resource ledger owns normal cleanup.
 - `ttlMinutes` from `lifetimeMs` (default one hour, rounded up to whole minutes): Daytona destroys the sandbox after it.
 
-The Python adapter (`threads.daytona`, `auto_stop_minutes`, `lifetime_ms`, `allow_internet`) sends the same values.
+The Python adapter (`threadsai.daytona`, `auto_stop_minutes`, `lifetime_ms`, `allow_internet`) sends the same values.
 
 ## The toolbox runs as a non-root user
 

@@ -21,7 +21,7 @@ import tokenize
 
 # The core helpers that raise a ConfigError code for an adapter, by name, and the one pattern for
 # a call to each: factory_scan counts these calls and this module allows exactly them, so the
-# two can't drift. A call is matched however it is qualified (`threads.secrets.resolve(`); an
+# two can't drift. A call is matched however it is qualified (`threadsai.secrets.resolve(`); an
 # unrelated method of the same name over-counts, which is red, never hidden.
 HELPERS: dict[str, dict[str, str]] = {
     "py": {"credential": "missing_secret", "resolve": "missing_secret",

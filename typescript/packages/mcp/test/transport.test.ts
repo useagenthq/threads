@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agent, scriptedModel, secret, sqlite } from "@threads/core";
+import { agent, scriptedModel, secret, sqlite } from "threadsai";
 import { mcp } from "../src";
 import { bound, ctx, eventsOf, say, server, use } from "./kit";
 import type { Call } from "./server";

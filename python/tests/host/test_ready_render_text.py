@@ -7,8 +7,8 @@ from dataclasses import dataclass
 import pytest
 from host.test_channel_approvals import ItemsChannel
 
-from threads import ConfigError, agent, scripted_model, sqlite
-from threads.host import host
+from threadsai import ConfigError, agent, scripted_model, sqlite
+from threadsai.host import host
 
 
 @dataclass

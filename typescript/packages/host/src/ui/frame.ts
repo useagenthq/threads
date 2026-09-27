@@ -1,4 +1,4 @@
-import type { Json } from "@threads/core/host";
+import type { Json } from "threadsai/host";
 
 // One frame of a UI stream (spec/schema/ui/README.md): a protocol chunk (an AI SDK UI message
 // chunk or an AG-UI event) and, for a frame derived from a committed event, its SSE id

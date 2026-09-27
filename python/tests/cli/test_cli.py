@@ -11,9 +11,9 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue
 
-from threads import Completed, agent, scripted_model, sqlite
-from threads.cli import main, serve
-from threads.host import Host
+from threadsai import Completed, agent, scripted_model, sqlite
+from threadsai.cli import main, serve
+from threadsai.host import Host
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 REPLY: JsonValue = {
@@ -87,10 +87,10 @@ def test_dev_loads_the_host_and_prints_its_webhook_urls(
 ) -> None:
     module = tmp_path / "myapp.py"
     module.write_text(
-        "from threads import agent, scripted_model, sqlite\n"
-        "from threads.host import host\n"
-        "from threads.secrets import secret\n"
-        "from threads.slack import slack\n"
+        "from threadsai import agent, scripted_model, sqlite\n"
+        "from threadsai.host import host\n"
+        "from threadsai.secrets import secret\n"
+        "from threadsai.slack import slack\n"
         "bot = agent(model=scripted_model({'responses': []}))\n"
         "app = host(store=sqlite(':memory:'), agents={'support': bot}, channels={'slack': slack(\n"
         "    signing_secret=secret('S'), bot_token=secret('T'), agent='support')})\n"
@@ -112,9 +112,9 @@ def test_start_refuses_a_host_whose_agent_uses_dev_sandbox(
 ) -> None:
     module = tmp_path / "devapp.py"
     module.write_text(
-        "from threads import agent, scripted_model, sqlite\n"
-        "from threads.dev import dev_sandbox\n"
-        "from threads.host import host\n"
+        "from threadsai import agent, scripted_model, sqlite\n"
+        "from threadsai.dev import dev_sandbox\n"
+        "from threadsai.host import host\n"
         f"bot = agent(model=scripted_model({{'responses': []}}), "
         f"sandbox=dev_sandbox(root={str(tmp_path / 'dev')!r}))\n"
         "app = host(store=sqlite(':memory:'), agents={'support': bot})\n"

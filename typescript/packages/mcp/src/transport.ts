@@ -3,7 +3,7 @@ import type {
   TransportSendOptions,
 } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
-import { fenceHere } from "@threads/core/adapter";
+import { fenceHere } from "threadsai/adapter";
 
 // The fence at the real transport, as for model and sandbox adapters. Over
 // HTTP every request the SDK makes goes through a wrapped fetch; a stdio server runs on the

@@ -188,7 +188,7 @@ def _py_helper(key: str, f: Obj, r: Render) -> list[str]:
 
 def _py_home(api: Obj, ref: str) -> str:
     """The Python module a contract type is exported from: its package's (`ChannelAdapter` is
-    `threads.host`'s)."""
+    `threadsai.host`'s)."""
     package = text(obj(obj(api.get("types", {})).get(ref, {})).get("package", "core"))
     return text(obj(obj(api["packages"])[package])["py"])
 
@@ -220,17 +220,15 @@ def render_py(api: Obj) -> str:
 
 
 def ts_out(api: Obj, package: str) -> pathlib.Path:
-    """typescript/packages/<dir>/test/generated/factories.ts for @threads/<dir>."""
+    """typescript/packages/<dir>/test/generated/factories.ts for @threadsai/<dir>.
+
+    The core package is unscoped (`threadsai`), so there is no scope to strip: an entry that
+    lives in core (dev, search) writes to packages/core.
+    """
     spec = text(obj(obj(api["packages"])[package])["ts"])
-    return (
-        ROOT
-        / "typescript"
-        / "packages"
-        / spec.rpartition("/")[2]
-        / "test"
-        / "generated"
-        / "factories.ts"
-    )
+    core = text(obj(obj(api["packages"])["core"])["ts"])
+    directory = "core" if spec == core else spec.rpartition("/")[2]
+    return ROOT / "typescript" / "packages" / directory / "test" / "generated" / "factories.ts"
 
 
 def write(path: pathlib.Path, content: str) -> None:

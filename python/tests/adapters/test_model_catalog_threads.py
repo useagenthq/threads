@@ -9,15 +9,15 @@ from typing import Unpack
 import pytest
 from kit import text
 
-from threads import Completed, Store, agent, sqlite
-from threads.adapters.models.openai.model import OpenAIOptions
-from threads.agents.config import ConfigError
-from threads.log import Budget, ThreadId
-from threads.loop.model import ModelInfo
-from threads.loop.scripted import ScriptedModel, scripted_model
-from threads.openai import openai
-from threads.result import Ok
-from threads.thread.handle import Thread, open_thread
+from threadsai import Completed, Store, agent, sqlite
+from threadsai.adapters.models.openai.model import OpenAIOptions
+from threadsai.agents.config import ConfigError
+from threadsai.log import Budget, ThreadId
+from threadsai.loop.model import ModelInfo
+from threadsai.loop.scripted import ScriptedModel, scripted_model
+from threadsai.openai import openai
+from threadsai.result import Ok
+from threadsai.thread.handle import Thread, open_thread
 
 
 def gpt(info: ModelInfo | None = None, **options: Unpack[OpenAIOptions]) -> ScriptedModel:

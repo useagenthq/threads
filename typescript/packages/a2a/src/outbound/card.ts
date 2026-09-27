@@ -1,8 +1,4 @@
-import type {
-  ArtifactRef,
-  EventDraft,
-  ToolContext,
-} from "@threads/core/adapter";
+import type { ArtifactRef, EventDraft, ToolContext } from "threadsai/adapter";
 import type { Remote } from "../a2a";
 import { fetchCard, type PinnedCard, pinCard, type Sending } from "../protocol";
 import { pinnedCardOf } from "./log";

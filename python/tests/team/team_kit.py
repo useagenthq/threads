@@ -12,8 +12,8 @@ from pathlib import Path
 from pydantic import JsonValue, TypeAdapter
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.agents.store import Store, open_store
-from threads.log import (
+from threadsai.agents.store import Store, open_store
+from threadsai.log import (
     AskClosedEvent,
     BranchId,
     Event,
@@ -27,14 +27,14 @@ from threads.log import (
     ThreadStartedEvent,
     UserInputEvent,
 )
-from threads.log.digest import sha256_hex
-from threads.log.jcs import canonicalize
-from threads.result import Err, Ok
-from threads.store import SqliteStore, VerifiedLog, sql, verify_export
-from threads.store.conn import Conn
-from threads.team.cross import TeamLogEvents, check_team_logs
-from threads.team.host_logs import prune_caller_rows
-from threads.team.rebuild import rebuild_team_index, team_branches
+from threadsai.log.digest import sha256_hex
+from threadsai.log.jcs import canonicalize
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore, VerifiedLog, sql, verify_export
+from threadsai.store.conn import Conn
+from threadsai.team.cross import TeamLogEvents, check_team_logs
+from threadsai.team.host_logs import prune_caller_rows
+from threadsai.team.rebuild import rebuild_team_index, team_branches
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 TEAM = "0192c000-0000-7000-8000-000000000001"

@@ -7,11 +7,11 @@ from dataclasses import dataclass
 import pytest
 from pydantic import JsonValue
 
-from threads import Completed, ConfigError, agent, scripted_model, sqlite
-from threads.log import Permissions
-from threads.result import Err, Ok
-from threads.sandbox.fake import FakeSandbox, SandboxScript
-from threads.sandbox.protocol import SandboxContext, SandboxError, SandboxSession
+from threadsai import Completed, ConfigError, agent, scripted_model, sqlite
+from threadsai.log import Permissions
+from threadsai.result import Err, Ok
+from threadsai.sandbox.fake import FakeSandbox, SandboxScript
+from threadsai.sandbox.protocol import SandboxContext, SandboxError, SandboxSession
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 BYPASS = Permissions(

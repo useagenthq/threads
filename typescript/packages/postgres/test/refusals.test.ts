@@ -1,5 +1,5 @@
 import { expect } from "bun:test";
-import { ConfigError } from "@threads/core/adapter";
+import { ConfigError } from "threadsai/adapter";
 import { localKnowledge } from "../../core/src/memory";
 import { bindLocalKnowledge } from "../../core/src/memory/local-knowledge";
 import { bindMemory, localMemory } from "../../core/src/memory/local-memory";

@@ -7,11 +7,11 @@ from collections.abc import Sequence
 import pytest
 from pydantic import JsonValue
 
-from threads import Completed, ConfigError, Parked, agent, open_thread, scripted_model, sqlite
-from threads.agents.agent import Agent
-from threads.agents.run import execute
-from threads.agents.store import Store
-from threads.log import (
+from threadsai import Completed, ConfigError, Parked, agent, open_thread, scripted_model, sqlite
+from threadsai.agents.agent import Agent
+from threadsai.agents.run import execute
+from threadsai.agents.store import Store
+from threadsai.log import (
     EffectBeginEvent,
     EffectClass,
     Event,
@@ -21,12 +21,12 @@ from threads.log import (
     Principal,
     ToolResultEvent,
 )
-from threads.memory.authority import MemoryWrite
-from threads.memory.local_memory import local_memory
-from threads.memory.protocol import MemoryProvider
-from threads.memory.setup import memory_scope
-from threads.memory.types import MemoryHit, MemoryRecord, Outcome, RecordRef, Scope
-from threads.result import Ok
+from threadsai.memory.authority import MemoryWrite
+from threadsai.memory.local_memory import local_memory
+from threadsai.memory.protocol import MemoryProvider
+from threadsai.memory.setup import memory_scope
+from threadsai.memory.types import MemoryHit, MemoryRecord, Outcome, RecordRef, Scope
+from threadsai.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALLOW = Permissions(

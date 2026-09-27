@@ -3,9 +3,9 @@ import {
   errorByCode,
   type Task,
   VERSION_HEADER,
-} from "@threads/a2a/protocol";
-import { type Agent, type Store, sqlite } from "@threads/core";
-import type { Principal } from "@threads/core/host";
+} from "@threadsai/a2a/protocol";
+import { type Agent, type Store, sqlite } from "threadsai";
+import type { Principal } from "threadsai/host";
 import { z } from "zod";
 import type { A2aOptions } from "../../src";
 import { type Host, host } from "../../src";

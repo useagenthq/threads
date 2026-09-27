@@ -24,9 +24,9 @@ from a2a_kit import (
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.host.a2a.config import A2aOptions, default_budget
-from threads.log import UserInputEvent
-from threads.reduce.handlers import to_json
+from threadsai.host.a2a.config import A2aOptions, default_budget
+from threadsai.log import UserInputEvent
+from threadsai.reduce.handlers import to_json
 
 
 def run(main: Callable[[], Coroutine[object, object, None]]) -> None:

@@ -10,7 +10,7 @@ from pydantic import JsonValue
 from team.run_kit import answers, reply_to, say, sq_of, types
 from team.team_kit import assert_team_replays
 
-from threads import (
+from threadsai import (
     Completed,
     MemberRef,
     Model,
@@ -23,18 +23,18 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads.agents.member_results import MemberCancelled, MemberCompleted
-from threads.agents.store import now_ms
-from threads.agents.team_answers import Answered, CancelRequested, Waited
-from threads.agents.team_handle_types import (
+from threadsai.agents.member_results import MemberCancelled, MemberCompleted
+from threadsai.agents.store import now_ms
+from threadsai.agents.team_answers import Answered, CancelRequested, Waited
+from threadsai.agents.team_handle_types import (
     AskNotFound,
     TeamAskRefused,
     TeamCancelRefused,
     TeamWaitRefused,
 )
-from threads.log import BranchId, Event
-from threads.result import Ok
-from threads.team.rows import team_row
+from threadsai.log import BranchId, Event
+from threadsai.result import Ok
+from threadsai.team.rows import team_row
 
 
 async def _ran(writer: Model, reader: Model | None = None) -> tuple[Store, Team]:

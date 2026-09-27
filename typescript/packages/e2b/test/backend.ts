@@ -1,4 +1,4 @@
-import type { Fetch } from "@threads/core/adapter";
+import type { Fetch } from "threadsai/adapter";
 import { z } from "zod";
 import type { World } from "../../core/test/sandbox/remote/world";
 import { OPERATION_KEY } from "../src/driver";

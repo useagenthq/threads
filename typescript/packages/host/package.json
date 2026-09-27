@@ -1,5 +1,5 @@
 {
-  "name": "@threads/host",
+  "name": "@threadsai/host",
   "version": "0.0.0",
   "license": "Apache-2.0",
   "type": "module",
@@ -7,16 +7,16 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@threads/a2a": "workspace:*",
-    "@threads/core": "workspace:*",
+    "@threadsai/a2a": "workspace:*",
+    "threadsai": "workspace:*",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@ag-ui/client": "1.0.0",
     "@ag-ui/core": "1.0.0",
-    "@threads/github": "workspace:*",
-    "@threads/slack": "workspace:*",
-    "@threads/whatsapp": "workspace:*",
+    "@threadsai/github": "workspace:*",
+    "@threadsai/slack": "workspace:*",
+    "@threadsai/whatsapp": "workspace:*",
     "ai": "7.0.113",
     "ajv": "8.20.0",
     "rxjs": "7.8.1"

@@ -9,10 +9,10 @@ import pytest
 from fakes import FakeContext, Script, collect, golden, line, render_case, sse
 from pydantic import JsonValue
 
-from threads.adapters.models.anthropic.model import AnthropicModel
-from threads.anthropic import anthropic
-from threads.log import CallId, ReasoningPart, TextPart, ToolUsePart, Usage
-from threads.loop.model import Delta, Done, ModelChunk, PartChunk, Rejected
+from threadsai.adapters.models.anthropic.model import AnthropicModel
+from threadsai.anthropic import anthropic
+from threadsai.log import CallId, ReasoningPart, TextPart, ToolUsePart, Usage
+from threadsai.loop.model import Delta, Done, ModelChunk, PartChunk, Rejected
 
 type Ev = tuple[str, dict[str, JsonValue]]
 USAGE: dict[str, JsonValue] = {"input_tokens": 10, "output_tokens": 1}

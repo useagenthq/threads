@@ -1,4 +1,4 @@
-import { JsonValue } from "@threads/core/adapter";
+import { JsonValue } from "threadsai/adapter";
 import { z } from "zod";
 import {
   type A2aErrorName,

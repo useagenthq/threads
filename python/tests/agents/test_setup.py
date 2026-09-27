@@ -16,7 +16,7 @@ from daytona_server import API_KEY, DaytonaServer
 from pydantic import BaseModel, JsonValue
 from sandbox_backend import FakeBackend
 
-from threads import (
+from threadsai import (
     Completed,
     ConfigError,
     Failure,
@@ -28,18 +28,18 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.adapters.sandboxes.daytona.sandbox import DaytonaSandbox
-from threads.log import Permissions, ToolResultEvent
-from threads.loop.model import (
+from threadsai.adapters.sandboxes.daytona.sandbox import DaytonaSandbox
+from threadsai.log import Permissions, ToolResultEvent
+from threadsai.loop.model import (
     ModelChunk,
     ModelContext,
     ModelInfo,
     ModelRequest,
 )
-from threads.loop.scripted import ScriptedModel
-from threads.redaction import redact_secrets
-from threads.result import Err, Ok
-from threads.secrets import credential, resolve
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.redaction import redact_secrets
+from threadsai.result import Err, Ok
+from threadsai.secrets import credential, resolve
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 FAILED_THEN_SET_UP = 2

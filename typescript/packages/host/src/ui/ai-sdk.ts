@@ -1,4 +1,4 @@
-import { assertNever, type EventOf, type KnownEvent } from "@threads/core/host";
+import { assertNever, type EventOf, type KnownEvent } from "threadsai/host";
 import type { RunFacts } from "./facts";
 import type { Chunk } from "./frame";
 import {

@@ -4,8 +4,8 @@ until it says whether the offline rerun can script it."""
 
 from typing import Literal, get_args, get_origin
 
-from threads.evals.kinds import USER_EVENTS
-from threads.log import Actor, Event, InjectedData
+from threadsai.evals.kinds import USER_EVENTS
+from threadsai.log import Actor, Event, InjectedData
 
 
 def _literals(annotation: object) -> set[str]:

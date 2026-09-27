@@ -12,17 +12,26 @@ import pytest
 from pydantic import AnyUrl, BaseModel, Field, JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads import Completed, ConfigError, EventItem, Failed, Thread, agent, scripted_model, sqlite
-from threads.agents.store import open_store
-from threads.log import (
+from threadsai import (
+    Completed,
+    ConfigError,
+    EventItem,
+    Failed,
+    Thread,
+    agent,
+    scripted_model,
+    sqlite,
+)
+from threadsai.agents.store import open_store
+from threadsai.log import (
     AgentFinishedEvent,
     Event,
     InjectedEvent,
     OutputValidatedEvent,
     ToolResultEvent,
 )
-from threads.log.digest import canonical_sha256
-from threads.result import Ok
+from threadsai.log.digest import canonical_sha256
+from threadsai.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

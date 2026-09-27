@@ -7,12 +7,12 @@ from collections.abc import Sequence
 
 from pydantic import BaseModel, JsonValue
 
-from threads import Completed, HandedOff, RunContext, Store, agent, scripted_model, sqlite, tool
-from threads.agents.store import now_ms, open_store
-from threads.log import AgentSpawnedEvent, Event, Permissions, ThreadId, ToolResultEvent
-from threads.result import Err, Ok
-from threads.store.deletion import delete_thread
-from threads.thread.handle import open_thread
+from threadsai import Completed, HandedOff, RunContext, Store, agent, scripted_model, sqlite, tool
+from threadsai.agents.store import now_ms, open_store
+from threadsai.log import AgentSpawnedEvent, Event, Permissions, ThreadId, ToolResultEvent
+from threadsai.result import Err, Ok
+from threadsai.store.deletion import delete_thread
+from threadsai.thread.handle import open_thread
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 GATE = asyncio.Event()

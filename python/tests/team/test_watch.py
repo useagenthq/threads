@@ -11,9 +11,9 @@ from team.clock_kit import Held, count, elapsing, until
 from team.run_kit import call, events, member_events, receipts, result_of, say, sq_of, start, types
 from team.team_kit import assert_team_replays
 
-from threads import Completed, MonitorResult, agent, scripted_model, sqlite
-from threads.log import MessageSentEvent
-from threads.team.constants import TEAM_CONSTANTS
+from threadsai import Completed, MonitorResult, agent, scripted_model, sqlite
+from threadsai.log import MessageSentEvent
+from threadsai.team.constants import TEAM_CONSTANTS
 
 FAILS: JsonValue = {"error": {"reason": "provider_error", "http_status": 400}}
 

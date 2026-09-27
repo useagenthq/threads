@@ -7,12 +7,12 @@ from collections.abc import Mapping
 
 from host.test_channel_recovery import Replies, text, until, webhook
 
-from threads import agent, scripted_model, sqlite
-from threads.agents.store import Store, open_store, scoped
-from threads.host import DeliveryError, DeliveryOutcome, host
-from threads.log import EffectBeginEvent, JsonObject, ToolResultEvent
-from threads.loop.effects import MAX_SENDS
-from threads.result import Ok
+from threadsai import agent, scripted_model, sqlite
+from threadsai.agents.store import Store, open_store, scoped
+from threadsai.host import DeliveryError, DeliveryOutcome, host
+from threadsai.log import EffectBeginEvent, JsonObject, ToolResultEvent
+from threadsai.loop.effects import MAX_SENDS
+from threadsai.result import Ok
 
 
 class _Refusing(Replies):

@@ -11,13 +11,13 @@ import pytest
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads import Completed, ConfigError, Thread, agent, scripted_model, sqlite
-from threads.adapters.models.litellm import litellm
-from threads.log import ModelRef, ThreadStartedEvent
-from threads.loop.defaults import CONTEXT
-from threads.loop.model import Cache, Model, ModelChunk, ModelContext, ModelInfo, ModelRequest
-from threads.loop.scripted import SCRIPTED_INFO, ScriptedModel
-from threads.result import Err, Ok
+from threadsai import Completed, ConfigError, Thread, agent, scripted_model, sqlite
+from threadsai.adapters.models.litellm import litellm
+from threadsai.log import ModelRef, ThreadStartedEvent
+from threadsai.loop.defaults import CONTEXT
+from threadsai.loop.model import Cache, Model, ModelChunk, ModelContext, ModelInfo, ModelRequest
+from threadsai.loop.scripted import SCRIPTED_INFO, ScriptedModel
+from threadsai.result import Err, Ok
 
 SAID: JsonValue = {
     "content": [{"type": "text", "text": "Hi."}],

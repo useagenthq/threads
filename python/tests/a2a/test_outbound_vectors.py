@@ -11,7 +11,7 @@ from typing import Final
 import pytest
 from pydantic import TypeAdapter
 
-from threads.a2a.outbound.derive import context_id_of, message_id_of, request_id_of
+from threadsai.a2a.outbound.derive import context_id_of, message_id_of, request_id_of
 
 VECTOR: Final = (
     pathlib.Path(__file__).resolve().parents[3] / "spec" / "conformance" / "vectors" / "a2a.json"

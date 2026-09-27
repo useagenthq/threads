@@ -1,5 +1,5 @@
-import type { EventDraft, ToolContext, ToolRun } from "@threads/core/adapter";
-import { err, ok, type Result } from "@threads/core/adapter";
+import type { EventDraft, ToolContext, ToolRun } from "threadsai/adapter";
+import { err, ok, type Result } from "threadsai/adapter";
 import type { Remote } from "../a2a";
 import {
   type A2aFault,

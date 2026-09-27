@@ -5,7 +5,7 @@ import type {
   RawRequest,
   Secret,
   VerifiedDelivery,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { challenger } from "./challenge";
 import { itemsOf, phoneNumbersOf } from "./inbound";
 import { performer, render, renderText, SESSION_WINDOW_MS } from "./outbound";

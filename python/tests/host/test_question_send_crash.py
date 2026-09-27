@@ -12,12 +12,12 @@ from host.test_channel_approvals import REQUESTER, TEAM, ItemsChannel, Note, mes
 from host.test_channel_questions import ASKER, CORRECTION, QUESTION
 from pydantic import JsonValue
 
-from threads import RunContext, agent, scripted_model, sqlite, tool
-from threads.agents.store import Store, open_store, scoped
-from threads.host import ChannelCapabilities, DeliveryOutcome, Sent, host
-from threads.host import deliver as deliver_module
-from threads.host.app import recovered
-from threads.log import (
+from threadsai import RunContext, agent, scripted_model, sqlite, tool
+from threadsai.agents.store import Store, open_store, scoped
+from threadsai.host import ChannelCapabilities, DeliveryOutcome, Sent, host
+from threadsai.host import deliver as deliver_module
+from threadsai.host.app import recovered
+from threadsai.log import (
     ApprovalRequestedEvent,
     CallId,
     EffectUnknownEvent,
@@ -28,10 +28,10 @@ from threads.log import (
     TurnCompletedEvent,
     UserInputEvent,
 )
-from threads.loop.model import Found, LookupResult, NotFound
-from threads.reduce.run_end import run_end
-from threads.result import Ok
-from threads.thread.handle import open_thread
+from threadsai.loop.model import Found, LookupResult, NotFound
+from threadsai.reduce.run_end import run_end
+from threadsai.result import Ok
+from threadsai.thread.handle import open_thread
 
 STOP_S = 3.0
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}

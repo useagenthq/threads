@@ -10,9 +10,9 @@ from typing import Final
 import pytest
 from pydantic import TypeAdapter
 
-from threads.host.a2a.keys import a2a_thread_id, body_hash, send_key
-from threads.host.ui.key import ui_thread_id
-from threads.log import Principal
+from threadsai.host.a2a.keys import a2a_thread_id, body_hash, send_key
+from threadsai.host.ui.key import ui_thread_id
+from threadsai.log import Principal
 
 VECTOR: Final = (
     pathlib.Path(__file__).resolve().parents[3] / "spec" / "conformance" / "vectors" / "a2a.json"

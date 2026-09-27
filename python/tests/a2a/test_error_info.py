@@ -16,7 +16,7 @@ from client_kit import (
     sending,
 )
 
-from threads.a2a.protocol import Faulted, call, error_info
+from threadsai.a2a.protocol import Faulted, call, error_info
 
 
 class TestTheErrorInfoTheBindingsAskFor:

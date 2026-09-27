@@ -13,10 +13,10 @@ from sandbox_deadline_kit import DEADLINE
 from sandbox_kit import OPEN, KitContext
 from sandbox_ledger_kit import LEDGER, Body, run_ledger
 
-from threads.agents.config import ConfigError
-from threads.modal import modal  # the re-export beside the `modal` SDK package
-from threads.result import Err, Ok
-from threads.sandbox.protocol import NO_ENV
+from threadsai.agents.config import ConfigError
+from threadsai.modal import modal  # the re-export beside the `modal` SDK package
+from threadsai.result import Err, Ok
+from threadsai.sandbox.protocol import NO_ENV
 
 
 @pytest.mark.parametrize("check", [*CHECKS, *DEADLINE], ids=lambda c: c.__name__)

@@ -7,12 +7,12 @@ from pathlib import Path
 
 from pydantic import JsonValue
 
-from threads import agent, import_thread, scripted_model, sqlite
-from threads.agents.store import Store, now_ms, open_store
-from threads.log import ParseError
-from threads.result import Err, Ok
-from threads.store import LOCAL_TENANT, deletion
-from threads.thread.handle import Thread, open_thread
+from threadsai import agent, import_thread, scripted_model, sqlite
+from threadsai.agents.store import Store, now_ms, open_store
+from threadsai.log import ParseError
+from threadsai.result import Err, Ok
+from threadsai.store import LOCAL_TENANT, deletion
+from threadsai.thread.handle import Thread, open_thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

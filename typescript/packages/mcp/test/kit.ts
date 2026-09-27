@@ -5,8 +5,8 @@ import {
   type RunResult,
   type Tool,
   tool,
-} from "@threads/core";
-import type { McpSession, ToolContext, ToolImpl } from "@threads/core/adapter";
+} from "threadsai";
+import type { McpSession, ToolContext, ToolImpl } from "threadsai/adapter";
 
 type Principal = ToolContext["principal"];
 

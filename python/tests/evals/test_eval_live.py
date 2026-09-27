@@ -21,12 +21,12 @@ from eval_kit import (
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads import Agent, ConfigError, EvalReport, Live, agent, run_evals, sqlite
-from threads.agents.store import Store, scoped
-from threads.evals.judge import judge_input
-from threads.log import Budget, Event, ThreadId, UnknownEvent, UserInputEvent
-from threads.result import Ok
-from threads.thread.handle import open_thread
+from threadsai import Agent, ConfigError, EvalReport, Live, agent, run_evals, sqlite
+from threadsai.agents.store import Store, scoped
+from threadsai.evals.judge import judge_input
+from threadsai.log import Budget, Event, ThreadId, UnknownEvent, UserInputEvent
+from threadsai.result import Ok
+from threadsai.thread.handle import open_thread
 
 RUBRIC = ("Quotes the 30-day refund window", "Looks up the order before refunding")
 BUDGET = Budget(max_model_requests=10)

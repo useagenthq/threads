@@ -9,8 +9,8 @@ from pathlib import Path
 from eval_kit import ALLOW, LOOKUP, REFUND, REFUND_TURN, Refunds, saved, say, use, verdicts_reply
 from local_sandbox import LOCAL_INFO, LocalSandbox
 
-from threads import EvalReport, Live, agent, run_evals, scripted_model
-from threads.log import Budget
+from threadsai import EvalReport, Live, agent, run_evals, scripted_model
+from threadsai.log import Budget
 
 RUBRIC = ("Quotes the 30-day refund window",)
 BUDGET = Budget(max_model_requests=10)

@@ -12,12 +12,12 @@ import httpx
 from pydantic import BaseModel, JsonValue
 from starlette.requests import Request
 
-from threads import Agent, RunContext, Store, agent, scripted_model, sqlite, tool
-from threads.agents.store import now_ms, open_store, scoped
-from threads.host import Host, host
-from threads.log import BranchId, Principal, UserInputEvent
-from threads.result import Ok
-from threads.store.conn import Conn
+from threadsai import Agent, RunContext, Store, agent, scripted_model, sqlite, tool
+from threadsai.agents.store import now_ms, open_store, scoped
+from threadsai.host import Host, host
+from threadsai.log import BranchId, Principal, UserInputEvent
+from threadsai.result import Ok
+from threadsai.store.conn import Conn
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALICE = Principal(issuer="api", tenant="acme", subject="alice")
@@ -206,7 +206,7 @@ def test_the_log_records_the_authenticated_principal_never_the_local_operator() 
         served_host: Host = host(store=store, agents={"support": bot}, authenticate=bearer)
         async with served_host:
             request_body = {"agent": "support", "input": "hi"}
-            from threads._generated.host_api_v1 import StartRunRequest  # noqa: PLC0415
+            from threadsai._generated.host_api_v1 import StartRunRequest  # noqa: PLC0415
 
             accepted = await served_host.start_run(
                 StartRunRequest.model_validate(request_body), principal=BOB, idempotency_key="k"

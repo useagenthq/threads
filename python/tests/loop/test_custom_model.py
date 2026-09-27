@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from corpus import CASES, Clock, ScriptedTools, load, now_of, own, stored_artifacts
 
-from threads import (
+from threadsai import (
     Completed,
     ConfigError,
     LooksUp,
@@ -25,15 +25,15 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads.log import TextPart, Usage
-from threads.loop.guard import block_model_requests
-from threads.loop.model import Done, LookupCapability, PartChunk, StaleEpoch
-from threads.loop.recovery import recover
-from threads.loop.runtime import Failed, Runtime
-from threads.loop.scripted import SCRIPTED_INFO, ScriptedModel
-from threads.permissions import Decision
-from threads.result import Err, Ok
-from threads.store import SqliteStore, verify_export
+from threadsai.log import TextPart, Usage
+from threadsai.loop.guard import block_model_requests
+from threadsai.loop.model import Done, LookupCapability, PartChunk, StaleEpoch
+from threadsai.loop.recovery import recover
+from threadsai.loop.runtime import Failed, Runtime
+from threadsai.loop.scripted import SCRIPTED_INFO, ScriptedModel
+from threadsai.permissions import Decision
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore, verify_export
 
 
 @dataclass(frozen=True)

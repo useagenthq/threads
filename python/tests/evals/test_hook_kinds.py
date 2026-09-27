@@ -11,14 +11,14 @@ from typing import Final
 from eval_kit import ALLOW, LOOKUP, say, use
 from pydantic import JsonValue
 
-from threads import Agent, agent, scripted_model, sqlite
-from threads.evals.kinds import HOOK_KINDS
-from threads.hooks.extension import extension
-from threads.hooks.types import HookName, Hooks, wire_name
-from threads.log import Event, HookDecisionEvent, ModelRef, Retry
-from threads.loop.scripted import SCRIPTED_INFO, ScriptedModel
-from threads.result import Ok
-from threads.thread.control import LOCAL_OPERATOR
+from threadsai import Agent, agent, scripted_model, sqlite
+from threadsai.evals.kinds import HOOK_KINDS
+from threadsai.hooks.extension import extension
+from threadsai.hooks.types import HookName, Hooks, wire_name
+from threadsai.log import Event, HookDecisionEvent, ModelRef, Retry
+from threadsai.loop.scripted import SCRIPTED_INFO, ScriptedModel
+from threadsai.result import Ok
+from threadsai.thread.control import LOCAL_OPERATOR
 
 NOOP: Final[Mapping[HookName, object]] = {
     "session_start": [],

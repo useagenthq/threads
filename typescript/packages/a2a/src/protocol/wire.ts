@@ -1,4 +1,4 @@
-import { JsonValue } from "@threads/core/adapter";
+import { JsonValue } from "threadsai/adapter";
 import { type A2aFault, fault } from "./errors";
 import { type Method, methodOf } from "./jsonrpc";
 import { A2A_VERSION } from "./version";

@@ -8,7 +8,7 @@ import {
   ProcessApi,
   Configuration as ToolboxConfiguration,
 } from "@daytona/toolbox-api-client";
-import { type Fetch, sandboxFetch } from "@threads/core/adapter";
+import { type Fetch, sandboxFetch } from "threadsai/adapter";
 
 // Daytona's official generated API clients (the transport layer of its SDK), each request sent
 // by axios's fetch adapter through threads' fenced fetch. The high-level `Daytona` class builds

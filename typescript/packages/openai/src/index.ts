@@ -1,3 +1,9 @@
+import OpenAI, {
+  APIConnectionError,
+  APIError,
+  APIUserAbortError,
+} from "openai";
+import type { Stream } from "openai/core/streaming";
 import type {
   Fetch,
   JsonObject,
@@ -9,7 +15,7 @@ import type {
   ModelRequest,
   Price,
   Secret,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import {
   ConfigError,
   checkHostedTools,
@@ -19,17 +25,11 @@ import {
   parseRender,
   rejectionFor,
   staleEpoch,
-} from "@threads/core/adapter";
-import OpenAI, {
-  APIConnectionError,
-  APIError,
-  APIUserAbortError,
-} from "openai";
-import type { Stream } from "openai/core/streaming";
+} from "threadsai/adapter";
 import { toOpenAI } from "./request";
 import { decode, ResponseFailed } from "./stream";
 
-export type { JsonObject, Price } from "@threads/core/adapter";
+export type { JsonObject, Price } from "threadsai/adapter";
 
 // openai(): the Responses API through the official SDK, as a threads Model (spec/api.json).
 // threads owns every attempt, so SDK retries are off, and the request body is

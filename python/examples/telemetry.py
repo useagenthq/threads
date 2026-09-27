@@ -2,9 +2,9 @@ import asyncio
 
 from pydantic import JsonValue
 
-from threads import agent, scripted_model, sqlite
-from threads.otel import otel
-from threads.result import Err, Ok
+from threadsai import agent, scripted_model, sqlite
+from threadsai.otel import otel
+from threadsai.result import Err, Ok
 
 
 # OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 python examples/telemetry.py

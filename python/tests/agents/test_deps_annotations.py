@@ -11,8 +11,8 @@ import pytest
 from agents.test_deps_default import ALLOW, USAGE
 from pydantic import BaseModel
 
-from threads import Completed, ConfigError, RunContext, agent, scripted_model, sqlite, tool
-from threads._tool_deps import context_deps, missing_deps
+from threadsai import Completed, ConfigError, RunContext, agent, scripted_model, sqlite, tool
+from threadsai._tool_deps import context_deps, missing_deps
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

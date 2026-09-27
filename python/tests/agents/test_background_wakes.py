@@ -21,7 +21,7 @@ from agents.wake_kit import (
 )
 from pydantic import BaseModel, JsonValue
 
-from threads import (
+from threadsai import (
     Cancelled,
     Completed,
     EventItem,
@@ -32,11 +32,11 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.agents.background import Background
-from threads.log import ToolResultEvent, ToolResultLateEvent
-from threads.loop.scripted import ScriptExhaustedError
-from threads.result import Ok
-from threads.thread.handle import open_thread
+from threadsai.agents.background import Background
+from threadsai.log import ToolResultEvent, ToolResultLateEvent
+from threadsai.loop.scripted import ScriptExhaustedError
+from threadsai.result import Ok
+from threadsai.thread.handle import open_thread
 
 
 @pytest.fixture

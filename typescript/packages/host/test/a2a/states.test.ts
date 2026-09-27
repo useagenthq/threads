@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { storeConnection } from "@threads/core/host";
+import { storeConnection } from "threadsai/host";
 import { z } from "zod";
 import { DEFAULT_BUDGET } from "../../src";
 import { alice, knownEventsOf } from "../kit";

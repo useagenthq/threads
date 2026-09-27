@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from threads.evals.report import case_line, dollars
+from threadsai.evals.report import case_line, dollars
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

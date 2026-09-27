@@ -1,4 +1,4 @@
-import type { EventOf, KnownEvent } from "@threads/core/internal/feed";
+import type { EventOf, KnownEvent } from "threadsai/internal/feed";
 import { spanEvent, turnAttrs, turnEnd } from "./attrs";
 import { spanId, traceId } from "./ids";
 import { type Context, INTERNAL, type Link, OpenSpan, type Span } from "./span";

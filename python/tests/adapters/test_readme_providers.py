@@ -8,13 +8,13 @@ from collections.abc import Callable, Iterator
 
 import pytest
 
-from threads.daytona import daytona
-from threads.e2b import e2b
-from threads.github import github
-from threads.modal import modal
-from threads.secrets import secret
-from threads.slack import slack
-from threads.whatsapp import whatsapp
+from threadsai.daytona import daytona
+from threadsai.e2b import e2b
+from threadsai.github import github
+from threadsai.modal import modal
+from threadsai.secrets import secret
+from threadsai.slack import slack
+from threadsai.whatsapp import whatsapp
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 GUIDES = ROOT / "docs" / "content" / "docs" / "(guides)"

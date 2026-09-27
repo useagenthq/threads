@@ -10,13 +10,13 @@ from team.team_kit import CASES, LEAD, TEAM, TEAM_LOG, TENANT, assert_team_repla
 from team.team_kit import verified as read
 from team.writes import ReplayClock, draft_of, reappend
 
-from threads.log import BranchId, Event, MessageReceivedEvent, ThreadId
-from threads.result import Ok
-from threads.store import SqliteStore, VerifiedLog, Writer
-from threads.store.conn import Conn
-from threads.team.claim import claim_mail
-from threads.team.constants import TEAM_CONSTANTS
-from threads.team.index import TeamLog, change_rows
+from threadsai.log import BranchId, Event, MessageReceivedEvent, ThreadId
+from threadsai.result import Ok
+from threadsai.store import SqliteStore, VerifiedLog, Writer
+from threadsai.store.conn import Conn
+from threadsai.team.claim import claim_mail
+from threadsai.team.constants import TEAM_CONSTANTS
+from threadsai.team.index import TeamLog, change_rows
 
 T0 = 1_790_000_000_000
 LEAD_BRANCH = branch_of(LEAD)

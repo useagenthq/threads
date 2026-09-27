@@ -4,9 +4,9 @@ error, never a saturated amount or a raised ValidationError (spec/api.json Threa
 from pydantic import JsonValue
 from thread.usage_kit import check, child_ids, priced, run, say, spawn, unpriced
 
-from threads import Store, agent
-from threads.result import Err, Ok
-from threads.thread.handle import open_thread
+from threadsai import Store, agent
+from threadsai.result import Err, Ok
+from threadsai.thread.handle import open_thread
 
 HUGE: JsonValue = {"input": 600_000_000_000_000, "output": 0}
 """One scripted response (10 input tokens) at this price costs 6e15 nanos: within the range."""

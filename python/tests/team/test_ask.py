@@ -21,8 +21,8 @@ from team.run_kit import (
 )
 from team.team_kit import assert_team_replays
 
-from threads import Completed, agent, scripted_model, sqlite
-from threads.log import Budget
+from threadsai import Completed, agent, scripted_model, sqlite
+from threadsai.log import Budget
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

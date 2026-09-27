@@ -209,7 +209,7 @@ def test_a_streaming_send_that_is_refused_answers_the_refusal_not_a_stream() -> 
 def test_a_rejected_streaming_send_is_one_frame_and_closes() -> None:
     async def main() -> None:
         async with served({"support": talker("hi")}) as on:
-            from threads.a2a.protocol import PROVENANCE  # noqa: PLC0415 - one test needs the uri
+            from threadsai.a2a.protocol import PROVENANCE  # noqa: PLC0415 - one test needs the uri
 
             body = message("m1", "hi", metadata={PROVENANCE: {"hops": 9}})
             read = frames(await on.rpc("SendStreamingMessage", body, as_=ALICE))

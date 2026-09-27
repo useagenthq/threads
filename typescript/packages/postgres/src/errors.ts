@@ -1,5 +1,5 @@
-import { StoreError } from "@threads/core/store-driver";
 import type pg from "pg";
+import { StoreError } from "threadsai/store-driver";
 
 // pg's errors as the store's. A serialization failure or deadlock is retried whole; a lost
 // connection, exhausted resources, a shutdown or a system error is an outage (StoreError); a

@@ -1,4 +1,4 @@
-import { err, ok, type Principal, type Result } from "@threads/core/host";
+import { err, ok, type Principal, type Result } from "threadsai/host";
 import type { HostContext } from "../context";
 import { answerQuestion, decideChallenge } from "../decisions";
 import type { Failure } from "../errors";

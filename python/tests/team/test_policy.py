@@ -6,9 +6,9 @@ from collections.abc import Sequence
 
 import pytest
 
-from threads import MessagePolicyRule
-from threads.agents.config import ConfigError
-from threads.team.policy import (
+from threadsai import MessagePolicyRule
+from threadsai.agents.config import ConfigError
+from threadsai.team.policy import (
     check_message_policy,
     leads,
     rule_for,

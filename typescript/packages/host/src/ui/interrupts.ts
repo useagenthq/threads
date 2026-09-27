@@ -1,4 +1,4 @@
-import type { Json, ParkAddress } from "@threads/core/host";
+import type { Json, ParkAddress } from "threadsai/host";
 import type { RunFacts } from "./facts";
 
 // A parked run's open items as AG-UI interrupts (spec/schema/ui/README.md, "Interrupts"). Each

@@ -9,7 +9,7 @@ from typing import Literal
 import pytest
 from pydantic import BaseModel, Field, JsonValue
 
-from threads._json_schema import conforms, holds, unchecked
+from threadsai._json_schema import conforms, holds, unchecked
 
 
 class Color(enum.Enum):

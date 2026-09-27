@@ -14,11 +14,11 @@ from host.test_http import run, sender, served
 from host.ui_kit import AI_SDK, chat, frames, post, user
 from pydantic import JsonValue
 
-from threads import sqlite
-from threads.host.ui.interrupts import ANSWER_SCHEMA, APPROVAL_DECISION_SCHEMA
-from threads.log import ThreadId
-from threads.result import Ok
-from threads.store import SqliteStore, verify_export
+from threadsai import sqlite
+from threadsai.host.ui.interrupts import ANSWER_SCHEMA, APPROVAL_DECISION_SCHEMA
+from threadsai.log import ThreadId
+from threadsai.result import Ok
+from threadsai.store import SqliteStore, verify_export
 
 HOST_API = Path(__file__).resolve().parents[3] / "spec" / "schema" / "host-api"
 

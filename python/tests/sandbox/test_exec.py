@@ -6,12 +6,12 @@ from pathlib import Path
 
 from sandbox_kit import OPEN
 
-from threads.log import Spill
-from threads.redaction import register
-from threads.result import Err, Ok
-from threads.sandbox import Command, ExecResult, SandboxError, fake_sandbox, run_exec
-from threads.sandbox.fake_session import CHUNK
-from threads.store import SqliteStore
+from threadsai.log import Spill
+from threadsai.redaction import register
+from threadsai.result import Err, Ok
+from threadsai.sandbox import Command, ExecResult, SandboxError, fake_sandbox, run_exec
+from threadsai.sandbox.fake_session import CHUNK
+from threadsai.store import SqliteStore
 
 LIMITS = Spill(threshold_bytes=100, head_bytes=10, tail_bytes=5, request_budget_bytes=1000)
 

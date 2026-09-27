@@ -106,11 +106,16 @@ def test_an_adapter_package_must_list_its_own_sources(tmp_path: pathlib.Path) ->
     own = api()
     packages = own["packages"]
     assert isinstance(packages, dict)
-    packages["web"] = {"ts": "@threads/web", "py": "threads.web", "kind": "adapter", "doc": "W."}
+    packages["web"] = {
+        "ts": "@threadsai/web",
+        "py": "threadsai.web",
+        "kind": "adapter",
+        "doc": "W.",
+    }
     assert check_decisions(own, decisions(), sources(tmp_path)) == [
         "decisions packages.web.ts: list typescript/packages/web/src, the package's own "
         "sources, so a new file there is scanned",
-        "decisions packages.web.py: list python/src/threads/web, the package's own sources, "
+        "decisions packages.web.py: list python/src/threadsai/web, the package's own sources, "
         "so a new file there is scanned",
     ]
 
@@ -135,7 +140,7 @@ def test_the_scan_counts_direct_codes_and_core_helpers() -> None:
     assert raised_codes(py, "py") == {"missing_secret": 1, "unknown_preset": 1}
     # However a helper call is qualified, it counts; an unrelated method of the same name
     # over-counts (red, never hidden).
-    qualified_all = "import threads.secrets\nthreads.secrets.resolve(k)\nself.resolve(x)\n"
+    qualified_all = "import threadsai.secrets\nthreads.secrets.resolve(k)\nself.resolve(x)\n"
     assert raised_codes(qualified_all, "py") == {"missing_secret": 2}
     assert raised_codes('credential("exa", "apiKey", k, "EXA")', "ts") == {"missing_secret": 1}
     assert raised_codes('credential("exa", "api_key", k, "EXA")', "py") == {"missing_secret": 1}
@@ -144,7 +149,7 @@ def test_the_scan_counts_direct_codes_and_core_helpers() -> None:
     assert raised_codes("raise ConfigError(code, message)", "py") == {"<unreadable>": 1}
 
 
-PY_IMPORT_AS = "from threads.agents.config import ConfigError as Error\n"
+PY_IMPORT_AS = "from threadsai.agents.config import ConfigError as Error\n"
 TS_IMPORT_AS = 'import { ConfigError as E } from "../agent/errors";\n'
 RAISE = 'raise Error("missing_secret", "m")'
 THROW = 'throw new E("missing_secret", "m");'
@@ -160,7 +165,7 @@ THROW = 'throw new E("missing_secret", "m");'
         ("const E = ConfigError;\n" + THROW, "ts"),
         ("class Refusal extends ConfigError {}", "ts"),
         ("(Alias,) = (ConfigError,)\n" + RAISE.replace("Error", "Alias", 1), "py"),
-        ("import threads.agents.config as c\nE = c.ConfigError\n" + RAISE, "py"),
+        ("import threadsai.agents.config as c\nE = c.ConfigError\n" + RAISE, "py"),
         ("class Refusal(ValueError, ConfigError):\n    pass", "py"),
         ("try:\n    f()\nexcept ValueError: E = ConfigError\n" + RAISE, "py"),
         ('refusals = {"e": ConfigError}\n', "py"),
@@ -171,15 +176,15 @@ THROW = 'throw new E("missing_secret", "m");'
         ('const E = { "https://x": ConfigError }["https://x"];\n' + THROW, "ts"),
         ("// a comment naming ConfigError\n", "ts"),
         (
-            'import { credential as c } from "@threads/core/adapter";\nc("x", "apiKey", k, "X");',
+            'import { credential as c } from "threadsai/adapter";\nc("x", "apiKey", k, "X");',
             "ts",
         ),
-        ("from threads.secrets import credential as c\nkey = c('x', 'api_key', k, 'X')\n", "py"),
+        ("from threadsai.secrets import credential as c\nkey = c('x', 'api_key', k, 'X')\n", "py"),
         ("get = credential\nget('x', 'api_key', k, 'X')\n", "py"),
         ("const show = key.reveal;\nshow();\n", "ts"),
-        ("from threads.secrets import resolve as r\nr(k)\n", "py"),
+        ("from threadsai.secrets import resolve as r\nr(k)\n", "py"),
         (
-            'import { credential as /* note */ c } from "@threads/core/adapter";\nc(a, b, k, d);',
+            'import { credential as /* note */ c } from "threadsai/adapter";\nc(a, b, k, d);',
             "ts",
         ),
     ],
@@ -217,7 +222,7 @@ def test_an_alias_of_config_error_or_a_refusing_helper_is_unreadable(
 
 def test_catching_and_plain_imports_are_not_aliases() -> None:
     py = (
-        "from threads.agents.config import ConfigError\n"
+        "from threadsai.agents.config import ConfigError\n"
         "try:\n    f()\nexcept ConfigError as e:\n    pass\n"
     )
     assert raised_codes(py, "py") == {}

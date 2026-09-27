@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { describe, expect } from "bun:test";
-import { StoreError } from "@threads/core/store-driver";
+import { StoreError } from "threadsai/store-driver";
 import { z } from "zod";
 import { LogStore, memoryArtifacts } from "../../core/src/store";
 import { STORE_SQL as SQLITE_SQL } from "../../core/src/store/generated/sql";

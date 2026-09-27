@@ -1,6 +1,6 @@
 [project]
-# Placeholder name; not published to PyPI yet (the "Private" classifier makes uploads fail).
-name = "threads"
+# The published name; the "Private" classifier still makes uploads fail until release.
+name = "threadsai"
 version = "0.0.0"
 license = "Apache-2.0"
 description = "Event-log agent framework."
@@ -31,17 +31,17 @@ daytona = [
 modal = [
     "modal>=1.5.5,<2",
 ]
-# threads.docker. The Docker Engine API is HTTP over a unix socket with no official Python SDK
+# threadsai.docker. The Docker Engine API is HTTP over a unix socket with no official Python SDK
 # worth a dependency (docker-py is sync and vendors its own transport stack); httpx is the async
 # client the other adapters already send through, and its unix-socket transport plus the
 # request-header trace are what the run's fence needs.
 docker = [
     "httpx>=0.28,<1",
 ]
-# threads.coding: the preset is agent() with a model and a sandbox already chosen, so it needs
+# threadsai.coding: the preset is agent() with a model and a sandbox already chosen, so it needs
 # both of their extras and adds no dependency of its own.
 coding = [
-    "threads[anthropic,docker]",
+    "threadsai[anthropic,docker]",
 ]
 mcp = [
     "jsonschema>=4.23,<5",
@@ -53,17 +53,17 @@ supermemory = [
 zep = [
     "zep-cloud>=3.28,<4",
 ]
-# threads.postgres (lane 27): Postgres has no official vendor SDK. psycopg 3 is the maintained
+# threadsai.postgres (lane 27): Postgres has no official vendor SDK. psycopg 3 is the maintained
 # reference adapter, with binary wheels; its sync connection fits the store's worker thread, and
 # its errors carry typed SQLSTATEs (serialization failures, connection loss).
 postgres = [
     "psycopg[binary]>=3.2,<3.3",
 ]
-# threads.host over HTTP. Starlette: spec/api.json types host(authenticate)
+# threadsai.host over HTTP. Starlette: spec/api.json types host(authenticate)
 # with starlette.requests.Request and Host.asgi as starlette.types.ASGIApp, and it is the
 # smallest routing/SSE layer that runs on any ASGI server. Uvicorn: the minimal ASGI server
 # `threads dev` and `threads start` run it on. Core stays pydantic-only; the library methods of
-# threads.host import neither.
+# threadsai.host import neither.
 host = [
     "starlette>=1.6,<2",
     "uvicorn>=0.53,<1",
@@ -83,7 +83,7 @@ whatsapp = [
 github = [
     "httpx>=0.28,<1",
 ]
-# threads.otel. httpx: the asyncio HTTP client the channel adapters already use (the stdlib has no
+# threadsai.otel. httpx: the asyncio HTTP client the channel adapters already use (the stdlib has no
 # async HTTP client, and AGENTS.md forbids threads for I/O). No OpenTelemetry SDK in either
 # language: the SDK generates random span ids and does its own batching and encoding, while this
 # exporter needs ids derived from event ids (safe re-sends) and OTLP bytes identical in TypeScript
@@ -94,7 +94,8 @@ otel = [
 ]
 
 [project.scripts]
-threads = "threads.cli:main"
+threads = "threadsai.cli:main"
+threadsai = "threadsai.cli:main"
 
 [dependency-groups]
 dev = [
@@ -143,10 +144,10 @@ select = ["E", "F", "W", "I", "B", "UP", "N", "S", "C4", "SIM", "RUF", "ANN", "P
 # Its `# Output:` line is the summary the example prints, verbatim, and the test compares it.
 "examples/evals_simulate.py" = ["TC", "E501"]
 # Docstrings are schema descriptions copied verbatim; the formatter doesn't wrap them.
-"src/threads/_generated/events_v1.py" = ["E501"]
-"src/threads/_generated/host_api_v1.py" = ["E501"]
+"src/threadsai/_generated/events_v1.py" = ["E501"]
+"src/threadsai/_generated/host_api_v1.py" = ["E501"]
 # Its queries are composed from constant scope and revision fragments; every value is bound.
-"src/threads/memory/local_knowledge.py" = ["S608"]
+"src/threadsai/memory/local_knowledge.py" = ["S608"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

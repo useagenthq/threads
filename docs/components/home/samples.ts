@@ -6,8 +6,8 @@ export type Sample = { ts: string; py: string };
 // The first sample a visitor meets, so it shows one idea: a name, instructions and a model, run once.
 // Tools, approvals and the rest are the Learn tutorials' job.
 export const FIRST_AGENT: Sample = {
-  ts: `import { agent } from "@threads/core";
-import { anthropic } from "@threads/anthropic";
+  ts: `import { agent } from "threadsai";
+import { anthropic } from "@threadsai/anthropic";
 
 const support = agent({
   name: "support",
@@ -17,8 +17,8 @@ const support = agent({
 
 const result = await support.run("Can I return a keyboard?");
 if (result.status === "completed") console.log(result.output);`,
-  py: `from threads import agent
-from threads.anthropic import anthropic
+  py: `from threadsai import agent
+from threadsai.anthropic import anthropic
 
 support = agent(
     name="support",
@@ -33,8 +33,8 @@ if result.status == "completed":
 
 // Turning on OpenTelemetry export, from the Observability guide.
 export const TELEMETRY: Sample = {
-  ts: `import { host } from "@threads/host";
-import { otel } from "@threads/otel";
+  ts: `import { host } from "@threadsai/host";
+import { otel } from "@threadsai/otel";
 
 // OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
 // OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=<your key>
@@ -44,8 +44,8 @@ export default host({
   agents: { support },
   telemetry: otel(),
 });`,
-  py: `from threads.host import host
-from threads.otel import otel
+  py: `from threadsai.host import host
+from threadsai.otel import otel
 
 # OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
 # OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=<your key>
@@ -99,10 +99,10 @@ export const USE_CASES: UseCase[] = [
     title: "Support bot on Slack",
     body: "Each Slack conversation becomes a thread. Risky actions get Approve and Deny buttons in the channel.",
     href: "/docs/host/slack",
-    ts: `import { agent, secret, sqlite } from "@threads/core";
-import { anthropic } from "@threads/anthropic";
-import { host } from "@threads/host";
-import { slack } from "@threads/slack";
+    ts: `import { agent, secret, sqlite } from "threadsai";
+import { anthropic } from "@threadsai/anthropic";
+import { host } from "@threadsai/host";
+import { slack } from "@threadsai/slack";
 
 const support = agent({
   name: "support",
@@ -121,10 +121,10 @@ export default host({
     }),
   },
 });`,
-    py: `from threads import agent, secret, sqlite
-from threads.anthropic import anthropic
-from threads.host import host
-from threads.slack import slack
+    py: `from threadsai import agent, secret, sqlite
+from threadsai.anthropic import anthropic
+from threadsai.host import host
+from threadsai.slack import slack
 
 support = agent(
     name="support",
@@ -149,9 +149,9 @@ app = host(
     title: "Coding agent in a sandbox",
     body: "The agent gets a shell and files in its own machine, with no internet and none of your keys.",
     href: "/docs/sandboxes/overview",
-    ts: `import { agent } from "@threads/core";
-import { anthropic } from "@threads/anthropic";
-import { e2b } from "@threads/e2b";
+    ts: `import { agent } from "threadsai";
+import { anthropic } from "@threadsai/anthropic";
+import { e2b } from "@threadsai/e2b";
 
 const coder = agent({
   name: "coder",
@@ -163,9 +163,9 @@ const coder = agent({
 
 const result = await coder.run("Make the test suite pass.");
 if (result.status === "completed") console.log(result.output);`,
-    py: `from threads import agent
-from threads.anthropic import anthropic
-from threads.e2b import e2b
+    py: `from threadsai import agent
+from threadsai.anthropic import anthropic
+from threadsai.e2b import e2b
 
 coder = agent(
     name="coder",
@@ -184,9 +184,9 @@ if result.status == "completed":
     title: "Research team",
     body: "A lead hands questions to a researcher on a cheaper model, then writes the report from what comes back.",
     href: "/docs/multi-agent/subagents",
-    ts: `import { agent, exa, secret } from "@threads/core";
-import { anthropic } from "@threads/anthropic";
-import { openai } from "@threads/openai";
+    ts: `import { agent, exa, secret } from "threadsai";
+import { anthropic } from "@threadsai/anthropic";
+import { openai } from "@threadsai/openai";
 
 const researcher = agent({
   name: "researcher",
@@ -204,10 +204,10 @@ const lead = agent({
 
 const report = await lead.run("How do support teams use agents today?");
 if (report.status === "completed") console.log(report.output);`,
-    py: `from threads import agent, secret
-from threads.anthropic import anthropic
-from threads.openai import openai
-from threads.search import exa
+    py: `from threadsai import agent, secret
+from threadsai.anthropic import anthropic
+from threadsai.openai import openai
+from threadsai.search import exa
 
 researcher = agent(
     name="researcher",
@@ -232,9 +232,9 @@ if report.status == "completed":
     title: "Scheduled job",
     body: "Run an agent on a cron schedule in any time zone. Each occurrence runs once, even across restarts.",
     href: "/docs/host/schedules",
-    ts: `import { agent, sqlite } from "@threads/core";
-import { anthropic } from "@threads/anthropic";
-import { host } from "@threads/host";
+    ts: `import { agent, sqlite } from "threadsai";
+import { anthropic } from "@threadsai/anthropic";
+import { host } from "@threadsai/host";
 
 const digest = agent({
   name: "digest",
@@ -255,9 +255,9 @@ export default host({
     },
   ],
 });`,
-    py: `from threads import agent, sqlite
-from threads.anthropic import anthropic
-from threads.host import Schedule, host
+    py: `from threadsai import agent, sqlite
+from threadsai.anthropic import anthropic
+from threadsai.host import Schedule, host
 
 digest = agent(
     name="digest",

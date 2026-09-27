@@ -1,5 +1,5 @@
 {
-  "name": "@threads/openai",
+  "name": "@threadsai/openai",
   "version": "0.0.0",
   "license": "Apache-2.0",
   "type": "module",
@@ -7,11 +7,11 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@threads/core": "workspace:*",
+    "threadsai": "workspace:*",
     "openai": "7.22.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@threads/adapter-testkit": "workspace:*"
+    "@threadsai/adapter-testkit": "workspace:*"
   }
 }

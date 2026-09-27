@@ -9,7 +9,7 @@ import {
   resumed,
   uuidv7,
   type Writer,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { consumes } from "./inbox";
 
 // A channel reply to an open ask_user question (spec/schema/README.md, "Questions and remembered

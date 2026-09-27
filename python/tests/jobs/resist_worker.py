@@ -16,9 +16,9 @@ from pathlib import Path
 from jobs.stores import drill_store
 from pydantic import BaseModel, JsonValue
 
-from threads import Failed, RunContext, agent, open_thread, scripted_model, tool
-from threads.log import EffectBeginEvent, Permissions, ThreadId
-from threads.result import Ok
+from threadsai import Failed, RunContext, agent, open_thread, scripted_model, tool
+from threadsai.log import EffectBeginEvent, Permissions, ThreadId
+from threadsai.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 BYPASS = Permissions.model_validate(

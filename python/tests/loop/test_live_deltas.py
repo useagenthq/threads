@@ -7,12 +7,12 @@ from collections.abc import AsyncIterator
 
 from pydantic import JsonValue
 
-from threads import DeltaItem, agent, scripted_model, sqlite
-from threads.log import EventId
-from threads.loop.model import Delta, ModelChunk, ModelContext, ModelRequest
-from threads.loop.scripted import ScriptedModel
-from threads.loop.shown import Shown
-from threads.redaction import redact_secrets, register
+from threadsai import DeltaItem, agent, scripted_model, sqlite
+from threadsai.log import EventId
+from threadsai.loop.model import Delta, ModelChunk, ModelContext, ModelRequest
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.loop.shown import Shown
+from threadsai.redaction import redact_secrets, register
 
 REQUEST = EventId("0192e000-0000-7000-8000-000000000003")
 VALUE = "sk-live-0123456789"  # a registered value, not a real key

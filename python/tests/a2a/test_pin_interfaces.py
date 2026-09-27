@@ -11,7 +11,7 @@ from typing import Final
 
 from cards import CARD_URL, as_bytes, card_of, rest_at, rpc_at
 
-from threads.a2a.protocol import PinFailure, PinnedCard, pin_card
+from threadsai.a2a.protocol import PinFailure, PinnedCard, pin_card
 
 SAFE: Final = "https://partner.example/a2a"
 

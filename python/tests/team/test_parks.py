@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from team.run_kit import call, events, member_events, receipts, say, sq_of, start, types
 from team.team_kit import assert_team_replays
 
-from threads import (
+from threadsai import (
     Completed,
     Parked,
     Principal,
@@ -24,11 +24,11 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.agents.run import execute
-from threads.log import ThreadId
-from threads.result import Ok
-from threads.team.rows import member_rows
-from threads.thread.handle import open_thread
+from threadsai.agents.run import execute
+from threadsai.log import ThreadId
+from threadsai.result import Ok
+from threadsai.team.rows import member_rows
+from threadsai.thread.handle import open_thread
 
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")
 

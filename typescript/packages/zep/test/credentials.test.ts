@@ -1,4 +1,4 @@
-import { credentialCases } from "@threads/adapter-testkit";
+import { credentialCases } from "@threadsai/adapter-testkit";
 import { zep } from "../src";
 
 // Lane 09: the credential defaults to secret("ZEP_API_KEY") and is resolved at setup.

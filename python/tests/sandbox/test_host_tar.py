@@ -12,10 +12,10 @@ from pathlib import Path
 import pytest
 from tar_kit import chunked
 
-from threads.result import Ok
-from threads.sandbox.tree.tar import StoredTree, store_tar
-from threads.sandbox.tree.tree import TreeDir, TreeFile, TreeSymlink
-from threads.store.artifacts import MemoryArtifacts
+from threadsai.result import Ok
+from threadsai.sandbox.tree.tar import StoredTree, store_tar
+from threadsai.sandbox.tree.tree import TreeDir, TreeFile, TreeSymlink
+from threadsai.store.artifacts import MemoryArtifacts
 
 LONG = "déjà vu/" + "n" * 120
 FILES = (

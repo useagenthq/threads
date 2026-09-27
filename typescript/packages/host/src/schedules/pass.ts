@@ -1,4 +1,4 @@
-import type { LogStore, NewThreadPin, StoreDriver } from "@threads/core/host";
+import type { LogStore, NewThreadPin, StoreDriver } from "threadsai/host";
 import type { HostContext, HostedAgent } from "../context";
 
 /** One scheduler pass over a tenant. */

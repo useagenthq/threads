@@ -2,7 +2,7 @@ import {
   canonicalize,
   type EventOf,
   type KnownEvent,
-} from "@threads/core/internal/feed";
+} from "threadsai/internal/feed";
 import type { Attrs, SpanEvent } from "./span";
 
 // Attributes by semantic conventions core v1.41.1 (spec/otel/README.md, "Attributes").

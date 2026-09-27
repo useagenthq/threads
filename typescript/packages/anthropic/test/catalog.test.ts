@@ -4,8 +4,8 @@ import {
   recordingFetch,
   renderBody,
   sse,
-} from "@threads/adapter-testkit";
-import { memoryContext } from "@threads/core/adapter";
+} from "@threadsai/adapter-testkit";
+import { memoryContext } from "threadsai/adapter";
 import { z } from "zod";
 import { anthropic } from "../src";
 

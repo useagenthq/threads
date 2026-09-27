@@ -8,15 +8,15 @@ from dataclasses import replace
 
 from pydantic import BaseModel, JsonValue
 
-from threads import Model, RunContext, scripted_model, tool
-from threads.agents.store import now_ms, open_store
-from threads.agents.tool import Tool
-from threads.hooks.extension import Extension, extension
-from threads.hooks.types import Hooks
-from threads.log import Event, HookDecisionEvent, ModelRef, Retry
-from threads.loop.scripted import SCRIPTED_INFO, ScriptedModel
-from threads.result import Ok
-from threads.thread.handle import Thread
+from threadsai import Model, RunContext, scripted_model, tool
+from threadsai.agents.store import now_ms, open_store
+from threadsai.agents.tool import Tool
+from threadsai.hooks.extension import Extension, extension
+from threadsai.hooks.types import Hooks
+from threadsai.log import Event, HookDecisionEvent, ModelRef, Retry
+from threadsai.loop.scripted import SCRIPTED_INFO, ScriptedModel
+from threadsai.result import Ok
+from threadsai.thread.handle import Thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 OVERLOADED: JsonValue = {"error": {"reason": "overloaded", "http_status": 529}}

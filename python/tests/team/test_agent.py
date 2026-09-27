@@ -11,7 +11,7 @@ from pydantic import BaseModel, JsonValue
 from team.run_kit import say, sq_of, start
 from team.team_kit import assert_team_replays
 
-from threads import (
+from threadsai import (
     Agent,
     Completed,
     ConfigError,
@@ -26,9 +26,9 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.agents.team_tools import Started, StartRefused
-from threads.log import MemberRef
-from threads.result import Err, Ok
+from threadsai.agents.team_tools import Started, StartRefused
+from threadsai.log import MemberRef
+from threadsai.result import Err, Ok
 
 
 def test_the_overloads_no_team_is_an_agent_team_empty_or_a_list_is_a_team_agent() -> None:

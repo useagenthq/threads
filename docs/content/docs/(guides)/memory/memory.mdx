@@ -10,7 +10,7 @@ Give an agent a `memory` provider and it can save facts in one run and recall th
 <Tab value="TypeScript">
 
 ```ts
-import { agent, localMemory } from "@threads/core";
+import { agent, localMemory } from "threadsai";
 
 const assistant = agent({
   name: "assistant",
@@ -25,7 +25,7 @@ const assistant = agent({
 <Tab value="Python">
 
 ```python
-from threads import agent, local_memory
+from threadsai import agent, local_memory
 
 assistant = agent(
     name="assistant",
@@ -43,16 +43,16 @@ assistant = agent(
 
 | Provider | TypeScript | Python | Stored in |
 |---|---|---|---|
-| Local | `localMemory()` from `@threads/core` | `local_memory()` from `threads` | The run's own SQLite store. Full-text search, no extra service. |
-| Supermemory | [`supermemory()`](/docs/reference/functions/supermemory) from `@threads/supermemory` | `supermemory()` from `threads.supermemory` | Supermemory. Reads `SUPERMEMORY_API_KEY` unless you pass `apiKey` / `api_key`. |
-| Zep | [`zep()`](/docs/reference/functions/zep) from `@threads/zep` | `zep()` from `threads.zep` | Zep Cloud. Reads `ZEP_API_KEY` unless you pass `apiKey` / `api_key`. |
+| Local | `localMemory()` from `threadsai` | `local_memory()` from `threadsai` | The run's own SQLite store. Full-text search, no extra service. |
+| Supermemory | [`supermemory()`](/docs/reference/functions/supermemory) from `@threadsai/supermemory` | `supermemory()` from `threadsai.supermemory` | Supermemory. Reads `SUPERMEMORY_API_KEY` unless you pass `apiKey` / `api_key`. |
+| Zep | [`zep()`](/docs/reference/functions/zep) from `@threadsai/zep` | `zep()` from `threadsai.zep` | Zep Cloud. Reads `ZEP_API_KEY` unless you pass `apiKey` / `api_key`. |
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
 
 ```ts
-import { supermemory } from "@threads/supermemory";
-import { zep } from "@threads/zep";
+import { supermemory } from "@threadsai/supermemory";
+import { zep } from "@threadsai/zep";
 
 memory: supermemory(), // SUPERMEMORY_API_KEY
 memory: zep(), // ZEP_API_KEY
@@ -62,8 +62,8 @@ memory: zep(), // ZEP_API_KEY
 <Tab value="Python">
 
 ```python
-from threads.supermemory import supermemory
-from threads.zep import zep
+from threadsai.supermemory import supermemory
+from threadsai.zep import zep
 
 memory = supermemory()                # SUPERMEMORY_API_KEY
 memory = zep()                        # ZEP_API_KEY

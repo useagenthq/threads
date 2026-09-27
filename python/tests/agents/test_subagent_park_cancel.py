@@ -9,7 +9,7 @@ from collections.abc import Sequence
 import pytest
 from pydantic import BaseModel, JsonValue
 
-from threads import (
+from threadsai import (
     Agent,
     Cancelled,
     Completed,
@@ -24,10 +24,10 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.agents.run import execute
-from threads.agents.store import now_ms, open_store
-from threads.hooks.types import StopGate
-from threads.log import (
+from threadsai.agents.run import execute
+from threadsai.agents.store import now_ms, open_store
+from threadsai.hooks.types import StopGate
+from threadsai.log import (
     AgentFinishedData,
     AgentFinishedEvent,
     AgentSpawnedEvent,
@@ -45,9 +45,9 @@ from threads.log import (
     TurnCompletedEvent,
     UserInputEvent,
 )
-from threads.result import Err, Ok
-from threads.thread.control import LOCAL_OPERATOR
-from threads.thread.handle import open_thread
+from threadsai.result import Err, Ok
+from threadsai.thread.control import LOCAL_OPERATOR
+from threadsai.thread.handle import open_thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 
@@ -300,7 +300,7 @@ def test_a_child_whose_thread_was_never_created_is_recorded_cancelled_not_starte
     async def main() -> None:
         store = sqlite(":memory:")
         lead = team([], [], [SPAWN])
-        monkeypatch.setattr("threads.agents.start.open_launched", crash)
+        monkeypatch.setattr("threadsai.agents.start.open_launched", crash)
         stream = lead.stream("go", store=store, deps=None)
         seen = [i.event async for i in stream if isinstance(i, EventItem)]
         with pytest.raises(_CrashError):

@@ -12,18 +12,18 @@ from local_sandbox import LOCAL_INFO, LocalSandbox
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads import Completed, ConfigError, agent, scripted_model, sqlite
-from threads.agents import catalog
-from threads.agents.bindings import category
-from threads.agents.catalog import GitOptions, LspOptions, WebOptions
-from threads.log import CitationPart, Event, Permissions, ThreadStartedEvent, ToolResultEvent
-from threads.result import Err, Ok
-from threads.sandbox.protocol import Sandbox
-from threads.search import exa
-from threads.secrets import secret
-from threads.web.guard import Target
-from threads.web.http import Fence, Request, Response, WebError
-from threads.web.tools import WebTools
+from threadsai import Completed, ConfigError, agent, scripted_model, sqlite
+from threadsai.agents import catalog
+from threadsai.agents.bindings import category
+from threadsai.agents.catalog import GitOptions, LspOptions, WebOptions
+from threadsai.log import CitationPart, Event, Permissions, ThreadStartedEvent, ToolResultEvent
+from threadsai.result import Err, Ok
+from threadsai.sandbox.protocol import Sandbox
+from threadsai.search import exa
+from threadsai.secrets import secret
+from threadsai.web.guard import Target
+from threadsai.web.http import Fence, Request, Response, WebError
+from threadsai.web.tools import WebTools
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 DONE: JsonValue = {

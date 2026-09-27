@@ -20,11 +20,11 @@ from each_kit import (
 )
 from pydantic import JsonValue
 
-from threads import RunContext, agent, scripted_model, sqlite
-from threads.hooks.extension import Extension
-from threads.hooks.types import ResultGate, ToolGate
-from threads.log import Event, Permissions, Span, ToolCallData, ToolResultData, ToolResultEvent
-from threads.reduce.state import ReducedState
+from threadsai import RunContext, agent, scripted_model, sqlite
+from threadsai.hooks.extension import Extension
+from threadsai.hooks.types import ResultGate, ToolGate
+from threadsai.log import Event, Permissions, Span, ToolCallData, ToolResultData, ToolResultEvent
+from threadsai.reduce.state import ReducedState
 
 
 def rules(

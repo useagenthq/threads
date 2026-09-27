@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue, TypeAdapter
 
-from threads.log.jcs import MAX_SAFE_INTEGER
-from threads.pos_int import is_pos_int
+from threadsai.log.jcs import MAX_SAFE_INTEGER
+from threadsai.pos_int import is_pos_int
 
 VECTORS = Path(__file__).resolve().parents[2] / "spec" / "conformance" / "vectors"
 _LIST: TypeAdapter[list[dict[str, JsonValue]]] = TypeAdapter(list[dict[str, JsonValue]])

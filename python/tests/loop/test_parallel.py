@@ -12,9 +12,9 @@ from kit import USER
 from parallel_kit import DONE, Bodies, Setup, begin, calls, fresh, ok, results
 from pydantic import JsonValue
 
-from threads.agents.context import RunContext
-from threads.hooks.extension import bind, extension
-from threads.log import (
+from threadsai.agents.context import RunContext
+from threadsai.hooks.extension import bind, extension
+from threadsai.log import (
     ApprovalRequestedEvent,
     Event,
     HookDecisionEvent,
@@ -28,15 +28,15 @@ from threads.log import (
     ToolResultEvent,
     ToolSpec,
 )
-from threads.loop.drafts import draft
-from threads.loop.drive import drive
-from threads.loop.runtime import Idle, Parked, Runtime
-from threads.loop.tools import Dispatched, Invocation, Output, Reference
-from threads.permissions import Decision
-from threads.reduce import Fold
-from threads.result import Ok
-from threads.store import Draft
-from threads.store.lines import uuid7
+from threadsai.loop.drafts import draft
+from threadsai.loop.drive import drive
+from threadsai.loop.runtime import Idle, Parked, Runtime
+from threadsai.loop.tools import Dispatched, Invocation, Output, Reference
+from threadsai.permissions import Decision
+from threadsai.reduce import Fold
+from threadsai.result import Ok
+from threadsai.store import Draft
+from threadsai.store.lines import uuid7
 
 VECTOR = Path(__file__).resolve().parents[3] / "spec/conformance/vectors/tool-groups.json"
 RECORDED_ORDER: JsonValue = json.loads(VECTOR.read_text(encoding="utf-8"))["recorded_order"]

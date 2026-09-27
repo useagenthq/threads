@@ -22,9 +22,9 @@ A host member is shared by every conversation in the tenant, **its history inclu
 <Tab value="TypeScript">
 
 ```ts
-import { anthropic } from "@threads/anthropic";
-import { agent, sqlite, tool, usd } from "@threads/core";
-import { type Host, host } from "@threads/host";
+import { anthropic } from "@threadsai/anthropic";
+import { agent, sqlite, tool, usd } from "threadsai";
+import { type Host, host } from "@threadsai/host";
 import { z } from "zod";
 
 const INVOICES: ReadonlyMap<string, string> = new Map([
@@ -75,11 +75,11 @@ const app: Host = host({
 ```python
 from pydantic import BaseModel, Field
 
-from threads import RunContext, agent, sqlite, tool, usd
-from threads.anthropic import anthropic
-from threads.host import host
-from threads.host.members import HostMemberOptions
-from threads.log import Budget
+from threadsai import RunContext, agent, sqlite, tool, usd
+from threadsai.anthropic import anthropic
+from threadsai.host import host
+from threadsai.host.members import HostMemberOptions
+from threadsai.log import Budget
 
 INVOICES: dict[str, str] = {"INV-1001": "paid", "INV-1002": "overdue"}
 
@@ -233,7 +233,7 @@ if (opened.ok) {
 <Tab value="Python">
 
 ```python
-from threads.result import Err, Ok
+from threadsai.result import Err, Ok
 
 match await app.team(principal=principal):
     case Ok(team):

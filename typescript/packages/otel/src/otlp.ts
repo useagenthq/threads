@@ -1,4 +1,4 @@
-import { canonicalize, type Json } from "@threads/core/internal/feed";
+import { canonicalize, type Json } from "threadsai/internal/feed";
 import { SEMCONV } from "./attrs";
 import type { Attrs, AttrValue, Span, SpanEvent } from "./span";
 

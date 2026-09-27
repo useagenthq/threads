@@ -13,25 +13,25 @@ from host.test_http import as_, bearer, run, sse, start, text, use
 from pydantic import TypeAdapter
 from team.team_kit import assert_team_replays
 
-from threads import MessagePolicyRule, agent, scripted_model, sqlite
-from threads.agents.config import ConfigError
-from threads.agents.store import Store, open_store, scoped
-from threads.host import host
-from threads.log import (
+from threadsai import MessagePolicyRule, agent, scripted_model, sqlite
+from threadsai.agents.config import ConfigError
+from threadsai.agents.store import Store, open_store, scoped
+from threadsai.host import host
+from threadsai.log import (
     BranchId,
     Budget,
     MemberStartedEvent,
     ModelRequestEvent,
     ThreadStartedEvent,
 )
-from threads.log.digest import sha256_hex
-from threads.render.request import line0
-from threads.result import Ok
+from threadsai.log.digest import sha256_hex
+from threadsai.render.request import line0
+from threadsai.result import Ok
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
-    from threads.agents.factory import Agent
+    from threadsai.agents.factory import Agent
 
 TEAM_TOOLS = frozenset({"ask", "cancel", "monitor", "reply", "send", "start", "wait"})
 

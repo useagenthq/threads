@@ -6,7 +6,7 @@ import {
   type RawRequest,
   type RawResponse,
   type Secret,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { z } from "zod";
 
 // Slack's inbound side: the signing secret

@@ -10,7 +10,7 @@ from jobs.drill import finish, spawn
 from jobs.stores import drill_open
 from jobs.worker import rows
 
-from threads.log import (
+from threadsai.log import (
     Event,
     ScheduleFiredEvent,
     ScheduleSkippedEvent,
@@ -18,8 +18,8 @@ from threads.log import (
     ThreadStartedEvent,
     UserInputEvent,
 )
-from threads.result import Ok
-from threads.store.sql import int_of, text_of
+from threadsai.result import Ok
+from threadsai.store.sql import int_of, text_of
 
 pytestmark = pytest.mark.jobs
 

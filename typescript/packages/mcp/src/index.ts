@@ -4,14 +4,14 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { Tool as ServerTool } from "@modelcontextprotocol/sdk/types.js";
-import type { McpServer, Secret, Tool } from "@threads/core";
+import type { McpServer, Secret, Tool } from "threadsai";
 import {
   ConfigError,
   type Fetch,
   type McpSession,
   sandboxFetch,
   within,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { type Effect, serverTools } from "./tools";
 import { clientTransport } from "./transport";
 

@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from corpus import CASES, cases, error_json, import_and_read, load, now_of, own
 
-from threads.log import (
+from threadsai.log import (
     CompactedEvent,
     ContextEditedEvent,
     Event,
@@ -28,11 +28,11 @@ from threads.log import (
     SteerEvent,
     UserInputEvent,
 )
-from threads.log.digest import sha256_hex
-from threads.reduce import PROJECTIONS
-from threads.render import render
-from threads.result import Err, Ok
-from threads.store import verify_export
+from threadsai.log.digest import sha256_hex
+from threadsai.reduce import PROJECTIONS
+from threadsai.render import render
+from threadsai.result import Err, Ok
+from threadsai.store import verify_export
 
 CASE_KEYS = frozenset(
     {"name", "family", "kind", "description", "clock", "model_script", "sandbox_script"}

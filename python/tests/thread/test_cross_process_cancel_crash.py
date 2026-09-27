@@ -14,13 +14,13 @@ from kit import Tools, kinds, open_store, start, text
 from team.crash_kit import OPERATOR, CrashError, Point, crashing, reached
 from test_cross_process_cancel import accepted, after_barrier
 
-from threads.agents.store import Store, now_ms, sqlite
-from threads.agents.store import open_store as store_handle
-from threads.log import ThreadId
-from threads.loop.drive import drive
-from threads.loop.runtime import Runtime
-from threads.loop.scripted import ScriptedModel, scripted_model
-from threads.thread.handle import Thread
+from threadsai.agents.store import Store, now_ms, sqlite
+from threadsai.agents.store import open_store as store_handle
+from threadsai.log import ThreadId
+from threadsai.loop.drive import drive
+from threadsai.loop.runtime import Runtime
+from threadsai.loop.scripted import ScriptedModel, scripted_model
+from threadsai.thread.handle import Thread
 
 _BEFORE, _WRITTEN, _COMMITTED = 0, 1, 2
 """A kill point's stages: before the row is written, written, and its transaction committed."""

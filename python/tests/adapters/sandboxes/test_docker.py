@@ -16,12 +16,12 @@ from sandbox_deadline_kit import DEADLINE
 from sandbox_kit import OPEN, KitContext
 from sandbox_ledger_kit import LEDGER, Body, run_ledger
 
-from threads.adapters.loop_resources import holding
-from threads.adapters.sandboxes.docker import create, transport
-from threads.adapters.sandboxes.docker.sandbox import IMAGE
-from threads.agents.config import ConfigError
-from threads.result import Err, Ok
-from threads.sandbox import SandboxError, SandboxSession
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.sandboxes.docker import create, transport
+from threadsai.adapters.sandboxes.docker.sandbox import IMAGE
+from threadsai.agents.config import ConfigError
+from threadsai.result import Err, Ok
+from threadsai.sandbox import SandboxError, SandboxSession
 
 pytestmark = pytest.mark.usefixtures("stub_supervisor")
 """Every test here injects a stub supervisor: the shipped binaries are build output, and a

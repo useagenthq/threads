@@ -13,12 +13,12 @@ from local_sandbox import LocalSandbox, LocalSession
 from pydantic import JsonValue
 from sandbox_kit import KitContext
 
-from threads import Agent, Completed, EventItem, Thread, agent, scripted_model, sqlite
-from threads._generated.tools_v1 import GitPushInput
-from threads.git.forge import GitHub
-from threads.git.gateway import Forge, GitGateway
-from threads.git.host import credential_env
-from threads.log import (
+from threadsai import Agent, Completed, EventItem, Thread, agent, scripted_model, sqlite
+from threadsai._generated.tools_v1 import GitPushInput
+from threadsai.git.forge import GitHub
+from threadsai.git.gateway import Forge, GitGateway
+from threadsai.git.host import credential_env
+from threadsai.log import (
     CallId,
     EffectBeginEvent,
     EffectResolvedEvent,
@@ -28,15 +28,15 @@ from threads.log import (
     Spill,
     ToolResultEvent,
 )
-from threads.loop.model import Found, NotFound, NotFoundNonfinal
-from threads.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertain
-from threads.result import Err, Ok
-from threads.secrets import secret
-from threads.store import SqliteStore
-from threads.tools import SandboxTools, specs
-from threads.tools.specs import GIT
-from threads.web.guard import Target
-from threads.web.http import Fence, Request, Response, WebError
+from threadsai.loop.model import Found, NotFound, NotFoundNonfinal
+from threadsai.loop.tools import Dispatched, Invocation, NotSent, Output, Uncertain
+from threadsai.result import Err, Ok
+from threadsai.secrets import secret
+from threadsai.store import SqliteStore
+from threadsai.tools import SandboxTools, specs
+from threadsai.tools.specs import GIT
+from threadsai.web.guard import Target
+from threadsai.web.http import Fence, Request, Response, WebError
 
 CANARY = "ghs_canary_token_do_not_leak"
 LIMITS = Spill(threshold_bytes=4096, head_bytes=2048, tail_bytes=2048, request_budget_bytes=8192)

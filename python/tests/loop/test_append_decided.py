@@ -8,12 +8,12 @@ from dataclasses import replace
 from corpus import Clock
 from kit import T0, USER, Tools, open_store, start, text
 
-from threads.loop.drafts import draft
-from threads.loop.runtime import Appended, Barred, Runtime
-from threads.loop.scripted import scripted_model
-from threads.result import Ok
-from threads.store import Draft, StoredEvent
-from threads.store.writer import Decide, Refusal
+from threadsai.loop.drafts import draft
+from threadsai.loop.runtime import Appended, Barred, Runtime
+from threadsai.loop.scripted import scripted_model
+from threadsai.result import Ok
+from threadsai.store import Draft, StoredEvent
+from threadsai.store.writer import Decide, Refusal
 
 CANCEL = replace(draft("cancel_requested", {"scope": "turn"}), actor=USER)
 

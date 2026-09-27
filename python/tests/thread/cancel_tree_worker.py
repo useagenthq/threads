@@ -7,8 +7,8 @@ import sys
 
 from pydantic import BaseModel, JsonValue
 
-from threads import agent, scripted_model, sqlite, tool
-from threads.agents.run import RunContext
+from threadsai import agent, scripted_model, sqlite, tool
+from threadsai.agents.run import RunContext
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

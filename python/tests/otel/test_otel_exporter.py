@@ -10,12 +10,12 @@ import pytest
 from otel_collector_kit import collector
 from otel_store_kit import cursors, looping
 
-from threads import Completed, ConfigError, agent, scripted_model, sqlite
-from threads.agents.store import open_store
-from threads.otel import otel
-from threads.redaction import register
-from threads.result import Err, Ok
-from threads.telemetry import Exporter, SyncReport
+from threadsai import Completed, ConfigError, agent, scripted_model, sqlite
+from threadsai.agents.store import open_store
+from threadsai.otel import otel
+from threadsai.redaction import register
+from threadsai.result import Err, Ok
+from threadsai.telemetry import Exporter, SyncReport
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

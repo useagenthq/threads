@@ -10,7 +10,7 @@ from typing import Literal, override
 import pytest
 from pydantic import JsonValue
 
-from threads import (
+from threadsai import (
     Agent,
     Completed,
     ConfigError,
@@ -21,11 +21,11 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads.agents.results import StreamEvent
-from threads.agents.run import execute
-from threads.agents.store import now_ms, open_store
-from threads.hooks.types import SwitchGate
-from threads.log import (
+from threadsai.agents.results import StreamEvent
+from threadsai.agents.run import execute
+from threadsai.agents.store import now_ms, open_store
+from threadsai.hooks.types import SwitchGate
+from threadsai.log import (
     Budget,
     Event,
     HookDecisionEvent,
@@ -36,11 +36,11 @@ from threads.log import (
     SettingsChangedEvent,
     UserInputEvent,
 )
-from threads.loop.defaults import CONTEXT, effective_window
-from threads.loop.drafts import draft
-from threads.loop.model import ModelChunk, ModelContext, ModelInfo, ModelRequest
-from threads.loop.scripted import SCRIPTED_INFO, ScriptedModel
-from threads.result import Ok
+from threadsai.loop.defaults import CONTEXT, effective_window
+from threadsai.loop.drafts import draft
+from threadsai.loop.model import ModelChunk, ModelContext, ModelInfo, ModelRequest
+from threadsai.loop.scripted import SCRIPTED_INFO, ScriptedModel
+from threadsai.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 OVERLOADED: JsonValue = {"error": {"reason": "overloaded", "http_status": 529}}

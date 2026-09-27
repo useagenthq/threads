@@ -23,7 +23,7 @@ from client_kit import (
     stream_response,
 )
 
-from threads.a2a.protocol import (
+from threadsai.a2a.protocol import (
     Answered,
     Faulted,
     NotSent,
@@ -33,7 +33,7 @@ from threads.a2a.protocol import (
     call,
     fetch_bytes,
 )
-from threads.web.http import Response
+from threadsai.web.http import Response
 
 
 class TestAnswered:

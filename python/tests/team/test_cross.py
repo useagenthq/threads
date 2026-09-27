@@ -8,8 +8,8 @@ import pytest
 from pydantic import JsonValue
 from team.team_kit import CASES, case_logs, rechain, team_cases, verified
 
-from threads.result import Ok
-from threads.team.cross import TeamLogEvents, check_team_logs
+from threadsai.result import Ok
+from threadsai.team.cross import TeamLogEvents, check_team_logs
 
 
 def _check(logs: dict[str, bytes]) -> tuple[str, int] | None:

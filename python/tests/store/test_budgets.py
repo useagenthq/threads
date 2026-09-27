@@ -7,9 +7,9 @@ import asyncio
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from threads.result import Ok
-from threads.store import SqliteStore
-from threads.store.budgets import Cover, Refused
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
+from threadsai.store.budgets import Cover, Refused
 
 
 async def _store() -> SqliteStore:

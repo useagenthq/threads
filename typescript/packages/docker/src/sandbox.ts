@@ -3,7 +3,7 @@ import {
   type Fetch,
   type ProviderSandbox,
   remoteSandbox,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { dockerDriver } from "./driver";
 import { engine } from "./engine";
 import type { Supervisor } from "./pins";

@@ -1,10 +1,10 @@
-import type { Json, ModelContext } from "@threads/core/adapter";
+import type { Json, ModelContext } from "threadsai/adapter";
 import {
   assertNever,
   JsonObject,
   OutputPart,
   putJson,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { z } from "zod";
 
 // One finished Responses API output item → the ordered parts it records. Items are

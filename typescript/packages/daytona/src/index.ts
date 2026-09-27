@@ -5,7 +5,7 @@ import {
   type ProviderSandbox,
   remoteSandbox,
   type Secret,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { type Clients, clients } from "./clients";
 import { daytonaDriver } from "./driver";
 import type { OpenSocket } from "./logs";

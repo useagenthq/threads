@@ -7,13 +7,9 @@ import {
   type ListTasksResponse,
   MAX_PAGE_SIZE,
   type Task,
-} from "@threads/a2a/protocol";
-import { openThread } from "@threads/core";
-import {
-  type Principal,
-  principalKey,
-  storeConnection,
-} from "@threads/core/host";
+} from "@threadsai/a2a/protocol";
+import { openThread } from "threadsai";
+import { type Principal, principalKey, storeConnection } from "threadsai/host";
 import type { HostContext } from "../context";
 import { resumeThread } from "../decisions";
 import { a2aTask, a2aTasks, type TaskReceipt } from "../receipts";

@@ -1,4 +1,4 @@
-import type { ArtifactRef, KnownEvent } from "@threads/core/adapter";
+import type { ArtifactRef, KnownEvent } from "threadsai/adapter";
 import type { Wire } from "../protocol";
 
 // What an outbound call reads back out of its own thread's log. Process memory is not allowed to

@@ -9,7 +9,7 @@ from collections.abc import Sequence
 import pytest
 from pydantic import BaseModel, JsonValue
 
-from threads import (
+from threadsai import (
     Agent,
     BudgetExhausted,
     Completed,
@@ -24,9 +24,9 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.agents.run import execute
-from threads.hooks.types import StopGate, SwitchGate
-from threads.log import (
+from threadsai.agents.run import execute
+from threadsai.hooks.types import StopGate, SwitchGate
+from threadsai.log import (
     AgentFinishedData,
     AgentFinishedEvent,
     AgentSpawnedEvent,
@@ -41,10 +41,10 @@ from threads.log import (
     ToolResultEvent,
     UserInputEvent,
 )
-from threads.loop.scripted import ScriptExhaustedError
-from threads.result import Ok
-from threads.thread.control import LOCAL_OPERATOR
-from threads.thread.handle import open_thread
+from threadsai.loop.scripted import ScriptExhaustedError
+from threadsai.result import Ok
+from threadsai.thread.control import LOCAL_OPERATOR
+from threadsai.thread.handle import open_thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

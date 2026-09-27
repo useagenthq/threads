@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { storeConnection } from "@threads/core/host";
+import { storeConnection } from "threadsai/host";
 import { z } from "zod";
 import {
   alice,
@@ -46,7 +46,7 @@ const Receipt = z.strictObject({
 describe("authentication", () => {
   test("without authenticate every /v1 route is 401", async () => {
     const { host } = await import("../src");
-    const { sqlite } = await import("@threads/core");
+    const { sqlite } = await import("threadsai");
     const bare = host({ store: sqlite(":memory:"), agents: {} });
     const response = await bare.fetch(
       new Request("http://x/v1/runs", { method: "POST" }),

@@ -1,4 +1,4 @@
-import type { Fetch, Sinks } from "@threads/core/adapter";
+import type { Fetch, Sinks } from "threadsai/adapter";
 import { z } from "zod";
 import { sha256Hex } from "../../core/src/hash";
 import type { Machine } from "../../core/test/sandbox/remote/machine";

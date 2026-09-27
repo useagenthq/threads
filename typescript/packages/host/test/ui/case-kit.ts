@@ -1,4 +1,4 @@
-import { sqlite } from "@threads/core";
+import { sqlite } from "threadsai";
 import {
   canonicalize,
   EventId,
@@ -9,7 +9,7 @@ import {
   ThreadId,
   tenantStore,
   threadHandle,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import type { Case } from "../../../core/test/conformance/cases";
 import { outcomeFromLog, type RunOutcome } from "../../src/outcome";

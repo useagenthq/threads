@@ -10,17 +10,17 @@ from compact_kit import kinds
 from kit import USER
 from pydantic import JsonValue
 
-from threads.log import Context, Event, TextPart, TurnCompletedEvent, Usage
-from threads.loop.defaults import CONTEXT
-from threads.loop.drafts import draft
-from threads.loop.model import ModelChunk, ModelContext, ModelRequest, ModelResponse
-from threads.loop.scripted import Entry, ScriptedModel
-from threads.result import Ok
-from threads.thread.control import LOCAL_OPERATOR
+from threadsai.log import Context, Event, TextPart, TurnCompletedEvent, Usage
+from threadsai.loop.defaults import CONTEXT
+from threadsai.loop.drafts import draft
+from threadsai.loop.model import ModelChunk, ModelContext, ModelRequest, ModelResponse
+from threadsai.loop.scripted import Entry, ScriptedModel
+from threadsai.result import Ok
+from threadsai.thread.control import LOCAL_OPERATOR
 
 if TYPE_CHECKING:
-    from threads.loop.runtime import Runtime
-    from threads.thread.handle import Thread
+    from threadsai.loop.runtime import Runtime
+    from threadsai.thread.handle import Thread
 
 
 def said(text: str = "Hi.", reported: int = 10) -> ModelResponse:

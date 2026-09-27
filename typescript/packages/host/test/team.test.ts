@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { agent, scriptedModel, sqlite } from "@threads/core";
-import { hostRunner, openStore, storeConnection } from "@threads/core/host";
+import { agent, scriptedModel, sqlite } from "threadsai";
+import { hostRunner, openStore, storeConnection } from "threadsai/host";
 import { z } from "zod";
 import { reserveDue } from "../src/schedules/identity";
 import {

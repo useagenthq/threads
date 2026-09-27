@@ -8,13 +8,13 @@ import asyncio
 
 from team.vectors import TEAM, seeded, vector_mint, vectors, world_logs
 
-from threads.log import BranchId, MailEnvelope, MemberStartedEvent, ThreadId
-from threads.result import Err, Ok
-from threads.store import SqliteStore
-from threads.store.deletion import delete_thread
-from threads.store.sql import int_of
-from threads.team.materialize import materialize
-from threads.team.materialize_types import MaterializeOptions, Rebind
+from threadsai.log import BranchId, MailEnvelope, MemberStartedEvent, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore
+from threadsai.store.deletion import delete_thread
+from threadsai.store.sql import int_of
+from threadsai.team.materialize import materialize
+from threadsai.team.materialize_types import MaterializeOptions, Rebind
 
 VECTOR = next(v for v in vectors() if v["name"] == "materialize-opens-branch")
 MEMBER_BRANCH = BranchId("0192b000-0000-7000-8000-0000000000b2")

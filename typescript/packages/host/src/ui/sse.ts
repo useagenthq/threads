@@ -1,4 +1,4 @@
-import { canonicalize } from "@threads/core/host";
+import { canonicalize } from "threadsai/host";
 import type { Protocol } from "./frame";
 import type { Out } from "./stream";
 

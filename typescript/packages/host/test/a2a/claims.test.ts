@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
-import { PROVENANCE } from "@threads/a2a/protocol";
-import { principalKey, storeConnection } from "@threads/core/host";
+import { PROVENANCE } from "@threadsai/a2a/protocol";
+import { principalKey, storeConnection } from "threadsai/host";
 import { z } from "zod";
 import { alice, knownEventsOf } from "../kit";
 import { sqlAll } from "../sql";

@@ -17,16 +17,16 @@ from mcp.types import ErrorData
 from mcp_kit import SEEN_HEADERS, TracedAsgi, server
 from pydantic import JsonValue
 
-from threads import Completed, ConfigError, Parked, agent, scripted_model, secret, sqlite
-from threads.adapters.mcp import tool as mcp_tool
-from threads.adapters.mcp.tool import McpTool
-from threads.adapters.mcp.transport import FENCE_REFUSED, FencedTransport, FenceRefusedError
-from threads.agents.results import Thread
-from threads.log import Event, Permissions, ThreadStartedEvent, ToolResultEvent
-from threads.loop.tools import Output, Uncertain
-from threads.mcp import McpServer, mcp
-from threads.render.framing import reference
-from threads.result import Ok
+from threadsai import Completed, ConfigError, Parked, agent, scripted_model, secret, sqlite
+from threadsai.adapters.mcp import tool as mcp_tool
+from threadsai.adapters.mcp.tool import McpTool
+from threadsai.adapters.mcp.transport import FENCE_REFUSED, FencedTransport, FenceRefusedError
+from threadsai.agents.results import Thread
+from threadsai.log import Event, Permissions, ThreadStartedEvent, ToolResultEvent
+from threadsai.loop.tools import Output, Uncertain
+from threadsai.mcp import McpServer, mcp
+from threadsai.render.framing import reference
+from threadsai.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 KIT = str(Path(__file__).resolve().parents[1] / "mcp_kit.py")

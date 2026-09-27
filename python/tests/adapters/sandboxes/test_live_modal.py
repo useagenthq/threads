@@ -13,9 +13,9 @@ import pytest
 from loop_kit import held
 from sandbox_kit import OPEN
 
-from threads.adapters.sandboxes.posix import collect
-from threads.modal import modal
-from threads.result import Ok
+from threadsai.adapters.sandboxes.posix import collect
+from threadsai.modal import modal
+from threadsai.result import Ok
 
 pytestmark = pytest.mark.live
 

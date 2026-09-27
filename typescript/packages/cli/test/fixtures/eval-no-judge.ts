@@ -1,4 +1,4 @@
-import type { Agent } from "@threads/core";
+import type { Agent } from "threadsai";
 import { support } from "./eval-agents";
 
 // An `--agent` module with agents but no judge: --live needs one.

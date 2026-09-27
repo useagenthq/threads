@@ -5,7 +5,7 @@ import {
   type Model,
   scriptedModel,
   tool,
-} from "@threads/core";
+} from "threadsai";
 import { z } from "zod";
 
 // The `--agent` module of the `threads eval` tests: a support agent, a scripted judge and a

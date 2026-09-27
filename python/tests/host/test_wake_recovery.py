@@ -22,14 +22,14 @@ from host.test_api_recovery import (
 )
 from pydantic import JsonValue
 
-from threads import Store, agent, sqlite
-from threads._generated.host_api_v1 import RunAccepted
-from threads.agents.store import open_store
-from threads.host import Host, host, reopen
-from threads.host.app import recovered
-from threads.log import ToolResultLateEvent, TurnCompletedEvent, WokenEvent
-from threads.reduce.wakes import pending_wakes
-from threads.store import wakes
+from threadsai import Store, agent, sqlite
+from threadsai._generated.host_api_v1 import RunAccepted
+from threadsai.agents.store import open_store
+from threadsai.host import Host, host, reopen
+from threadsai.host.app import recovered
+from threadsai.log import ToolResultLateEvent, TurnCompletedEvent, WokenEvent
+from threadsai.reduce.wakes import pending_wakes
+from threadsai.store import wakes
 
 SCAN: JsonValue = {
     "content": [

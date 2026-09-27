@@ -7,8 +7,8 @@ import {
   type Model,
   runEvals,
   sqlite,
-} from "@threads/core";
-import { Budget, canonicalize, caseLine, caseNames } from "@threads/core/host";
+} from "threadsai";
+import { Budget, canonicalize, caseLine, caseNames } from "threadsai/host";
 import { z } from "zod";
 
 // `threads eval` (spec/api.json cli): runEvals() over saved cases. Without --agent it loads no

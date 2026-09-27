@@ -1,5 +1,5 @@
-import type { Exporter, SkippedBranch, Store } from "@threads/core";
-import { bindTelemetry } from "@threads/core/host";
+import type { Exporter, SkippedBranch, Store } from "threadsai";
+import { bindTelemetry } from "threadsai/host";
 
 // host({telemetry}): the exporter syncs on its own timer, beside the tick and never inside it, so
 // a slow or dead collector holds up no run, schedule or reply. A failing collector is retried

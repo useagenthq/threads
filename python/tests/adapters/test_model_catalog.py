@@ -13,17 +13,17 @@ import pytest
 from fakes import FakeContext, Script, collect, line, sse
 from pydantic import JsonValue
 
-from threads._generated.model_catalogs import MODEL_CATALOGS
-from threads.adapters.models import catalog as catalog_module
-from threads.adapters.models.anthropic.model import AnthropicModel
-from threads.adapters.models.catalog import ModelCatalog, catalog_for, parse_catalog
-from threads.adapters.models.openai.model import OpenAIModel
-from threads.adapters.models.options import Limits, resolve_limits
-from threads.agents.config import ConfigError
-from threads.anthropic import anthropic
-from threads.litellm import litellm
-from threads.openai import openai
-from threads.result import Ok
+from threadsai._generated.model_catalogs import MODEL_CATALOGS
+from threadsai.adapters.models import catalog as catalog_module
+from threadsai.adapters.models.anthropic.model import AnthropicModel
+from threadsai.adapters.models.catalog import ModelCatalog, catalog_for, parse_catalog
+from threadsai.adapters.models.openai.model import OpenAIModel
+from threadsai.adapters.models.options import Limits, resolve_limits
+from threadsai.agents.config import ConfigError
+from threadsai.anthropic import anthropic
+from threadsai.litellm import litellm
+from threadsai.openai import openai
+from threadsai.result import Ok
 
 VECTORS = (
     pathlib.Path(__file__).resolve().parents[3] / "spec/conformance/vectors/model-catalog.json"

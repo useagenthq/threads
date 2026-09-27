@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { agent, ConfigError, scriptedModel, sqlite, tool } from "@threads/core";
-import { hostTeamIds, storeConnection } from "@threads/core/host";
+import { agent, ConfigError, scriptedModel, sqlite, tool } from "threadsai";
+import { hostTeamIds, storeConnection } from "threadsai/host";
 import { z } from "zod";
 import type { HostOptions } from "../src/host";
 import { host } from "../src/host";

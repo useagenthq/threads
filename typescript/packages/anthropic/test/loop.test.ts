@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { recordingFetch, sse } from "@threads/adapter-testkit";
-import { agent, sqlite } from "@threads/core";
-import { type Json, markTestKit } from "@threads/core/adapter";
+import { recordingFetch, sse } from "@threadsai/adapter-testkit";
+import { agent, sqlite } from "threadsai";
+import { type Json, markTestKit } from "threadsai/adapter";
 import { z } from "zod";
 import { anthropic } from "../src";
 

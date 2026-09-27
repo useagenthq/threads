@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING
 from host.test_http import ALICE, BOB, as_, run, sender, served
 from host.ui_kit import AG_UI, AI_SDK, chat, frames, post, types, user
 
-from threads import sqlite
-from threads.host.ui.key import ui_thread_id
+from threadsai import sqlite
+from threadsai.host.ui.key import ui_thread_id
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

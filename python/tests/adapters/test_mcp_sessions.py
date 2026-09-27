@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, JsonValue
 
-from threads import Completed, ConfigError, RunContext, agent, scripted_model, sqlite, tool
-from threads.log import Permissions, ToolResultEvent
-from threads.mcp import McpServer, mcp
-from threads.result import Err, Ok
+from threadsai import Completed, ConfigError, RunContext, agent, scripted_model, sqlite, tool
+from threadsai.log import Permissions, ToolResultEvent
+from threadsai.mcp import McpServer, mcp
+from threadsai.result import Err, Ok
 
 KIT = str(Path(__file__).resolve().parents[1] / "mcp_kit.py")
 RUNS = 2

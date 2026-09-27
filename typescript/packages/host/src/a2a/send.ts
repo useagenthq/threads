@@ -6,14 +6,14 @@ import {
   type SendMessageRequest,
   type Task,
   textOf,
-} from "@threads/a2a/protocol";
+} from "@threadsai/a2a/protocol";
 import {
   type EventDraft,
   type Principal,
   principalKey,
   storeConnection,
   uuidv7,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { HostContext } from "../context";
 import { A2A_SEND, findReceipt } from "../receipts";
 import { start } from "../runs";

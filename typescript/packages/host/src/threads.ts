@@ -1,4 +1,4 @@
-import { openThread, type Thread } from "@threads/core";
+import { openThread, type Thread } from "threadsai";
 import {
   BranchId,
   CallId,
@@ -6,7 +6,7 @@ import {
   type Principal,
   ThreadId,
   Uuid,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { z } from "zod";
 import type { HostContext } from "./context";
 import { answerQuestion, decideChallenge, resumeThread } from "./decisions";

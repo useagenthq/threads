@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING
 from team.delete_kit import PENDING, PLAIN, SETTLE, count, delete, plain_child, team, team_rows
 from team.team_kit import LEAD, MEMBER, add, branch_of, case_logs, holding
 
-from threads.agents.store import open_store
-from threads.result import Err, Ok
-from threads.store.conn import Conn
-from threads.store.deletion import TEAM_TABLES
+from threadsai.agents.store import open_store
+from threadsai.result import Err, Ok
+from threadsai.store.conn import Conn
+from threadsai.store.deletion import TEAM_TABLES
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

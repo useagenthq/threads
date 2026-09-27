@@ -1,4 +1,4 @@
-// @threads/core/host: what @threads/host builds on. Core never imports the host.
+// threadsai/host: what @threadsai/host builds on. Core never imports the host.
 
 export { dryPin } from "./agent/dry-pin";
 export { InvalidCursorError } from "./agent/errors";

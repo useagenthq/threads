@@ -1,4 +1,4 @@
-import type { Sent, WebTransport } from "@threads/core/adapter";
+import type { Sent, WebTransport } from "threadsai/adapter";
 import { type A2aErrorName, errorInfo } from "../src/protocol/errors";
 import type { Wire } from "../src/protocol/wire";
 

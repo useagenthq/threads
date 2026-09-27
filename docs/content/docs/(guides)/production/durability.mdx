@@ -105,8 +105,8 @@ const sendEmail = tool({
 <Tab value="Python">
 
 ```python
-from threads import Reconcile, RunContext, tool
-from threads.loop.model import Found, LookupResult, NotFound
+from threadsai import Reconcile, RunContext, tool
+from threadsai.loop.model import Found, LookupResult, NotFound
 
 
 async def do_charge(args: Amount, ctx: RunContext[None]) -> str:
@@ -178,7 +178,7 @@ if (!resolved.ok) console.log(resolved.error.code, resolved.error.message);
 <Tab value="Python">
 
 ```python
-from threads import Principal
+from threadsai import Principal
 
 operator = Principal(issuer="api", tenant="local", subject="operator")
 opened = await open_thread(store, result.thread.id)

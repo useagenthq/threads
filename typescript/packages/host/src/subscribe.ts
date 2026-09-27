@@ -13,7 +13,7 @@ import {
   runEnd,
   type ThreadId,
   threadHandle,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { HostContext } from "./context";
 import { outcomeFromLog, type RunOutcome, toOutcome } from "./outcome";
 

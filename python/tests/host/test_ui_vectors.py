@@ -10,10 +10,10 @@ import pytest
 from host.test_http import as_, run, sender, served
 from pydantic import JsonValue, TypeAdapter
 
-from threads import sqlite
-from threads.host.ui.ag_ui_fold import AgUiFold
-from threads.host.ui.key import CHAT_KEY, ui_thread_id
-from threads.log import Principal
+from threadsai import sqlite
+from threadsai.host.ui.ag_ui_fold import AgUiFold
+from threadsai.host.ui.key import CHAT_KEY, ui_thread_id
+from threadsai.log import Principal
 
 VECTORS = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "vectors"
 _LIST: TypeAdapter[list[dict[str, JsonValue]]] = TypeAdapter(list[dict[str, JsonValue]])

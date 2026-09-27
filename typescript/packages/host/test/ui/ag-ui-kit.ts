@@ -4,7 +4,7 @@ import type {
   Message,
   RunAgentParameters,
 } from "@ag-ui/client";
-import type { Principal } from "@threads/core/host";
+import type { Principal } from "threadsai/host";
 import { z } from "zod";
 import { uiThreadId } from "../../src/ui/key";
 import type { Fetcher } from "./clients";

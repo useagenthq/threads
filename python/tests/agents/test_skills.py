@@ -8,10 +8,10 @@ import pytest
 from corpus import CASES
 from pydantic import JsonValue
 
-from threads import Completed, ConfigError, Skill, agent, scripted_model, sqlite
-from threads.log import Event, InjectedEvent, ThreadStartedEvent, ToolResultEvent
-from threads.reduce.handlers import to_json
-from threads.result import Ok
+from threadsai import Completed, ConfigError, Skill, agent, scripted_model, sqlite
+from threadsai.log import Event, InjectedEvent, ThreadStartedEvent, ToolResultEvent
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Ok
 
 NONE: dict[str, JsonValue] = {"responses": []}
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}

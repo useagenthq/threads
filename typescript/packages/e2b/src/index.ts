@@ -1,4 +1,4 @@
-import type { ProviderSandbox } from "@threads/core/adapter";
+import type { ProviderSandbox } from "threadsai/adapter";
 import { type E2bOptions, e2bSandbox } from "./sandbox";
 
 export type { E2bOptions };

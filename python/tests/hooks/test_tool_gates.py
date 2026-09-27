@@ -8,11 +8,11 @@ import json
 import pytest
 from hook_kit import ALLOW, Accent, Box, Echo, decisions, kinds, run, text, use
 
-from threads import Completed, RunContext, agent, scripted_model, sqlite, tool
-from threads.hooks.extension import extension
-from threads.hooks.types import Hooks, ResultGate, ToolGate
-from threads.log import HookDecisionEvent, Span, ToolCallData, ToolResultData
-from threads.result import Ok
+from threadsai import Completed, RunContext, agent, scripted_model, sqlite, tool
+from threadsai.hooks.extension import extension
+from threadsai.hooks.types import Hooks, ResultGate, ToolGate
+from threadsai.log import HookDecisionEvent, Span, ToolCallData, ToolResultData
+from threadsai.result import Ok
 
 
 def test_before_tool_deny_is_folded_into_the_permission_decision_and_nothing_runs() -> None:

@@ -15,11 +15,11 @@ from pathlib import Path
 from control_item_kit import rows
 from team.crash_kit import OPERATOR
 
-from threads._generated.host_api_v1 import CancelAccepted
-from threads.agents.store import Store, open_store, sqlite
-from threads.log import AgentFinishedEvent, AgentSpawnedEvent, Event, ThreadId
-from threads.result import Ok
-from threads.thread.handle import Thread, open_thread
+from threadsai._generated.host_api_v1 import CancelAccepted
+from threadsai.agents.store import Store, open_store, sqlite
+from threadsai.log import AgentFinishedEvent, AgentSpawnedEvent, Event, ThreadId
+from threadsai.result import Ok
+from threadsai.thread.handle import Thread, open_thread
 
 WORKER = Path(__file__).with_name("cancel_tree_worker.py")
 TREE = 2

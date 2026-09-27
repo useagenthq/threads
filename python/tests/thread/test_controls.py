@@ -6,7 +6,7 @@ import asyncio
 
 from pydantic import BaseModel, JsonValue
 
-from threads import (
+from threadsai import (
     Agent,
     Cancelled,
     Completed,
@@ -17,10 +17,10 @@ from threads import (
     scripted_model,
     tool,
 )
-from threads._generated.host_api_v1 import CancelAccepted, SettingsChange
-from threads.agents.run import execute
-from threads.agents.store import LIVE, now_ms, open_store, scoped, sqlite
-from threads.log import (
+from threadsai._generated.host_api_v1 import CancelAccepted, SettingsChange
+from threadsai.agents.run import execute
+from threadsai.agents.store import LIVE, now_ms, open_store, scoped, sqlite
+from threadsai.log import (
     ApprovalGrantedEvent,
     CallId,
     CancelRequestedEvent,
@@ -32,10 +32,10 @@ from threads.log import (
     ResumedEvent,
     SettingsChangedEvent,
 )
-from threads.result import Err, Ok
-from threads.thread.approvals import suggested_rules
-from threads.thread.control import LOCAL_OPERATOR
-from threads.thread.handle import open_thread
+from threadsai.result import Err, Ok
+from threadsai.thread.approvals import suggested_rules
+from threadsai.thread.control import LOCAL_OPERATOR
+from threadsai.thread.handle import open_thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 OTHER_TENANT = Principal(issuer="api", tenant="acme", subject="operator")

@@ -3,7 +3,7 @@ import type { Narrow } from "./narrow";
 
 // Cross-field rules (if/then/else, not, oneOf over required, ...) have no Zod form. A rule is
 // written once, as JSON Schema data: the export copies it into the schema verbatim and `holds`
-// enforces it at parse time, as python/src/threads/_strict_model.py does for the same data.
+// enforces it at parse time, as python/src/threadsai/_strict_model.py does for the same data.
 
 type Scalar = string | number | boolean | null;
 

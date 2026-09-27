@@ -11,18 +11,18 @@ import httpx
 import pytest
 from pydantic import JsonValue
 
-from threads import ConfigError
-from threads.log import EventId, ThreadId
-from threads.mem0 import mem0
-from threads.memory.conformance import A, memory_suite
-from threads.memory.guard import Binder, scoped_memory
-from threads.memory.protocol import MemoryProvider
-from threads.memory.types import MemoryHit, Outcome, Provenance, RecordRef
-from threads.result import Err, Ok
-from threads.secrets import secret
-from threads.store import SqliteStore
-from threads.supermemory import supermemory
-from threads.zep import zep
+from threadsai import ConfigError
+from threadsai.log import EventId, ThreadId
+from threadsai.mem0 import mem0
+from threadsai.memory.conformance import A, memory_suite
+from threadsai.memory.guard import Binder, scoped_memory
+from threadsai.memory.protocol import MemoryProvider
+from threadsai.memory.types import MemoryHit, Outcome, Provenance, RecordRef
+from threadsai.result import Err, Ok
+from threadsai.secrets import secret
+from threadsai.store import SqliteStore
+from threadsai.supermemory import supermemory
+from threadsai.zep import zep
 
 PROVENANCE = Provenance(
     thread_id=ThreadId("0192e000-0000-7000-8000-000000000001"),

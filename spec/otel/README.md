@@ -1,4 +1,4 @@
-# OpenTelemetry export (`@threads/otel`, `threads.otel`)
+# OpenTelemetry export (`@threadsai/otel`, `threadsai.otel`)
 
 Traces are derived from the log. Nothing is recorded for them: an exporter reads committed
 events, computes spans with a pure function, and sends each span once, when it closes, to an

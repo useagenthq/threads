@@ -3,8 +3,8 @@ spans are checked against that part's text (TypeScript's loop/gates.ts textPart)
 
 from pydantic import JsonValue
 
-from threads.log import Span, ToolResultData
-from threads.reduce.redaction import first_text_part, span_error, text_part
+from threadsai.log import Span, ToolResultData
+from threadsai.reduce.redaction import first_text_part, span_error, text_part
 
 IMAGE: JsonValue = {
     "type": "image_ref",

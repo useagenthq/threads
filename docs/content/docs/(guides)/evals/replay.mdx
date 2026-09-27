@@ -14,7 +14,7 @@ Use it as the first step of your evals: before you stub-run saved cases or pay f
 <Tab value="TypeScript">
 
 ```ts
-import { openThread, sqlite } from "@threads/core";
+import { openThread, sqlite } from "threadsai";
 
 const store = sqlite("./threads-data");
 const opened = await openThread(store, threadId);
@@ -30,8 +30,8 @@ if (!replayed.ok) {
 <Tab value="Python">
 
 ```python
-from threads import open_thread, sqlite
-from threads.result import Err
+from threadsai import open_thread, sqlite
+from threadsai.result import Err
 
 store = sqlite("./threads-data")
 opened = await open_thread(store, thread_id)
@@ -57,7 +57,7 @@ Keep a corpus of real threads (export them with `threads export`, or point at a 
 
 ```ts
 import { expect, test } from "bun:test";
-import { openThread, sqlite } from "@threads/core";
+import { openThread, sqlite } from "threadsai";
 import { corpus } from "./corpus"; // your list of thread ids
 
 const store = sqlite("./fixtures/threads");
@@ -78,8 +78,8 @@ for (const id of corpus) {
 ```python
 import pytest
 
-from threads import open_thread, sqlite
-from threads.result import Ok
+from threadsai import open_thread, sqlite
+from threadsai.result import Ok
 
 from corpus import CORPUS  # your list of thread ids
 

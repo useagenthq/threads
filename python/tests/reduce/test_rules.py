@@ -6,9 +6,9 @@ from collections.abc import Sequence
 import pytest
 from pydantic import JsonValue
 
-from threads.log import BranchId, ThreadId
-from threads.result import Err, Ok
-from threads.store import Draft, SqliteStore
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.store import Draft, SqliteStore
 
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
 ROOT = BranchId("0192b000-0000-7000-8000-000000000001")

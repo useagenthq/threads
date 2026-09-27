@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { canonicalize } from "@threads/core/host";
+import { canonicalize } from "threadsai/host";
 import { z } from "zod";
 import {
   AgentCapabilities,

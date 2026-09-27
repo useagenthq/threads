@@ -43,7 +43,7 @@ for entry in timeline.value.entries:
 
 `first` is the result of an earlier `agent.run`; its `thread` is the thread's handle in both languages.
 
-Both return a value instead of throwing: check `ok` in TypeScript, or `isinstance(x, Err)` in Python (`from threads.result import Err`). A missing thread comes back as `not_found`.
+Both return a value instead of throwing: check `ok` in TypeScript, or `isinstance(x, Err)` in Python (`from threadsai.result import Err`). A missing thread comes back as `not_found`.
 
 <Callout>
 The `sandbox` option is only needed if you want to [fork](/docs/evals/fork) or [save a case](/docs/evals/saved-cases) from this handle.

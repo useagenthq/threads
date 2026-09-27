@@ -20,8 +20,8 @@ from team.run_kit import (
 )
 from team.team_kit import assert_team_replays
 
-from threads import Agent, AskResult, Completed, WaitResult, agent, scripted_model, sqlite
-from threads.log import Event, ToolResultEvent
+from threadsai import Agent, AskResult, Completed, WaitResult, agent, scripted_model, sqlite
+from threadsai.log import Event, ToolResultEvent
 
 _ASK = TypeAdapter[AskResult](AskResult)
 

@@ -1,0 +1,171 @@
+"""`Host.start_run` (POST /v1/runs): the user_input is made durable together
+with its idempotency receipt, and the run goes on in the host.
+
+The key binds the tenant, the full principal, the operation and the request's hash. The same
+key, principal and request replays the receipt and starts nothing; another request under the
+key is idempotency_key_reused; another principal of the tenant is
+idempotency_key_principal_mismatch and never sees the receipt.
+"""
+
+import asyncio
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Final
+
+from pydantic import JsonValue
+from pydantic.experimental.missing_sentinel import MISSING
+
+from threadsai._generated.host_api_v1 import RunAccepted, StartRunRequest
+from threadsai.agents.config import ConfigError
+from threadsai.agents.intake import Intake
+from threadsai.agents.results import Failed
+from threadsai.agents.store import Store, now_ms, open_store
+from threadsai.host.runs import Bound, Runner
+from threadsai.log import BranchId, Budget, InputPart, ParseError, Principal, ThreadId
+from threadsai.log.digest import canonical_sha256
+from threadsai.log.keys import principal_key
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Err, Ok
+from threadsai.store import StoredEvent, receipts
+from threadsai.store.lines import uuid7
+from threadsai.thread.handle import Thread, open_thread
+
+MAX_KEY: Final = 255
+
+type Started = Ok[RunAccepted] | Err[ParseError]
+
+
+async def start_run(
+    runner: Runner, request: StartRunRequest, principal: Principal, idempotency_key: str
+) -> Started:
+    # A request the host stops before its run starts is refused, never started after a restart.
+    since = runner.generation
+    if not 0 < len(idempotency_key) <= MAX_KEY:
+        return Err(ParseError("invalid_request", "Idempotency-Key must be 1 to 255 characters"))
+    if runner.agent(request.agent) is None:
+        return Err(ParseError("not_found", f"no agent {request.agent} on this host"))
+    store = runner.store(principal.tenant)
+    body = canonical_sha256(to_json(request))
+    if not isinstance(body, Ok):
+        raise AssertionError("a parsed request always canonicalizes")
+    key = receipts.Key(
+        principal.tenant,
+        receipts.START_RUN,
+        idempotency_key,
+        principal_key(principal),
+        body.value,
+    )
+    replayed = await _replay(store, key)
+    if replayed is not None:
+        return replayed
+    target = await _target(runner, store, request)
+    if isinstance(target, Err):
+        return target
+    thread, bound = target.value
+    budget = None if request.budget is MISSING else request.budget
+    return await recorded_run(
+        runner, key, Launched(bound, request.input, thread, principal, budget), since
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class Launched:
+    """One run a host request starts: its binding, input, branch and sender."""
+
+    bound: Bound
+    input: str | Sequence[InputPart]
+    thread: Thread
+    principal: Principal
+    budget: Budget | None = None
+    client_message_id: str | None = None
+    a2a: Mapping[str, JsonValue] | None = None
+    """An exposed A2A task's message, context and claims (user_input.a2a)."""
+
+
+async def recorded_run(runner: Runner, key: receipts.Key, run: Launched, since: int) -> Started:
+    """Launches the run with its receipt bound to its user_input's append, and answers once the
+    input is durable, or why it recorded none."""
+    recorded: asyncio.Future[StoredEvent] = asyncio.get_running_loop().create_future()
+    receipt = receipts.insert(key, now_ms())
+    intake = Intake(
+        "api",
+        recorded,
+        companion=receipt,
+        client_message_id=run.client_message_id,
+        a2a=run.a2a,
+    )
+    task = runner.launch(
+        run.bound,
+        run.input,
+        run.thread,
+        run.principal,
+        intake=intake,
+        budget=run.budget,
+        since=since,
+    )
+    await asyncio.wait({recorded, task}, return_when=asyncio.FIRST_COMPLETED)
+    if recorded.done():
+        done = recorded.result()
+        return Ok(
+            RunAccepted(thread_id=done.thread_id, branch_id=done.branch_id, run_id=done.event_id)
+        )
+    return await _refused(run.thread.store, key, task)
+
+
+async def _refused(store: Store, key: receipts.Key, task: "asyncio.Task[object]") -> Started:
+    """The run recorded no input: another request took the key first, or the branch can't take
+    one now (busy, parked on something else, inspection-only, pinned to another agent), or the
+    host stopped before it started (retryable, as for a busy branch)."""
+    if task.cancelled():
+        return Err(ParseError("branch_busy", "the host stopped before the run started; retry"))
+    try:
+        result = task.result()
+    except ConfigError as error:
+        return Err(ParseError("invalid_request", error.message))
+    replayed = await _replay(store, key)
+    if replayed is not None:
+        return replayed
+    if isinstance(result, Failed) and result.error.code == "branch_busy":
+        return Err(ParseError("branch_busy", result.error.message))
+    return Err(ParseError("branch_not_runnable", "the branch takes no input now"))
+
+
+async def _replay(store: Store, key: receipts.Key) -> Started | None:
+    found = await (await open_store(store)).tables.receipt(key)
+    if found is None:
+        return None
+    if found.principal_key != key.principal_key:
+        why = "the key belongs to another principal"
+        return Err(ParseError("idempotency_key_principal_mismatch", why))
+    if found.body_hash != key.body_hash:
+        return Err(ParseError("idempotency_key_reused", "the key was used for another request"))
+    return Ok(
+        RunAccepted(thread_id=found.thread_id, branch_id=found.branch_id, run_id=found.run_id)
+    )
+
+
+async def _target(
+    runner: Runner, store: Store, request: StartRunRequest
+) -> Ok[tuple[Thread, Bound]] | Err[ParseError]:
+    """The branch the input goes to: a new thread of the named agent, or the given (or main)
+    branch of an existing thread of this tenant, which must run the named agent."""
+    wanted = runner.bound_to(request.agent, answerer=True)
+    sq = await open_store(store)
+    if request.thread_id is MISSING:
+        now = now_ms()
+        thread_id, branch_id = ThreadId(uuid7(now)), BranchId(uuid7(now))
+        created = await sq.create(thread_id, branch_id, now)
+        if isinstance(created, Err):
+            return created
+        return Ok((Thread(thread_id, branch_id, store), wanted))
+    branch = None if request.branch_id is MISSING else request.branch_id
+    opened = await open_thread(store, request.thread_id, branch_id=branch)
+    if isinstance(opened, Err):
+        code = "not_found" if opened.error.code == "not_found" else "branch_not_runnable"
+        return Err(ParseError(code, opened.error.message))
+    bound = await runner.bound(store, request.thread_id)
+    plain = runner.bound_to(request.agent).definition
+    if bound is None or all(bound.definition is not d for d in (wanted.definition, plain)):
+        return Err(ParseError("invalid_request", f"the thread does not run {request.agent}"))
+    thread = opened.value
+    return Ok((Thread(thread.id, thread.branch, store), bound))

@@ -9,7 +9,7 @@ from pathlib import Path
 from eval_kit import ALLOW, LOOKUP, REFUND_TURN, Order, say, support, use
 from schema_check import CASE_ID, valid
 
-from threads import (
+from threadsai import (
     CaseExpectation,
     Completed,
     agent,
@@ -18,10 +18,10 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads.log import EventId, Permissions, SnapshotEvent, TextPart, UserInputEvent
-from threads.result import Err, Ok
-from threads.thread.case import SavedCase
-from threads.thread.handle import Thread
+from threadsai.log import EventId, Permissions, SnapshotEvent, TextPart, UserInputEvent
+from threadsai.result import Err, Ok
+from threadsai.thread.case import SavedCase
+from threadsai.thread.handle import Thread
 
 MUST = CaseExpectation(must=({"type": "tool_call", "data": {"name": "lookup_order"}},))
 DONE = CaseExpectation(must=({"type": "turn_completed"},))

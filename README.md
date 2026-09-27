@@ -39,9 +39,9 @@ An agent that fixes failing tests in its own sandbox.
 **TypeScript**
 
 ```ts
-import { agent, sqlite } from "@threads/core";
-import { anthropic } from "@threads/anthropic";
-import { e2b } from "@threads/e2b";
+import { agent, sqlite } from "threadsai";
+import { anthropic } from "@threadsai/anthropic";
+import { e2b } from "@threadsai/e2b";
 
 const coder = agent({
   name: "coder",
@@ -57,9 +57,9 @@ console.log(result.status); // "completed", or "parked" until you approve a comm
 **Python**
 
 ```python
-from threads import agent, sqlite
-from threads.anthropic import anthropic
-from threads.e2b import e2b
+from threadsai import agent, sqlite
+from threadsai.anthropic import anthropic
+from threadsai.e2b import e2b
 
 coder = agent(
     name="coder",
@@ -167,9 +167,9 @@ Each provider is one line, and keys come from your environment unless you pass t
 <summary><b>Models</b></summary>
 
 ```ts
-import { anthropic } from "@threads/anthropic";
-import { openai } from "@threads/openai";
-import { aiSdk } from "@threads/ai-sdk";
+import { anthropic } from "@threadsai/anthropic";
+import { openai } from "@threadsai/openai";
+import { aiSdk } from "@threadsai/ai-sdk";
 
 model: anthropic("claude-sonnet-5"),                    // ANTHROPIC_API_KEY
 model: openai("gpt-5.5", { maxTokens: 32_000 }),         // OPENAI_API_KEY; maxTokens is the per-request cap
@@ -177,9 +177,9 @@ model: aiSdk({ model: (fetch) => yourProvider({ fetch })("model-id"), maxInputTo
 ```
 
 ```python
-from threads.anthropic import anthropic
-from threads.litellm import litellm
-from threads.openai import openai
+from threadsai.anthropic import anthropic
+from threadsai.litellm import litellm
+from threadsai.openai import openai
 
 model=anthropic("claude-sonnet-5")                  # ANTHROPIC_API_KEY
 model=openai("gpt-5.5", max_tokens=32_000)          # OPENAI_API_KEY; max_tokens is the per-request cap
@@ -194,10 +194,10 @@ Limits for listed model ids come from a catalog verified against each provider (
 <summary><b>Sandboxes</b></summary>
 
 ```ts
-import { e2b } from "@threads/e2b";
-import { daytona } from "@threads/daytona";
-import { docker } from "@threads/docker";
-import { devSandbox } from "@threads/core";
+import { e2b } from "@threadsai/e2b";
+import { daytona } from "@threadsai/daytona";
+import { docker } from "@threadsai/docker";
+import { devSandbox } from "threadsai";
 
 sandbox: e2b({ template: "base" }),                          // E2B_API_KEY
 sandbox: daytona(),                                          // DAYTONA_API_KEY
@@ -207,11 +207,11 @@ sandbox: devSandbox(),                                       // a local director
 ```
 
 ```python
-from threads.daytona import daytona
-from threads.dev import dev_sandbox
-from threads.docker import docker
-from threads.e2b import e2b
-from threads.modal import modal
+from threadsai.daytona import daytona
+from threadsai.dev import dev_sandbox
+from threadsai.docker import docker
+from threadsai.e2b import e2b
+from threadsai.modal import modal
 
 sandbox=e2b(template="base")         # E2B_API_KEY
 sandbox=daytona()                    # DAYTONA_API_KEY
@@ -230,11 +230,11 @@ To open the network, pass `allowInternet: true` (TS) or `allow_internet=True` (P
 Channels run in the optional host. Start it with `threads dev`; it prints each channel's webhook URL.
 
 ```ts
-import { secret, sqlite } from "@threads/core";
-import { host } from "@threads/host";
-import { slack } from "@threads/slack";
-import { whatsapp } from "@threads/whatsapp";
-import { github } from "@threads/github";
+import { secret, sqlite } from "threadsai";
+import { host } from "@threadsai/host";
+import { slack } from "@threadsai/slack";
+import { whatsapp } from "@threadsai/whatsapp";
+import { github } from "@threadsai/github";
 
 export default host({
   store: sqlite(".threads"),
@@ -248,11 +248,11 @@ export default host({
 ```
 
 ```python
-from threads import secret, sqlite
-from threads.github import github
-from threads.host import host
-from threads.slack import slack
-from threads.whatsapp import whatsapp
+from threadsai import secret, sqlite
+from threadsai.github import github
+from threadsai.host import host
+from threadsai.slack import slack
+from threadsai.whatsapp import whatsapp
 
 app = host(
     store=sqlite(".threads"),
@@ -276,10 +276,10 @@ app = host(
 <summary><b>Memory, knowledge and MCP</b></summary>
 
 ```ts
-import { localKnowledge, localMemory } from "@threads/core";
-import { mcp } from "@threads/mcp";
-import { supermemory } from "@threads/supermemory";
-import { zep } from "@threads/zep";
+import { localKnowledge, localMemory } from "threadsai";
+import { mcp } from "@threadsai/mcp";
+import { supermemory } from "@threadsai/supermemory";
+import { zep } from "@threadsai/zep";
 
 memory: localMemory(),                                          // SQLite, in the run's store
 memory: supermemory(),                                          // SUPERMEMORY_API_KEY
@@ -289,10 +289,10 @@ tools: [mcp({ name: "docs", url: "https://example.com/mcp" })],
 ```
 
 ```python
-from threads import local_knowledge, local_memory
-from threads.mcp import mcp
-from threads.supermemory import supermemory
-from threads.zep import zep
+from threadsai import local_knowledge, local_memory
+from threadsai.mcp import mcp
+from threadsai.supermemory import supermemory
+from threadsai.zep import zep
 
 memory=local_memory()                # SQLite, in the run's store
 memory=supermemory()                 # SUPERMEMORY_API_KEY
@@ -340,8 +340,8 @@ Not built yet, so not claimed above:
 | Folder | What's in it |
 |---|---|
 | `spec/` | The shared contract both languages follow: event log schema, public API map, SQLite layout, tool catalog and the conformance cases both implementations must pass |
-| `typescript/` | The TypeScript framework (`@threads/*` packages) |
-| `python/` | The Python framework (`threads`, with optional extras per provider) |
+| `typescript/` | The TypeScript framework (`@threadsai/*` packages) |
+| `python/` | The Python framework (`threadsai`, with optional extras per provider) |
 | `docs/` | The documentation site |
 | `scripts/` | `generate.sh` (rebuild generated code) and repo checks |
 | `AGENTS.md` | Coding rules for contributors and coding agents |

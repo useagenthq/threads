@@ -1,13 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import {
-  type ChannelAdapter,
-  ConfigError,
-  secret,
-  sqlite,
-} from "@threads/core";
-import { github } from "@threads/github";
-import { slack } from "@threads/slack";
-import { whatsapp } from "@threads/whatsapp";
+import { github } from "@threadsai/github";
+import { slack } from "@threadsai/slack";
+import { whatsapp } from "@threadsai/whatsapp";
+import { type ChannelAdapter, ConfigError, secret, sqlite } from "threadsai";
 import { host } from "../src";
 import { mailer } from "./kit";
 

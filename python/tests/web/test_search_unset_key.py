@@ -9,13 +9,13 @@ from collections.abc import Callable, Sequence
 
 import pytest
 
-from threads import Failure, agent, scripted_model
-from threads.memory.fence import bound
-from threads.result import Err, Ok
-from threads.search import HttpSearch, brave, exa, tavily
-from threads.secrets import Secret, secret
-from threads.web.guard import Target
-from threads.web.http import Fence, Request, Response, WebError
+from threadsai import Failure, agent, scripted_model
+from threadsai.memory.fence import bound
+from threadsai.result import Err, Ok
+from threadsai.search import HttpSearch, brave, exa, tavily
+from threadsai.secrets import Secret, secret
+from threadsai.web.guard import Target
+from threadsai.web.http import Fence, Request, Response, WebError
 
 FACTORIES = pytest.mark.parametrize("make", [exa, tavily, brave], ids=["exa", "tavily", "brave"])
 UNSET = "THREADS_TEST_UNSET_KEY"

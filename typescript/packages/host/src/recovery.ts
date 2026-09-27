@@ -7,7 +7,7 @@ import {
   pendingWakes,
   StoreError,
   type ThreadId,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { HostContext, HostedAgent } from "./context";
 
 // Runs a crash left open, run on from the log by a host's recovery pass (spec/schema/README.md,

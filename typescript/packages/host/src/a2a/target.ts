@@ -7,7 +7,7 @@ import {
   type Result,
   type ThreadId,
   uuidv7,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { type HostContext, samePin } from "../context";
 import { fail, type StartFailure, type Target } from "../runs";
 import type { ExposedAgent } from "./config";

@@ -10,7 +10,7 @@ icon: Plug
 <Tab value="TypeScript">
 
 ```ts
-import { mcp } from "@threads/mcp";
+import { mcp } from "@threadsai/mcp";
 
 const docs = mcp({ name: "docs", url: "https://example.com/mcp" });
 
@@ -21,7 +21,7 @@ const assistant = agent({ model, tools: [docs, github, files] });
 <Tab value="Python">
 
 ```python
-from threads.mcp import mcp
+from threadsai.mcp import mcp
 
 docs = mcp(name="docs", url="https://example.com/mcp")
 
@@ -31,7 +31,7 @@ assistant = agent(model=model, tools=[docs, github, files])
 </Tab>
 </Tabs>
 
-Python needs the `mcp` extra (`threads[mcp]`).
+Python needs the `mcp` extra (`threadsai[mcp]`).
 
 Each server tool shows up as `mcp__<server>__<tool>`, for example `mcp__docs__search`. If the server offers resources, the agent also gets `mcp__<server>__read_resource`.
 

@@ -6,15 +6,15 @@ from dataclasses import replace
 
 from pydantic import JsonValue, TypeAdapter
 
-from threads import Agent, Completed, Store, agent, sqlite
-from threads.agents.store import open_store
-from threads.log import Cost, OutputPart, ThreadId, Usage
-from threads.log import Model as ModelLimits
-from threads.loop.model import Model, ModelInfo, ModelResponse
-from threads.loop.scripted import ScriptedModel
-from threads.result import Ok
-from threads.store.conn import Conn
-from threads.thread.handle import Thread
+from threadsai import Agent, Completed, Store, agent, sqlite
+from threadsai.agents.store import open_store
+from threadsai.log import Cost, OutputPart, ThreadId, Usage
+from threadsai.log import Model as ModelLimits
+from threadsai.loop.model import Model, ModelInfo, ModelResponse
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.result import Ok
+from threadsai.store.conn import Conn
+from threadsai.thread.handle import Thread
 
 PRICE: JsonValue = {"input": 3000, "output": 15_000}
 ONE = 10 * 3000 + 2 * 15_000

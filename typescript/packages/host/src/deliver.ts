@@ -1,4 +1,4 @@
-import { type ChannelAdapter, DeliveryOutcome } from "@threads/core";
+import { type ChannelAdapter, DeliveryOutcome } from "threadsai";
 import {
   type ArtifactStore,
   dispatched,
@@ -9,7 +9,7 @@ import {
   redactSecrets,
   type Writer,
   within,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { z } from "zod";
 
 // Outbound replies are effects: every op is a channel_send tool_call with a

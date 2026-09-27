@@ -1,4 +1,4 @@
-import { liveTransport, vet, type WebTransport } from "@threads/core/adapter";
+import { liveTransport, vet, type WebTransport } from "threadsai/adapter";
 import { type Answer, bodyBytes, message, single, stream } from "./answer";
 import type { Method } from "./jsonrpc";
 import {

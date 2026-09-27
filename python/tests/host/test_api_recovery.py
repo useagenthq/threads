@@ -8,13 +8,13 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 
 from pydantic import BaseModel, JsonValue
 
-from threads import RunContext, Store, agent, scripted_model, sqlite, tool
-from threads._generated.host_api_v1 import RunAccepted, StartRunRequest
-from threads.agents.results import Completed, Failed, RunError, RunResult
-from threads.agents.store import open_store, scoped
-from threads.host import Host, host, reopen
-from threads.host.app import recovered
-from threads.log import (
+from threadsai import RunContext, Store, agent, scripted_model, sqlite, tool
+from threadsai._generated.host_api_v1 import RunAccepted, StartRunRequest
+from threadsai.agents.results import Completed, Failed, RunError, RunResult
+from threadsai.agents.store import open_store, scoped
+from threadsai.host import Host, host, reopen
+from threadsai.host.app import recovered
+from threadsai.log import (
     BranchId,
     EffectBeginEvent,
     Event,
@@ -26,17 +26,17 @@ from threads.log import (
     TurnCompletedEvent,
     UserInputEvent,
 )
-from threads.loop.model import (
+from threadsai.loop.model import (
     ModelChunk,
     ModelContext,
     ModelRequest,
 )
-from threads.loop.runtime import RunErrorCode
-from threads.loop.scripted import ScriptedModel
-from threads.reduce import Fold
-from threads.result import Ok
-from threads.store import StoreError
-from threads.thread.handle import Thread
+from threadsai.loop.runtime import RunErrorCode
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.reduce import Fold
+from threadsai.result import Ok
+from threadsai.store import StoreError
+from threadsai.thread.handle import Thread
 
 ALICE = Principal(issuer="api", tenant="acme", subject="alice")
 EVE = Principal(issuer="api", tenant="other", subject="eve")

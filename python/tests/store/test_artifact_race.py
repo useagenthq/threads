@@ -12,11 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from threads.result import Ok
-from threads.store.artifacts import FileArtifacts
-from threads.store.retention import sweep
-from threads.store.trash import SEAMS, SeamPoint, trash_name
-from threads.store.worker import StoreError
+from threadsai.result import Ok
+from threadsai.store.artifacts import FileArtifacts
+from threadsai.store.retention import sweep
+from threadsai.store.trash import SEAMS, SeamPoint, trash_name
+from threadsai.store.worker import StoreError
 
 DATA = b'{"name":"mcp__jira__create_issue"}'
 SHA = hashlib.sha256(DATA).hexdigest()

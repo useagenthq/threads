@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { docker } from "@threads/docker";
+import { docker } from "@threadsai/docker";
 import type { SandboxSession } from "../../core/src/sandbox";
 import { CTX } from "../../core/test/sandbox/context";
 import { drained } from "../../core/test/sandbox/remote/kit";

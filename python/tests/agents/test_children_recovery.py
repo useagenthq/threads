@@ -9,9 +9,9 @@ import pytest
 from local_sandbox import LocalSandbox
 from pydantic import JsonValue
 
-from threads import Completed, EventItem, Thread, agent, scripted_model, sqlite
-from threads.agents import team
-from threads.log import (
+from threadsai import Completed, EventItem, Thread, agent, scripted_model, sqlite
+from threadsai.agents import team
+from threadsai.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
     Event,
@@ -21,9 +21,9 @@ from threads.log import (
     ToolResultEvent,
     ToolResultLateEvent,
 )
-from threads.loop.scripted import ScriptExhaustedError
-from threads.result import Ok
-from threads.thread.handle import open_thread
+from threadsai.loop.scripted import ScriptExhaustedError
+from threadsai.result import Ok
+from threadsai.thread.handle import open_thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 BYPASS = Permissions(

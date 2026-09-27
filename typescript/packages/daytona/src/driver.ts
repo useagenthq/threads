@@ -5,7 +5,7 @@ import {
   type BestEffortStop,
   quote,
   type SandboxDriver,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { type Clients, statusOf } from "./clients";
 import { framed, unhex } from "./framing";
 import { follow, type OpenSocket } from "./logs";

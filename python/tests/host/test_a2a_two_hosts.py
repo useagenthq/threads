@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from a2a_agents import talker
 from a2a_kit import ALICE, Served, fault_name, message, result, served, task, user_inputs
 
-from threads import sqlite
+from threadsai import sqlite
 
 
 def run(main: Callable[[], Coroutine[object, object, None]]) -> None:

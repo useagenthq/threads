@@ -3,8 +3,8 @@ import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HttpAgent, Message } from "@ag-ui/client";
-import { type Store, sqlite } from "@threads/core";
-import { openStore, tenantStore } from "@threads/core/host";
+import { type Store, sqlite } from "threadsai";
+import { openStore, tenantStore } from "threadsai/host";
 import { uiThreadId } from "../../src/ui/key";
 import {
   alice,

@@ -1,16 +1,16 @@
-import type { MemoryHit, MemoryProvider, Scope, Secret } from "@threads/core";
+import Supermemory, {
+  APIConnectionError,
+  APIConnectionTimeoutError,
+  APIError,
+} from "supermemory";
+import type { MemoryHit, MemoryProvider, Scope, Secret } from "threadsai";
 import {
   credential,
   type Fetch,
   type ProviderError,
   sandboxFetch,
   sha256Hex,
-} from "@threads/core/adapter";
-import Supermemory, {
-  APIConnectionError,
-  APIConnectionTimeoutError,
-  APIError,
-} from "supermemory";
+} from "threadsai/adapter";
 import { z } from "zod";
 
 // supermemory(): a MemoryProvider over the official Supermemory SDK. Each

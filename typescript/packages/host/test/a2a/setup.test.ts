@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { ConfigError, sqlite } from "@threads/core";
+import { ConfigError, sqlite } from "threadsai";
 import { DEFAULT_BUDGET, host } from "../../src";
 import { alice, authenticate, say } from "../kit";
 import { actor, handoffPair, reader, talker } from "./agents";

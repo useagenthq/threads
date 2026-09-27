@@ -9,15 +9,15 @@ from pathlib import Path
 import pytest
 from pg_kit import Leg, need_postgres
 
-from threads.agents.config import ConfigError
-from threads.agents.store import open_store
-from threads.memory.local_knowledge import local_knowledge
-from threads.memory.local_memory import local_memory
-from threads.postgres import postgres
-from threads.postgres.placeholders import psycopg
-from threads.result import Ok
-from threads.store import StoreError
-from threads.store.conn import RETRY_BUDGET_S, pause_s
+from threadsai.agents.config import ConfigError
+from threadsai.agents.store import open_store
+from threadsai.memory.local_knowledge import local_knowledge
+from threadsai.memory.local_memory import local_memory
+from threadsai.postgres import postgres
+from threadsai.postgres.placeholders import psycopg
+from threadsai.result import Ok
+from threadsai.store import StoreError
+from threadsai.store.conn import RETRY_BUDGET_S, pause_s
 
 VECTORS = Path(__file__).resolve().parents[3] / "spec/conformance/vectors/sql-placeholders.json"
 SQLITE_BUSY_TIMEOUT_S = 5.0

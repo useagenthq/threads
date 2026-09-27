@@ -8,9 +8,9 @@ A model is one line of config: the provider's model id. Keys come from your envi
 
 | | TypeScript | Python |
 |---|---|---|
-| Anthropic | `anthropic()` from `@threads/anthropic` | `anthropic()` from `threads.anthropic` |
-| OpenAI | `openai()` from `@threads/openai` | `openai()` from `threads.openai` |
-| Everything else | `aiSdk()` from `@threads/ai-sdk` (any AI SDK provider) | `litellm()` from `threads.litellm` (LiteLLM's `openai/` route) |
+| Anthropic | `anthropic()` from `@threadsai/anthropic` | `anthropic()` from `threadsai.anthropic` |
+| OpenAI | `openai()` from `@threadsai/openai` | `openai()` from `threadsai.openai` |
+| Everything else | `aiSdk()` from `@threadsai/ai-sdk` (any AI SDK provider) | `litellm()` from `threadsai.litellm` (LiteLLM's `openai/` route) |
 
 ## Anthropic
 
@@ -18,7 +18,7 @@ A model is one line of config: the provider's model id. Keys come from your envi
 <Tab value="TypeScript">
 
 ```ts
-import { anthropic } from "@threads/anthropic";
+import { anthropic } from "@threadsai/anthropic";
 
 const claude = anthropic("claude-sonnet-5");
 ```
@@ -27,7 +27,7 @@ const claude = anthropic("claude-sonnet-5");
 <Tab value="Python">
 
 ```python
-from threads.anthropic import anthropic
+from threadsai.anthropic import anthropic
 
 claude = anthropic("claude-sonnet-5")
 ```
@@ -72,7 +72,7 @@ Uses the Responses API.
 <Tab value="TypeScript">
 
 ```ts
-import { openai } from "@threads/openai";
+import { openai } from "@threadsai/openai";
 
 const gpt = openai("gpt-5.5", {
   params: { reasoning: { effort: "medium" } },
@@ -83,7 +83,7 @@ const gpt = openai("gpt-5.5", {
 <Tab value="Python">
 
 ```python
-from threads.openai import openai
+from threadsai.openai import openai
 
 gpt = openai("gpt-5.5", params={"reasoning": {"effort": "medium"}})
 ```
@@ -153,7 +153,7 @@ A thread continues only with the same pinned limits and cap it started with. The
     `aiSdk()` wraps any [AI SDK](https://ai-sdk.dev) provider. Build the model inside the factory with the `fetch` threads hands you, so every request goes through threads.
 
     ```ts
-    import { aiSdk } from "@threads/ai-sdk";
+    import { aiSdk } from "@threadsai/ai-sdk";
 
     aiSdk({
       model: (fetch) => createProvider({ fetch })("model-id"),
@@ -168,7 +168,7 @@ A thread continues only with the same pinned limits and cap it started with. The
     `litellm()` works with any OpenAI-compatible endpoint through LiteLLM's `openai/` route, such as a LiteLLM proxy or a local server.
 
     ```python
-    from threads.litellm import litellm
+    from threadsai.litellm import litellm
 
     local = litellm(
         "openai/my-model",
@@ -227,7 +227,7 @@ threads owns every retry; provider SDK retries are turned off. Rate limits, over
 | `max_total_wait_ms` | 600,000 |
 | `fallback_after` | 3 overloaded errors in a row |
 
-When retries run out, the run ends `failed` with code `model_unavailable`. In TypeScript, pass any subset: `retry: { max_retries: 4 }`. Python's `retry=` takes a complete `Retry` object from `threads.log`.
+When retries run out, the run ends `failed` with code `model_unavailable`. In TypeScript, pass any subset: `retry: { max_retries: 4 }`. Python's `retry=` takes a complete `Retry` object from `threadsai.log`.
 
 ## Fallback models
 

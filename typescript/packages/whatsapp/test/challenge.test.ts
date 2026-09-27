@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { secret } from "@threads/core/adapter";
+import { secret } from "threadsai/adapter";
 import { whatsapp } from "../src";
 
 // Meta's GET subscription check: the challenge is echoed only for the configured verify token.

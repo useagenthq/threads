@@ -11,11 +11,11 @@ import httpx2
 from corpus import CASES
 from pydantic import JsonValue
 
-from threads.adapters.loop_resources import holding
-from threads.log import ArtifactRef, BranchId, ParseError
-from threads.log.digest import sha256_hex
-from threads.loop.model import ModelChunk, ModelContext, ModelRequest
-from threads.result import Err, Ok
+from threadsai.adapters.loop_resources import holding
+from threadsai.log import ArtifactRef, BranchId, ParseError
+from threadsai.log.digest import sha256_hex
+from threadsai.loop.model import ModelChunk, ModelContext, ModelRequest
+from threadsai.result import Err, Ok
 
 GOLDEN = Path(__file__).parent / "golden"
 BRANCH = BranchId("0192b000-0000-7000-8000-000000000001")

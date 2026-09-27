@@ -17,7 +17,7 @@ export type McpSession = {
 };
 
 /**
- * spec/api.json McpServer: an MCP server binding, built by mcp() in @threads/mcp. Core opens a
+ * spec/api.json McpServer: an MCP server binding, built by mcp() in @threadsai/mcp. Core opens a
  * session for each check() and each run and pins the tools it lists, named mcp__<name>__<tool>.
  */
 export type McpServer = {

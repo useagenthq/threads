@@ -1,5 +1,5 @@
-import { agent, devSandbox, scriptedModel, sqlite } from "@threads/core";
-import { type Host, host } from "@threads/host";
+import { type Host, host } from "@threadsai/host";
+import { agent, devSandbox, scriptedModel, sqlite } from "threadsai";
 
 // A host module whose agent runs in devSandbox(): what `threads start` refuses and `threads dev`
 // serves. The dev root comes from the test through THREADS_TEST_DEV_ROOT.

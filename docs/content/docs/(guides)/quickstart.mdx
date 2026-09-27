@@ -23,7 +23,7 @@ You'll build a small weather agent with one tool. First it runs on a **scripted 
     <Tab value="TypeScript">
 
     ```ts
-    import { agent, scriptedModel, sqlite, tool } from "@threads/core";
+    import { agent, scriptedModel, sqlite, tool } from "threadsai";
     import { z } from "zod";
 
     const getWeather = tool({
@@ -43,7 +43,7 @@ You'll build a small weather agent with one tool. First it runs on a **scripted 
 
     from pydantic import BaseModel
 
-    from threads import RunContext, agent, scripted_model, sqlite, tool
+    from threadsai import RunContext, agent, scripted_model, sqlite, tool
 
 
     class WeatherInput(BaseModel):
@@ -174,7 +174,7 @@ You'll build a small weather agent with one tool. First it runs on a **scripted 
     <Tab value="TypeScript">
 
     ```ts
-    import { anthropic } from "@threads/anthropic";
+    import { anthropic } from "@threadsai/anthropic";
 
     const weather = agent({
       name: "weather",
@@ -201,7 +201,7 @@ You'll build a small weather agent with one tool. First it runs on a **scripted 
     <Tab value="Python">
 
     ```python
-    from threads.anthropic import anthropic
+    from threadsai.anthropic import anthropic
 
     weather = agent(
         name="weather",
@@ -254,7 +254,7 @@ chosen, so it is one call:
 <Tab value="TypeScript">
 
 ```ts
-import { codingAgent } from "@threads/coding";
+import { codingAgent } from "@threadsai/coding";
 
 const coder = codingAgent({ workspace: { localDir: "./app" } });
 const result = await coder.run("Add a --json flag to the CLI and run its tests");
@@ -265,7 +265,7 @@ if (result.status === "completed") console.log(result.output);
 <Tab value="Python">
 
 ```python
-from threads.coding import coding_agent
+from threadsai.coding import coding_agent
 
 coder = coding_agent(workspace={"local_dir": "./app"})
 result = await coder.run("Add a --json flag to the CLI and run its tests")
@@ -302,7 +302,7 @@ an ignored `node_modules` is not copied. To let a dependency install through:
 <Tab value="TypeScript">
 
 ```ts
-import { docker } from "@threads/docker";
+import { docker } from "@threadsai/docker";
 
 const coder = codingAgent({
   sandbox: docker({ allowInternet: true, cpus: 4, memoryMb: 8192 }),
@@ -315,7 +315,7 @@ const coder = codingAgent({
 <Tab value="Python">
 
 ```python
-from threads.docker import docker
+from threadsai.docker import docker
 
 coder = coding_agent(
     sandbox=docker(allow_internet=True, cpus=4, memory_mb=8192),

@@ -2,7 +2,7 @@ import { appendFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import type { Fetch } from "@threads/core/adapter";
+import type { Fetch } from "threadsai/adapter";
 import { z } from "zod";
 
 // A real MCP server (the official SDK's) for the tests, reached without a network: over HTTP

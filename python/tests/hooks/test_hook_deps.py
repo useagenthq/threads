@@ -8,7 +8,7 @@ from typing import assert_type
 import pytest
 from pydantic import BaseModel, JsonValue
 
-from threads import (
+from threadsai import (
     Agent,
     Completed,
     ConfigError,
@@ -19,8 +19,8 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.hooks.types import Source
-from threads.log import Permissions
+from threadsai.hooks.types import Source
+from threadsai.log import Permissions
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALLOW = Permissions(

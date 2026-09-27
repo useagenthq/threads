@@ -11,13 +11,13 @@ from pathlib import Path
 from corpus import CASES, load, matches, now_of, obj, stored_artifacts
 from pydantic import JsonValue
 
-from threads.log import BranchId, EventId, ParseError
-from threads.reduce.handlers import to_json
-from threads.result import Err, Ok
-from threads.sandbox import Sandbox
-from threads.sandbox.fake import FakeCrashError
-from threads.store import SqliteStore, StoredEvent, Writer, verify_export
-from threads.thread.fork import (
+from threadsai.log import BranchId, EventId, ParseError
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Err, Ok
+from threadsai.sandbox import Sandbox
+from threadsai.sandbox.fake import FakeCrashError
+from threadsai.store import SqliteStore, StoredEvent, Writer, verify_export
+from threadsai.thread.fork import (
     ForkAt,
     KnowledgePolicy,
     fork_branch,

@@ -16,11 +16,11 @@ from sandbox_deadline_kit import DEADLINE
 from sandbox_kit import OPEN, KitContext
 from sandbox_ledger_kit import LEDGER, Body, run_ledger
 
-from threads.adapters.loop_resources import holding
-from threads.adapters.sandboxes import fence
-from threads.adapters.sandboxes.e2b.transport import FencedHttpx, http_transport
-from threads.loop.model import LookupUnknown
-from threads.result import Err, Ok
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.sandboxes import fence
+from threadsai.adapters.sandboxes.e2b.transport import FencedHttpx, http_transport
+from threadsai.loop.model import LookupUnknown
+from threadsai.result import Err, Ok
 
 
 @pytest.mark.parametrize("check", [*CHECKS, *DEADLINE], ids=lambda c: c.__name__)

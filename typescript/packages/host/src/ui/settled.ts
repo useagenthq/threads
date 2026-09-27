@@ -1,4 +1,4 @@
-import type { KnownEvent, ParkAddress } from "@threads/core/host";
+import type { KnownEvent, ParkAddress } from "threadsai/host";
 
 // Where a human input stands in the log: an approval challenge open, decided or expired; an
 // ask_user question open, answered or closed. The UI routes read it to make a repeated answer

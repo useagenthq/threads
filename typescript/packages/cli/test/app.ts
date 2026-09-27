@@ -1,10 +1,5 @@
-import {
-  agent,
-  type ChannelAdapter,
-  scriptedModel,
-  sqlite,
-} from "@threads/core";
-import { type Host, host } from "@threads/host";
+import { type Host, host } from "@threadsai/host";
+import { agent, type ChannelAdapter, scriptedModel, sqlite } from "threadsai";
 
 // A host module as `threads dev` loads it: its default export is host({...}). The store path
 // comes from the test through THREADS_TEST_STORE.

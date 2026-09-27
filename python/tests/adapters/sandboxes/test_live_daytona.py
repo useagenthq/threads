@@ -14,10 +14,10 @@ import pytest
 from loop_kit import held
 from sandbox_kit import OPEN
 
-from threads.adapters.sandboxes.posix import collect
-from threads.daytona import daytona
-from threads.loop.model import Found
-from threads.result import Ok
+from threadsai.adapters.sandboxes.posix import collect
+from threadsai.daytona import daytona
+from threadsai.loop.model import Found
+from threadsai.result import Ok
 
 pytestmark = pytest.mark.live
 

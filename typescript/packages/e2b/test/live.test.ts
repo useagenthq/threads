@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { within } from "@threads/core/adapter";
+import { within } from "threadsai/adapter";
 import { CTX } from "../../core/test/sandbox/context";
 import { run } from "../../core/test/sandbox/remote/kit";
 import { code, unwrap } from "../../core/test/store/helpers";

@@ -8,7 +8,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agent, runEvals, scriptedModel, sqlite, tool } from "@threads/core";
+import { agent, runEvals, scriptedModel, sqlite, tool } from "threadsai";
 import { z } from "zod";
 
 const usage = { input_tokens: 10, output_tokens: 2 };

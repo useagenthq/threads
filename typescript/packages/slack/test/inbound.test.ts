@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
-import type { RawRequest } from "@threads/core/adapter";
+import type { RawRequest } from "threadsai/adapter";
 import { adapter, CHALLENGE, NOW_S, SIGNING } from "./kit";
 
 // Inbound over raw bytes: signature and replay window, the workspace from the verified envelope,

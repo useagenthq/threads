@@ -1,4 +1,4 @@
-import { JsonObject, JsonValue } from "@threads/core/adapter";
+import { JsonObject, JsonValue } from "threadsai/adapter";
 import { z } from "zod";
 
 // The exact AI SDK prompt parts a reasoning or hosted tool part stores (its artifact), so a

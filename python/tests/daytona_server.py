@@ -19,11 +19,11 @@ from aiohttp.test_utils import TestServer
 from pydantic import BaseModel, Field
 from sandbox_backend import Box, FakeBackend, LostAnswerError, Proc, UnavailableError
 
-from threads.adapters.loop_resources import holding
-from threads.adapters.sandboxes.daytona import DaytonaSandbox
-from threads.adapters.sandboxes.daytona.logs import STDERR, STDOUT
-from threads.adapters.sandboxes.daytona.toolbox import PREFIX, PREPARE_WORKSPACE
-from threads.sandbox.fake import FakeCrashError
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.sandboxes.daytona import DaytonaSandbox
+from threadsai.adapters.sandboxes.daytona.logs import STDERR, STDOUT
+from threadsai.adapters.sandboxes.daytona.toolbox import PREFIX, PREPARE_WORKSPACE
+from threadsai.sandbox.fake import FakeCrashError
 
 API_KEY = "dtn-test-secret-key"
 type Handler = Callable[[web.Request], Awaitable[web.StreamResponse]]

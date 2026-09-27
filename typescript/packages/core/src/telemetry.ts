@@ -4,7 +4,7 @@ import type { Result } from "./result";
 import type { LogError } from "./verify/error";
 
 // The telemetry protocol (spec/api.json Exporter): what host({telemetry}) calls. otel() in
-// @threads/otel implements it; core only knows the shape and which store a host bound it to.
+// @threadsai/otel implements it; core only knows the shape and which store a host bound it to.
 
 /** A branch Exporter.sync() could not read, and the head it failed at. */
 export type SkippedBranch = {

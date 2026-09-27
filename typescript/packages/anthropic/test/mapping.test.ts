@@ -4,8 +4,8 @@ import {
   recordingFetch,
   renderBody,
   renderCase,
-} from "@threads/adapter-testkit";
-import { memoryContext, parseRender } from "@threads/core/adapter";
+} from "@threadsai/adapter-testkit";
+import { memoryContext, parseRender } from "threadsai/adapter";
 import { anthropic } from "../src";
 import { toAnthropic } from "../src/request";
 

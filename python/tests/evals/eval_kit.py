@@ -7,16 +7,16 @@ from pathlib import Path
 
 from pydantic import BaseModel, JsonValue
 
-from threads import Agent, CaseExpectation, Completed, RunContext, agent, scripted_model, sqlite
-from threads import tool as make_tool
-from threads.hooks.extension import Extension
-from threads.log import Model as ModelLimits
-from threads.log import ModelRef, Permissions
-from threads.loop.model import ModelInfo
-from threads.loop.scripted import SCRIPTED_INFO, ScriptedModel
-from threads.result import Ok
-from threads.thread.case import SavedCase
-from threads.thread.case_simulate import Simulate
+from threadsai import Agent, CaseExpectation, Completed, RunContext, agent, scripted_model, sqlite
+from threadsai import tool as make_tool
+from threadsai.hooks.extension import Extension
+from threadsai.log import Model as ModelLimits
+from threadsai.log import ModelRef, Permissions
+from threadsai.loop.model import ModelInfo
+from threadsai.loop.scripted import SCRIPTED_INFO, ScriptedModel
+from threadsai.result import Ok
+from threadsai.thread.case import SavedCase
+from threadsai.thread.case_simulate import Simulate
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

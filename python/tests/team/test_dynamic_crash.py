@@ -17,7 +17,7 @@ from pydantic import BaseModel, JsonValue
 from team.run_kit import call, say
 from team.team_kit import assert_team_replays
 
-from threads import (
+from threadsai import (
     Agent,
     Completed,
     DynamicAgent,
@@ -29,15 +29,15 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.agents.bindings import AppTool, Fence
-from threads.agents.run import RunOptions, execute
-from threads.agents.store import open_store
-from threads.log import BranchId, MemberEndedEvent, MemberStartedEvent, ThreadId
-from threads.loop.scripted import ScriptedModel
-from threads.result import Ok
-from threads.store.sql import text_of
-from threads.team.rows import member_rows
-from threads.thread.handle import Thread
+from threadsai.agents.bindings import AppTool, Fence
+from threadsai.agents.run import RunOptions, execute
+from threadsai.agents.store import open_store
+from threadsai.log import BranchId, MemberEndedEvent, MemberStartedEvent, ThreadId
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.result import Ok
+from threadsai.store.sql import text_of
+from threadsai.team.rows import member_rows
+from threadsai.thread.handle import Thread
 
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")
 

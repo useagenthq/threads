@@ -7,9 +7,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, JsonValue
 
-from threads import Completed, RunContext, Tool, agent, scripted_model, sqlite, tool
-from threads.log import Permissions
-from threads.mcp import mcp
+from threadsai import Completed, RunContext, Tool, agent, scripted_model, sqlite, tool
+from threadsai.log import Permissions
+from threadsai.mcp import mcp
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 KIT = str(Path(__file__).resolve().parents[1] / "mcp_kit.py")

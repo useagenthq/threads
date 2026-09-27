@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from threads import VERSION
-from threads.log import BranchId, ThreadId
-from threads.log.digest import sha256_hex
-from threads.result import Err, Ok
-from threads.store import ForkRequest, SqliteStore, verify_export
-from threads.store.lines import head_line, header_line
+from threadsai import VERSION
+from threadsai.log import BranchId, ThreadId
+from threadsai.log.digest import sha256_hex
+from threadsai.result import Err, Ok
+from threadsai.store import ForkRequest, SqliteStore, verify_export
+from threadsai.store.lines import head_line, header_line
 
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
 ROOT = BranchId("0192b000-0000-7000-8000-000000000001")

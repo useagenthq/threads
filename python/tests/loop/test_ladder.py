@@ -9,13 +9,13 @@ from pathlib import Path
 from local_sandbox import LocalSandbox
 from pydantic import JsonValue
 
-from threads import Completed, Failed, agent, scripted_model, sqlite
-from threads.agents.context import RunContext
-from threads.agents.results import RunResult
-from threads.agents.store import open_store
-from threads.hooks.extension import extension
-from threads.hooks.types import CompactGate
-from threads.log import (
+from threadsai import Completed, Failed, agent, scripted_model, sqlite
+from threadsai.agents.context import RunContext
+from threadsai.agents.results import RunResult
+from threadsai.agents.store import open_store
+from threadsai.hooks.extension import extension
+from threadsai.hooks.types import CompactGate
+from threadsai.log import (
     CompactedEvent,
     Context,
     Event,
@@ -24,8 +24,8 @@ from threads.log import (
     ModelRequestEvent,
     Permissions,
 )
-from threads.reduce.state import ReducedState
-from threads.result import Ok
+from threadsai.reduce.state import ReducedState
+from threadsai.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 BIG = 1_000_000

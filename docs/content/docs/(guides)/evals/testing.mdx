@@ -13,7 +13,7 @@ Two test-kit pieces let you run a real agent loop in a unit test: `scriptedModel
 
 ```ts
 import { expect, test } from "bun:test";
-import { agent, fakeSandbox, scriptedModel, sqlite } from "@threads/core";
+import { agent, fakeSandbox, scriptedModel, sqlite } from "threadsai";
 
 test("the fixer runs the tests and reports", async () => {
   const model = scriptedModel({
@@ -50,8 +50,8 @@ test("the fixer runs the tests and reports", async () => {
 ```python
 import asyncio
 
-from threads import Completed, agent, fake_sandbox, scripted_model, sqlite
-from threads.log import Permissions
+from threadsai import Completed, agent, fake_sandbox, scripted_model, sqlite
+from threadsai.log import Permissions
 
 BYPASS = Permissions(
     mode="bypass",
@@ -137,7 +137,7 @@ Turn on the model-request guard once for your whole test run. After that, any re
 
 ```ts
 // test/setup.ts, loaded by bunfig.toml: [test] preload = ["./test/setup.ts"]
-import { blockRealModels } from "@threads/core";
+import { blockRealModels } from "threadsai";
 
 blockRealModels();
 ```
@@ -146,7 +146,7 @@ blockRealModels();
 <Tab value="Python">
 
 ```python
-from threads.loop.guard import block_model_requests
+from threadsai.loop.guard import block_model_requests
 
 block_model_requests()  # usually once, in conftest.py
 ```

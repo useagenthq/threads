@@ -6,7 +6,7 @@ icon: "SquareFunction"
 
 Everything is validated before anything is written: the log, every recorded model request, each bundled file against the manifest's hash and length, and the destination's thread tombstones, so a thread deleted here is never brought back. A failure there leaves the store exactly unchanged. Then the artifacts are stored, and all the rows in one transaction, so the rows are all or nothing; a crash in between can leave artifact files no row names, which are harmless (content-addressed, never read without a ref) and reused by a retry. A bare .jsonl needs its artifacts already in the store.
 
-Import from `@threads/core` (TypeScript) or `threads` (Python).
+Import from `threadsai` (TypeScript) or `threadsai` (Python).
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">

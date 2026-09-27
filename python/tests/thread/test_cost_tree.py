@@ -20,13 +20,13 @@ from thread.usage_kit import (
     usd,
 )
 
-from threads import Store, agent
-from threads.agents.store import now_ms, open_store
-from threads.log import AgentSpawnedEvent, Cost, ThreadId
-from threads.result import Err, Ok
-from threads.store.conn import Conn
-from threads.store.lines import uuid7
-from threads.thread.handle import Thread, open_thread
+from threadsai import Store, agent
+from threadsai.agents.store import now_ms, open_store
+from threadsai.log import AgentSpawnedEvent, Cost, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.store.conn import Conn
+from threadsai.store.lines import uuid7
+from threadsai.thread.handle import Thread, open_thread
 
 
 async def handle(store: Store, thread: ThreadId) -> Thread:

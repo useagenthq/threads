@@ -15,10 +15,10 @@ from a2a_agents import actor, say, use
 from a2a_kit import ALICE, artifacts_of, fault_name, message, reaches, says, served, state_of, task
 from pydantic import JsonValue
 
-from threads.host.a2a.keys import a2a_thread_id
-from threads.host.a2a.state import Slice, task_of
-from threads.log import EventId
-from threads.reduce.handlers import to_json
+from threadsai.host.a2a.keys import a2a_thread_id
+from threadsai.host.a2a.state import Slice, task_of
+from threadsai.log import EventId
+from threadsai.reduce.handlers import to_json
 
 TASK_ID: Final = EventId("01a00000-0000-7000-8000-000000000000")
 PARKS: Final = (

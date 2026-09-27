@@ -10,14 +10,14 @@ from pydantic import JsonValue
 from sandbox_backend import FakeBackend
 from sandbox_kit import OPEN
 
-from threads.adapters.loop_resources import holding
-from threads.adapters.sandboxes.docker import records
-from threads.adapters.sandboxes.docker.exec import FRAME_MAX, FrameError, Frames
-from threads.adapters.sandboxes.posix import collect
-from threads.adapters.sandboxes.streams import StreamLostError
-from threads.result import Ok
-from threads.sandbox import SandboxSession, Trees
-from threads.sandbox.protocol import ExecOutput
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.sandboxes.docker import records
+from threadsai.adapters.sandboxes.docker.exec import FRAME_MAX, FrameError, Frames
+from threadsai.adapters.sandboxes.posix import collect
+from threadsai.adapters.sandboxes.streams import StreamLostError
+from threadsai.result import Ok
+from threadsai.sandbox import SandboxSession, Trees
+from threadsai.sandbox.protocol import ExecOutput
 
 pytestmark = pytest.mark.usefixtures("stub_supervisor")
 

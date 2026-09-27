@@ -12,13 +12,13 @@ import pytest
 from local_sandbox import LocalSession
 from sandbox_kit import KitContext
 
-from threads.log import CallId, JsonObject, Spill
-from threads.loop.tools import Dispatched, Invocation, Output
-from threads.result import Ok
-from threads.store import SqliteStore
-from threads.tools import SandboxTools, specs
-from threads.tools.lsp import render
-from threads.tools.lsp_driver import SEARCH
+from threadsai.log import CallId, JsonObject, Spill
+from threadsai.loop.tools import Dispatched, Invocation, Output
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
+from threadsai.tools import SandboxTools, specs
+from threadsai.tools.lsp import render
+from threadsai.tools.lsp_driver import SEARCH
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

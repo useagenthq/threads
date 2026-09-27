@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { openThread } from "@threads/core";
+import { openThread } from "threadsai";
 import {
   knownEvents,
   type Principal,
   type ThreadId,
   tenantStore,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { HostContext } from "../../src/context";
 import { applyResume } from "../../src/ui/ag-ui-resume";
 import { recordParts } from "../../src/ui/ai-sdk-decisions";

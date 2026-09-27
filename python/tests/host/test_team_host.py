@@ -6,14 +6,14 @@ from typing import TYPE_CHECKING
 
 from host.test_http import as_, run, served, sse, start, text, use
 
-from threads import agent, scripted_model, sqlite
-from threads.agents.store import open_store, scoped
-from threads.host.runs import Runner
-from threads.host.schedule_pass import Pass
-from threads.host.schedule_threads import reserve_due
-from threads.log import BranchId, ThreadStartedEvent
-from threads.result import Ok
-from threads.store.schedules import Due
+from threadsai import agent, scripted_model, sqlite
+from threadsai.agents.store import open_store, scoped
+from threadsai.host.runs import Runner
+from threadsai.host.schedule_pass import Pass
+from threadsai.host.schedule_threads import reserve_due
+from threadsai.log import BranchId, ThreadStartedEvent
+from threadsai.result import Ok
+from threadsai.store.schedules import Due
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

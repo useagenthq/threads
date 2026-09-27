@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type Fetch, secret, within } from "@threads/core/adapter";
+import { type Fetch, secret, within } from "threadsai/adapter";
 import { KnownEvent } from "../../core/src/log";
 import { err } from "../../core/src/result";
 import type { SandboxContext } from "../../core/src/sandbox";

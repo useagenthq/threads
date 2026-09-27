@@ -14,8 +14,8 @@ import pytest
 from a2a_agents import talker
 from a2a_kit import ALICE, ONE, Agents, fault_name, message, served, task
 
-from threads.a2a.protocol import A2A_JSON, VERSION_HEADER
-from threads.host.a2a.config import A2aOptions
+from threadsai.a2a.protocol import A2A_JSON, VERSION_HEADER
+from threadsai.host.a2a.config import A2aOptions
 
 EVE: Final = "01a00000-0000-7000-8000-000000000000"
 TWO: Final[A2aOptions] = {
@@ -171,8 +171,8 @@ class TestWhatMustLookMissing:
 
     def test_the_a2a_routes_serve_nothing_on_a_host_without_the_option(self) -> None:
         async def main() -> None:
-            from threads import sqlite  # noqa: PLC0415 - one test builds a host by hand
-            from threads.host import host  # noqa: PLC0415 - one test builds a host by hand
+            from threadsai import sqlite  # noqa: PLC0415 - one test builds a host by hand
+            from threadsai.host import host  # noqa: PLC0415 - one test builds a host by hand
 
             plain = host(store=sqlite(":memory:"), agents={"support": talker("hi")})
             async with plain:
@@ -280,7 +280,7 @@ class TestBothBindings:
 
     def test_another_tenants_principal_gets_its_own_task_never_this_tenants(self) -> None:
         async def main() -> None:
-            from threads.log import Principal  # noqa: PLC0415 - one test needs a second tenant
+            from threadsai.log import Principal  # noqa: PLC0415 - one test needs a second tenant
 
             eve = Principal(issuer="partner", tenant="other", subject="eve.partner.example")
             async with served(_bot()) as on:

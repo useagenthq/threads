@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue, TypeAdapter
 
-from threads.evals.judge import judge_input
-from threads.evals.simulated_user import VisibleMessage, simulated_user_input, user_turn
-from threads.log import Event
+from threadsai.evals.judge import judge_input
+from threadsai.evals.simulated_user import VisibleMessage, simulated_user_input, user_turn
+from threadsai.log import Event
 
 VECTORS = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "vectors"
 _EVENTS = TypeAdapter[list[Event]](list[Event])

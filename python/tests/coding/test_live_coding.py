@@ -18,11 +18,11 @@ import pytest
 from loop_kit import held
 from sandbox_kit import OPEN
 
-from threads.adapters.sandboxes.posix import collect
-from threads.agents.setup import SetsUp
-from threads.coding import CODING_INSTRUCTIONS, coding_agent
-from threads.result import Ok
-from threads.sandbox import Sandbox, SandboxSession
+from threadsai.adapters.sandboxes.posix import collect
+from threadsai.agents.setup import SetsUp
+from threadsai.coding import CODING_INSTRUCTIONS, coding_agent
+from threadsai.result import Ok
+from threadsai.sandbox import Sandbox, SandboxSession
 
 pytestmark = pytest.mark.live
 

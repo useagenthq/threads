@@ -7,14 +7,14 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, JsonValue
 
-from threads import Completed, RunContext, Tool, agent, scripted_model, sqlite, tool
-from threads.adapters.models.render import parse
-from threads.agents.pinned import pinned_start
-from threads.agents.results import Thread
-from threads.log import ArtifactRef, Event, ThreadStartedEvent, ToolsLoadedEvent
-from threads.log.jcs import canonicalize
-from threads.reduce.handlers import to_json
-from threads.result import Ok
+from threadsai import Completed, RunContext, Tool, agent, scripted_model, sqlite, tool
+from threadsai.adapters.models.render import parse
+from threadsai.agents.pinned import pinned_start
+from threadsai.agents.results import Thread
+from threadsai.log import ArtifactRef, Event, ThreadStartedEvent, ToolsLoadedEvent
+from threadsai.log.jcs import canonicalize
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Ok
 
 TOOLS = 500
 LOADS = 10

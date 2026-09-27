@@ -7,7 +7,7 @@ import asyncio
 import pytest
 from pydantic import BaseModel, JsonValue
 
-from threads import (
+from threadsai import (
     Completed,
     ConfigError,
     EventItem,
@@ -18,11 +18,11 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.agents.tool import Reconcile
-from threads.hooks.extension import extension
-from threads.log import ToolResultEvent
-from threads.loop.model import LookupResult, NotFound
-from threads.store import StoredEvent
+from threadsai.agents.tool import Reconcile
+from threadsai.hooks.extension import extension
+from threadsai.log import ToolResultEvent
+from threadsai.loop.model import LookupResult, NotFound
+from threadsai.store import StoredEvent
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 DONE: JsonValue = {

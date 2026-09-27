@@ -1,4 +1,4 @@
-import type { Agent, ChannelAdapter, MessagePolicyRule } from "@threads/core";
+import type { Agent, ChannelAdapter, MessagePolicyRule } from "threadsai";
 import {
   asks,
   type BranchId,
@@ -18,7 +18,7 @@ import {
   StoreError,
   type ThreadId,
   tenantStore,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { z } from "zod";
 import { reply } from "./outbound";
 import { LiveHub } from "./ui/hub";

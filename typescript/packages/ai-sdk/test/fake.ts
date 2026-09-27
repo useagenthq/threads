@@ -3,7 +3,7 @@ import type {
   LanguageModelV4CallOptions,
   LanguageModelV4StreamPart,
 } from "@ai-sdk/provider";
-import type { Fetch } from "@threads/core/adapter";
+import type { Fetch } from "threadsai/adapter";
 
 // A hand-written AI SDK v4 model: each doStream call takes the next script entry, which either
 // throws (a rejection before the stream) or streams its parts. Calls are recorded.

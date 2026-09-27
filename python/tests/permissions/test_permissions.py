@@ -8,9 +8,9 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import JsonValue
 
-from threads.log import PermissionDecisionData, PermissionRuleAddedData, Permissions
-from threads.permissions import Call, Source, Verdict, decide, parse_rule
-from threads.result import Err, Ok
+from threadsai.log import PermissionDecisionData, PermissionRuleAddedData, Permissions
+from threadsai.permissions import Call, Source, Verdict, decide, parse_rule
+from threadsai.result import Err, Ok
 
 WORKSPACE = "/workspace"
 CHALLENGE = "0192c000-0000-7000-8000-000000000001"

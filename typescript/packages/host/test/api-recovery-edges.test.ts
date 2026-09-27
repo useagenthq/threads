@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { scriptedModel, sqlite } from "@threads/core";
-import { storeConnection } from "@threads/core/host";
+import { scriptedModel, sqlite } from "threadsai";
+import { storeConnection } from "threadsai/host";
 import { hostTicked } from "../src/host";
 import {
   cleanup,

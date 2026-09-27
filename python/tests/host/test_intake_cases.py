@@ -11,9 +11,9 @@ import pytest
 from corpus import CASES, cases, load
 from pydantic import JsonValue, TypeAdapter
 
-from threads import agent, scripted_model, sqlite
-from threads.agents.store import open_store
-from threads.host import (
+from threadsai import agent, scripted_model, sqlite
+from threadsai.agents.store import open_store
+from threadsai.host import (
     ChannelCapabilities,
     DeliveryOutcome,
     Inbound,
@@ -23,12 +23,12 @@ from threads.host import (
     VerifiedDelivery,
     host,
 )
-from threads.host.channel import DeliveryError
-from threads.log import Event, JsonObject, ParseError, Principal
-from threads.loop.model import LookupResult, LookupUnknown
-from threads.result import Err, Ok
-from threads.secrets import Secret
-from threads.store.sql import text_of
+from threadsai.host.channel import DeliveryError
+from threadsai.log import Event, JsonObject, ParseError, Principal
+from threadsai.loop.model import LookupResult, LookupUnknown
+from threadsai.result import Err, Ok
+from threadsai.secrets import Secret
+from threadsai.store.sql import text_of
 
 _WEBHOOK: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { agent, scriptedModel } from "@threads/core";
+import { agent, scriptedModel } from "threadsai";
 import {
   BranchId,
   hostRunner,
@@ -8,7 +8,7 @@ import {
   storeConnection,
   ThreadId,
   tenantStore,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { hostTicked } from "../src/host";
 import { fakeChannel, type Harness, harness, say, until, webhook } from "./kit";

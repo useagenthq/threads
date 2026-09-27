@@ -9,11 +9,11 @@ Run: threads dev examples/host_policy.py (it exports `app`, as README.md does).
 
 from pydantic import BaseModel, Field
 
-from threads import RunContext, agent, secret, sqlite, tool, usd
-from threads.anthropic import anthropic
-from threads.host import host
-from threads.log import Budget
-from threads.slack import slack
+from threadsai import RunContext, agent, secret, sqlite, tool, usd
+from threadsai.anthropic import anthropic
+from threadsai.host import host
+from threadsai.log import Budget
+from threadsai.slack import slack
 
 INVOICES: dict[str, str] = {"INV-1001": "paid", "INV-1002": "overdue"}
 

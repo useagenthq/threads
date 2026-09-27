@@ -4,8 +4,8 @@ walk is fed events directly, past validation."""
 
 from otel_goldens_kit import goldens
 
-from threads.log import Event, UnknownEvent, UserInputEvent, WokenEvent
-from threads.otel.walk import WalkInput, walk
+from threadsai.log import Event, UnknownEvent, UserInputEvent, WokenEvent
+from threadsai.otel.walk import WalkInput, walk
 
 
 def test_a_call_open_at_turn_end_is_cut() -> None:

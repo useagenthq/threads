@@ -8,13 +8,13 @@ from collections.abc import Callable
 import pytest
 from pydantic import JsonValue
 
-from threads import Completed, RunContext, agent, extension, fake_sandbox, scripted_model, sqlite
-from threads.hooks.types import Source
-from threads.log import Permissions, SnapshotData, SnapshotEvent
-from threads.result import Ok
-from threads.sandbox.fake import FakeSandbox
-from threads.sandbox.fake_session import FakeSession
-from threads.thread.snapshot import VerifiedSnapshot
+from threadsai import Completed, RunContext, agent, extension, fake_sandbox, scripted_model, sqlite
+from threadsai.hooks.types import Source
+from threadsai.log import Permissions, SnapshotData, SnapshotEvent
+from threadsai.result import Ok
+from threadsai.sandbox.fake import FakeSandbox
+from threadsai.sandbox.fake_session import FakeSession
+from threadsai.thread.snapshot import VerifiedSnapshot
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 BYPASS = Permissions(

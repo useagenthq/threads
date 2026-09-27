@@ -2,7 +2,7 @@ import {
   type ChainEvent,
   type KnownEvent,
   turnOpeners,
-} from "@threads/core/internal/feed";
+} from "threadsai/internal/feed";
 import { Calls } from "./calls";
 import { Models } from "./models";
 import type { Link, Span } from "./span";

@@ -1,4 +1,4 @@
-import type { ArtifactStore, StoreDriver } from "@threads/core/store-driver";
+import type { ArtifactStore, StoreDriver } from "threadsai/store-driver";
 import { pgArtifacts } from "../src/artifacts";
 import { openPg } from "../src/driver";
 import { freshSchema } from "./kit";

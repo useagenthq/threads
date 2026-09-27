@@ -11,11 +11,11 @@ from host.test_host_stop import (
     _root,  # pyright: ignore[reportPrivateUsage] - the shared lookup
 )
 
-from threads import agent, extension, scripted_model, sqlite
-from threads.agents.context import RunContext
-from threads.host import host
-from threads.host.app import recovered
-from threads.thread import tree
+from threadsai import agent, extension, scripted_model, sqlite
+from threadsai.agents.context import RunContext
+from threadsai.host import host
+from threadsai.host.app import recovered
+from threadsai.thread import tree
 
 STOP_S = 2.0
 

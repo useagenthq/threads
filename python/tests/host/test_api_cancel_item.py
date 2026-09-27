@@ -8,13 +8,13 @@ from http import HTTPStatus
 
 from test_http import ALICE, as_, bearer, sender, served, sse, start
 
-from threads import sqlite
-from threads.agents.store import now_ms, open_store, scoped
-from threads.host import host
-from threads.host.app import recovered
-from threads.log import BranchId
-from threads.result import Ok
-from threads.store.sql import int_of, text_of
+from threadsai import sqlite
+from threadsai.agents.store import now_ms, open_store, scoped
+from threadsai.host import host
+from threadsai.host.app import recovered
+from threadsai.log import BranchId
+from threadsai.result import Ok
+from threadsai.store.sql import int_of, text_of
 
 
 def test_the_hosts_sweep_applies_a_pending_api_item_once() -> None:

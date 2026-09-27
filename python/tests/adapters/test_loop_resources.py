@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 import pytest
 from loop_kit import Handled
 
-from threads.adapters import loop_resources
-from threads.adapters.loop_resources import KEPT, LoopResources, holding, spawn_owned
+from threadsai.adapters import loop_resources
+from threadsai.adapters.loop_resources import KEPT, LoopResources, holding, spawn_owned
 
 
 @dataclass
@@ -125,7 +125,7 @@ def test_every_closer_runs_when_one_fails(caplog: pytest.LogCaptureFixture) -> N
                 adapter.bundle()
         return "done"
 
-    with caplog.at_level(logging.WARNING, "threads"):
+    with caplog.at_level(logging.WARNING, "threadsai"):
         assert asyncio.run(ok()) == "done"
     assert left.made[0].closed
     assert right.made[0].closed
@@ -183,7 +183,7 @@ def test_a_failing_owned_task_is_collected_once(
                     await asyncio.sleep(0)  # the task runs and fails; its callback is queued
                     assert task.done()
 
-    with caplog.at_level(logging.WARNING, "threads"):
+    with caplog.at_level(logging.WARNING, "threadsai"):
         asyncio.run(main())
     logged, reported = _failure_lines(caplog)
     assert len(logged) == 1
@@ -203,7 +203,7 @@ def test_failures_kept_under_a_long_hold_are_bounded(caplog: pytest.LogCaptureFi
                 await asyncio.wait({spawn_owned(_boom(), "terminate k")})
             await asyncio.sleep(0)
 
-    with caplog.at_level(logging.WARNING, "threads"):
+    with caplog.at_level(logging.WARNING, "threadsai"):
         asyncio.run(main())
     logged, reported = _failure_lines(caplog)
     assert len(logged) == failed  # each logged once, when it happened

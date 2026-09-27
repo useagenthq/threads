@@ -4,11 +4,11 @@
   "license": "Apache-2.0",
   "type": "module",
   "dependencies": {
-    "@threads/anthropic": "workspace:*",
-    "@threads/coding": "workspace:*",
-    "@threads/core": "workspace:*",
-    "@threads/host": "workspace:*",
-    "@threads/slack": "workspace:*",
+    "@threadsai/anthropic": "workspace:*",
+    "@threadsai/coding": "workspace:*",
+    "threadsai": "workspace:*",
+    "@threadsai/host": "workspace:*",
+    "@threadsai/slack": "workspace:*",
     "zod": "^4.6.5"
   }
 }

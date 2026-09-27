@@ -14,154 +14,154 @@
   "packages": {
     "otel": {
       "kind": "adapter",
-      "ts": "@threads/otel",
-      "py": "threads.otel",
+      "ts": "@threadsai/otel",
+      "py": "threadsai.otel",
       "provider": "OpenTelemetry",
       "doc": "Exports traces derived from the log to an OTLP/HTTP collector as JSON (Python extra otel). No OpenTelemetry SDK: span ids are derived from event ids, so a re-send carries the same ids."
     },
     "core": {
       "kind": "core",
-      "ts": "@threads/core",
-      "py": "threads",
-      "doc": "Pure library. Runtime dependency: zod / pydantic only. Names pending an npm/PyPI check."
+      "ts": "threadsai",
+      "py": "threadsai",
+      "doc": "Pure library. Runtime dependency: zod / pydantic only."
     },
     "host": {
       "kind": "core",
-      "ts": "@threads/host",
-      "py": "threads.host",
+      "ts": "@threadsai/host",
+      "py": "threadsai.host",
       "doc": "Channels, schedules, the HTTP API (spec/schema/host-api/) and the CLI."
     },
     "a2a": {
       "kind": "core",
-      "ts": "@threads/a2a",
-      "py": "threads.a2a",
+      "ts": "@threadsai/a2a",
+      "py": "threadsai.a2a",
       "doc": "A2A 1.0, both directions: remote() names a partner's agent, and the exposed side serves a host agent from the same schemas. Runtime dependency: core only. The protocol is small and the adapter has to own the message id, the attempt record and the exact request bytes so that a resend is byte-identical, which an SDK hides; the official SDKs are dev dependencies for interop tests. The pinned protocol is spec/schema/a2a/."
     },
     "mcp": {
       "kind": "core",
-      "ts": "@threads/mcp",
-      "py": "threads.mcp",
+      "ts": "@threadsai/mcp",
+      "py": "threadsai.mcp",
       "doc": "The MCP client (official MCP SDK) and a JSON Schema validator for server-declared tool inputs. Core has no general JSON Schema evaluator, so both stay out of it."
     },
     "supermemory": {
       "kind": "adapter",
-      "ts": "@threads/supermemory",
-      "py": "threads.supermemory",
+      "ts": "@threadsai/supermemory",
+      "py": "threadsai.supermemory",
       "provider": "Supermemory",
       "doc": "Hosted memory on the official Supermemory SDK (Python extra supermemory). Every request goes through the run's fenced transport."
     },
     "zep": {
       "kind": "adapter",
-      "ts": "@threads/zep",
-      "py": "threads.zep",
+      "ts": "@threadsai/zep",
+      "py": "threadsai.zep",
       "provider": "Zep",
       "doc": "Hosted memory on the official Zep SDK (Python extra zep). Every request goes through the run's fenced transport."
     },
     "anthropic": {
       "kind": "adapter",
-      "ts": "@threads/anthropic",
-      "py": "threads.anthropic",
+      "ts": "@threadsai/anthropic",
+      "py": "threadsai.anthropic",
       "provider": "Anthropic",
       "doc": "Claude models on the official Anthropic SDK (Python extra anthropic). Every request goes through the run's fenced transport."
     },
     "openai": {
       "kind": "adapter",
-      "ts": "@threads/openai",
-      "py": "threads.openai",
+      "ts": "@threadsai/openai",
+      "py": "threadsai.openai",
       "provider": "OpenAI",
       "doc": "OpenAI models on the official OpenAI SDK (Python extra openai). Every request goes through the run's fenced transport."
     },
     "ai-sdk": {
       "kind": "adapter",
-      "ts": "@threads/ai-sdk",
+      "ts": "@threadsai/ai-sdk",
       "provider": "AI SDK",
       "doc": "Any AI SDK v4 language model as a threads Model (TypeScript only). The adapter calls the model's doStream directly, below the AI SDK's generate and stream helpers, so threads owns every attempt and the SDK adds no hidden retry. The model is built by a factory handed threads' fetch, so every provider request goes through the run's fenced transport."
     },
     "litellm": {
       "kind": "adapter",
-      "py": "threads.litellm",
+      "py": "threadsai.litellm",
       "provider": "LiteLLM",
       "doc": "Models behind LiteLLM's openai/ route, that is any OpenAI-compatible endpoint (Python only, extra litellm). That route sends through the OpenAI SDK client threads hands it, so every request goes through the run's fenced transport; any other route is refused when the model is constructed."
     },
     "e2b": {
       "kind": "adapter",
-      "ts": "@threads/e2b",
-      "py": "threads.e2b",
+      "ts": "@threadsai/e2b",
+      "py": "threadsai.e2b",
       "provider": "E2B",
       "doc": "Sandboxes on E2B cloud VMs through the official e2b SDK (Python extra e2b). Every control-plane and sandbox request goes through the run's fenced transport."
     },
     "daytona": {
       "kind": "adapter",
-      "ts": "@threads/daytona",
-      "py": "threads.daytona",
+      "ts": "@threadsai/daytona",
+      "py": "threadsai.daytona",
       "provider": "Daytona",
       "doc": "Sandboxes on Daytona through its official API clients (Python extra daytona). Every control-plane and toolbox request goes through the run's fenced transport."
     },
     "docker": {
       "kind": "adapter",
-      "ts": "@threads/docker",
-      "py": "threads.docker",
+      "ts": "@threadsai/docker",
+      "py": "threadsai.docker",
       "provider": "Docker",
       "doc": "Sandboxes in local Docker containers over the Engine API on its unix socket (Python extra docker), with no SDK and no registry credentials. Every request goes through the run's fenced transport."
     },
     "coding": {
       "kind": "preset",
-      "ts": "@threads/coding",
-      "py": "threads.coding",
+      "ts": "@threadsai/coding",
+      "py": "threadsai.coding",
       "doc": "codingAgent(): agent() with a coding agent's defaults already chosen (Python extra coding = anthropic + docker). It holds one function and one constant, and depends on the anthropic and docker packages, which is why it is its own package: core depends only on zod / pydantic."
     },
     "modal": {
       "kind": "adapter",
-      "ts": "@threads/modal",
-      "py": "threads.modal",
+      "ts": "@threadsai/modal",
+      "py": "threadsai.modal",
       "provider": "Modal",
       "doc": "Sandboxes on Modal over the official SDK's gRPC protocol (Python extra modal), on channels fenced at every request. The TypeScript package always refuses: Modal's JS SDK sends commands over a transport threads can't fence."
     },
     "dev": {
       "kind": "adapter",
-      "ts": "@threads/core",
-      "py": "threads.dev",
+      "ts": "threadsai",
+      "py": "threadsai.dev",
       "doc": "A local sandbox in a confined directory on the host: bubblewrap on Linux, sandbox-exec on macOS. No provider SDK, no snapshots and no new dependency, so it ships inside the core package. For development: `threads start` refuses a host whose agent uses it."
     },
     "postgres": {
       "kind": "adapter",
-      "ts": "@threads/postgres",
-      "py": "threads.postgres",
+      "ts": "@threadsai/postgres",
+      "py": "threadsai.postgres",
       "provider": "PostgreSQL",
       "doc": "The log and artifact store on Postgres 16 or later (Python extra postgres), for hosts on several processes or machines. Dependency reason: Postgres has no official vendor SDK. TypeScript uses pg (node-postgres), the standard pure-JavaScript client, which runs on Bun and Node and has pooling, parameterized queries and SQLSTATE codes. Python uses psycopg 3 (binary), the maintained reference adapter, whose sync connection fits the store's worker thread and whose errors carry typed SQLSTATEs."
     },
     "mem0": {
       "kind": "adapter",
-      "ts": "@threads/mem0",
-      "py": "threads.mem0",
+      "ts": "@threadsai/mem0",
+      "py": "threadsai.mem0",
       "provider": "Mem0",
       "doc": "Mem0 memory, refused in both languages: the mem0ai SDK sends outside any transport threads can fence."
     },
     "slack": {
       "kind": "adapter",
-      "ts": "@threads/slack",
-      "py": "threads.slack",
+      "ts": "@threadsai/slack",
+      "py": "threadsai.slack",
       "provider": "Slack",
       "doc": "The Slack channel for host({channels}): Events API and interactivity in, chat.postMessage out (Python extra slack). Sends go through the run's fenced transport."
     },
     "github": {
       "kind": "adapter",
-      "ts": "@threads/github",
-      "py": "threads.github",
+      "ts": "@threadsai/github",
+      "py": "threadsai.github",
       "provider": "GitHub",
       "doc": "The GitHub channel for host({channels}): App webhooks in, issue and pull request comments out (Python extra github). Sends go through the run's fenced transport."
     },
     "whatsapp": {
       "kind": "adapter",
-      "ts": "@threads/whatsapp",
-      "py": "threads.whatsapp",
+      "ts": "@threadsai/whatsapp",
+      "py": "threadsai.whatsapp",
       "provider": "WhatsApp",
       "doc": "The WhatsApp Cloud API channel for host({channels}) (Python extra whatsapp). Sends go through the run's fenced transport."
     },
     "search": {
       "kind": "adapter",
-      "ts": "@threads/core",
-      "py": "threads.search",
+      "ts": "threadsai",
+      "py": "threadsai.search",
       "doc": "web_search backends: exa(), tavily() and brave(). Each sends one JSON request per search through the host's fenced web transport; no provider SDK."
     }
   },
@@ -295,7 +295,7 @@
     {
       "id": "store-sealed",
       "open": "The draft design lists store among provider interfaces; allows only SQLite in v0.1.",
-      "choice": "Store is opaque: sqlite() and postgres() are the implementations and no methods are public. The driver seam is internal: exported at @threads/core/store-driver / threads.store.driver for the in-repo Postgres package only, excluded from the API reference and from semver.",
+      "choice": "Store is opaque: sqlite() and postgres() are the implementations and no methods are public. The driver seam is internal: exported at threadsai/store-driver / threadsai.store.driver for the in-repo Postgres package only, excluded from the API reference and from semver.",
       "why": "Don't freeze an interface nobody else implements yet: one internal seam with two in-repo implementations is not a public store interface."
     },
     {
@@ -1401,7 +1401,7 @@
         {"name": "max_output_tokens", "kind": "option", "type": {"prim": "integer"}, "required": false, "default_doc": "the catalog entry's max_output_tokens", "doc": "The most output tokens the model can produce in one response. Pinned in policy.models. Omitted: the catalog entry's value; a model id the catalog doesn't list needs it."},
         {"name": "max_tokens", "kind": "option", "type": {"prim": "integer"}, "required": false, "default_doc": "min(8192, max_output_tokens)", "doc": "The per-request output cap, pinned as params.max_tokens (Render v1 line 0) and sent as max_tokens. Output-token budgets read it. Omitted: min(8192, max_output_tokens); a long answer continues in a new request. Above max_output_tokens is invalid_config."},
         {"name": "params", "kind": "option", "type": {"platform": {"ts": "JsonObject", "py": "Mapping[str, pydantic.JsonValue]"}}, "required": false, "doc": "Other Messages API request fields (temperature, reasoning and the like), pinned in line 0. A field the adapter derives from the render, or the cap, is invalid_config, and so is cache_control anywhere in it: prompt_cache is the one source of cache controls. Omitted: none."},
-        {"name": "price", "kind": "option", "type": {"platform": {"ts": "Price", "py": "threads.log.Price"}}, "required": false, "doc": "Nano-currency units per token, pinned in policy.models; a cost budget needs it. With prompt caching on, a missing cache_write is derived from input (1.25 x for \"5m\", 2 x for \"1h\") and a missing cache_read as 0.1 x input, the highest documented read rate, both rounded up, so cost is never understated. Omitted: cost is unknown."},
+        {"name": "price", "kind": "option", "type": {"platform": {"ts": "Price", "py": "threadsai.log.Price"}}, "required": false, "doc": "Nano-currency units per token, pinned in policy.models; a cost budget needs it. With prompt caching on, a missing cache_write is derived from input (1.25 x for \"5m\", 2 x for \"1h\") and a missing cache_read as 0.1 x input, the highest documented read rate, both rounded up, so cost is never understated. Omitted: cost is unknown."},
         {"name": "hosted_tools", "kind": "option", "type": {"array": {"platform": {"ts": "JsonObject", "py": "Mapping[str, pydantic.JsonValue]"}}}, "required": false, "doc": "Provider-executed tools, sent as given and pinned in line 0: web search and web fetch (web_search_YYYYMMDD, web_fetch_YYYYMMDD) only; any other is hosted_tool_unsupported. cache_control inside one is invalid_config, and so is any hosted tool with prompt_cache \"1h\": Anthropic caches hosted tool results for 5 minutes, so writes would be billed at two rates. Omitted: none."},
         {"name": "prompt_cache", "kind": "option", "type": {"union": [{"enum": ["5m", "1h"]}, {"literal": false}]}, "required": false, "default": "5m", "doc": "Prompt caching, pinned in line 0 as adapter setting prompt_cache: a breakpoint at the end of line 0 (the system prompt, else the last tool) and automatic caching of the history, both with this lifetime. \"1h\" costs 2 x input per written token instead of 1.25 x. false sends no cache controls; it is also what continues a thread started before prompt caching existed. Omitted: \"5m\"."},
         {"name": "citations", "kind": "option", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "Enables citations on every document in the request (an adapter setting, pinned in line 0). With a native structured-output field in params (output_format or output_config.format) it is invalid_config, as the provider refuses the pair; agent output (tool mode) is unaffected. Omitted: off."},
@@ -1424,7 +1424,7 @@
         {"name": "max_output_tokens", "kind": "option", "type": {"prim": "integer"}, "required": false, "default_doc": "the catalog entry's max_output_tokens", "doc": "The most output tokens the model can produce in one response. Pinned in policy.models. Omitted: the catalog entry's value; a model id the catalog doesn't list needs it."},
         {"name": "max_tokens", "kind": "option", "type": {"prim": "integer"}, "required": false, "default_doc": "min(8192, max_output_tokens)", "doc": "The per-request output cap, pinned as params.max_tokens (Render v1 line 0) and sent as max_output_tokens. Output-token budgets read it. Omitted: min(8192, max_output_tokens); a long answer continues in a new request. Above max_output_tokens is invalid_config."},
         {"name": "params", "kind": "option", "type": {"platform": {"ts": "JsonObject", "py": "Mapping[str, pydantic.JsonValue]"}}, "required": false, "doc": "Other Responses API request fields (temperature, reasoning and the like), pinned in line 0. A field the adapter derives from the render, or the cap, is invalid_config. Omitted: none."},
-        {"name": "price", "kind": "option", "type": {"platform": {"ts": "Price", "py": "threads.log.Price"}}, "required": false, "doc": "Nano-currency units per token, pinned in policy.models; a cost budget needs it. Omitted: cost is unknown."},
+        {"name": "price", "kind": "option", "type": {"platform": {"ts": "Price", "py": "threadsai.log.Price"}}, "required": false, "doc": "Nano-currency units per token, pinned in policy.models; a cost budget needs it. Omitted: cost is unknown."},
         {"name": "hosted_tools", "kind": "option", "type": {"array": {"platform": {"ts": "JsonObject", "py": "Mapping[str, pydantic.JsonValue]"}}}, "required": false, "doc": "Provider-executed tools, sent as given and pinned in line 0: web search (web_search, with an optional _preview and date) only; any other is hosted_tool_unsupported. Omitted: none."},
         {"name": "api_key", "kind": "option", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"OPENAI_API_KEY\")", "doc": "The API key: a secret() or a string. Omitted: secret(\"OPENAI_API_KEY\"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. Never pinned or logged."},
         {"name": "base_url", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The API base URL. Omitted: the SDK's default endpoint."},
@@ -1468,7 +1468,7 @@
         {"name": "max_output_tokens", "kind": "option", "type": {"prim": "integer"}, "required": true, "doc": "The most output tokens the model can produce in one response. Pinned in policy.models. Required for the same reason as max_input_tokens."},
         {"name": "max_tokens", "kind": "option", "type": {"prim": "integer"}, "required": false, "default_doc": "min(8192, max_output_tokens)", "doc": "The per-request output cap, pinned as params.max_tokens (Render v1 line 0). Output-token budgets read it. Omitted: min(8192, max_output_tokens); a long answer continues in a new request. Above max_output_tokens is invalid_config."},
         {"name": "params", "kind": "option", "type": {"platform": {"py": "Mapping[str, pydantic.JsonValue]"}}, "required": false, "doc": "Other completion request fields (temperature, reasoning and the like), pinned in line 0. A field the adapter derives from the render, or the cap, is invalid_config. Omitted: none."},
-        {"name": "price", "kind": "option", "type": {"platform": {"py": "threads.log.Price"}}, "required": false, "doc": "Nano-currency units per token, pinned in policy.models; a cost budget needs it. Omitted: cost is unknown."},
+        {"name": "price", "kind": "option", "type": {"platform": {"py": "threadsai.log.Price"}}, "required": false, "doc": "Nano-currency units per token, pinned in policy.models; a cost budget needs it. Omitted: cost is unknown."},
         {"name": "cache_ttl_ms", "kind": "option", "type": {"union": [{"prim": "integer"}, {"literal": "none"}]}, "required": false, "doc": "How long the provider keeps prompt-cache entries, in ms, or \"none\" when it doesn't cache; it becomes info.cache. threads can't see the provider behind base_url, so an agent using this model needs it or context.cache_ttl_ms. Anything else is invalid_config. Omitted: the lifetime is unknown."},
         {"name": "api_key", "kind": "option", "type": {"union": [{"prim": "string"}, {"$ref": "#/types/Secret"}]}, "required": false, "default_doc": "secret(\"OPENAI_API_KEY\")", "doc": "The key the endpoint expects: a secret() or a string. Omitted: secret(\"OPENAI_API_KEY\"). Resolved on the host at setup (check() or the first run); unset is missing_secret naming the option and the variable. Never pinned or logged."},
         {"name": "base_url", "kind": "option", "type": {"prim": "string"}, "required": false, "doc": "The OpenAI-compatible endpoint's base URL. Omitted: the SDK's default endpoint."}
@@ -1568,7 +1568,7 @@
         {"name": "cpus", "kind": "option", "type": {"prim": "number"}, "required": false, "doc": "How many CPUs the container may use (Docker's NanoCpus). Greater than 0; anything else is invalid_config. Omitted: no CPU limit."},
         {"name": "memory_mb", "kind": "option", "type": {"prim": "integer"}, "required": false, "doc": "How much memory the container may use, in MiB, with swap held to the same value. An integer of at least 64; anything else is invalid_config. Omitted: no memory limit. A daemon that can't enforce a requested limit fails the create rather than running without it."},
         {"name": "fetch", "kind": "option", "lang": "ts", "type": {"platform": {"ts": "(input: string | URL | Request, init?: RequestInit) => Promise<Response>"}}, "required": false, "doc": "Seam: the fetch every Engine API request goes through (a test server); the run's fence wraps it either way, and redirects are never followed. Omitted: the Engine API over the discovered unix socket."},
-        {"name": "transport", "kind": "option", "lang": "py", "type": {"platform": {"py": "threads.adapters.sandboxes.docker.transport.MakeTransport"}}, "required": false, "doc": "Seam: makes the httpx transport every Engine API request goes through (a test server). Omitted: the Engine API over the discovered unix socket; the fence checks every request either way."},
+        {"name": "transport", "kind": "option", "lang": "py", "type": {"platform": {"py": "threadsai.adapters.sandboxes.docker.transport.MakeTransport"}}, "required": false, "doc": "Seam: makes the httpx transport every Engine API request goes through (a test server). Omitted: the Engine API over the discovered unix socket; the fence checks every request either way."},
         {"name": "name", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "docker", "doc": "The provider name in SandboxInfo and the sandbox ledger ([a-z][a-z0-9_]*, else invalid_config); rows under another name are never touched."}
       ],
       "returns": {"$ref": "#/types/Sandbox"},
@@ -1590,7 +1590,7 @@
         {"name": "allow_internet", "kind": "option", "lang": "py", "type": {"prim": "boolean"}, "required": false, "default": false, "doc": "Lifts Modal's network block. Egress is then unenforced, so the agent must also set egress: \"unenforced\"."},
         {"name": "name", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "modal", "doc": "The provider name in SandboxInfo and the sandbox ledger; rows under another name are never touched."},
         {"name": "server_url", "kind": "option", "lang": "py", "type": {"prim": "string"}, "required": false, "default": "https://api.modal.com", "doc": "Seam: the Modal API URL (tests point it at a fake)."},
-        {"name": "connect", "kind": "option", "lang": "py", "type": {"platform": {"py": "threads.adapters.sandboxes.modal.channel.Connect"}}, "required": false, "doc": "Seam: opens a gRPC channel to a URL (tests). Omitted: a TLS channel; the fence checks every request on it either way."}
+        {"name": "connect", "kind": "option", "lang": "py", "type": {"platform": {"py": "threadsai.adapters.sandboxes.modal.channel.Connect"}}, "required": false, "doc": "Seam: opens a gRPC channel to a URL (tests). Omitted: a TLS channel; the fence checks every request on it either way."}
       ],
       "returns": {"$ref": "#/types/Sandbox"},
       "config_errors": [{"code": "transport_fence_unsupported", "lang": "ts"}, {"code": "invalid_config", "lang": "py"}, {"code": "missing_secret", "lang": "py"}]

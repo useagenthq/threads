@@ -14,12 +14,12 @@ from factory_surface_py import check_py_factory, modules_of, namespace
 from gen_api_surface_factories import adapter_packages, factories
 from typeexpr_render import Json, Obj, Render, obj, text
 
-import threads
-from threads import Secret
+import threadsai
+from threadsai import Secret
 
 SPEC = pathlib.Path(__file__).resolve().parents[3] / "spec"
 API = obj(json.loads((SPEC / "api.json").read_text()))
-NS = namespace(threads)
+NS = namespace(threadsai)
 STRING: Obj = {"prim": "string"}
 SECRET: Obj = {"$ref": "#/types/Secret"}
 
@@ -117,7 +117,7 @@ def test_an_arity_mismatch_is_red() -> None:
 def test_a_wrong_positional_type_is_red() -> None:
     wide = param("api_key", "positional", required=True)
     assert check_py_factory(contract(wide), positional, NS) == [
-        "api_key: annotation <class 'threads.secrets.Secret'> != declared str"
+        "api_key: annotation <class 'threadsai.secrets.Secret'> != declared str"
     ]
 
 

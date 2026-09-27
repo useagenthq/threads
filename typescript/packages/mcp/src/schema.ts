@@ -1,7 +1,7 @@
-import { ConfigError } from "@threads/core/adapter";
 import { Ajv, type ValidateFunction } from "ajv";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
+import { ConfigError } from "threadsai/adapter";
 import { z } from "zod";
 
 // A server's tool input schema is an external JSON Schema discovered at setup (item

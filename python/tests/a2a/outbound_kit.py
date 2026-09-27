@@ -15,23 +15,23 @@ from corpus import Clock
 from kit import T0, USER, acquire, allow_all, open_store
 from pydantic import JsonValue, TypeAdapter
 
-from threads.a2a.outbound.tools import RemoteTool
-from threads.a2a.protocol import A2A_VERSION, IDEMPOTENT_SEND
-from threads.a2a.remote import A2aAuth, remote
-from threads.log import BranchId, JsonObject, ThreadId, ToolSpec
-from threads.log.digest import canonical_sha256
-from threads.loop.drafts import draft
-from threads.loop.model import LookupResult
-from threads.loop.runtime import Runtime, serving
-from threads.loop.scripted import scripted_model
-from threads.loop.tools import Dispatched, Invocation, Prepared, Termination, prepared
-from threads.permissions import Decision
-from threads.reduce.handlers import to_json
-from threads.result import Err, Ok
-from threads.store import Draft, SqliteStore, StoredEvent, Writer
-from threads.store.lines import uuid7
-from threads.web.guard import Target
-from threads.web.http import Fence, Request, Response, WebError
+from threadsai.a2a.outbound.tools import RemoteTool
+from threadsai.a2a.protocol import A2A_VERSION, IDEMPOTENT_SEND
+from threadsai.a2a.remote import A2aAuth, remote
+from threadsai.log import BranchId, JsonObject, ThreadId, ToolSpec
+from threadsai.log.digest import canonical_sha256
+from threadsai.loop.drafts import draft
+from threadsai.loop.model import LookupResult
+from threadsai.loop.runtime import Runtime, serving
+from threadsai.loop.scripted import scripted_model
+from threadsai.loop.tools import Dispatched, Invocation, Prepared, Termination, prepared
+from threadsai.permissions import Decision
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Err, Ok
+from threadsai.store import Draft, SqliteStore, StoredEvent, Writer
+from threadsai.store.lines import uuid7
+from threadsai.web.guard import Target
+from threadsai.web.http import Fence, Request, Response, WebError
 
 TOOL: Final = "refund_desk"
 CARD_URL: Final = "https://partner.example/.well-known/agent-card.json"

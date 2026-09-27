@@ -10,7 +10,7 @@ from pydantic import BaseModel, JsonValue
 from team.run_kit import Watched, call, events, member_events, receipts, say, sq_of, start
 from team.team_kit import assert_team_replays
 
-from threads import (
+from threadsai import (
     BudgetExhausted,
     Completed,
     Failed,
@@ -24,11 +24,11 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.agents.definition import Definition
-from threads.agents.store import now_ms
-from threads.agents.team_worker import MemberRun, TeamWorker, WorkerEnv
-from threads.agents.teams import member_pin
-from threads.log import (
+from threadsai.agents.definition import Definition
+from threadsai.agents.store import now_ms
+from threadsai.agents.team_worker import MemberRun, TeamWorker, WorkerEnv
+from threadsai.agents.teams import member_pin
+from threadsai.log import (
     BranchId,
     Budget,
     MemberEndedEvent,
@@ -36,10 +36,10 @@ from threads.log import (
     ToolResultEvent,
     UserInputEvent,
 )
-from threads.result import Ok
-from threads.store import Draft
-from threads.team.rows import member_rows
-from threads.thread.handle import open_thread
+from threadsai.result import Ok
+from threadsai.store import Draft
+from threadsai.team.rows import member_rows
+from threadsai.thread.handle import open_thread
 
 ALICE = Principal(issuer="api", tenant="local", subject="alice")
 BOB = Principal(issuer="api", tenant="local", subject="bob")

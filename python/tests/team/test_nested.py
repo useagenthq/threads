@@ -8,13 +8,13 @@ import asyncio
 from team.run_kit import Watched, events, receipts, say, sq_of, start
 from team.team_kit import assert_team_replays
 
-from threads import Completed, Principal, agent, scripted_model, sqlite
-from threads.log import BranchId, ThreadId
-from threads.result import Ok
-from threads.store import SqliteStore
-from threads.store.sql import text_of
-from threads.team.rows import member_rows
-from threads.thread.authority import Checked, refused
+from threadsai import Completed, Principal, agent, scripted_model, sqlite
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
+from threadsai.store.sql import text_of
+from threadsai.team.rows import member_rows
+from threadsai.thread.authority import Checked, refused
 
 ALICE = Principal(issuer="api", tenant="local", subject="alice")
 BOB = Principal(issuer="api", tenant="local", subject="bob")

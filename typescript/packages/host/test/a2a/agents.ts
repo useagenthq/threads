@@ -1,12 +1,6 @@
-import {
-  type Agent,
-  agent,
-  type Model,
-  scriptedModel,
-  tool,
-} from "@threads/core";
-import { markTestKit } from "@threads/core/adapter";
-import type { Principal } from "@threads/core/host";
+import { type Agent, agent, type Model, scriptedModel, tool } from "threadsai";
+import { markTestKit } from "threadsai/adapter";
+import type { Principal } from "threadsai/host";
 import { z } from "zod";
 import { say, use } from "../kit";
 

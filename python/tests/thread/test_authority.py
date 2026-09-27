@@ -7,12 +7,12 @@ import asyncio
 
 from pydantic import BaseModel, JsonValue
 
-from threads import Agent, Parked, RunContext, Thread, agent, scripted_model, sqlite, tool
-from threads.agents.run import execute
-from threads.agents.store import Store, open_store
-from threads.host import host
-from threads.log import EffectResolvedEvent, ParseError, Principal
-from threads.result import Err, Ok
+from threadsai import Agent, Parked, RunContext, Thread, agent, scripted_model, sqlite, tool
+from threadsai.agents.run import execute
+from threadsai.agents.store import Store, open_store
+from threadsai.host import host
+from threadsai.log import EffectResolvedEvent, ParseError, Principal
+from threadsai.result import Err, Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALICE = Principal(issuer="api", tenant="local", subject="alice")

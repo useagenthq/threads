@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { ConfigError } from "@threads/core/adapter";
-import { StoreError } from "@threads/core/store-driver";
+import { ConfigError } from "threadsai/adapter";
+import { StoreError } from "threadsai/store-driver";
 import { openStore, Store } from "../../core/src/agent/sqlite";
 import { postgres } from "../src";
 

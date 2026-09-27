@@ -1,4 +1,4 @@
-import type { LossRow } from "@threads/core/internal/feed";
+import type { LossRow } from "threadsai/internal/feed";
 import { lossIds } from "./ids";
 import { INTERNAL, type Span } from "./span";
 

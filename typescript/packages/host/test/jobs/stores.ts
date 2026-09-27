@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { type Store, sqlite } from "@threads/core";
-import { openBunSqlite } from "@threads/core/bun-sqlite";
-import type { ArtifactStore, StoreDriver } from "@threads/core/host";
+import { type Store, sqlite } from "threadsai";
+import { openBunSqlite } from "threadsai/bun-sqlite";
+import type { ArtifactStore, StoreDriver } from "threadsai/host";
 import { fileArtifacts } from "../../../core/src/store";
 
 // The drills' store, by engine (THREADS_TEST_STORE, as the core fixtures): on SQLite, the

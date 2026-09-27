@@ -1,5 +1,5 @@
-import { agent, scriptedModel, sqlite } from "@threads/core";
-import { otel } from "@threads/otel";
+import { otel } from "@threadsai/otel";
+import { agent, scriptedModel, sqlite } from "threadsai";
 
 // OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 bun examples/telemetry.ts
 const store = sqlite(".threads");

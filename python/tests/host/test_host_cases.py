@@ -12,11 +12,11 @@ from corpus import CASES, cases, load
 from pydantic import JsonValue
 from starlette.requests import Request
 
-from threads import agent, scripted_model, sqlite
-from threads.agents.store import open_store, scoped
-from threads.host import host
-from threads.log import BranchId, Principal, UserInputEvent
-from threads.result import Ok
+from threadsai import agent, scripted_model, sqlite
+from threadsai.agents.store import open_store, scoped
+from threadsai.host import host
+from threadsai.log import BranchId, Principal, UserInputEvent
+from threadsai.result import Ok
 
 DONE: JsonValue = {
     "content": [{"type": "text", "text": "Done."}],

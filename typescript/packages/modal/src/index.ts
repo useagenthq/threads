@@ -1,4 +1,4 @@
-import { ConfigError, type ProviderSandbox } from "@threads/core/adapter";
+import { ConfigError, type ProviderSandbox } from "threadsai/adapter";
 
 // modal(): refused at setup. Modal's official JS SDK (npm `modal`) runs sandboxes, but every
 // exec, stdio stream and file operation goes over its task command router: a gRPC channel the
@@ -14,6 +14,6 @@ import { ConfigError, type ProviderSandbox } from "@threads/core/adapter";
 export function modal(): ProviderSandbox {
   throw new ConfigError(
     "transport_fence_unsupported",
-    "modal: not available in TypeScript: Modal's JS SDK sends exec and file operations over a channel threads can't fence; use the Python adapter (`from threads.modal import modal`)",
+    "modal: not available in TypeScript: Modal's JS SDK sends exec and file operations over a channel threads can't fence; use the Python adapter (`from threadsai.modal import modal`)",
   );
 }

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, JsonValue
 
-from threads import (
+from threadsai import (
     Agent,
     Completed,
     ConfigError,
@@ -25,16 +25,16 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.adapters.memories.supermemory import supermemory
-from threads.adapters.memories.zep import zep
-from threads.adapters.models.anthropic import anthropic
-from threads.adapters.models.litellm import litellm
-from threads.adapters.models.openai import openai
-from threads.adapters.sandboxes.daytona.sandbox import daytona
-from threads.adapters.sandboxes.e2b.sandbox import e2b
-from threads.adapters.sandboxes.modal.sandbox import modal
-from threads.log import Permissions, ToolResultEvent
-from threads.result import Err, Ok
+from threadsai.adapters.memories.supermemory import supermemory
+from threadsai.adapters.memories.zep import zep
+from threadsai.adapters.models.anthropic import anthropic
+from threadsai.adapters.models.litellm import litellm
+from threadsai.adapters.models.openai import openai
+from threadsai.adapters.sandboxes.daytona.sandbox import daytona
+from threadsai.adapters.sandboxes.e2b.sandbox import e2b
+from threadsai.adapters.sandboxes.modal.sandbox import modal
+from threadsai.log import Permissions, ToolResultEvent
+from threadsai.result import Err, Ok
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 SAY: JsonValue = {

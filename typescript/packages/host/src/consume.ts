@@ -15,7 +15,7 @@ import {
   type ThreadId,
   uuidv7,
   type Writer,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { type Replied, replyToQuestion } from "./answers";
 import { type HostContext, type HostedAgent, newPin, samePin } from "./context";
 import {

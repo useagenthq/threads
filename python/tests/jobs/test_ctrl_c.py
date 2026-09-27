@@ -19,8 +19,8 @@ from jobs.stores import drill_store
 from loop_kit import BYPASS, text, use
 from pydantic import BaseModel
 
-from threads import Completed, RunContext, agent, scripted_model, tool
-from threads.agents.store import Store, open_store
+from threadsai import Completed, RunContext, agent, scripted_model, tool
+from threadsai.agents.store import Store, open_store
 
 pytestmark = pytest.mark.jobs
 RESIST = Path(__file__).with_name("resist_worker.py")

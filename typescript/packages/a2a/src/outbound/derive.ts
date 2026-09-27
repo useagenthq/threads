@@ -1,4 +1,4 @@
-import { derivedId } from "@threads/core/adapter";
+import { derivedId } from "threadsai/adapter";
 import { PROVENANCE } from "../protocol";
 
 // The ids an outbound call derives rather than generates, and the provenance claim it may carry.

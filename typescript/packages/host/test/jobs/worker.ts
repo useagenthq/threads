@@ -29,8 +29,8 @@ import {
   type Model,
   type Store,
   scriptedModel,
-} from "@threads/core";
-import { sandboxFetch } from "@threads/core/adapter";
+} from "threadsai";
+import { sandboxFetch } from "threadsai/adapter";
 import {
   knownEvents,
   openStore,
@@ -38,7 +38,7 @@ import {
   ThreadId,
   tenantStore,
   type VerifiedLog,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { host } from "../../src";
 import { HostContext } from "../../src/context";

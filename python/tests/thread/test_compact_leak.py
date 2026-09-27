@@ -7,13 +7,13 @@ from collections.abc import AsyncIterator
 
 from compact_kit import kinds, logged, request_of, requests
 
-from threads import agent, sqlite
-from threads.log import CompactionFailedEvent, TextPart, TurnCompletedEvent, Usage
-from threads.loop.model import ModelChunk, ModelContext, ModelRequest, ModelResponse
-from threads.loop.scripted import ScriptedModel
-from threads.result import Ok
-from threads.secrets import credential
-from threads.thread.control import LOCAL_OPERATOR
+from threadsai import agent, sqlite
+from threadsai.log import CompactionFailedEvent, TextPart, TurnCompletedEvent, Usage
+from threadsai.loop.model import ModelChunk, ModelContext, ModelRequest, ModelResponse
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.result import Ok
+from threadsai.secrets import credential
+from threadsai.thread.control import LOCAL_OPERATOR
 
 USAGE = Usage(input_tokens=10, output_tokens=2)
 

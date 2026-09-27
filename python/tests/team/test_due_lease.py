@@ -12,13 +12,13 @@ from team.clock_kit import Held, count, elapsing, until
 from team.run_kit import call, member_events, result_of, say, sq_of, start
 from team.team_kit import assert_team_replays
 
-from threads import Completed, agent, scripted_model, sqlite
-from threads.agents.store import now_ms
-from threads.agents.team_worker import TeamWorker
-from threads.log import BranchId
-from threads.result import Ok
-from threads.store.sql import text_of
-from threads.team.constants import TEAM_CONSTANTS
+from threadsai import Completed, agent, scripted_model, sqlite
+from threadsai.agents.store import now_ms
+from threadsai.agents.team_worker import TeamWorker
+from threadsai.log import BranchId
+from threadsai.result import Ok
+from threadsai.store.sql import text_of
+from threadsai.team.constants import TEAM_CONSTANTS
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

@@ -3,8 +3,8 @@ and the `user` model that plays the customer. Everything is scripted."""
 
 from pydantic import BaseModel, JsonValue
 
-from threads import Agent, RunContext, agent, scripted_model, tool
-from threads.log import Budget, Permissions
+from threadsai import Agent, RunContext, agent, scripted_model, tool
+from threadsai.log import Budget, Permissions
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

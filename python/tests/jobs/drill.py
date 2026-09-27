@@ -17,9 +17,9 @@ from typing import Final
 from jobs.stores import activity, drill_open, query
 from jobs.worker import TEAM, read, rows
 
-from threads.log import EventId
-from threads.reduce import Fold
-from threads.result import Ok
+from threadsai.log import EventId
+from threadsai.reduce import Fold
+from threadsai.result import Ok
 
 WORKER: Final = Path(__file__).with_name("worker.py")
 WAIT_S: Final = 20.0

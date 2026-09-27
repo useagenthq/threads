@@ -1,4 +1,4 @@
-import { type A2aFault, fault } from "@threads/a2a/protocol";
+import { type A2aFault, fault } from "@threadsai/a2a/protocol";
 
 // The operations we deliberately do not serve. Each answers by name rather than as an unknown
 // method, because the card says so: a client that reads `pushNotifications: false` and then calls a

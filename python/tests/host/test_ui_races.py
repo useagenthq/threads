@@ -13,19 +13,19 @@ import httpx
 from host.test_http import ALICE, as_, bearer, run, sender
 from host.ui_kit import AG_UI, AI_SDK, chat, frames, post, user
 
-from threads import sqlite
-from threads._generated.host_api_v1 import AgUiResumeEntry, AiSdkPart
-from threads.agents.store import now_ms
-from threads.host import Host, host
-from threads.host.ui.ag_ui_resume import apply_resume
-from threads.host.ui.ai_sdk_decisions import record_parts
-from threads.host.ui.common import UiLog, ui_log
-from threads.host.ui.hub import LiveHub
-from threads.host.ui.key import ui_thread_id
-from threads.host.ui.listener import LiveListener
-from threads.host.ui.live import Delta
-from threads.log import EventId
-from threads.result import Ok
+from threadsai import sqlite
+from threadsai._generated.host_api_v1 import AgUiResumeEntry, AiSdkPart
+from threadsai.agents.store import now_ms
+from threadsai.host import Host, host
+from threadsai.host.ui.ag_ui_resume import apply_resume
+from threadsai.host.ui.ai_sdk_decisions import record_parts
+from threadsai.host.ui.common import UiLog, ui_log
+from threadsai.host.ui.hub import LiveHub
+from threadsai.host.ui.key import ui_thread_id
+from threadsai.host.ui.listener import LiveListener
+from threadsai.host.ui.live import Delta
+from threadsai.log import EventId
+from threadsai.result import Ok
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

@@ -10,11 +10,11 @@ import pytest
 from cancel_kit import TAIL, Cancel, CancelAt, after_cancel, context, ended_cancelled, said
 from compact_kit import logged
 
-from threads import agent, sqlite
-from threads.agents.context import RunContext
-from threads.hooks.extension import Extension, extension
-from threads.hooks.types import CompactGate
-from threads.log import (
+from threadsai import agent, sqlite
+from threadsai.agents.context import RunContext
+from threadsai.hooks.extension import Extension, extension
+from threadsai.hooks.types import CompactGate
+from threadsai.log import (
     Budget,
     CompactionFailedEvent,
     Context,
@@ -24,19 +24,19 @@ from threads.log import (
     ParseError,
     TurnCompletedEvent,
 )
-from threads.loop import attempt, compact, ladder
-from threads.loop.budget import Reservation
-from threads.loop.defaults import CONTEXT
-from threads.loop.model import ModelInfo, Rejected
-from threads.loop.runtime import Failed, Halt, Runtime
-from threads.loop.scripted import Entry
-from threads.reduce.state import ReducedState
-from threads.render import Rendered
-from threads.result import Err, Ok
-from threads.secrets import credential
-from threads.store import Draft, SqliteStore
-from threads.store.budgets import BudgetLedger, Cover, LimitName, Refused
-from threads.thread.control import LOCAL_OPERATOR
+from threadsai.loop import attempt, compact, ladder
+from threadsai.loop.budget import Reservation
+from threadsai.loop.defaults import CONTEXT
+from threadsai.loop.model import ModelInfo, Rejected
+from threadsai.loop.runtime import Failed, Halt, Runtime
+from threadsai.loop.scripted import Entry
+from threadsai.reduce.state import ReducedState
+from threadsai.render import Rendered
+from threadsai.result import Err, Ok
+from threadsai.secrets import credential
+from threadsai.store import Draft, SqliteStore
+from threadsai.store.budgets import BudgetLedger, Cover, LimitName, Refused
+from threadsai.thread.control import LOCAL_OPERATOR
 
 TOO_LONG = Rejected("prompt_too_long", 400)
 

@@ -29,8 +29,8 @@ Add `slack()` to a host and each Slack conversation becomes a thread. The agent 
     <Tab value="TypeScript">
 
     ```ts
-    import { secret } from "@threads/core";
-    import { slack } from "@threads/slack";
+    import { secret } from "threadsai";
+    import { slack } from "@threadsai/slack";
 
     const slackChannel = slack({
       agent: "support",
@@ -44,8 +44,8 @@ Add `slack()` to a host and each Slack conversation becomes a thread. The agent 
     <Tab value="Python">
 
     ```python
-    from threads import secret
-    from threads.slack import slack
+    from threadsai import secret
+    from threadsai.slack import slack
 
     slack_channel = slack(
         agent="support",
@@ -112,7 +112,7 @@ const approving = agent({
 <Tab value="Python">
 
 ```python
-from threads import Principal
+from threadsai import Principal
 
 approving = agent(
     name="support",

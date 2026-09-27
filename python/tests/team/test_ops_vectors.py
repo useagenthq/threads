@@ -23,12 +23,12 @@ from team.vectors import (
     world_logs,
 )
 
-from threads.log import BranchId, MailEnvelope, MemberStartedEvent, ThreadId
-from threads.result import Err, Ok
-from threads.store import SqliteStore, Writer
-from threads.store.deletion import delete_thread
-from threads.team.materialize import materialize
-from threads.team.materialize_types import MaterializeOptions, Rebind
+from threadsai.log import BranchId, MailEnvelope, MemberStartedEvent, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore, Writer
+from threadsai.store.deletion import delete_thread
+from threadsai.team.materialize import materialize
+from threadsai.team.materialize_types import MaterializeOptions, Rebind
 
 MINE = [v for v in vectors() if "lane" not in v]
 """A vector tagged for a later lane waits for that sub-lane's build; 29E untagged the last

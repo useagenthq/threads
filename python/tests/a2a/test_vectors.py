@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue, TypeAdapter, ValidationError
 
-from threads._generated.a2a_v1 import TaskState
-from threads.a2a.protocol import (
+from threadsai._generated.a2a_v1 import TaskState
+from threadsai.a2a.protocol import (
     A2A_ERROR_NAMES,
     A2A_ERRORS,
     check_version,

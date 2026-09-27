@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { sqlite } from "@threads/core";
-import { openStore, storeConnection, tenantStore } from "@threads/core/host";
+import { sqlite } from "threadsai";
+import { openStore, storeConnection, tenantStore } from "threadsai/host";
 import { z } from "zod";
 import { type Host, host } from "../src";
 import { hostTicked } from "../src/host";

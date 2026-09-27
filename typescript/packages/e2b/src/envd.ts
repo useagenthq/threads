@@ -1,4 +1,4 @@
-import type { Sinks, Started } from "@threads/core/adapter";
+import type { Sinks, Started } from "threadsai/adapter";
 import { serverStream, unary } from "./connect";
 import { follow } from "./process";
 import { bounded, type Send } from "./transport";

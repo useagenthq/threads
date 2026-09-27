@@ -1,7 +1,7 @@
 # pyright: strict
 """Internal entries stay internal: no docs page, README or example names them.
 
-`@threads/core/internal/*` (TypeScript subpaths) and `threads.store._feed` (Python) are the
+`threadsai/internal/*` (TypeScript subpaths) and `threadsai.store._feed` (Python) are the
 readers adapter packages build on. They are not in spec/api.json, not documented, and may change
 in any release, so a mention in user-facing text is an error. Stdlib only.
 """
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import pathlib
 
-INTERNAL = re.compile(r"@threads/core/internal/[\w/-]*|threads\.store\._feed")
+INTERNAL = re.compile(r"threadsai/internal/[\w/-]*|threadsai\.store\._feed")
 
 
 def user_facing(root: pathlib.Path) -> list[pathlib.Path]:

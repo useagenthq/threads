@@ -1,4 +1,4 @@
-import { credentialCases } from "@threads/adapter-testkit";
+import { credentialCases } from "@threadsai/adapter-testkit";
 import { daytona } from "../src";
 
 // Lane 09: the credential defaults to secret("DAYTONA_API_KEY") and is resolved at setup.

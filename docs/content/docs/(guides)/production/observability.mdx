@@ -14,8 +14,8 @@ Add `otel()` to your host and point the standard OpenTelemetry variables at your
 <Tab value="TypeScript">
 
 ```ts
-import { host } from "@threads/host";
-import { otel } from "@threads/otel";
+import { host } from "@threadsai/host";
+import { otel } from "@threadsai/otel";
 
 // OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
 // OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=<your key>
@@ -27,13 +27,13 @@ export default host({ store, agents: { support }, telemetry: otel() });
 <Tab value="Python">
 
 ```python
-from threads.host import host
-from threads.otel import otel
+from threadsai.host import host
+from threadsai.otel import otel
 
 app = host(store=store, agents={"support": support}, telemetry=otel())
 ```
 
-Install the extra: `pip install "threads[otel]"`.
+Install the extra: `pip install "threadsai[otel]"`.
 
 </Tab>
 </Tabs>
@@ -99,8 +99,8 @@ Outside a host, give `otel()` your store and call `sync()` yourself. It sends wh
 <Tab value="TypeScript">
 
 ```ts
-import { agent, scriptedModel, sqlite } from "@threads/core";
-import { otel } from "@threads/otel";
+import { otel } from "@threadsai/otel";
+import { agent, scriptedModel, sqlite } from "threadsai";
 
 // OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 bun examples/telemetry.ts
 const store = sqlite(".threads");
@@ -131,9 +131,9 @@ import asyncio
 
 from pydantic import JsonValue
 
-from threads import agent, scripted_model, sqlite
-from threads.otel import otel
-from threads.result import Err, Ok
+from threadsai import agent, scripted_model, sqlite
+from threadsai.otel import otel
+from threadsai.result import Err, Ok
 
 
 # OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 python examples/telemetry.py

@@ -3,73 +3,73 @@
   "packages": {
     "otel": {
       "ts": ["typescript/packages/otel/src"],
-      "py": ["python/src/threads/otel"]
+      "py": ["python/src/threadsai/otel"]
     },
     "search": {
       "ts": ["typescript/packages/core/src/tools/search-backends.ts"],
-      "py": ["python/src/threads/search.py"]
+      "py": ["python/src/threadsai/search.py"]
     },
     "supermemory": {
       "ts": ["typescript/packages/supermemory/src"],
-      "py": ["python/src/threads/supermemory.py", "python/src/threads/adapters/memories/supermemory.py"]
+      "py": ["python/src/threadsai/supermemory.py", "python/src/threadsai/adapters/memories/supermemory.py"]
     },
     "zep": {
       "ts": ["typescript/packages/zep/src"],
-      "py": ["python/src/threads/zep.py", "python/src/threads/adapters/memories/zep.py"]
+      "py": ["python/src/threadsai/zep.py", "python/src/threadsai/adapters/memories/zep.py"]
     },
     "postgres": {
       "ts": ["typescript/packages/postgres/src"],
-      "py": ["python/src/threads/postgres"]
+      "py": ["python/src/threadsai/postgres"]
     },
     "anthropic": {
       "ts": ["typescript/packages/anthropic/src"],
-      "py": ["python/src/threads/anthropic.py", "python/src/threads/adapters/models/anthropic"]
+      "py": ["python/src/threadsai/anthropic.py", "python/src/threadsai/adapters/models/anthropic"]
     },
     "openai": {
       "ts": ["typescript/packages/openai/src"],
-      "py": ["python/src/threads/openai.py", "python/src/threads/adapters/models/openai"]
+      "py": ["python/src/threadsai/openai.py", "python/src/threadsai/adapters/models/openai"]
     },
     "ai-sdk": {
       "ts": ["typescript/packages/ai-sdk/src"]
     },
     "litellm": {
-      "py": ["python/src/threads/litellm.py", "python/src/threads/adapters/models/litellm"]
+      "py": ["python/src/threadsai/litellm.py", "python/src/threadsai/adapters/models/litellm"]
     },
     "e2b": {
       "ts": ["typescript/packages/e2b/src"],
-      "py": ["python/src/threads/e2b.py", "python/src/threads/adapters/sandboxes/e2b"]
+      "py": ["python/src/threadsai/e2b.py", "python/src/threadsai/adapters/sandboxes/e2b"]
     },
     "daytona": {
       "ts": ["typescript/packages/daytona/src"],
-      "py": ["python/src/threads/daytona.py", "python/src/threads/adapters/sandboxes/daytona"]
+      "py": ["python/src/threadsai/daytona.py", "python/src/threadsai/adapters/sandboxes/daytona"]
     },
     "docker": {
       "ts": ["typescript/packages/docker/src"],
-      "py": ["python/src/threads/docker.py", "python/src/threads/adapters/sandboxes/docker"]
+      "py": ["python/src/threadsai/docker.py", "python/src/threadsai/adapters/sandboxes/docker"]
     },
     "modal": {
       "ts": ["typescript/packages/modal/src"],
-      "py": ["python/src/threads/modal.py", "python/src/threads/adapters/sandboxes/modal"]
+      "py": ["python/src/threadsai/modal.py", "python/src/threadsai/adapters/sandboxes/modal"]
     },
     "dev": {
       "ts": ["typescript/packages/core/src/sandbox/dev"],
-      "py": ["python/src/threads/dev.py", "python/src/threads/adapters/sandboxes/dev"]
+      "py": ["python/src/threadsai/dev.py", "python/src/threadsai/adapters/sandboxes/dev"]
     },
     "mem0": {
       "ts": ["typescript/packages/mem0/src"],
-      "py": ["python/src/threads/mem0.py", "python/src/threads/adapters/memories/mem0.py"]
+      "py": ["python/src/threadsai/mem0.py", "python/src/threadsai/adapters/memories/mem0.py"]
     },
     "slack": {
       "ts": ["typescript/packages/slack/src"],
-      "py": ["python/src/threads/slack.py", "python/src/threads/adapters/channels/slack.py", "python/src/threads/adapters/channels/common.py"]
+      "py": ["python/src/threadsai/slack.py", "python/src/threadsai/adapters/channels/slack.py", "python/src/threadsai/adapters/channels/common.py"]
     },
     "github": {
       "ts": ["typescript/packages/github/src"],
-      "py": ["python/src/threads/github.py", "python/src/threads/adapters/channels/github.py", "python/src/threads/adapters/channels/common.py"]
+      "py": ["python/src/threadsai/github.py", "python/src/threadsai/adapters/channels/github.py", "python/src/threadsai/adapters/channels/common.py"]
     },
     "whatsapp": {
       "ts": ["typescript/packages/whatsapp/src"],
-      "py": ["python/src/threads/whatsapp.py", "python/src/threads/adapters/channels/whatsapp.py", "python/src/threads/adapters/channels/common.py"]
+      "py": ["python/src/threadsai/whatsapp.py", "python/src/threadsai/adapters/channels/whatsapp.py", "python/src/threadsai/adapters/channels/common.py"]
     }
   },
   "factories": {

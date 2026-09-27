@@ -13,11 +13,11 @@ import pytest
 from pydantic import BaseModel, JsonValue
 from starlette.requests import Request
 
-from threads.a2a.protocol import Binding, Method
-from threads.host.a2a.parse import Inbound, Named, Unnamed, operation, request_of, tenant_mismatch
-from threads.host.a2a.wire import Envelope, refuse, unauthenticated
-from threads.log import Principal
-from threads.result import Err
+from threadsai.a2a.protocol import Binding, Method
+from threadsai.host.a2a.parse import Inbound, Named, Unnamed, operation, request_of, tenant_mismatch
+from threadsai.host.a2a.wire import Envelope, refuse, unauthenticated
+from threadsai.log import Principal
+from threadsai.result import Err
 
 ALICE: Final = Principal(issuer="partner", tenant="acme", subject="refunds.partner.example")
 OK: Final = 200

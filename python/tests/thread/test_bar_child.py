@@ -6,10 +6,10 @@ import asyncio
 
 from pydantic import JsonValue
 
-from threads import Completed, agent, scripted_model, sqlite
-from threads.log import CancelRequestedEvent, Principal
-from threads.result import Ok
-from threads.thread.tree import bar_child
+from threadsai import Completed, agent, scripted_model, sqlite
+from threadsai.log import CancelRequestedEvent, Principal
+from threadsai.result import Ok
+from threadsai.thread.tree import bar_child
 
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")
 ANSWER: JsonValue = {

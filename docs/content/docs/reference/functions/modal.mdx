@@ -6,7 +6,7 @@ icon: "Plug"
 
 Pass it as agent(&#123;sandbox: modal(image_id="im-...")&#125;). Each sandbox starts with no environment and its network blocked. TypeScript: always refuses (Modal's JS SDK runs commands over a transport threads can't fence); use Python.
 
-Import from `@threads/modal` (TypeScript) or `threads.modal` (Python).
+Import from `@threadsai/modal` (TypeScript) or `threadsai.modal` (Python).
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -30,7 +30,7 @@ def modal(
     allow_internet: bool = False,
     name: str = "modal",
     server_url: str = "https://api.modal.com",
-    connect: threads.adapters.sandboxes.modal.channel.Connect | None = None,
+    connect: threadsai.adapters.sandboxes.modal.channel.Connect | None = None,
 ) -> Sandbox
 ```
 
@@ -75,7 +75,7 @@ def modal(
   Python only. Seam: the Modal API URL (tests point it at a fake).
 </Field>
 
-<Field name="connect" type={"threads.adapters.sandboxes.modal.channel.Connect"}>
+<Field name="connect" type={"threadsai.adapters.sandboxes.modal.channel.Connect"}>
   Python only. Seam: opens a gRPC channel to a URL (tests). Omitted: a TLS channel; the fence checks every request on it either way.
 </Field>
 

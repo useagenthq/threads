@@ -19,10 +19,10 @@ from protobuf import Oneof
 from pyqwest.testing import ASGITransport
 from sandbox_backend import Box, FakeBackend, LostAnswerError, UnavailableError
 
-from threads.adapters.loop_resources import holding
-from threads.adapters.sandboxes.e2b.control import KEY
-from threads.adapters.sandboxes.e2b.envd import Transports
-from threads.adapters.sandboxes.e2b.sandbox import E2BSandbox
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.sandboxes.e2b.control import KEY
+from threadsai.adapters.sandboxes.e2b.envd import Transports
+from threadsai.adapters.sandboxes.e2b.sandbox import E2BSandbox
 
 API_KEY = "e2b_test_key_0123456789"
 DOMAIN = "e2b.test"

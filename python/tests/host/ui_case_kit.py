@@ -10,21 +10,21 @@ from pathlib import Path
 from corpus import import_and_read, load, now_of
 from pydantic import JsonValue, TypeAdapter
 
-from threads._generated.host_api_v1 import AgUiResumeEntry
-from threads.agents.store import sqlite
-from threads.host.outcome import logged, run_start
-from threads.host.ui.ag_ui_resume import resume_conflicts
-from threads.host.ui.closing import RunIds, ending
-from threads.host.ui.connection import Cursor
-from threads.host.ui.frame import Frame, Protocol
-from threads.host.ui.hub import LiveHub
-from threads.host.ui.listener import LiveListener
-from threads.host.ui.live import Delta
-from threads.host.ui.session import SessionPlan, UiSession
-from threads.log import Event, EventId, ParkAddress, ParkedEvent, ResumedEvent, ThreadId
-from threads.log.jcs import canonicalize
-from threads.result import Ok
-from threads.thread.handle import Thread
+from threadsai._generated.host_api_v1 import AgUiResumeEntry
+from threadsai.agents.store import sqlite
+from threadsai.host.outcome import logged, run_start
+from threadsai.host.ui.ag_ui_resume import resume_conflicts
+from threadsai.host.ui.closing import RunIds, ending
+from threadsai.host.ui.connection import Cursor
+from threadsai.host.ui.frame import Frame, Protocol
+from threadsai.host.ui.hub import LiveHub
+from threadsai.host.ui.listener import LiveListener
+from threadsai.host.ui.live import Delta
+from threadsai.host.ui.session import SessionPlan, UiSession
+from threadsai.log import Event, EventId, ParkAddress, ParkedEvent, ResumedEvent, ThreadId
+from threadsai.log.jcs import canonicalize
+from threadsai.result import Ok
+from threadsai.thread.handle import Thread
 
 _JSON: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
 

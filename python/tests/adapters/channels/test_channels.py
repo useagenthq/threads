@@ -12,14 +12,14 @@ import httpx
 import pytest
 from pydantic import JsonValue
 
-from threads.github import github
-from threads.host import DeliveryError, Message, RawRequest, Sent
-from threads.loop.model import Found, NotFound
-from threads.memory.fence import FenceRefusedError, bound
-from threads.result import Err, Ok
-from threads.secrets import secret
-from threads.slack import slack
-from threads.whatsapp import whatsapp
+from threadsai.github import github
+from threadsai.host import DeliveryError, Message, RawRequest, Sent
+from threadsai.loop.model import Found, NotFound
+from threadsai.memory.fence import FenceRefusedError, bound
+from threadsai.result import Err, Ok
+from threadsai.secrets import secret
+from threadsai.slack import slack
+from threadsai.whatsapp import whatsapp
 
 SECRET = "shh-signing"  # noqa: S105 - a test signing secret
 

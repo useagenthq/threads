@@ -14,7 +14,7 @@ import pytest
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads import (
+from threadsai import (
     Completed,
     ConfigError,
     Parked,
@@ -22,11 +22,11 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads.agents.agent import Agent
-from threads.coding import coding_agent
-from threads.log import Event, PermissionDecisionEvent, ToolResultEvent
-from threads.result import Ok
-from threads.thread.handle import Thread
+from threadsai.agents.agent import Agent
+from threadsai.coding import coding_agent
+from threadsai.log import Event, PermissionDecisionEvent, ToolResultEvent
+from threadsai.result import Ok
+from threadsai.thread.handle import Thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 PIPELINE = "cd app && npm test 2>&1 | tail -50"

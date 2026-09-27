@@ -5,7 +5,7 @@ proves the two agree about A2A 1.0 without either reading the other's code.
 Every expected value comes from the pinned protocol, never from memory: the error codes are parsed
 out of the table in `spec/schema/a2a/README.md` (itself copied from the specification's §5.4
 mapping), and the rest is the behaviour the protocol source states —
-`typescript/packages/a2a/src/protocol/` and `python/src/threads/a2a/protocol/`.
+`typescript/packages/a2a/src/protocol/` and `python/src/threadsai/a2a/protocol/`.
 
 - `errors`: every A2A error name with its JSON-RPC code and HTTP status.
 - `task_states`: the eight states we accept, each with `terminal` and `interrupted`, plus the two
@@ -199,7 +199,7 @@ KEYS: tuple[tuple[str, str, str, JsonValue], ...] = (
 
 
 def _principal_key() -> str:
-    """`issuer/tenant/subject`, each part with % then / escaped (python/src/threads/log/keys.py)."""
+    """`issuer/tenant/subject`, each part with % then / escaped (src/threadsai/log/keys.py)."""
     return "/".join(part.replace("%", "%25").replace("/", "%2F") for part in PRINCIPAL)
 
 
@@ -254,7 +254,7 @@ def _keys() -> list[JsonValue]:
 
 
 # The client side's derivations (typescript/packages/a2a/src/outbound/derive.ts and
-# python/src/threads/a2a/outbound/derive.py), recomputed here from their definitions.
+# python/src/threadsai/a2a/outbound/derive.py), recomputed here from their definitions.
 OUTBOUND: tuple[tuple[str, str, str, str, str], ...] = (
     (
         "a plain call of one remote",

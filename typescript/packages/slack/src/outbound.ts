@@ -7,7 +7,7 @@ import {
   type LookupResult,
   responseText,
   sandboxFetch,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { z } from "zod";
 import type { ButtonValue } from "./inbound";
 

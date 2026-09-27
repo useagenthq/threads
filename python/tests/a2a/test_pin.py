@@ -11,8 +11,8 @@ from typing import Final
 from cards import CARD_URL, RPC, as_bytes, card_of
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads._generated.a2a_v1 import SendMessageResponse, StreamResponse, Task
-from threads.a2a.protocol import (
+from threadsai._generated.a2a_v1 import SendMessageResponse, StreamResponse, Task
+from threadsai.a2a.protocol import (
     IDEMPOTENT_SEND,
     MAX_CARD_BYTES,
     MessagePayload,
@@ -31,10 +31,10 @@ from threads.a2a.protocol import (
     stream_payload,
     text_of,
 )
-from threads.log.digest import sha256_hex
-from threads.result import Err, Ok
-from threads.web.guard import Resolve, Target
-from threads.web.http import Fence, Request, Response, WebError
+from threadsai.log.digest import sha256_hex
+from threadsai.result import Err, Ok
+from threadsai.web.guard import Resolve, Target
+from threadsai.web.http import Fence, Request, Response, WebError
 
 DAY_MS: Final = 86_400_000
 """The window our own exposed agents declare, so the vector and this test read the same number."""

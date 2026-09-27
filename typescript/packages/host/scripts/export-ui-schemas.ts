@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { canonicalize } from "@threads/core/host";
 import { uiMessageChunkSchema } from "ai";
+import { canonicalize } from "threadsai/host";
 import { z } from "zod";
 
 // bun scripts/export-ui-schemas.ts          write spec/schema/ui/ai-sdk-ui.v1.schema.json

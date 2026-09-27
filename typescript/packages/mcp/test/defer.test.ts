@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { agent, scriptedModel, sqlite } from "@threads/core";
+import { agent, scriptedModel, sqlite } from "threadsai";
 import { eventsOf, note, say, server, use } from "./kit";
 import type { Call } from "./server";
 

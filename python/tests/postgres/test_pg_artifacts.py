@@ -8,12 +8,12 @@ from collections.abc import Iterator
 import pytest
 from pg_kit import Leg, admin, need_postgres, schema_url
 
-from threads.log.digest import sha256_hex
-from threads.postgres.artifacts import PgArtifacts, candidates, delete_older
-from threads.postgres.opening import install, open_postgres
-from threads.result import Err, Ok
-from threads.store import SqliteStore
-from threads.store.conn import run
+from threadsai.log.digest import sha256_hex
+from threadsai.postgres.artifacts import PgArtifacts, candidates, delete_older
+from threadsai.postgres.opening import install, open_postgres
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore
+from threadsai.store.conn import run
 
 T0 = 1_790_000_000_000
 DATA = b"a spilled result"

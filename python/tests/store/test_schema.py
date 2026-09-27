@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from threads._generated.store_sql import STORE_VERSION
-from threads.log import BranchId, ThreadId
-from threads.result import Err, Ok
-from threads.store import LOCAL_TENANT, SqliteStore
-from threads.store.sqlite_driver import connect
+from threadsai._generated.store_sql import STORE_VERSION
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.store import LOCAL_TENANT, SqliteStore
+from threadsai.store.sqlite_driver import connect
 
 pytestmark = pytest.mark.sqlite_only
 

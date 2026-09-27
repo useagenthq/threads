@@ -221,7 +221,7 @@ export function childFactory(agent: object): ChildFactory | undefined {
   return AGENTS.get(agent)?.child;
 }
 
-/** The host's view of an agent handle (@threads/host), or undefined for a foreign object. */
+/** The host's view of an agent handle (@threadsai/host), or undefined for a foreign object. */
 export function hostRunner(agent: object): HostRunner | undefined {
   return AGENTS.get(agent)?.host;
 }

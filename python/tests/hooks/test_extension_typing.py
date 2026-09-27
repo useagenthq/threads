@@ -2,7 +2,7 @@
 file) infers Extension[None] even without context, so passing it to agent() is not an unknown
 argument."""
 
-from threads import agent, extension, scripted_model
+from threadsai import agent, extension, scripted_model
 
 STYLE = extension(name="style", instructions="Answer briefly.")
 

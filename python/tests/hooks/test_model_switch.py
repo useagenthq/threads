@@ -7,17 +7,17 @@ from corpus import Clock
 from kit import T0, USER, Tools, acquire, allow_all, open_store, text
 from pydantic import JsonValue
 
-from threads.agents.context import RunContext
-from threads.hooks.extension import bind, extension
-from threads.hooks.types import SwitchGate
-from threads.log import BranchId, ModelSettings, Principal, ThreadId
-from threads.loop.drafts import draft
-from threads.loop.drive import drive
-from threads.loop.runtime import Idle, Runtime, serving
-from threads.loop.scripted import scripted_model
-from threads.reduce.handlers import to_json
-from threads.result import Ok
-from threads.store.lines import uuid7
+from threadsai.agents.context import RunContext
+from threadsai.hooks.extension import bind, extension
+from threadsai.hooks.types import SwitchGate
+from threadsai.log import BranchId, ModelSettings, Principal, ThreadId
+from threadsai.loop.drafts import draft
+from threadsai.loop.drive import drive
+from threadsai.loop.runtime import Idle, Runtime, serving
+from threadsai.loop.scripted import scripted_model
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Ok
+from threadsai.store.lines import uuid7
 
 OVERLOADED: JsonValue = {"error": {"reason": "overloaded", "http_status": 529}}
 DONE = text("Done.")

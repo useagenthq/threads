@@ -4,10 +4,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from threads.log import SnapshotData
-from threads.result import Err, Ok
-from threads.sandbox import FakeSandbox, SandboxError, SandboxInfo, SandboxSession
-from threads.sandbox.protocol import (
+from threadsai.log import SnapshotData
+from threadsai.result import Err, Ok
+from threadsai.sandbox import FakeSandbox, SandboxError, SandboxInfo, SandboxSession
+from threadsai.sandbox.protocol import (
     NO_ENV,
     ExecOutput,
     SandboxContext,

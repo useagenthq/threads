@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { agent, scriptedModel } from "@threads/core";
+import { agent, scriptedModel } from "threadsai";
 import {
   openStore,
   storeConnection,
   TeamId,
   type TeamItem,
   tenantStore,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { rebuildTeamIndex } from "../../core/src/team/rebuild";
 import { teamSse } from "../src/teams";

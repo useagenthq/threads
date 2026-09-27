@@ -18,9 +18,9 @@ from team.team_kit import (
     verified,
 )
 
-from threads.agents.store import Store, open_store
-from threads.agents.team_feed import InvalidCursorError, team_events
-from threads.agents.team_handle_types import (
+from threadsai.agents.store import Store, open_store
+from threadsai.agents.team_feed import InvalidCursorError, team_events
+from threadsai.agents.team_handle_types import (
     EpochRestarted,
     MemberSource,
     OperatorSource,
@@ -28,15 +28,15 @@ from threads.agents.team_handle_types import (
     TeamItem,
     TeamSource,
 )
-from threads.log import ParseError, TeamOpenedEvent, ThreadStartedEvent
-from threads.reduce.handlers import to_json
-from threads.result import Err
-from threads.store import LOCAL_TENANT, SqliteStore, VerifiedLog
-from threads.store.sql import int_of, text_of
-from threads.team.cross import TeamLogEvents, check_team_logs
-from threads.team.index import opened_tenant as _opened_tenant
-from threads.team.members import PENDING, open_member, team_members
-from threads.team.rebuild import rebuild_team_index
+from threadsai.log import ParseError, TeamOpenedEvent, ThreadStartedEvent
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Err
+from threadsai.store import LOCAL_TENANT, SqliteStore, VerifiedLog
+from threadsai.store.sql import int_of, text_of
+from threadsai.team.cross import TeamLogEvents, check_team_logs
+from threadsai.team.index import opened_tenant as _opened_tenant
+from threadsai.team.members import PENDING, open_member, team_members
+from threadsai.team.rebuild import rebuild_team_index
 
 _JSON: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 type Found = dict[str, JsonValue]

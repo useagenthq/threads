@@ -10,18 +10,18 @@ import httpx
 import pytest
 from eval_kit import LOOKUP, Order, say
 
-from threads import Agent, ConfigError, RunContext, agent, fake_sandbox, scripted_model, tool
-from threads.adapters.models.anthropic import anthropic
-from threads.adapters.models.litellm import litellm
-from threads.adapters.models.openai import openai
-from threads.agents.bindings import AppTool, Fence
-from threads.agents.definition import dry_pin
-from threads.agents.setup import set_up
-from threads.hooks.extension import extension
-from threads.log import ThreadStartedData
-from threads.memory.types import MemoryRecord, ProviderError, Scope
-from threads.render.request import line0
-from threads.result import Err
+from threadsai import Agent, ConfigError, RunContext, agent, fake_sandbox, scripted_model, tool
+from threadsai.adapters.models.anthropic import anthropic
+from threadsai.adapters.models.litellm import litellm
+from threadsai.adapters.models.openai import openai
+from threadsai.agents.bindings import AppTool, Fence
+from threadsai.agents.definition import dry_pin
+from threadsai.agents.setup import set_up
+from threadsai.hooks.extension import extension
+from threadsai.log import ThreadStartedData
+from threadsai.memory.types import MemoryRecord, ProviderError, Scope
+from threadsai.render.request import line0
+from threadsai.result import Err
 
 COUNTS: dict[str, int] = {"connects": 0, "extension": 0, "memory": 0}
 

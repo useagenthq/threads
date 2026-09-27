@@ -1,4 +1,4 @@
-import { JsonObject, JsonValue } from "@threads/core/adapter";
+import { JsonObject, JsonValue } from "threadsai/adapter";
 import { z } from "zod";
 import type { Arr, EnumOf, Opt, Strict, Union } from "./zod";
 

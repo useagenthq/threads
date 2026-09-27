@@ -4,7 +4,7 @@ import { mailRenders, monitorId } from "./team";
 
 // Where the open (or last) turn of a log began: its user_input, its woken, or the received mail
 // that opened it (spec/schema/README.md, "Which events open a turn"), read from the events alone
-// with the fold's own rules. Mirrors Python's threads.reduce.openers.
+// with the fold's own rules. Mirrors Python's threadsai.reduce.openers.
 
 function opens(
   e: KnownEvent,

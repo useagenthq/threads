@@ -1,11 +1,11 @@
-import { ConfigError, type MessagePolicyRule } from "@threads/core";
+import { ConfigError, type MessagePolicyRule } from "threadsai";
 import {
   type DryPin,
   dryPin,
   type RestartPolicy,
   type ToolSpec,
-} from "@threads/core/host";
-import { isPosInt } from "@threads/core/internal/pos-int";
+} from "threadsai/host";
+import { isPosInt } from "threadsai/internal/pos-int";
 
 // host({members}) at setup (spec/api.json host.members): which host agents run as one long-lived
 // member per tenant, and every refusal that makes a shared member safe. Checked synchronously from

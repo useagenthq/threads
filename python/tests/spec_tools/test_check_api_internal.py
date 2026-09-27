@@ -1,5 +1,5 @@
 """check_api.py refuses user-facing text that names an internal entry (spec/tools/api_internal.py):
-the telemetry feed is `@threads/core/internal/feed` / `threads.store._feed`, never documented."""
+the telemetry feed is `threadsai/internal/feed` / `threadsai.store._feed`, never documented."""
 
 import pathlib
 
@@ -15,20 +15,20 @@ def test_the_repository_names_no_internal_entry() -> None:
 def test_a_docs_page_that_mentions_the_internal_feed_fails(tmp_path: pathlib.Path) -> None:
     page = tmp_path / "docs" / "content" / "docs" / "telemetry.mdx"
     page.parent.mkdir(parents=True)
-    page.write_text('import { Feed } from "@threads/core/internal/feed";\n')
+    page.write_text('import { Feed } from "threadsai/internal/feed";\n')
     example = tmp_path / "python" / "examples" / "feed.py"
     example.parent.mkdir(parents=True)
-    example.write_text("from threads.store._feed import Feed\n")
+    example.write_text("from threadsai.store._feed import Feed\n")
     problems = check_internal_mentions(tmp_path)
     assert problems == [
-        "docs/content/docs/telemetry.mdx: mentions @threads/core/internal/feed, an internal"
+        "docs/content/docs/telemetry.mdx: mentions threadsai/internal/feed, an internal"
         " entry that is never documented",
-        "python/examples/feed.py: mentions threads.store._feed, an internal entry that is never"
+        "python/examples/feed.py: mentions threadsai.store._feed, an internal entry that is never"
         " documented",
     ]
 
 
 def test_public_entries_are_fine(tmp_path: pathlib.Path) -> None:
     page = tmp_path / "README.md"
-    page.write_text('import { otel } from "@threads/otel";\nfrom threads.otel import otel\n')
+    page.write_text('import { otel } from "@threadsai/otel";\nfrom threadsai.otel import otel\n')
     assert check_internal_mentions(tmp_path) == []

@@ -8,7 +8,7 @@ from host.test_http import run, served, text, use
 from host.ui_kit import AG_UI, AI_SDK, chat, frames, post, types, user
 from pydantic import JsonValue
 
-from threads import Agent, agent, scripted_model
+from threadsai import Agent, agent, scripted_model
 
 ASK: JsonValue = {"question": "Which colour?", "options": ["Red", "Blue"]}
 

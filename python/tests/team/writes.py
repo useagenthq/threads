@@ -8,10 +8,10 @@ from dataclasses import dataclass
 
 from team.team_kit import appendable
 
-from threads.log import Event, TeamOpenedEvent
-from threads.reduce.handlers import to_json
-from threads.result import Ok
-from threads.store import Draft, SqliteStore, VerifiedLog, Writer
+from threadsai.log import Event, TeamOpenedEvent
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Ok
+from threadsai.store import Draft, SqliteStore, VerifiedLog, Writer
 
 HOLDER = "replay"
 

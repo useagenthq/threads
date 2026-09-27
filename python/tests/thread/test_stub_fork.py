@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, JsonValue
 
-from threads import (
+from threadsai import (
     Agent,
     Completed,
     Failed,
@@ -23,15 +23,15 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.agents.config import ConfigError
-from threads.agents.store import Store, now_ms, open_store
-from threads.anthropic import anthropic
-from threads.log import EffectCommitEvent, Permissions, ToolResultEvent
-from threads.result import Err, Ok
-from threads.sandbox.fake import FakeSandbox
-from threads.sandbox.protocol import SandboxInfo
-from threads.thread.frozen_stubs import stub_fork_ref
-from threads.thread.handle import open_thread
+from threadsai.agents.config import ConfigError
+from threadsai.agents.store import Store, now_ms, open_store
+from threadsai.anthropic import anthropic
+from threadsai.log import EffectCommitEvent, Permissions, ToolResultEvent
+from threadsai.result import Err, Ok
+from threadsai.sandbox.fake import FakeSandbox
+from threadsai.sandbox.protocol import SandboxInfo
+from threadsai.thread.frozen_stubs import stub_fork_ref
+from threadsai.thread.handle import open_thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 BYPASS = Permissions(

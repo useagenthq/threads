@@ -7,9 +7,9 @@ from pathlib import Path
 
 from eval_kit import Refunds, saved
 
-from threads import run_evals
-from threads.loop import guard
-from threads.reduce.handlers import to_json
+from threadsai import run_evals
+from threadsai.loop import guard
+from threadsai.reduce.handlers import to_json
 
 LOOKUP_RESULT = 5
 """The lookup's tool_result: the first appended event a changed result makes differ."""

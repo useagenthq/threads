@@ -1,5 +1,5 @@
-import { agent, type Model, type Store, scriptedModel } from "@threads/core";
-import { markTestKit } from "@threads/core/adapter";
+import { agent, type Model, type Store, scriptedModel } from "threadsai";
+import { markTestKit } from "threadsai/adapter";
 import {
   type BranchId,
   knownEvents,
@@ -8,7 +8,7 @@ import {
   storeConnection,
   tenantStore,
   type VerifiedLog,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { type Host, host, type RunAccepted } from "../src";
 import { authenticate, say } from "./kit";
 import { sqlRun } from "./sql";

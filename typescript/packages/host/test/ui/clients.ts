@@ -1,5 +1,4 @@
 import { HttpAgent } from "@ag-ui/client";
-import type { Principal } from "@threads/core/host";
 import {
   AbstractChat,
   lastAssistantMessageIsCompleteWithToolCalls as answered,
@@ -10,6 +9,7 @@ import {
   DefaultChatTransport,
   type UIMessage,
 } from "ai";
+import type { Principal } from "threadsai/host";
 import type { Host } from "../../src";
 
 // The stock web clients, pointed at a host's fetch: AI SDK 7's Chat (with a plain state, as the

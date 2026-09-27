@@ -4,7 +4,7 @@ import {
   ConfigError,
   type Exporter,
   type MessagePolicyRule,
-} from "@threads/core";
+} from "threadsai";
 import {
   dueQuestionBranches,
   type EventId,
@@ -17,7 +17,7 @@ import {
   type Team,
   ThreadId,
   wakeBranches,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { type A2aOptions, type Exposed, exposeA2a } from "./a2a/config";
 import { a2aRoute } from "./a2a/route";
 import { consume } from "./consume";

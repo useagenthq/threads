@@ -9,11 +9,11 @@ from pydantic import JsonValue
 from team.run_kit import call, events, member_events, say
 from team.test_dynamic import INVOICE, preview, scripted, specialist_of, start_specialist
 
-from threads import Completed, agent, dynamic_agent, fake_sandbox, sqlite, usd
-from threads.log import Budget, ThreadStartedEvent, ToolResultEvent
-from threads.log import Model as ModelLimits
-from threads.loop.model import ModelInfo
-from threads.loop.scripted import ScriptedModel
+from threadsai import Completed, agent, dynamic_agent, fake_sandbox, sqlite, usd
+from threadsai.log import Budget, ThreadStartedEvent, ToolResultEvent
+from threadsai.log import Model as ModelLimits
+from threadsai.loop.model import ModelInfo
+from threadsai.loop.scripted import ScriptedModel
 
 
 def test_a_sandboxed_templates_member_that_chose_one_tool_has_no_bash() -> None:

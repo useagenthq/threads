@@ -12,13 +12,13 @@ from pg_drill import Forcing, opened_with
 from pg_kit import Leg, need_postgres
 from store.test_writer import DONE, ROOT, T0, THREAD, Clock, started, user
 
-from threads.log import ParseError
-from threads.result import Ok
-from threads.store import Draft, StoreError, Writer, verify_export
-from threads.store import conn as seam
-from threads.store.conn import Conn
-from threads.store.verify import StoredEvent
-from threads.store.writer import DecideTx, Refusal
+from threadsai.log import ParseError
+from threadsai.result import Ok
+from threadsai.store import Draft, StoreError, Writer, verify_export
+from threadsai.store import conn as seam
+from threadsai.store.conn import Conn
+from threadsai.store.verify import StoredEvent
+from threadsai.store.writer import DecideTx, Refusal
 
 type At = Callable[[str], bool]
 
@@ -162,7 +162,7 @@ def test_a_forced_lease_acquire_retries_and_takes_the_next_epoch(leg: Leg) -> No
 def test_a_forced_team_rebuild_retries_and_rebuilds_the_same_rows(leg: Leg) -> None:
     from team.team_kit import TEAM, TENANT, add, case_logs, index_rows  # noqa: PLC0415
 
-    from threads.team.rebuild import rebuild_team_index  # noqa: PLC0415
+    from threadsai.team.rebuild import rebuild_team_index  # noqa: PLC0415
 
     async def main() -> None:
         store, conn = await opened_with(leg, Forcing, tenant=TENANT)

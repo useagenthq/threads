@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from threads.host.cron import MINUTE_MS, is_due, parse_cron
+from threadsai.host.cron import MINUTE_MS, is_due, parse_cron
 
 VECTOR = Path(__file__).resolve().parents[3] / "spec/conformance/vectors/schedule-dst.json"
 

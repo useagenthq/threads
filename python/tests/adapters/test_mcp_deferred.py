@@ -11,10 +11,10 @@ from itertools import pairwise
 from mcp_kit import TracedAsgi, server
 from pydantic import BaseModel, JsonValue
 
-from threads import Completed, RunContext, agent, scripted_model, sqlite, tool
-from threads.adapters.models.render import parse
-from threads.agents.results import Thread
-from threads.log import (
+from threadsai import Completed, RunContext, agent, scripted_model, sqlite, tool
+from threadsai.adapters.models.render import parse
+from threadsai.agents.results import Thread
+from threadsai.log import (
     Event,
     ModelRequestEvent,
     Permissions,
@@ -22,10 +22,10 @@ from threads.log import (
     ToolResultEvent,
     ToolsLoadedEvent,
 )
-from threads.loop.model import ModelRequest
-from threads.mcp import mcp
-from threads.result import Ok
-from threads.thread.control import LOCAL_OPERATOR
+from threadsai.loop.model import ModelRequest
+from threadsai.mcp import mcp
+from threadsai.result import Ok
+from threadsai.thread.control import LOCAL_OPERATOR
 
 ALLOW = Permissions(
     mode="default",

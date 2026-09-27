@@ -7,7 +7,7 @@ import asyncio
 import pytest
 from pydantic import JsonValue
 
-from threads import Completed, agent, scripted_model, sqlite
+from threadsai import Completed, agent, scripted_model, sqlite
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

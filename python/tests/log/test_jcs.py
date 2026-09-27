@@ -8,9 +8,9 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from pydantic import JsonValue
 
-from threads.log.jcs import MAX_SAFE_INTEGER, canonicalize
-from threads.log.strict_json import parse_json
-from threads.result import Err, Ok
+from threadsai.log.jcs import MAX_SAFE_INTEGER, canonicalize
+from threadsai.log.strict_json import parse_json
+from threadsai.result import Err, Ok
 
 
 def from_bits(bits: str) -> float:

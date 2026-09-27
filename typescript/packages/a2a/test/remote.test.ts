@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ConfigError, secret } from "@threads/core/adapter";
+import { ConfigError, secret } from "threadsai/adapter";
 import { bearer, DEFAULT_TIMEOUT_MS, remote } from "../src/a2a";
 
 // remote() and bearer() are pure config: the card is fetched and pinned later, so a host whose

@@ -13,10 +13,10 @@ import httpx
 import pytest
 from pydantic import JsonValue
 
-from threads import ConfigError, agent, scripted_model, sqlite
-from threads.agents.store import Store, open_store, scoped
-from threads.host import RawRequest, host
-from threads.log import (
+from threadsai import ConfigError, agent, scripted_model, sqlite
+from threadsai.agents.store import Store, open_store, scoped
+from threadsai.host import RawRequest, host
+from threadsai.log import (
     ChannelDeliveryEvent,
     EffectCommitEvent,
     EffectUnknownEvent,
@@ -24,11 +24,11 @@ from threads.log import (
     ToolCallEvent,
     UserInputEvent,
 )
-from threads.result import Ok
-from threads.secrets import secret
-from threads.slack import slack
-from threads.store import StoredEvent
-from threads.whatsapp import whatsapp
+from threadsai.result import Ok
+from threadsai.secrets import secret
+from threadsai.slack import slack
+from threadsai.store import StoredEvent
+from threadsai.whatsapp import whatsapp
 
 SECRET = "shh-signing"  # noqa: S105 - a test signing secret
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}

@@ -11,8 +11,8 @@ import pytest
 from corpus import CASES, import_and_read, load, now_of
 from pydantic import JsonValue
 
-from threads.result import Ok
-from threads.store import verify_export
+from threadsai.result import Ok
+from threadsai.store import verify_export
 
 STAGED = CASES.parent / "staged"
 

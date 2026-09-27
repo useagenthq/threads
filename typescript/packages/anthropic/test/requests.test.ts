@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { recordingFetch, renderBody, sse } from "@threads/adapter-testkit";
-import { agent, sqlite } from "@threads/core";
+import { recordingFetch, renderBody, sse } from "@threadsai/adapter-testkit";
+import { agent, sqlite } from "threadsai";
 import {
   type Json,
   markTestKit,
   memoryContext,
   parseRender,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { z } from "zod";
 import { type AnthropicOptions, anthropic } from "../src";
 import { toAnthropic } from "../src/request";

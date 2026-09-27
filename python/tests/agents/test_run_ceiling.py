@@ -8,9 +8,9 @@ from collections.abc import Sequence
 
 from pydantic import BaseModel, JsonValue
 
-from threads import Agent, HandedOff, RunContext, Thread, agent, scripted_model, sqlite, tool
-from threads.host import host
-from threads.log import (
+from threadsai import Agent, HandedOff, RunContext, Thread, agent, scripted_model, sqlite, tool
+from threadsai.host import host
+from threadsai.log import (
     AgentSpawnedEvent,
     Event,
     HandoffEvent,
@@ -18,8 +18,8 @@ from threads.log import (
     Principal,
     ToolResultEvent,
 )
-from threads.result import Ok
-from threads.thread.handle import open_thread
+from threadsai.result import Ok
+from threadsai.thread.handle import open_thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALICE = Principal(issuer="api", tenant="local", subject="alice")
@@ -120,7 +120,7 @@ def test_a_host_ceiling_caps_the_runs_it_starts() -> None:
     sent: list[str] = []
 
     async def main() -> None:
-        from threads._generated.host_api_v1 import StartRunRequest  # noqa: PLC0415
+        from threadsai._generated.host_api_v1 import StartRunRequest  # noqa: PLC0415
 
         bot = sender(sent, [call("send", {"text": "x"}), text("ok")])
         store = sqlite(":memory:")

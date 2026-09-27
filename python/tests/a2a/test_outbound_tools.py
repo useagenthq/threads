@@ -10,11 +10,11 @@ import asyncio
 from outbound_kit import CARD_URL, TOOL, Answer, Drill, Partner, drill, task, text, use
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.a2a.outbound.tools import FINALITY
-from threads.a2a.protocol import PROVENANCE
-from threads.a2a.remote import bearer, remote
-from threads.log import RemoteCallEvent, ToolResultEvent
-from threads.loop.drive import drive
+from threadsai.a2a.outbound.tools import FINALITY
+from threadsai.a2a.protocol import PROVENANCE
+from threadsai.a2a.remote import bearer, remote
+from threadsai.log import RemoteCallEvent, ToolResultEvent
+from threadsai.loop.drive import drive
 
 
 def test_the_send_is_reconcilable_and_nonfinal_and_the_status_read_is_read_only() -> None:

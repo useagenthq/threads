@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { credential } from "@threads/core/adapter";
-import { openStore, storeConnection } from "@threads/core/host";
+import { credential } from "threadsai/adapter";
+import { openStore, storeConnection } from "threadsai/host";
 import { z } from "zod";
 import {
   eventsOf,

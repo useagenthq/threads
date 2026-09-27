@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { agent, type Model, scriptedModel, sqlite } from "@threads/core";
-import { knownEvents, storeConnection } from "@threads/core/host";
+import { agent, type Model, scriptedModel, sqlite } from "threadsai";
+import { knownEvents, storeConnection } from "threadsai/host";
 import { hostTicked } from "../src/host";
 import { cleanup, expireLeases, fold, serveAgent, stall } from "./api-kit";
 import { alice, say, until } from "./kit";

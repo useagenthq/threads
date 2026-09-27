@@ -6,14 +6,14 @@ import {
   type SyncError,
   type SyncReport,
   VERSION,
-} from "@threads/core";
-import { err, ok, type Result } from "@threads/core/host";
+} from "threadsai";
+import { err, ok, type Result } from "threadsai/host";
 import {
   type ChainEvent,
   type ChangedBranch,
   Feed,
   telemetryBinding,
-} from "@threads/core/internal/feed";
+} from "threadsai/internal/feed";
 import { Backoff } from "./backoff";
 import type { Config } from "./env";
 import { lossSpans } from "./losses";

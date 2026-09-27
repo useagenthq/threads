@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { secret } from "@threads/core";
-import {
-  dispatched,
-  type Fetch,
-  memoryProviderSuite,
-} from "@threads/core/adapter";
+import { secret } from "threadsai";
+import { dispatched, type Fetch, memoryProviderSuite } from "threadsai/adapter";
 import { z } from "zod";
 import { zep } from "../src";
 

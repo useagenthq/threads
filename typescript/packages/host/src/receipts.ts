@@ -9,7 +9,7 @@ import {
   ThreadId,
   type Tx,
   UI_RECEIPT,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 
 // store.sql run_receipts: POST /v1/runs idempotency. A key is unique per

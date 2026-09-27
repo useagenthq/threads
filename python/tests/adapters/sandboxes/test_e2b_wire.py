@@ -18,16 +18,16 @@ from pyqwest.testing import ASGITransport
 from sandbox_backend import FakeBackend
 from sandbox_kit import OPEN
 
-from threads.adapters.sandboxes.e2b import wire
-from threads.adapters.sandboxes.e2b.control import MAX_PAGES, Control
-from threads.adapters.sandboxes.e2b.driver import classify
-from threads.adapters.sandboxes.e2b.envd import Envd, Transports
-from threads.adapters.sandboxes.e2b.transport import FencedHttpx
-from threads.adapters.sandboxes.fence import dispatch
-from threads.adapters.sandboxes.streams import StreamLostError
-from threads.result import Err, Ok
-from threads.sandbox.protocol import SandboxContext, SandboxError
-from threads.sandbox.remote.driver import FileError
+from threadsai.adapters.sandboxes.e2b import wire
+from threadsai.adapters.sandboxes.e2b.control import MAX_PAGES, Control
+from threadsai.adapters.sandboxes.e2b.driver import classify
+from threadsai.adapters.sandboxes.e2b.envd import Envd, Transports
+from threadsai.adapters.sandboxes.e2b.transport import FencedHttpx
+from threadsai.adapters.sandboxes.fence import dispatch
+from threadsai.adapters.sandboxes.streams import StreamLostError
+from threadsai.result import Err, Ok
+from threadsai.sandbox.protocol import SandboxContext, SandboxError
+from threadsai.sandbox.remote.driver import FileError
 
 VECTOR_PATH = Path(__file__).resolve().parents[4] / "spec/conformance/vectors/e2b-wire/cases.json"
 type Obj = dict[str, JsonValue]

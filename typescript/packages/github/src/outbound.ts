@@ -7,7 +7,7 @@ import {
   type LookupResult,
   type Secret,
   sandboxFetch,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { z } from "zod";
 import { MARKER_PREFIX } from "./inbound";
 

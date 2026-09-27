@@ -17,13 +17,13 @@ import httpx
 from host.test_http import as_, bearer, run, start, text, use
 from starlette.responses import StreamingResponse
 
-from threads import Agent, Store, agent, scripted_model, sqlite
-from threads.agents.store import open_store, scoped
-from threads.agents.team_handle_types import EpochRestarted, TeamCursor, TeamItem
-from threads.host import Host, host
-from threads.host.http import teams
-from threads.result import Ok
-from threads.team.rebuild import rebuild_team_index
+from threadsai import Agent, Store, agent, scripted_model, sqlite
+from threadsai.agents.store import open_store, scoped
+from threadsai.agents.team_handle_types import EpochRestarted, TeamCursor, TeamItem
+from threadsai.host import Host, host
+from threadsai.host.http import teams
+from threadsai.result import Ok
+from threadsai.team.rebuild import rebuild_team_index
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

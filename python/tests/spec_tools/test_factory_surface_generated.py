@@ -13,7 +13,7 @@ from typeexpr_render import Obj
 PYTHON = pathlib.Path(__file__).resolve().parents[2]
 API: Obj = {
     "packages": {
-        "core": {"kind": "core", "py": "threads", "doc": "Core."},
+        "core": {"kind": "core", "py": "threadsai", "doc": "Core."},
         "fix": {"kind": "adapter", "py": "fixpkg", "doc": "Fixture."},
     },
     "functions": {
@@ -38,8 +38,8 @@ API: Obj = {
 }
 PACKAGE = """import decimal
 
-from threads import SearchBackend, Secret
-from threads.search import exa
+from threadsai import SearchBackend, Secret
+from threadsai.search import exa
 
 
 def make(key: Secret, *, region: str, amount: decimal.Decimal, tier: str = "a") -> SearchBackend:
@@ -91,7 +91,7 @@ def test_an_optional_option_s_platform_type_is_not_imported() -> None:
 
 
 def test_a_contract_type_is_imported_from_its_own_packages_module() -> None:
-    """ChannelAdapter is threads.host's, not threads'; an undeclared type stays core's."""
+    """ChannelAdapter is threadsai.host's, not threads'; an undeclared type stays core's."""
     functions, packages = API["functions"], API["packages"]
     assert isinstance(functions, dict)
     assert isinstance(packages, dict)
@@ -99,13 +99,13 @@ def test_a_contract_type_is_imported_from_its_own_packages_module() -> None:
     assert isinstance(make, dict)
     api: Obj = {
         **API,
-        "packages": {**packages, "host": {"kind": "core", "py": "threads.host", "doc": "Host."}},
+        "packages": {**packages, "host": {"kind": "core", "py": "threadsai.host", "doc": "Host."}},
         "types": {"ChannelAdapter": {"package": "host"}},
         "functions": {"make": {**make, "returns": {"$ref": "#/types/ChannelAdapter"}}},
     }
     source = render_py(api)
-    assert "from threads.host import ChannelAdapter\n" in source
-    assert "from threads import Secret\n" in source
+    assert "from threadsai.host import ChannelAdapter\n" in source
+    assert "from threadsai import Secret\n" in source
 
 
 @pytest.mark.parametrize(

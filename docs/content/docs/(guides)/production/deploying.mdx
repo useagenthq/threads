@@ -50,8 +50,8 @@ With the default SQLite store, run the host on one machine with the store on loc
 <Tab value="TypeScript">
 
 ```ts
-import { host } from "@threads/host";
-import { postgres } from "@threads/postgres";
+import { host } from "@threadsai/host";
+import { postgres } from "@threadsai/postgres";
 
 export default host({
   store: postgres(), // reads DATABASE_URL; or postgres("postgres://…")
@@ -64,8 +64,8 @@ export default host({
 <Tab value="Python">
 
 ```python
-from threads.host import host
-from threads.postgres import postgres  # pip install "threads[postgres]"
+from threadsai.host import host
+from threadsai.postgres import postgres  # pip install "threadsai[postgres]"
 
 app = host(store=postgres(), agents={"assistant": assistant}, authenticate=authenticate)
 ```

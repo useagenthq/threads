@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { Principal } from "@threads/core/host";
+import { Principal } from "threadsai/host";
 import { z } from "zod";
 import { AI_SDK_SCHEMA, aiSdkSchema } from "../../scripts/export-ui-schemas";
 import { FOLD_VECTORS, vectors } from "../../scripts/record-ag-ui-fold";

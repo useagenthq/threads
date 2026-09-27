@@ -82,7 +82,7 @@ def contract(
     execute = callback(positional("ctx", THREAD, ctx))
     tool = function(param("execute", execute, "Runs the tool.", required=True))
     return {
-        "packages": {"core": {"ts": "@threads/core", "py": "threads"}},
+        "packages": {"core": {"ts": "threadsai", "py": "threadsai"}},
         "functions": {"agent": agent, "tool": tool, **(functions or {})},
         "types": {"Thread": THREAD_TYPE, **(types or {})},
     }

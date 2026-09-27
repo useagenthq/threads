@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Principal } from "@threads/core/host";
+import type { Principal } from "threadsai/host";
 import { z } from "zod";
 import { a2aThreadId, bodyHash, sendKey } from "../../src/a2a/keys";
 

@@ -20,8 +20,8 @@ from team.team_kit import (
 )
 from team.writes import reappend
 
-from threads.result import Ok
-from threads.store import SqliteStore
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
 
 STAGED = CASES.parent / "staged"
 _JSON: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)

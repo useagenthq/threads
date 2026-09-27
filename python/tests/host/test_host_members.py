@@ -21,11 +21,11 @@ from host.test_http import bearer, run, text, use
 from team.run_kit import answers, reply_to
 from team.team_kit import assert_team_replays
 
-from threads import Principal, Store, agent, scripted_model, sqlite
-from threads.agents.store import open_store, scoped
-from threads.host import host
-from threads.host.members import HostMemberOptions
-from threads.log import (
+from threadsai import Principal, Store, agent, scripted_model, sqlite
+from threadsai.agents.store import open_store, scoped
+from threadsai.host import host
+from threadsai.host.members import HostMemberOptions
+from threadsai.log import (
     Event,
     MemberIdleEvent,
     MemberStartedEvent,
@@ -34,16 +34,16 @@ from threads.log import (
     TeamOpenedEvent,
     ThreadStartedEvent,
 )
-from threads.result import Ok
-from threads.store import LOCAL_TENANT
-from threads.store.conn import Conn
-from threads.team.host_team import host_team_ids
-from threads.team.rows import member_rows
+from threadsai.result import Ok
+from threadsai.store import LOCAL_TENANT
+from threadsai.store.conn import Conn
+from threadsai.team.host_team import host_team_ids
+from threadsai.team.rows import member_rows
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
-    from threads.agents.factory import Agent
+    from threadsai.agents.factory import Agent
 
 TEAM_TOOLS = frozenset({"ask", "cancel", "monitor", "reply", "send", "start", "wait"})
 

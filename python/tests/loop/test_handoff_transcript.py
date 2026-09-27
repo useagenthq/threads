@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue
 
-from threads.agents.transcript import handoff_transcript
-from threads.log import Event, Head, Header, UnknownEvent, parse_log_line
-from threads.result import Ok
+from threadsai.agents.transcript import handoff_transcript
+from threadsai.log import Event, Head, Header, UnknownEvent, parse_log_line
+from threadsai.result import Ok
 
 VECTOR: dict[str, JsonValue] = json.loads(
     (

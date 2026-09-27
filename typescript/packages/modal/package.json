@@ -1,5 +1,5 @@
 {
-  "name": "@threads/modal",
+  "name": "@threadsai/modal",
   "version": "0.0.0",
   "license": "Apache-2.0",
   "type": "module",
@@ -7,6 +7,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@threads/core": "workspace:*"
+    "threadsai": "workspace:*"
   }
 }

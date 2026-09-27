@@ -1,4 +1,4 @@
-import { type KnownEvent, questionText } from "@threads/core/host";
+import { type KnownEvent, questionText } from "threadsai/host";
 import { z } from "zod";
 
 // The ask_user question a run has open, derived from the events alone. A frame must show the

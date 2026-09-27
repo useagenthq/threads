@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { agent, scriptedModel, sqlite, tool } from "@threads/core";
+import { agent, scriptedModel, sqlite, tool } from "threadsai";
 import {
   BranchId,
   knownEvents,
   openStore,
   storeConnection,
   tenantStore,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { type Host, host } from "../src";
 import { hostTicked } from "../src/host";

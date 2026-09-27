@@ -1,4 +1,4 @@
-import { JsonValue } from "@threads/core/host";
+import { JsonValue } from "threadsai/host";
 import { z } from "zod";
 import { CHAT_KEY } from "./key";
 

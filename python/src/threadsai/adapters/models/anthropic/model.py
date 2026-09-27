@@ -1,0 +1,198 @@
+"""`anthropic()`: the Messages API adapter over the official `anthropic` SDK's async client.
+
+One transport attempt per send: SDK retries are off, and threads records and schedules every
+retry. The SDK sends through a fenced HTTP client, so a writer that lost its
+lease while the SDK prepared or queued the request sends nothing.
+"""
+
+import re
+from collections.abc import AsyncIterator, Mapping, Sequence
+from dataclasses import replace
+from http import HTTPStatus
+from typing import Final, Literal, Unpack
+
+import anthropic as sdk
+import httpx2
+from pydantic import JsonValue
+
+from threadsai.adapters.loop_resources import LoopResources
+from threadsai.adapters.models import transport
+from threadsai.adapters.models.anthropic.caching import (
+    cache_info,
+    cache_price,
+    prompt_cache,
+    refuse_cache_control,
+)
+from threadsai.adapters.models.anthropic.request import PROVIDER, build
+from threadsai.adapters.models.anthropic.stream import Assembler, ProviderStreamError
+from threadsai.adapters.models.anthropic.wire import parse
+from threadsai.adapters.models.hosted import declare
+from threadsai.adapters.models.options import ModelOptions, info
+from threadsai.adapters.models.render import prepare
+from threadsai.agents.config import ConfigError
+from threadsai.log import AdapterRef, ModelRef
+from threadsai.loop.model import (
+    ModelChunk,
+    ModelContext,
+    ModelInfo,
+    ModelRequest,
+    Rejected,
+)
+from threadsai.secrets import Secret, credential
+
+ADAPTER = "anthropic"
+API_KEY = "ANTHROPIC_API_KEY"
+VERSION = "1"
+_STREAM_ERRORS: Mapping[str, Rejected] = {
+    "overloaded_error": Rejected("overloaded"),
+    "rate_limit_error": Rejected("rate_limited"),
+    "api_error": Rejected("server_error"),
+}
+
+
+class AnthropicModel:
+    """spec/api.json `Model` for the Anthropic Messages API. No response lookup: the API has no
+    way to find a response by client request id, so recovery re-sends under its budget."""
+
+    def __init__(
+        self,
+        info: ModelInfo,
+        api_key: str | Secret | None = None,
+        base_url: str | None = None,
+        http: httpx2.AsyncBaseTransport | None = None,
+    ) -> None:
+        self._info = info
+        self._key = credential(ADAPTER, "api_key", api_key, API_KEY)
+        self._base_url, self._http = base_url, http
+        self._clients: LoopResources[sdk.AsyncAnthropic] = LoopResources(ADAPTER, _close)
+
+    @property
+    def info(self) -> ModelInfo:
+        return self._info
+
+    async def setup(self) -> None:
+        """Resolves the key on the host. The SDK client is made by the first send, on the
+        run's own event loop, and closed when nothing holds that loop any more."""
+        self._key()
+
+    def _sdk(self) -> sdk.AsyncAnthropic:
+        return self._clients.get(lambda: client(self._key(), self._base_url, self._http))
+
+    async def send(self, request: ModelRequest, context: ModelContext) -> AsyncIterator[ModelChunk]:
+        prepared = await prepare(request.body, ADAPTER, context, build)
+        if isinstance(prepared, Rejected):
+            yield prepared
+            return
+        rendered, body = prepared
+        try:
+            with transport.attempt(context):
+                response = await self._sdk().post(
+                    "/v1/messages",
+                    body=body.json,
+                    cast_to=httpx2.Response,
+                    stream=True,
+                    stream_cls=sdk.AsyncStream[object],
+                )
+        except sdk.APIStatusError as error:
+            yield transport.rejection(error.status_code, error.response.headers, _too_long(error))
+            return
+        except sdk.APIConnectionError as error:
+            if transport.stale(error):
+                yield Rejected("stale_epoch")
+                return
+            if transport.not_sent(error):
+                yield Rejected("server_error")
+                return
+            raise
+        assembler = Assembler(context, rendered.head.model.name, body.documents, body.ttl)
+        async for chunk in transport.relay(response, parse, assembler.feed, _rejected):
+            yield chunk
+
+
+def _rejected(error: Exception) -> Rejected | None:
+    return _STREAM_ERRORS.get(error.kind) if isinstance(error, ProviderStreamError) else None
+
+
+def _too_long(error: sdk.APIStatusError) -> bool:
+    return error.status_code == HTTPStatus.BAD_REQUEST and "prompt is too long" in error.message
+
+
+class AnthropicOptions(ModelOptions, total=False):
+    """Limits default from spec/models/anthropic.v1.json when the model id is listed there."""
+
+    citations: bool
+    """Enables citations on every document in the request (an adapter setting, so pinned in
+    line 0). Refused with a native structured-output field in `params`."""
+    hosted_tools: Sequence[Mapping[str, JsonValue]]
+    """Server tools, sent as given and pinned in line 0: web search and web fetch only
+    (`web_search_YYYYMMDD`, `web_fetch_YYYYMMDD`); anything else raises hosted_tool_unsupported."""
+    prompt_cache: Literal["5m", "1h"] | Literal[False]
+    """Prompt caching, pinned in line 0: the end of line 0 and the growing history are cached for
+    this long. Defaults to "5m"; False sends no cache controls (and continues threads started
+    before prompt caching existed)."""
+
+
+RESERVED: Final = ("model", "messages", "system", "tools", "stream", "max_tokens")
+"""Request fields the adapter derives from the render, and the cap (the max_tokens option)."""
+
+
+def _web(kind: str) -> bool:
+    return re.fullmatch(r"(web_search|web_fetch)_\d{8}", kind) is not None
+
+
+def anthropic(model: str, **options: Unpack[AnthropicOptions]) -> AnthropicModel:
+    """A Claude model by its exact id: `anthropic("claude-sonnet-5")` (spec/api.json
+    conventions.adapters). `max_tokens` defaults to min(8192, max_output_tokens); other `params`
+    are Messages API fields. `api_key` defaults to `secret("ANTHROPIC_API_KEY")`, resolved at
+    setup."""
+    tools = options.get("hosted_tools", ())
+    settings, hosted = declare(tools, _web, "name")
+    params = options.get("params", {})
+    refuse_cache_control(params, tools)
+    ttl = prompt_cache(options.get("prompt_cache", "5m"), tools)
+    if ttl is not None:
+        settings["prompt_cache"] = ttl
+    if options.get("citations"):
+        _refuse_structured_output(params)
+        settings["citations"] = True
+    declared = info(
+        ModelRef(provider=PROVIDER, name=model),
+        AdapterRef(name=ADAPTER, version=VERSION, settings=settings),
+        options,
+        RESERVED,
+        hosted,
+    )
+    declared = replace(declared, cache=cache_info(ttl))
+    price = cache_price(options.get("price"), ttl)
+    if price is not None:
+        declared = replace(declared, limits=declared.limits.model_copy(update={"price": price}))
+    return AnthropicModel(declared, options.get("api_key"), options.get("base_url"))
+
+
+def _refuse_structured_output(params: Mapping[str, JsonValue]) -> None:
+    """The provider refuses citations with native structured output (output_config.format)."""
+    config = params.get("output_config")
+    if "output_format" in params or (isinstance(config, dict) and "format" in config):
+        raise ConfigError(
+            "invalid_config",
+            "anthropic citations can't be combined with structured output (output_format or "
+            "output_config.format in params): drop one, or use agent output, which is unaffected",
+        )
+
+
+def client(
+    api_key: str,
+    base_url: str | None = None,
+    http: httpx2.AsyncBaseTransport | None = None,
+) -> sdk.AsyncAnthropic:
+    """The SDK client: retries off, sending through the fenced transport (`http` for tests)."""
+    return sdk.AsyncAnthropic(
+        api_key=api_key,
+        base_url=base_url,
+        max_retries=0,
+        http_client=transport.client(http),
+    )
+
+
+async def _close(client: sdk.AsyncAnthropic) -> None:
+    await client.close()

@@ -21,13 +21,13 @@ from sandbox_deadline_kit import DEADLINE
 from sandbox_kit import OPEN, KitContext
 from sandbox_ledger_kit import LEDGER, Body, run_ledger
 
-from threads.adapters.loop_resources import holding
-from threads.adapters.sandboxes.daytona.logs import STDERR, STDOUT, Demux, Stream, Unbase64
-from threads.adapters.sandboxes.posix import collect
-from threads.agents.config import ConfigError
-from threads.daytona import DaytonaSandbox, daytona
-from threads.loop.model import Found
-from threads.result import Err, Ok
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.sandboxes.daytona.logs import STDERR, STDOUT, Demux, Stream, Unbase64
+from threadsai.adapters.sandboxes.posix import collect
+from threadsai.agents.config import ConfigError
+from threadsai.daytona import DaytonaSandbox, daytona
+from threadsai.loop.model import Found
+from threadsai.result import Err, Ok
 
 
 @pytest.mark.parametrize("check", [*CHECKS, *DEADLINE], ids=lambda c: c.__name__)

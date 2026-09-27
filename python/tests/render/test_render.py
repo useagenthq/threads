@@ -8,11 +8,11 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import JsonValue
 
-from threads.log import Event, Head, Header, ParseError, UnknownEvent, parse_log_line
-from threads.log.digest import sha256_hex
-from threads.log.jcs import canonicalize
-from threads.render import COMPACT_INSTRUCTION, ReadArtifact, esc, render
-from threads.result import Err, Ok
+from threadsai.log import Event, Head, Header, ParseError, UnknownEvent, parse_log_line
+from threadsai.log.digest import sha256_hex
+from threadsai.log.jcs import canonicalize
+from threadsai.render import COMPACT_INSTRUCTION, ReadArtifact, esc, render
+from threadsai.result import Err, Ok
 
 GOLDEN = Path(__file__).parent / "golden"
 USER: dict[str, JsonValue] = {

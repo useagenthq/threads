@@ -2,14 +2,14 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agent, scriptedModel, sqlite } from "@threads/core";
+import { agent, scriptedModel, sqlite } from "threadsai";
 import {
   openStore,
   type Principal,
   storeConnection,
   tenantStore,
   uuidv7,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { uiThreadId } from "../../src/ui/key";
 import {

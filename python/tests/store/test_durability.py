@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from threads.store.sqlite_driver import connect
+from threadsai.store.sqlite_driver import connect
 
 pytestmark = pytest.mark.sqlite_only
 

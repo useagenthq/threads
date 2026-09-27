@@ -33,11 +33,11 @@ from typing import Final
 from jobs.stores import drill_store
 from pydantic import JsonValue, TypeAdapter
 
-from threads import agent, extension, scripted_model
-from threads.agents.context import RunContext
-from threads.agents.store import open_store, scoped
-from threads.hooks.types import ModelGate
-from threads.host import (
+from threadsai import agent, extension, scripted_model
+from threadsai.agents.context import RunContext
+from threadsai.agents.store import open_store, scoped
+from threadsai.hooks.types import ModelGate
+from threadsai.host import (
     ChannelCapabilities,
     DeliveryOutcome,
     Inbound,
@@ -48,17 +48,17 @@ from threads.host import (
     VerifiedDelivery,
     host,
 )
-from threads.host.runs import Runner
-from threads.host.schedules import Scheduler
-from threads.log import EffectCommitEvent, Event, JsonObject, ParseError, Principal
-from threads.loop.guard import block_model_requests
-from threads.loop.model import Found, LookupResult, LookupUnknown, ModelRequest, NotFound
-from threads.memory.fence import check
-from threads.reduce import Fold
-from threads.reduce.state import ReducedState
-from threads.result import Err, Ok
-from threads.secrets import Secret
-from threads.store import SqliteStore
+from threadsai.host.runs import Runner
+from threadsai.host.schedules import Scheduler
+from threadsai.log import EffectCommitEvent, Event, JsonObject, ParseError, Principal
+from threadsai.loop.guard import block_model_requests
+from threadsai.loop.model import Found, LookupResult, LookupUnknown, ModelRequest, NotFound
+from threadsai.memory.fence import check
+from threadsai.reduce import Fold
+from threadsai.reduce.state import ReducedState
+from threadsai.result import Err, Ok
+from threadsai.secrets import Secret
+from threadsai.store import SqliteStore
 
 TEAM: Final = "T1"
 USER: Final = Principal(issuer="fake:T1", tenant=TEAM, subject="U1")

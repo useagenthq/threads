@@ -9,17 +9,17 @@ from pathlib import Path
 from corpus import Clock
 from pydantic import JsonValue
 
-from threads.log import BranchId, JsonObject, ThreadId, ToolCallData, ToolSpec
-from threads.loop.drafts import draft
-from threads.loop.model import LookupResult, LookupUnknown, Model
-from threads.loop.runtime import Runtime, serving
-from threads.loop.tools import Dispatched, Invocation, Termination, ToolRunner
-from threads.permissions import Decision
-from threads.reduce import Fold
-from threads.reduce.handlers import to_json
-from threads.result import Err, Ok
-from threads.store import SqliteStore, StoredEvent, Writer
-from threads.store.lines import uuid7
+from threadsai.log import BranchId, JsonObject, ThreadId, ToolCallData, ToolSpec
+from threadsai.loop.drafts import draft
+from threadsai.loop.model import LookupResult, LookupUnknown, Model
+from threadsai.loop.runtime import Runtime, serving
+from threadsai.loop.tools import Dispatched, Invocation, Termination, ToolRunner
+from threadsai.permissions import Decision
+from threadsai.reduce import Fold
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore, StoredEvent, Writer
+from threadsai.store.lines import uuid7
 
 T0 = 1_790_000_000_000
 USER: dict[str, JsonValue] = {

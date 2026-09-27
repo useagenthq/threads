@@ -1,10 +1,5 @@
-import type { Thread } from "@threads/core";
-import {
-  err,
-  knownEvents,
-  type Principal,
-  type Result,
-} from "@threads/core/host";
+import type { Thread } from "threadsai";
+import { err, knownEvents, type Principal, type Result } from "threadsai/host";
 import type { z } from "zod";
 import type { HostContext } from "./context";
 import type { Failure } from "./errors";

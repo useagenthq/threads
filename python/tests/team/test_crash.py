@@ -15,10 +15,10 @@ from team.crash_kit import CrashError, Point, crashing, mentions, reached, resta
 from team.run_kit import say, start
 from team.team_kit import assert_team_replays
 
-from threads import Agent, Completed, agent, scripted_model
-from threads.log import BranchId, MemberStartedEvent, MessageReceivedEvent, UserInputEvent
-from threads.result import Ok
-from threads.team.rows import member_rows, team_row
+from threadsai import Agent, Completed, agent, scripted_model
+from threadsai.log import BranchId, MemberStartedEvent, MessageReceivedEvent, UserInputEvent
+from threadsai.result import Ok
+from threadsai.team.rows import member_rows, team_row
 
 
 def _a_researchers(conn: sqlite3.Connection, params: Sequence[object]) -> bool:

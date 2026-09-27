@@ -1,5 +1,5 @@
-import { ConfigError } from "@threads/core/adapter";
-import { type Store, storeOver } from "@threads/core/store-driver";
+import { ConfigError } from "threadsai/adapter";
+import { type Store, storeOver } from "threadsai/store-driver";
 import { pgArtifacts } from "./artifacts";
 import { openPg } from "./driver";
 
@@ -7,7 +7,7 @@ import { openPg } from "./driver";
 // several processes or machines. The same opaque Store every API takes; nothing connects until
 // first use.
 
-export type { Store } from "@threads/core/store-driver";
+export type { Store } from "threadsai/store-driver";
 
 /** A postgres:// URL, or DATABASE_URL. With neither, the first use is invalid_config. */
 export function postgres(url?: string): Store {

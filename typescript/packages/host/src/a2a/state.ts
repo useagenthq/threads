@@ -4,8 +4,8 @@ import type {
   Task,
   TaskState,
   TaskStatus,
-} from "@threads/a2a/protocol";
-import { assertNever, type EventId, type KnownEvent } from "@threads/core/host";
+} from "@threadsai/a2a/protocol";
+import { assertNever, type EventId, type KnownEvent } from "threadsai/host";
 import type { RunOutcome } from "../outcome";
 import { artifactId, statusMessageId } from "./keys";
 import { askText, type OpenAsk } from "./question";

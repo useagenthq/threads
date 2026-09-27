@@ -1,4 +1,4 @@
-import type { Sent, WebTransport } from "@threads/core/adapter";
+import type { Sent, WebTransport } from "threadsai/adapter";
 import { A2A_VERSION, IDEMPOTENT_SEND } from "../../src/protocol";
 
 // A partner that records every request it was asked to send, and can lose an answer on purpose.

@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { agent, type Store, sqlite } from "@threads/core";
-import {
-  hostTeamIds,
-  type KnownEvent,
-  storeConnection,
-} from "@threads/core/host";
+import { agent, type Store, sqlite } from "threadsai";
+import { hostTeamIds, type KnownEvent, storeConnection } from "threadsai/host";
 import { z } from "zod";
 import { MemberName } from "../../core/src/log";
 import { answering, answers, replyTo } from "../../core/test/team/run-kit";

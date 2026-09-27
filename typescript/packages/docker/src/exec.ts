@@ -1,4 +1,4 @@
-import type { Sinks, Started } from "@threads/core/adapter";
+import type { Sinks, Started } from "threadsai/adapter";
 import { z } from "zod";
 import { type Engine, failure } from "./engine";
 import { parsed, unavailable } from "./wire";

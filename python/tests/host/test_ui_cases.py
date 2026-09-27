@@ -15,8 +15,8 @@ from jsonschema.protocols import Validator
 from pydantic import JsonValue
 from ui_case_kit import Case, expected, line, loaded, serve
 
-from threads.host.ui.ag_ui_fold import AgUiFold
-from threads.host.ui.agui_sequence import check
+from threadsai.host.ui.ag_ui_fold import AgUiFold
+from threadsai.host.ui.agui_sequence import check
 
 SCHEMAS = Path(__file__).resolve().parents[3] / "spec" / "schema" / "ui"
 AG_UI_SHA256 = "4b5c93226838a0e72d88e6c5df20633c686c49fcb75d9be2815c6cbf9e48e71a"

@@ -19,10 +19,10 @@ from team.team_kit import (
 )
 from team.writes import ReplayClock, draft_of
 
-from threads.log import BranchId, ThreadId
-from threads.result import Ok
-from threads.store import MemoryArtifacts, SqliteStore
-from threads.store.opening import insert_root, new_root
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Ok
+from threadsai.store import MemoryArtifacts, SqliteStore
+from threadsai.store.opening import insert_root, new_root
 
 WAKE = CASES / "legacy-wake-pending-row"
 

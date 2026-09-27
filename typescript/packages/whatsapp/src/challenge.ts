@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import type { ChannelAdapter, Secret } from "@threads/core/adapter";
+import type { ChannelAdapter, Secret } from "threadsai/adapter";
 
 // Meta's webhook subscription check (spec/api.json ChannelAdapter.challenge): a GET with
 // hub.mode=subscribe, hub.verify_token and hub.challenge. The token is compared with the

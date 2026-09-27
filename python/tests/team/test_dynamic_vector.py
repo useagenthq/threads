@@ -8,9 +8,9 @@ from typing import Final
 import pytest
 from pydantic import JsonValue, TypeAdapter
 
-from threads.reduce.handlers import to_json
-from threads.result import Ok
-from threads.team.dynamic import (
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Ok
+from threadsai.team.dynamic import (
     INSTRUCTIONS_CAP,
     KEPT,
     LABEL_MAX,

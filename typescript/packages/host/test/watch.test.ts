@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ThreadId } from "@threads/core/host";
+import { ThreadId } from "threadsai/host";
 import { Watch } from "../src/watch";
 
 const T = ThreadId.parse("01a0cf30-3969-7caf-adb4-abbec478caa6");

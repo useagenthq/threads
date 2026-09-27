@@ -10,10 +10,10 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import JsonValue, TypeAdapter
 
-from threads._generated.fold_table import SEPARATORS, UNICODE_VERSION
-from threads.adapters.models.render import parse
-from threads.tools import tool_search
-from threads.tools.tool_search import fold, search, terms, tokens
+from threadsai._generated.fold_table import SEPARATORS, UNICODE_VERSION
+from threadsai.adapters.models.render import parse
+from threadsai.tools import tool_search
+from threadsai.tools.tool_search import fold, search, terms, tokens
 
 SPEC = Path(__file__).resolve().parents[3] / "spec"
 VECTORS = SPEC / "conformance" / "vectors"

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import pytest
 from pydantic import BaseModel, JsonValue
 
-from threads import (
+from threadsai import (
     Agent,
     Completed,
     ConfigError,
@@ -17,7 +17,7 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.log import Permissions
+from threadsai.log import Permissions
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 ALLOW = Permissions(

@@ -8,17 +8,17 @@ from pathlib import Path
 from local_sandbox import LocalSandbox
 from pydantic import JsonValue
 
-from threads import Completed, agent, scripted_model, sqlite
-from threads.log import BranchId, CitationPart, Permissions, TextPart, ThreadId, ToolResultEvent
-from threads.loop.drafts import draft
-from threads.loop.results import reference_drafts
-from threads.loop.tools import Reference
-from threads.redaction import StreamRedactor
-from threads.reduce.handlers import to_json
-from threads.result import Ok
-from threads.secrets import credential
-from threads.store import Draft
-from threads.store.lines import Position, event_line, uuid7
+from threadsai import Completed, agent, scripted_model, sqlite
+from threadsai.log import BranchId, CitationPart, Permissions, TextPart, ThreadId, ToolResultEvent
+from threadsai.loop.drafts import draft
+from threadsai.loop.results import reference_drafts
+from threadsai.loop.tools import Reference
+from threadsai.redaction import StreamRedactor
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Ok
+from threadsai.secrets import credential
+from threadsai.store import Draft
+from threadsai.store.lines import Position, event_line, uuid7
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 BYPASS = Permissions.model_validate(

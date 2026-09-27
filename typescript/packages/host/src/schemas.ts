@@ -1,4 +1,4 @@
-import { Input } from "@threads/core";
+import { Input } from "threadsai";
 import {
   BranchId,
   Budget,
@@ -9,7 +9,7 @@ import {
   PermissionMode,
   PermissionRule,
   ThreadId,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 
 // Request bodies of the host HTTP API (spec/schema/host-api/host-api.v1.schema.json), built

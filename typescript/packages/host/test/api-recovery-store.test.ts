@@ -17,14 +17,14 @@ import {
   type Store,
   scriptedModel,
   sqlite,
-} from "@threads/core";
-import { markTestKit } from "@threads/core/adapter";
+} from "threadsai";
+import { markTestKit } from "threadsai/adapter";
 import {
   knownEvents,
   openStore,
   StoreError,
   tenantStore,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { RunAccepted } from "../src";
 import { hostTicked } from "../src/host";
 import {

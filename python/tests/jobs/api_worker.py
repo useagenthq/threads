@@ -18,17 +18,17 @@ from jobs.stores import drill_store
 from jobs.worker import DONE, reached, record, started, until
 from pydantic import BaseModel, JsonValue
 
-from threads import RunContext, agent, scripted_model, tool
-from threads._generated.host_api_v1 import StartRunRequest
-from threads.agents.store import open_store, scoped
-from threads.host import host
-from threads.log import BranchId, ModelResponseEvent, Permissions, Principal
-from threads.loop.guard import block_model_requests
-from threads.loop.model import ModelRequest
-from threads.reduce import Fold
-from threads.result import Ok
-from threads.store import SqliteStore
-from threads.store.sql import text_of
+from threadsai import RunContext, agent, scripted_model, tool
+from threadsai._generated.host_api_v1 import StartRunRequest
+from threadsai.agents.store import open_store, scoped
+from threadsai.host import host
+from threadsai.log import BranchId, ModelResponseEvent, Permissions, Principal
+from threadsai.loop.guard import block_model_requests
+from threadsai.loop.model import ModelRequest
+from threadsai.reduce import Fold
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
+from threadsai.store.sql import text_of
 
 TENANT: Final = "acme"
 USER: Final = Principal(issuer="api", tenant=TENANT, subject="alice")

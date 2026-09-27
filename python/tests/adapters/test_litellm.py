@@ -14,12 +14,12 @@ import pytest
 from fakes import FakeContext, Script, collect, golden, line, render_case
 from pydantic import JsonValue
 
-from threads.adapters.loop_resources import holding
-from threads.adapters.models.litellm.model import ACOMPLETION, Complete, Connection, LiteLLMModel
-from threads.agents.config import ConfigError
-from threads.litellm import litellm
-from threads.log import CallId, TextPart, ToolUsePart, Usage
-from threads.loop.model import Delta, Done, ModelChunk, ModelRequest, PartChunk, Rejected
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.models.litellm.model import ACOMPLETION, Complete, Connection, LiteLLMModel
+from threadsai.agents.config import ConfigError
+from threadsai.litellm import litellm
+from threadsai.log import CallId, TextPart, ToolUsePart, Usage
+from threadsai.loop.model import Delta, Done, ModelChunk, ModelRequest, PartChunk, Rejected
 
 ROUTE = "openai/gpt-test"
 INFO = litellm(ROUTE, max_input_tokens=128_000, max_output_tokens=4096, api_key="sk-test-1").info

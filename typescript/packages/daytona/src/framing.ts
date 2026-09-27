@@ -1,4 +1,4 @@
-import { quote } from "@threads/core/adapter";
+import { quote } from "threadsai/adapter";
 
 // Daytona's log stream marks stdout and stderr in-band with the bytes 01 01 01 and 02 02 02,
 // and documents no escaping, so output holding those bytes can't be told from a marker

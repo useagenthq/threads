@@ -11,12 +11,12 @@ from dataclasses import dataclass, field
 
 from pydantic import JsonValue, TypeAdapter
 
-from threads.adapters.sandboxes import posix
-from threads.log.digest import sha256_hex
-from threads.result import Err
-from threads.sandbox.fake import FakeCrashError, SandboxScript, SnapshotScript
-from threads.sandbox.fake_trees import MemoryEntry, MemoryFile, MemoryLink, archive_of, extract
-from threads.sandbox.manifest import ManifestEntry, manifest_of
+from threadsai.adapters.sandboxes import posix
+from threadsai.log.digest import sha256_hex
+from threadsai.result import Err
+from threadsai.sandbox.fake import FakeCrashError, SandboxScript, SnapshotScript
+from threadsai.sandbox.fake_trees import MemoryEntry, MemoryFile, MemoryLink, archive_of, extract
+from threadsai.sandbox.manifest import ManifestEntry, manifest_of
 
 _SCRIPT: TypeAdapter[SandboxScript] = TypeAdapter(SandboxScript)
 KILLED = 137

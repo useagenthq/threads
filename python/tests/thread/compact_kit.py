@@ -5,11 +5,11 @@ from collections.abc import Sequence
 
 from pydantic import BaseModel, JsonValue
 
-from threads import Parked, RunContext, agent, scripted_model, sqlite, tool
-from threads.agents.store import now_ms, open_store
-from threads.log import CompactionRequestedEvent, Event, ModelRequestEvent
-from threads.result import Ok
-from threads.thread.handle import Thread
+from threadsai import Parked, RunContext, agent, scripted_model, sqlite, tool
+from threadsai.agents.store import now_ms, open_store
+from threadsai.log import CompactionRequestedEvent, Event, ModelRequestEvent
+from threadsai.result import Ok
+from threadsai.thread.handle import Thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 SUMMARY = "The user said hi."

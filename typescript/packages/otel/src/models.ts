@@ -1,4 +1,4 @@
-import type { EventOf, KnownEvent } from "@threads/core/internal/feed";
+import type { EventOf, KnownEvent } from "threadsai/internal/feed";
 import { chatAttrs, responseAttrs, spanEvent } from "./attrs";
 import { spanId } from "./ids";
 import { CLIENT, OpenSpan, type Span } from "./span";

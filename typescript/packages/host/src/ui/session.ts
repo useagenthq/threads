@@ -1,4 +1,4 @@
-import type { EventId, KnownEvent } from "@threads/core/host";
+import type { EventId, KnownEvent } from "threadsai/host";
 import type { RunOutcome } from "../outcome";
 import { endOf } from "../subscribe";
 import type { RunIds } from "./closing";

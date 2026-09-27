@@ -20,9 +20,9 @@ import httpx
 from docker_bytes import GENERATION, frame, tar_of, tools
 from sandbox_backend import Box, FakeBackend, LostAnswerError, Proc, UnavailableError
 
-from threads.adapters.loop_resources import holding
-from threads.adapters.sandboxes.docker import records
-from threads.adapters.sandboxes.docker.sandbox import DockerSandbox
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.sandboxes.docker import records
+from threadsai.adapters.sandboxes.docker.sandbox import DockerSandbox
 
 ARCH = "arm64"
 KILLED = 137

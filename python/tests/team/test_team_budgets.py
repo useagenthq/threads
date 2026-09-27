@@ -8,9 +8,9 @@ import pytest
 from team.run_kit import Watched, call, events, member_events, say, sq_of, start, types
 from team.team_kit import assert_team_replays
 
-from threads import BudgetExhausted, Completed, Principal, Store, agent, scripted_model, sqlite
-from threads.log import Budget, MemberEndedEvent, ToolResultEvent, UserInputEvent
-from threads.store.sql import text_of
+from threadsai import BudgetExhausted, Completed, Principal, Store, agent, scripted_model, sqlite
+from threadsai.log import Budget, MemberEndedEvent, ToolResultEvent, UserInputEvent
+from threadsai.store.sql import text_of
 
 BOB = Principal(issuer="api", tenant="local", subject="bob")
 

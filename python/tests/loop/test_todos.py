@@ -7,10 +7,10 @@ from collections.abc import Sequence
 
 from pydantic import JsonValue
 
-from threads import Completed, Thread, agent, scripted_model, sqlite
-from threads.log import Event, InjectedEvent, TodosUpdatedEvent, ToolResultEvent
-from threads.loop.todos import REMIND_AFTER
-from threads.result import Ok
+from threadsai import Completed, Thread, agent, scripted_model, sqlite
+from threadsai.log import Event, InjectedEvent, TodosUpdatedEvent, ToolResultEvent
+from threadsai.loop.todos import REMIND_AFTER
+from threadsai.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ITEMS: JsonValue = [

@@ -5,8 +5,8 @@ import json
 import pytest
 from pydantic_core import to_json
 
-from threads import ConfigError, secret
-from threads.secrets import resolve
+from threadsai import ConfigError, secret
+from threadsai.secrets import resolve
 
 
 def test_a_secret_serializes_and_prints_as_its_name_only() -> None:

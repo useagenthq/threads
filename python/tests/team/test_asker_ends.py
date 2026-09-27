@@ -13,10 +13,10 @@ from team.crash_kit import CrashError, Point, crashing, reached, restart
 from team.run_kit import Answering, ask_ids, call, reply_to, say, start, types
 from team.team_kit import assert_team_replays
 
-from threads import Agent, agent, scripted_model
-from threads.log import AskClosedEvent, BranchId
-from threads.result import Ok
-from threads.team.rows import member_rows
+from threadsai import Agent, agent, scripted_model
+from threadsai.log import AskClosedEvent, BranchId
+from threadsai.result import Ok
+from threadsai.team.rows import member_rows
 
 _OPEN = "SELECT COUNT(*) FROM asks WHERE state = 'open'"
 

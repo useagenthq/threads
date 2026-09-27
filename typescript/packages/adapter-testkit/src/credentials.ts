@@ -12,7 +12,7 @@ import {
   scriptedModel,
   sqlite,
   tool,
-} from "@threads/core";
+} from "threadsai";
 import { z } from "zod";
 
 // Lane 09's per-factory cases, shared by every single-account adapter: the credential defaults

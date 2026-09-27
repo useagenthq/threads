@@ -8,15 +8,15 @@ from dataclasses import replace
 import pytest
 from pydantic import JsonValue
 
-from threads import Agent, Completed, Parked, Thread, agent, scripted_model
-from threads.agents import run as run_module
-from threads.agents.run import execute
-from threads.agents.store import now_ms, open_store, sqlite
-from threads.log import CallId, ModelRequestEvent, Principal, ResumedEvent, ToolResultEvent
-from threads.result import Err, Ok
-from threads.store import verify_export
-from threads.store.deletion import delete_thread
-from threads.thread.control import LOCAL_OPERATOR
+from threadsai import Agent, Completed, Parked, Thread, agent, scripted_model
+from threadsai.agents import run as run_module
+from threadsai.agents.run import execute
+from threadsai.agents.store import now_ms, open_store, sqlite
+from threadsai.log import CallId, ModelRequestEvent, Principal, ResumedEvent, ToolResultEvent
+from threadsai.result import Err, Ok
+from threadsai.store import verify_export
+from threadsai.store.deletion import delete_thread
+from threadsai.thread.control import LOCAL_OPERATOR
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 BOB = Principal(issuer="api", tenant="local", subject="bob")

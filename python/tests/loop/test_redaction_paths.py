@@ -9,14 +9,14 @@ from typing import Literal
 
 from pydantic import BaseModel, JsonValue
 
-from threads import Completed, RunContext, agent, scripted_model, sqlite, tool
-from threads.hooks.extension import extension
-from threads.hooks.types import ToolGate
-from threads.log import Context, Permissions, ToolCallData
-from threads.loop.scripted import ScriptedModel
-from threads.redaction import StreamRedactor
-from threads.result import Err
-from threads.secrets import credential
+from threadsai import Completed, RunContext, agent, scripted_model, sqlite, tool
+from threadsai.hooks.extension import extension
+from threadsai.hooks.types import ToolGate
+from threadsai.log import Context, Permissions, ToolCallData
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.redaction import StreamRedactor
+from threadsai.result import Err
+from threadsai.secrets import credential
 
 BYPASS = Permissions.model_validate(
     {

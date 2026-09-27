@@ -21,7 +21,7 @@ asking anyone.
 <Tab value="TypeScript">
 
 ```ts title="support.ts"
-import { agent, scriptedModel, sqlite, tool } from "@threads/core";
+import { agent, scriptedModel, sqlite, tool } from "threadsai";
 import { z } from "zod";
 
 const usage = { input_tokens: 10, output_tokens: 2 };
@@ -69,7 +69,7 @@ import asyncio
 
 from pydantic import BaseModel, JsonValue
 
-from threads import RunContext, agent, scripted_model, sqlite, tool
+from threadsai import RunContext, agent, scripted_model, sqlite, tool
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 
@@ -147,7 +147,7 @@ for (const { event } of timeline.value.entries) console.log(event.seq, event.typ
 <Tab value="Python">
 
 ```python
-from threads.result import Err
+from threadsai.result import Err
 
 timeline = await result.thread.timeline()
 if isinstance(timeline, Err):

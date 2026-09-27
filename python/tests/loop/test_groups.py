@@ -7,8 +7,8 @@ from typing import Literal
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from threads.log import EffectClass
-from threads.loop.groups import Candidate, groups
+from threadsai.log import EffectClass
+from threadsai.loop.groups import Candidate, groups
 
 SPEC = Path(__file__).resolve().parents[3] / "spec"
 

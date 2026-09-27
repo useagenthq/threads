@@ -15,12 +15,12 @@ from typing import TYPE_CHECKING
 import pytest
 from fakes import FakeContext, collect, line
 
-from threads.anthropic import anthropic
-from threads.litellm import litellm
-from threads.loop.guard import block_model_requests
-from threads.loop.model import Done, Model, PartChunk
-from threads.openai import openai
-from threads.reduce.handlers import to_json
+from threadsai.anthropic import anthropic
+from threadsai.litellm import litellm
+from threadsai.loop.guard import block_model_requests
+from threadsai.loop.model import Done, Model, PartChunk
+from threadsai.openai import openai
+from threadsai.reduce.handlers import to_json
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

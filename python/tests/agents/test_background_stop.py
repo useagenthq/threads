@@ -9,7 +9,7 @@ from collections.abc import AsyncIterator, Sequence
 from agents.wake_kit import ALICE, Gated, events_of, spawns, text, wakes
 from pydantic import JsonValue
 
-from threads import (
+from threadsai import (
     Agent,
     Cancelled,
     Completed,
@@ -23,18 +23,18 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads.agents.store import open_store
-from threads.log import (
+from threadsai.agents.store import open_store
+from threadsai.log import (
     AgentFinishedEvent,
     AgentSpawnedEvent,
     CancelRequestedEvent,
     Event,
     TurnCompletedEvent,
 )
-from threads.loop.model import ModelChunk
-from threads.loop.scripted import ScriptedModel
-from threads.result import Ok
-from threads.thread.handle import open_thread
+from threadsai.loop.model import ModelChunk
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.result import Ok
+from threadsai.thread.handle import open_thread
 
 TOO_LONG: JsonValue = {"error": {"reason": "prompt_too_long", "http_status": 400}}
 

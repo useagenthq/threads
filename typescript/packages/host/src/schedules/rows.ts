@@ -1,4 +1,4 @@
-import { Input } from "@threads/core";
+import { Input } from "threadsai";
 import {
   canonicalize,
   Int,
@@ -7,7 +7,7 @@ import {
   parseRows,
   ThreadId,
   type Tx,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 
 // The scheduler's rows (spec/schema/store.sql): the threads a schedule has had

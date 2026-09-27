@@ -1,4 +1,4 @@
-import type { Inbound } from "@threads/core/adapter";
+import type { Inbound } from "threadsai/adapter";
 import { z } from "zod";
 
 // The Cloud API webhook (a trust boundary). Objects are loose because Meta adds fields over

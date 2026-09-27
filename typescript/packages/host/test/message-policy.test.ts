@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { agent, ConfigError, scriptedModel, sqlite } from "@threads/core";
+import { agent, ConfigError, scriptedModel, sqlite } from "threadsai";
 import {
   openStore,
   pinnedLine0,
   sha256Hex,
   storeConnection,
   tenantStore,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { assertTeamReplays } from "../../core/test/team/kit";
 import { host } from "../src/host";

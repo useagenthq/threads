@@ -5,12 +5,12 @@ from collections.abc import Sequence
 
 from pydantic import BaseModel, JsonValue
 
-from threads import RunContext, agent, scripted_model, sqlite, tool
-from threads.agents.results import RunResult
-from threads.hooks.extension import extension
-from threads.hooks.types import Hooks
-from threads.log import Event, HookDecisionEvent, Permissions
-from threads.result import Ok
+from threadsai import RunContext, agent, scripted_model, sqlite, tool
+from threadsai.agents.results import RunResult
+from threadsai.hooks.extension import extension
+from threadsai.hooks.types import Hooks
+from threadsai.log import Event, HookDecisionEvent, Permissions
+from threadsai.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALLOW = Permissions(

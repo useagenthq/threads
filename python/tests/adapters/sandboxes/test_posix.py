@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 from sandbox_kit import OPEN
 
-from threads.adapters.sandboxes.posix import WRAPPER, run, stdin_path, wrap
-from threads.result import Err, Ok
-from threads.sandbox.manifest import manifest_hash, manifest_of
-from threads.sandbox.protocol import ExecOutput, SandboxContext, SandboxError
+from threadsai.adapters.sandboxes.posix import WRAPPER, run, stdin_path, wrap
+from threadsai.result import Err, Ok
+from threadsai.sandbox.manifest import manifest_hash, manifest_of
+from threadsai.sandbox.protocol import ExecOutput, SandboxContext, SandboxError
 
 VECTOR = (
     Path(__file__).resolve().parents[4] / "spec" / "conformance" / "vectors" / "manifest-order.json"

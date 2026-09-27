@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { verifyExport } from "@threads/core";
-import type { ChainEvent } from "@threads/core/internal/feed";
+import { verifyExport } from "threadsai";
+import type { ChainEvent } from "threadsai/internal/feed";
 import { z } from "zod";
 import { body } from "../src/otlp";
 import type { Span } from "../src/span";

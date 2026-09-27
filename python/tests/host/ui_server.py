@@ -14,9 +14,9 @@ import uvicorn
 from pydantic import BaseModel, JsonValue, TypeAdapter
 from starlette.requests import Request
 
-from threads import RunContext, agent, scripted_model, sqlite, tool
-from threads.host import host
-from threads.log import Principal
+from threadsai import RunContext, agent, scripted_model, sqlite, tool
+from threadsai.host import host
+from threadsai.log import Principal
 
 ALICE = Principal(issuer="api", tenant="acme", subject="alice")
 BOB = Principal(issuer="api", tenant="acme", subject="bob")

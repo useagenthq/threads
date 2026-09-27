@@ -14,7 +14,7 @@ import type {
   ModelRequest,
   Price,
   Secret,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import {
   ConfigError,
   checkHostedTools,
@@ -25,7 +25,7 @@ import {
   parseRender,
   rejectionFor,
   staleEpoch,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 
 import {
   cacheInfo,
@@ -37,7 +37,7 @@ import {
 import { toAnthropic } from "./request";
 import { decode } from "./stream";
 
-export type { JsonObject, Price } from "@threads/core/adapter";
+export type { JsonObject, Price } from "threadsai/adapter";
 export type { PromptCache } from "./caching";
 
 // anthropic(): the Messages API through the official SDK, as a threads Model (spec/api.json).

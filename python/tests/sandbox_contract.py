@@ -15,13 +15,13 @@ from sandbox_backend import Box, FakeBackend
 from sandbox_kit import OPEN, KitContext
 from tree_contract import TREE_CHECKS
 
-from threads.adapters.sandboxes.posix import collect
-from threads.loop.model import Found, LookupUnknown, NotFound, NotFoundNonfinal
-from threads.result import Err, Ok
-from threads.sandbox import LooksUpSandbox, LooksUpSnapshot, Sandbox, SandboxSession
-from threads.sandbox.manifest import manifest_hash, manifest_of
-from threads.sandbox.protocol import ExecOutput, SandboxError
-from threads.store.context import CleanupAuthority
+from threadsai.adapters.sandboxes.posix import collect
+from threadsai.loop.model import Found, LookupUnknown, NotFound, NotFoundNonfinal
+from threadsai.result import Err, Ok
+from threadsai.sandbox import LooksUpSandbox, LooksUpSnapshot, Sandbox, SandboxSession
+from threadsai.sandbox.manifest import manifest_hash, manifest_of
+from threadsai.sandbox.protocol import ExecOutput, SandboxError
+from threadsai.store.context import CleanupAuthority
 
 
 class Bundled(Sandbox, LooksUpSandbox, LooksUpSnapshot, Protocol):

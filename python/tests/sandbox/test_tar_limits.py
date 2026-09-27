@@ -8,11 +8,11 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from threads.result import Err, Ok
-from threads.sandbox.tree.build import Owner, build_tar
-from threads.sandbox.tree.tar import read_tar
-from threads.sandbox.tree.tree import Tree, TreeDir, TreeSymlink, parse_tree
-from threads.store.artifacts import MemoryArtifacts
+from threadsai.result import Err, Ok
+from threadsai.sandbox.tree.build import Owner, build_tar
+from threadsai.sandbox.tree.tar import read_tar
+from threadsai.sandbox.tree.tree import Tree, TreeDir, TreeSymlink, parse_tree
+from threadsai.store.artifacts import MemoryArtifacts
 
 QUICK_S = 0.25
 """Well under a second: the refusal is linear, not quadratic."""

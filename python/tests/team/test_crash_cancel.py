@@ -12,10 +12,10 @@ from team.crash_kit import CrashError, Point, crashing, reached, restart
 from team.run_kit import Answering, call, receipts, say, start, types
 from team.team_kit import assert_team_replays
 
-from threads import Agent, Completed, agent, scripted_model
-from threads.log import BranchId, MemberEndedEvent
-from threads.result import Ok
-from threads.team.rows import member_rows
+from threadsai import Agent, Completed, agent, scripted_model
+from threadsai.log import BranchId, MemberEndedEvent
+from threadsai.result import Ok
+from threadsai.team.rows import member_rows
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

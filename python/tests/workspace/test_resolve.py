@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 from fixture import HAS_GIT, dir_of, git, repo_of, scratch
 
-from threads.agents.config import ConfigError
-from threads.redaction.registry import register
-from threads.sandbox.tree.tree import Tree, TreeFile, TreeSymlink
-from threads.workspace import Forge, Resolved, Workspace, resolve_workspace
+from threadsai.agents.config import ConfigError
+from threadsai.redaction.registry import register
+from threadsai.sandbox.tree.tree import Tree, TreeFile, TreeSymlink
+from threadsai.workspace import Forge, Resolved, Workspace, resolve_workspace
 
 NO_FORGE = Forge(lambda repo: f"https://example.invalid/{repo}.git")
 FILE = 0o644

@@ -10,19 +10,19 @@ import pytest
 from pydantic import JsonValue
 from redaction_kit import RACED, ROOT, T0, Race, opened, started, user, writer
 
-from threads.log import BranchId, ParseError
-from threads.log.digest import sha256_hex
-from threads.memory import local_knowledge
-from threads.memory.conformance import A
-from threads.memory.local_knowledge import LocalKnowledge
-from threads.memory.types import Binding, KnowledgeSource
-from threads.redaction import SecretInStoredBytesError, register
-from threads.result import Err, Ok
-from threads.store import Draft, ForkRequest, SqliteStore, verify_export
-from threads.store import branches as store_branches
-from threads.store.conn import Conn
-from threads.store.forking import ChildStart, Forking
-from threads.store.worker import Worker
+from threadsai.log import BranchId, ParseError
+from threadsai.log.digest import sha256_hex
+from threadsai.memory import local_knowledge
+from threadsai.memory.conformance import A
+from threadsai.memory.local_knowledge import LocalKnowledge
+from threadsai.memory.types import Binding, KnowledgeSource
+from threadsai.redaction import SecretInStoredBytesError, register
+from threadsai.result import Err, Ok
+from threadsai.store import Draft, ForkRequest, SqliteStore, verify_export
+from threadsai.store import branches as store_branches
+from threadsai.store.conn import Conn
+from threadsai.store.forking import ChildStart, Forking
+from threadsai.store.worker import Worker
 
 
 def test_a_value_registered_before_the_append_publishes_is_redacted(

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { within } from "@threads/core/adapter";
+import { within } from "threadsai/adapter";
 import { CTX } from "../../core/test/sandbox/context";
 import { envdUrl } from "../src/envd";
 import { control } from "../src/rest";

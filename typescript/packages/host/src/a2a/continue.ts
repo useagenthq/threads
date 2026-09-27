@@ -5,14 +5,14 @@ import {
   isTerminal,
   type Message,
   textOf,
-} from "@threads/a2a/protocol";
-import { openThread } from "@threads/core";
+} from "@threadsai/a2a/protocol";
+import { openThread } from "threadsai";
 import {
   type Principal,
   principalKey,
   storeConnection,
   writing,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { HostContext } from "../context";
 import { answerQuestion } from "../decisions";
 import { A2A_SEND, a2aTask, findReceipt, insertReceipt } from "../receipts";

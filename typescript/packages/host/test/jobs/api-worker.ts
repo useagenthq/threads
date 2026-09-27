@@ -7,13 +7,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import {
-  agent,
-  type Model,
-  scriptedModel,
-  type sqlite,
-  tool,
-} from "@threads/core";
+import { agent, type Model, scriptedModel, type sqlite, tool } from "threadsai";
 import {
   BranchId,
   knownEvents,
@@ -21,7 +15,7 @@ import {
   storeConnection,
   tenantStore,
   type VerifiedLog,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { host } from "../../src";
 import { sqlAll } from "../sql";

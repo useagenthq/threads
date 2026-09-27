@@ -13,8 +13,8 @@ import {
   RpcRequest,
   SendMessageRequest,
   SubscribeToTaskRequest,
-} from "@threads/a2a/protocol";
-import type { Principal } from "@threads/core/host";
+} from "@threadsai/a2a/protocol";
+import type { Principal } from "threadsai/host";
 import { cutOperation, cutPath } from "./cuts";
 import type { Envelope } from "./wire";
 

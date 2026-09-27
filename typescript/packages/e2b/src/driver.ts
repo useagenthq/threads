@@ -1,4 +1,4 @@
-import type { Fetch, SandboxDriver } from "@threads/core/adapter";
+import type { Fetch, SandboxDriver } from "threadsai/adapter";
 import { type Envd, envd, envdUrl } from "./envd";
 import { control } from "./rest";
 import { sender } from "./transport";

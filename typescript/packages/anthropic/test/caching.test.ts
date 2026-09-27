@@ -4,8 +4,8 @@ import {
   recordingFetch,
   renderBody,
   sse,
-} from "@threads/adapter-testkit";
-import { type Json, memoryContext } from "@threads/core/adapter";
+} from "@threadsai/adapter-testkit";
+import { type Json, memoryContext } from "threadsai/adapter";
 import { type AnthropicOptions, anthropic } from "../src";
 
 // Prompt caching at the factory (lane 10): the pin, the declared lifetime, the refusals that keep

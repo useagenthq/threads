@@ -1,4 +1,4 @@
-import type { EventOf, KnownEvent } from "@threads/core/host";
+import type { EventOf, KnownEvent } from "threadsai/host";
 
 // The committed events a UI stream shows (spec/schema/ui/README.md, "Mapping"). Every other
 // event maps to zero frames.

@@ -10,12 +10,12 @@ import httpx2
 import pytest
 from fakes import FakeContext, collect, line
 
-from threads.adapters.models import transport
-from threads.adapters.models.anthropic.model import AnthropicModel
-from threads.anthropic import anthropic
-from threads.litellm import litellm
-from threads.loop.model import Done, Model, ModelChunk, Rejected
-from threads.reduce.handlers import to_json
+from threadsai.adapters.models import transport
+from threadsai.adapters.models.anthropic.model import AnthropicModel
+from threadsai.anthropic import anthropic
+from threadsai.litellm import litellm
+from threadsai.loop.model import Done, Model, ModelChunk, Rejected
+from threadsai.reduce.handlers import to_json
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

@@ -22,7 +22,7 @@ for the process; give it a path and it lasts on disk.
 <Tab value="TypeScript">
 
 ```ts title="support.ts"
-import { agent, scriptedModel, sqlite } from "@threads/core";
+import { agent, scriptedModel, sqlite } from "threadsai";
 
 const support = agent({
   name: "support",
@@ -51,7 +51,7 @@ import asyncio
 
 from pydantic import JsonValue
 
-from threads import agent, scripted_model, sqlite
+from threadsai import agent, scripted_model, sqlite
 
 REPLY: JsonValue = {
     "content": [{"type": "text", "text": "Orders can be returned within 30 days of delivery."}],
@@ -102,7 +102,7 @@ the run later.
 <Tab value="TypeScript">
 
 ```ts
-import { anthropic } from "@threads/anthropic";
+import { anthropic } from "@threadsai/anthropic";
 
 const support = agent({
   name: "support",
@@ -117,7 +117,7 @@ const result = await support.run("What is your refund policy?", { store: sqlite(
 <Tab value="Python">
 
 ```python
-from threads.anthropic import anthropic
+from threadsai.anthropic import anthropic
 
 support = agent(
     name="support",

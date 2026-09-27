@@ -18,7 +18,7 @@ from team.run_kit import say, sq_of, start
 from team.team_kit import assert_team_replays
 from team.test_dynamic import scripted, specialist_of
 
-from threads import (
+from threadsai import (
     Completed,
     Principal,
     StoreCorruptError,
@@ -30,13 +30,13 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads.agents.member_results import MemberCompleted, hydrated
-from threads.agents.store import now_ms, open_store
-from threads.agents.team_handle_types import TeamStartRefused
-from threads.agents.team_leads import leads_named
-from threads.agents.team_log_mail import take_team_log_mail
-from threads.agents.team_tools import Sent, Started
-from threads.log import (
+from threadsai.agents.member_results import MemberCompleted, hydrated
+from threadsai.agents.store import now_ms, open_store
+from threadsai.agents.team_handle_types import TeamStartRefused
+from threadsai.agents.team_leads import leads_named
+from threadsai.agents.team_log_mail import take_team_log_mail
+from threadsai.agents.team_tools import Sent, Started
+from threadsai.log import (
     ArtifactRef,
     BranchId,
     CompletedResult,
@@ -49,13 +49,13 @@ from threads.log import (
     StoredMemberResult,
     TextBody,
 )
-from threads.log.digest import sha256_hex
-from threads.result import Err, Ok
-from threads.store.sql import blob_of
-from threads.team.dynamic import InvalidDefinition
-from threads.team.materialize import materialize
-from threads.team.materialize_types import MaterializeOptions, Rebind
-from threads.team.rows import team_row
+from threadsai.log.digest import sha256_hex
+from threadsai.result import Err, Ok
+from threadsai.store.sql import blob_of
+from threadsai.team.dynamic import InvalidDefinition
+from threadsai.team.materialize import materialize
+from threadsai.team.materialize_types import MaterializeOptions, Rebind
+from threadsai.team.rows import team_row
 
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")
 BIG = "x" * 20_000

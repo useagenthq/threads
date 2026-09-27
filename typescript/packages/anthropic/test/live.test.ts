@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { drain, renderBody } from "@threads/adapter-testkit";
-import { memoryContext } from "@threads/core/adapter";
+import { drain, renderBody } from "@threadsai/adapter-testkit";
+import { memoryContext } from "threadsai/adapter";
 import { anthropic } from "../src";
 
 // Live gate: real network, so it runs only with THREADS_LIVE=1 and a key.

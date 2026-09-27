@@ -1,4 +1,4 @@
-import type { Json } from "@threads/core/host";
+import type { Json } from "threadsai/host";
 import { z } from "zod";
 import type { Chunk } from "./frame";
 

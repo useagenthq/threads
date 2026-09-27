@@ -8,7 +8,7 @@ import re
 import pytest
 from pydantic import JsonValue
 
-from threads import Completed, TeamAgent, TeamCursor, agent, scripted_model, sqlite
+from threadsai import Completed, TeamAgent, TeamCursor, agent, scripted_model, sqlite
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

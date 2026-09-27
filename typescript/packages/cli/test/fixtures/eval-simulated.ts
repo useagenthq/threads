@@ -1,10 +1,4 @@
-import {
-  type Agent,
-  agent,
-  type Model,
-  scriptedModel,
-  tool,
-} from "@threads/core";
+import { type Agent, agent, type Model, scriptedModel, tool } from "threadsai";
 import { z } from "zod";
 
 // The `--agent` module of the simulated-user CLI tests (spec lane 32, E): agents, a judge, a

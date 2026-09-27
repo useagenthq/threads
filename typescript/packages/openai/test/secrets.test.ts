@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { recordingFetch, sse } from "@threads/adapter-testkit";
-import { agent, sqlite } from "@threads/core";
-import { credential, type Json, markTestKit } from "@threads/core/adapter";
+import { recordingFetch, sse } from "@threadsai/adapter-testkit";
+import { agent, sqlite } from "threadsai";
+import { credential, type Json, markTestKit } from "threadsai/adapter";
 import { openai } from "../src";
 
 // Provider items are stored byte-exact for replay (reasoning is encrypted, hosted results are

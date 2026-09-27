@@ -5,7 +5,7 @@ test/team/run-charge.test.ts."""
 
 from team.team_kit import CASES, case_logs, verified
 
-from threads.log import (
+from threadsai.log import (
     Budget,
     Event,
     EventId,
@@ -14,9 +14,9 @@ from threads.log import (
     TurnCompletedEvent,
     UserInputEvent,
 )
-from threads.loop.budget import own
-from threads.reduce.openers import run_opener
-from threads.result import Ok
+from threadsai.loop.budget import own
+from threadsai.reduce.openers import run_opener
+from threadsai.result import Ok
 
 _READ = verified(case_logs("team-settle-wakes-lead")["lead"])
 assert isinstance(_READ, Ok)

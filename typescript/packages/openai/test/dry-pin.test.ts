@@ -1,4 +1,4 @@
-import { dryPinCases } from "@threads/adapter-testkit";
+import { dryPinCases } from "@threadsai/adapter-testkit";
 import { openai } from "../src";
 
 // Lane 22 (test 4d): threads eval --agent pins this adapter without setup or a key, and gets

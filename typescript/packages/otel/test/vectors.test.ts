@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ConfigError } from "@threads/core";
+import { ConfigError } from "threadsai";
 import { z } from "zod";
 import { type Options, resolve } from "../src/env";
 import { lossIds, nonzero, spanId, traceId } from "../src/ids";

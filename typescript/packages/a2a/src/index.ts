@@ -1,6 +1,6 @@
-// @threads/a2a: A2A 1.0, both directions. `remote()` names a partner's agent; the protocol core is
-// at @threads/a2a/protocol, and the exposed side lives in @threads/host, which serves a host agent
-// from the same schemas. Runtime dependency: @threads/core and zod only — the adapter owns the
+// @threadsai/a2a: A2A 1.0, both directions. `remote()` names a partner's agent; the protocol core is
+// at @threadsai/a2a/protocol, and the exposed side lives in @threadsai/host, which serves a host agent
+// from the same schemas. Runtime dependency: threadsai and zod only — the adapter owns the
 // message id, the attempt record and the exact bytes, which an SDK hides.
 
 export {

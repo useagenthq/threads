@@ -9,13 +9,13 @@ import pytest
 from pydantic import JsonValue
 from test_channel_approvals import TEAM, ItemsChannel, text, until, webhook
 
-from threads import agent, scripted_model, sqlite
-from threads.agents import run as run_module
-from threads.agents.store import Store, open_store, scoped
-from threads.host import expiry as expiry_module
-from threads.host import host
-from threads.host.app import recovered
-from threads.log import (
+from threadsai import agent, scripted_model, sqlite
+from threadsai.agents import run as run_module
+from threadsai.agents.store import Store, open_store, scoped
+from threadsai.host import expiry as expiry_module
+from threadsai.host import host
+from threadsai.host.app import recovered
+from threadsai.log import (
     AnswerRejectedEvent,
     ChannelDeliveryEvent,
     Event,
@@ -23,8 +23,8 @@ from threads.log import (
     ToolResultEvent,
     TurnCompletedEvent,
 )
-from threads.result import Ok
-from threads.store.sql import int_of, text_of
+from threadsai.result import Ok
+from threadsai.store.sql import int_of, text_of
 
 ASKER = Principal(issuer="fake:T1", tenant=TEAM, subject="U1")
 OTHER = Principal(issuer="fake:T1", tenant=TEAM, subject="U2")

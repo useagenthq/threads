@@ -1,4 +1,4 @@
-import type { ThreadId } from "@threads/core/host";
+import type { ThreadId } from "threadsai/host";
 import type { HostedAgent } from "../context";
 import { failure, routeFailure } from "../errors";
 import type { RunAccepted } from "../runs";

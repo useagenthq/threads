@@ -9,13 +9,13 @@ from pydantic import JsonValue
 from team.run_kit import Watched, call, member_events, receipts, say, sq_of, start
 from team.team_kit import assert_team_replays
 
-from threads import Agent, TeamAgent, agent, scripted_model, sqlite
-from threads.agents import team_worker
-from threads.agents.store import now_ms
-from threads.log import BranchId
-from threads.result import Ok
-from threads.team.constants import TEAM_CONSTANTS
-from threads.team.rows import member_rows
+from threadsai import Agent, TeamAgent, agent, scripted_model, sqlite
+from threadsai.agents import team_worker
+from threadsai.agents.store import now_ms
+from threadsai.log import BranchId
+from threadsai.result import Ok
+from threadsai.team.constants import TEAM_CONSTANTS
+from threadsai.team.rows import member_rows
 
 
 def _researcher() -> Agent[None, str]:

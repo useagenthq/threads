@@ -7,14 +7,14 @@ import type {
   RenderLine,
   RenderRequest,
   ResultPart,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import {
   assertNever,
   JsonObject,
   loadedTools,
   readOrRefuse,
   Unsendable,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 
 // Render v1 → a Responses API request body, deterministically. Every value
 // comes from the render: model, params and hosted tools from line 0. Stateless: store is false

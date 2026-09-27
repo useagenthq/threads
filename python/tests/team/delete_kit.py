@@ -13,12 +13,12 @@ from team.team_kit import (
     rechain,
 )
 
-from threads.agents.store import Store, open_store
-from threads.log import ThreadId
-from threads.result import Err, Ok
-from threads.store.conn import one
-from threads.store.deletion import TEAM_TABLES, DeleteError, delete_thread
-from threads.team.rebuild import rebuild_team_index
+from threadsai.agents.store import Store, open_store
+from threadsai.log import ThreadId
+from threadsai.result import Err, Ok
+from threadsai.store.conn import one
+from threadsai.store.deletion import TEAM_TABLES, DeleteError, delete_thread
+from threadsai.team.rebuild import rebuild_team_index
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 NOW = 1_790_000_100_000

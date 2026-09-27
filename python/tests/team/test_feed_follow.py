@@ -10,7 +10,7 @@ import pytest
 from team.run_kit import say, sq_of, start
 from team.team_kit import assert_team_replays
 
-from threads import (
+from threadsai import (
     Completed,
     Failed,
     InvalidCursorError,
@@ -23,11 +23,11 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads.agents.team_feed import team_events
-from threads.agents.team_handle_types import EpochRestarted
-from threads.result import Ok
-from threads.store import SqliteStore
-from threads.team.rebuild import rebuild_team_index
+from threadsai.agents.team_feed import team_events
+from threadsai.agents.team_handle_types import EpochRestarted
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
+from threadsai.team.rebuild import rebuild_team_index
 
 if TYPE_CHECKING:
     from pydantic import JsonValue

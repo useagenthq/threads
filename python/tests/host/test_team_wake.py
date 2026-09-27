@@ -20,7 +20,7 @@ from pydantic.experimental.missing_sentinel import MISSING
 from team.run_kit import call, say, sq_of
 from team.team_kit import assert_team_replays
 
-from threads import (
+from threadsai import (
     Agent,
     Model,
     Principal,
@@ -31,10 +31,10 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads._generated.host_api_v1 import StartRunRequest
-from threads.agents.store import now_ms, open_store, scoped
-from threads.host import Host, RawRequest, host
-from threads.log import (
+from threadsai._generated.host_api_v1 import StartRunRequest
+from threadsai.agents.store import now_ms, open_store, scoped
+from threadsai.host import Host, RawRequest, host
+from threadsai.log import (
     BranchId,
     Event,
     MessageReceivedEvent,
@@ -44,9 +44,9 @@ from threads.log import (
     UserInputEvent,
     WokenEvent,
 )
-from threads.result import Ok
-from threads.secrets import secret
-from threads.slack import slack
+from threadsai.result import Ok
+from threadsai.secrets import secret
+from threadsai.slack import slack
 
 ALICE = Principal(issuer="api", tenant="acme", subject="alice")
 TENANT = "slack:T1"

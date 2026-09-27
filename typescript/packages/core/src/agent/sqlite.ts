@@ -10,7 +10,7 @@ import {
 
 // sqlite() (spec/api.json): the SQLite log and artifact store. Opening is lazy, so sqlite()
 // itself does no I/O; the bun:sqlite driver is loaded on first use, which keeps core's import
-// graph free of runtime-specific modules. postgres() (@threads/postgres) builds the same opaque
+// graph free of runtime-specific modules. postgres() (@threadsai/postgres) builds the same opaque
 // Store over its own driver with `storeOver`.
 
 export type OpenStore = {

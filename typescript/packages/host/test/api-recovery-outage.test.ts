@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { type Model, scriptedModel, sqlite } from "@threads/core";
-import { markTestKit } from "@threads/core/adapter";
+import { type Model, scriptedModel, sqlite } from "threadsai";
+import { markTestKit } from "threadsai/adapter";
 import {
   knownEvents,
   openStore,
@@ -10,7 +10,7 @@ import {
   ThreadId,
   tenantStore,
   uuidv7,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { hostTicked } from "../src/host";
 import { cleanup, fold, serve, started } from "./api-kit";
 import { alice, say, until } from "./kit";

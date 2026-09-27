@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from pydantic import JsonValue
 
-from threads import (
+from threadsai import (
     Completed,
     Doc,
     DocVersion,
@@ -21,9 +21,9 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads.log import Permissions, SnapshotEvent
-from threads.memory.types import Outcome, ProviderError
-from threads.result import Err, Ok
+from threadsai.log import Permissions, SnapshotEvent
+from threadsai.memory.types import Outcome, ProviderError
+from threadsai.result import Err, Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 BYPASS = Permissions(

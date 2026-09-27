@@ -4,12 +4,12 @@ reference form, tool_search's pinned spec, defer_tools and what children inherit
 import pytest
 from pydantic import BaseModel, Field, JsonValue
 
-from threads import ConfigError, RunContext, Tool, agent, scripted_model, tool
-from threads.agents.deferral import reference_form
-from threads.log import ArtifactRef, ToolSpec
-from threads.log.digest import sha256_hex
-from threads.loop.defaults import CONTEXT
-from threads.tools.specs import search_tool_spec
+from threadsai import ConfigError, RunContext, Tool, agent, scripted_model, tool
+from threadsai.agents.deferral import reference_form
+from threadsai.log import ArtifactRef, ToolSpec
+from threadsai.log.digest import sha256_hex
+from threadsai.loop.defaults import CONTEXT
+from threadsai.tools.specs import search_tool_spec
 
 NO_MODEL: dict[str, JsonValue] = {"responses": []}
 

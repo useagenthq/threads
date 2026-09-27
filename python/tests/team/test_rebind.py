@@ -14,9 +14,9 @@ from pydantic import BaseModel
 from team.run_kit import call, events, member_events, receipts, say, sq_of, start, types
 from team.team_kit import assert_team_replays
 
-from threads import Completed, RunContext, agent, scripted_model, sqlite, tool
-from threads.agents.bindings import AppTool, Fence
-from threads.log import MemberEndedEvent
+from threadsai import Completed, RunContext, agent, scripted_model, sqlite, tool
+from threadsai.agents.bindings import AppTool, Fence
+from threadsai.log import MemberEndedEvent
 
 
 class _Doc(BaseModel):

@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from tools_kit import TOOL_CASES
 from turn_kit import TURN_CASES
 
-from threads.hooks.types import CLASSES, wire_name
+from threadsai.hooks.types import CLASSES, wire_name
 
 CASES: Final[Mapping[str, HookCase]] = {**TURN_CASES, **TOOL_CASES, **AGENT_CASES}
 """Every hook's case, keyed as spec/api.json `types.Hooks` names it."""

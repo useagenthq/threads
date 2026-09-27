@@ -12,18 +12,18 @@ from fakes import Script, sse
 from kit import T0, Tools, open_store, start
 from pydantic import JsonValue
 
-from threads.adapters.loop_resources import holding
-from threads.adapters.models.anthropic.model import AnthropicModel
-from threads.adapters.models.litellm.model import Connection, LiteLLMModel
-from threads.adapters.models.openai.model import OpenAIModel
-from threads.anthropic import anthropic
-from threads.litellm import litellm
-from threads.log import ModelResponseEvent
-from threads.loop.drive import drive
-from threads.loop.guard import block_model_requests
-from threads.loop.model import Model
-from threads.loop.runtime import Idle, Runtime
-from threads.openai import openai
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.models.anthropic.model import AnthropicModel
+from threadsai.adapters.models.litellm.model import Connection, LiteLLMModel
+from threadsai.adapters.models.openai.model import OpenAIModel
+from threadsai.anthropic import anthropic
+from threadsai.litellm import litellm
+from threadsai.log import ModelResponseEvent
+from threadsai.loop.drive import drive
+from threadsai.loop.guard import block_model_requests
+from threadsai.loop.model import Model
+from threadsai.loop.runtime import Idle, Runtime
+from threadsai.openai import openai
 
 
 @pytest.fixture(autouse=True)

@@ -4,9 +4,9 @@ import {
   recordingFetch,
   renderBody,
   sse,
-} from "@threads/adapter-testkit";
-import { agent, type Model, openThread, sqlite } from "@threads/core";
-import { markTestKit, memoryContext } from "@threads/core/adapter";
+} from "@threadsai/adapter-testkit";
+import { agent, type Model, openThread, sqlite } from "threadsai";
+import { markTestKit, memoryContext } from "threadsai/adapter";
 import { z } from "zod";
 import { type OpenAIOptions, openai } from "../src";
 

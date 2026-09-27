@@ -7,12 +7,12 @@ import asyncio
 from pydantic import JsonValue
 from test_channel_approvals import TEAM, USAGE, ItemsChannel, message, text, until, webhook
 
-from threads import agent, scripted_model, sqlite
-from threads.agents.store import Store, open_store, scoped
-from threads.host import host
-from threads.log import HandoffEvent, ThreadId, UserInputEvent
-from threads.result import Ok
-from threads.store.sql import text_of
+from threadsai import agent, scripted_model, sqlite
+from threadsai.agents.store import Store, open_store, scoped
+from threadsai.host import host
+from threadsai.log import HandoffEvent, ThreadId, UserInputEvent
+from threadsai.result import Ok
+from threadsai.store.sql import text_of
 
 
 def _handoff(to: str) -> JsonValue:

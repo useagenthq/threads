@@ -10,11 +10,11 @@ from collections.abc import AsyncIterator, Mapping, Sequence
 from pathlib import Path
 from typing import Literal
 
-from threads.log import ParseError, SnapshotData
-from threads.loop.model import LookupUnknown, NotFound
-from threads.loop.tools import Termination
-from threads.result import Err, Ok
-from threads.sandbox.protocol import (
+from threadsai.log import ParseError, SnapshotData
+from threadsai.loop.model import LookupUnknown, NotFound
+from threadsai.loop.tools import Termination
+from threadsai.result import Err, Ok
+from threadsai.sandbox.protocol import (
     NO_ENV,
     ExecOutput,
     Looked,

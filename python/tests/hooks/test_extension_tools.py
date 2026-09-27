@@ -7,10 +7,10 @@ import asyncio
 import pytest
 from pydantic import BaseModel, JsonValue
 
-from threads import Completed, ConfigError, RunContext, agent, extension, scripted_model, sqlite
-from threads import tool as make_tool
-from threads.log import Permissions, ThreadStartedEvent, ToolResultEvent
-from threads.result import Ok
+from threadsai import Completed, ConfigError, RunContext, agent, extension, scripted_model, sqlite
+from threadsai import tool as make_tool
+from threadsai.log import Permissions, ThreadStartedEvent, ToolResultEvent
+from threadsai.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALLOW = Permissions(

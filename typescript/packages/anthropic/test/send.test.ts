@@ -6,8 +6,8 @@ import {
   recordingFetch,
   renderBody,
   sse,
-} from "@threads/adapter-testkit";
-import { type Json, memoryContext } from "@threads/core/adapter";
+} from "@threadsai/adapter-testkit";
+import { type Json, memoryContext } from "threadsai/adapter";
 import { anthropic } from "../src";
 
 // SDK-level fetch mocks: the real SDK, no network.

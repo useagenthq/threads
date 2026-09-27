@@ -1,4 +1,4 @@
-import type { ToolContext, ToolRun } from "@threads/core/adapter";
+import type { ToolContext, ToolRun } from "threadsai/adapter";
 import type { Remote } from "../a2a";
 import type { Sending } from "../protocol";
 import { resolveCard } from "./card";

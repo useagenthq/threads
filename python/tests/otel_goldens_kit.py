@@ -6,11 +6,11 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-from threads.otel.otlp import body
-from threads.otel.span import Span
-from threads.otel.spans import Branch, spans
-from threads.result import Ok
-from threads.store.verify import VerifiedLog, verify_export
+from threadsai.otel.otlp import body
+from threadsai.otel.span import Span
+from threadsai.otel.spans import Branch, spans
+from threadsai.result import Ok
+from threadsai.store.verify import VerifiedLog, verify_export
 
 OTEL = Path(__file__).resolve().parents[2] / "spec" / "otel"
 NOW = 1_790_000_060_000

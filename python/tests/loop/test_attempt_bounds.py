@@ -5,9 +5,9 @@ import pytest
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.log import Model
-from threads.loop.budget import bounds
-from threads.reduce.projections import bound
+from threadsai.log import Model
+from threadsai.loop.budget import bounds
+from threadsai.reduce.projections import bound
 
 MODEL = Model.model_validate(
     {

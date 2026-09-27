@@ -11,15 +11,15 @@ from pg_drill import Dropping, opened_with
 from pg_kit import Leg, need_postgres
 from store.test_writer import DONE, ROOT, T0, Clock, started, user
 
-from threads.log import ParseError, ThreadId
-from threads.result import Err, Ok
-from threads.store import StoreError
-from threads.store.budgets import Cover
-from threads.store.companion import Companion
-from threads.store.conn import CommitUnknownError, Conn
-from threads.store.inbox import Item, consume
-from threads.store.receipts import Key, insert
-from threads.store.verify import StoredEvent
+from threadsai.log import ParseError, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.store import StoreError
+from threadsai.store.budgets import Cover
+from threadsai.store.companion import Companion
+from threadsai.store.conn import CommitUnknownError, Conn
+from threadsai.store.inbox import Item, consume
+from threadsai.store.receipts import Key, insert
+from threadsai.store.verify import StoredEvent
 
 type When = Literal["before", "after"]
 

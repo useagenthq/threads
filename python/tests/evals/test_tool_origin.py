@@ -9,15 +9,15 @@ from typing import Final
 import pytest
 from eval_kit import Order, say
 
-from threads import Agent, ConfigError, RunContext, agent, scripted_model, sqlite, tool
-from threads.agents.store import now_ms, open_store
-from threads.hooks.extension import extension
-from threads.log import BranchId, ThreadId, ToolSpec
-from threads.loop.drafts import draft
-from threads.render.lines import tools_line
-from threads.result import Ok
-from threads.store.lines import uuid7
-from threads.thread.handle import Thread
+from threadsai import Agent, ConfigError, RunContext, agent, scripted_model, sqlite, tool
+from threadsai.agents.store import now_ms, open_store
+from threadsai.hooks.extension import extension
+from threadsai.log import BranchId, ThreadId, ToolSpec
+from threadsai.loop.drafts import draft
+from threadsai.render.lines import tools_line
+from threadsai.result import Ok
+from threadsai.store.lines import uuid7
+from threadsai.thread.handle import Thread
 
 PLAIN_HASH: Final = "57e16a33d4ed8aba5c50cc95310c37e6e3c030058c15f32ae9bc7f82c9085986"
 """Golden: an agent without extension tools, the same before and after this release."""

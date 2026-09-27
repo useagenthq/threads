@@ -1,5 +1,5 @@
 {
-  "name": "@threads/daytona",
+  "name": "@threadsai/daytona",
   "version": "0.0.0",
   "license": "Apache-2.0",
   "type": "module",
@@ -7,12 +7,12 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@threads/core": "workspace:*",
+    "threadsai": "workspace:*",
     "@daytona/api-client": "0.216.0",
     "@daytona/toolbox-api-client": "0.216.0"
   },
   "devDependencies": {
     "zod": "^4.6.5",
-    "@threads/adapter-testkit": "workspace:*"
+    "@threadsai/adapter-testkit": "workspace:*"
   }
 }

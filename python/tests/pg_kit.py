@@ -17,12 +17,12 @@ from urllib.parse import quote
 import psycopg
 import pytest
 
-from threads.log import ParseError
-from threads.postgres.driver import PgConn, connector
-from threads.postgres.opening import open_postgres
-from threads.result import Err, Ok
-from threads.store import LOCAL_TENANT, ArtifactStore, SqliteStore
-from threads.store.conn import Conn
+from threadsai.log import ParseError
+from threadsai.postgres.driver import PgConn, connector
+from threadsai.postgres.opening import open_postgres
+from threadsai.result import Err, Ok
+from threadsai.store import LOCAL_TENANT, ArtifactStore, SqliteStore
+from threadsai.store.conn import Conn
 
 URL: Final = os.environ.get("THREADS_TEST_POSTGRES_URL")
 REQUIRED: Final = os.environ.get("THREADS_TEST_POSTGRES_REQUIRED") == "1"

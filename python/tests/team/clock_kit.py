@@ -10,10 +10,10 @@ import pytest
 from pydantic import JsonValue
 from team.run_kit import sq_of
 
-from threads import Store, scripted_model
-from threads.loop.model import ModelChunk, ModelContext, ModelRequest
-from threads.loop.scripted import ScriptedModel
-from threads.store.sql import int_of
+from threadsai import Store, scripted_model
+from threadsai.loop.model import ModelChunk, ModelContext, ModelRequest
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.store.sql import int_of
 
 
 class Held(ScriptedModel):

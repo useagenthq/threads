@@ -20,29 +20,29 @@ from pydantic.experimental.missing_sentinel import MISSING
 from team.run_kit import Answering, answers, call, reply_to, say
 from team.team_kit import assert_team_replays
 
-from threads import Store, agent, sqlite
-from threads.agents.store import open_store, scoped
-from threads.agents.team_handle_types import TeamSendRefused, TeamStartRefused
-from threads.agents.team_tools import Started
-from threads.host import host
-from threads.host.members import HostMemberOptions
-from threads.log import (
+from threadsai import Store, agent, sqlite
+from threadsai.agents.store import open_store, scoped
+from threadsai.agents.team_handle_types import TeamSendRefused, TeamStartRefused
+from threadsai.agents.team_tools import Started
+from threadsai.host import host
+from threadsai.host.members import HostMemberOptions
+from threadsai.log import (
     MailRefusedEvent,
     MemberRef,
     MemberStartedEvent,
     SupervisorDecidedEvent,
 )
-from threads.result import Ok
-from threads.store.conn import Conn
-from threads.store.sql import int_of, text_of
-from threads.team.host_team import host_team_ids
-from threads.team.rows import MemberRow, member_rows
+from threadsai.result import Ok
+from threadsai.store.conn import Conn
+from threadsai.store.sql import int_of, text_of
+from threadsai.team.host_team import host_team_ids
+from threadsai.team.rows import MemberRow, member_rows
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
-    from threads.agents.factory import Agent
-    from threads.host.app import Host
+    from threadsai.agents.factory import Agent
+    from threadsai.host.app import Host
 
 IDS = host_team_ids(ALICE.tenant)
 NEXT = 2

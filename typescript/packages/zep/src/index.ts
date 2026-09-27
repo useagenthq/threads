@@ -1,11 +1,11 @@
 import { ZepClient, ZepError, ZepTimeoutError } from "@getzep/zep-cloud";
-import type { MemoryHit, MemoryProvider, Scope, Secret } from "@threads/core";
+import type { MemoryHit, MemoryProvider, Scope, Secret } from "threadsai";
 import {
   credential,
   type Fetch,
   type ProviderError,
   sha256Hex,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { z } from "zod";
 import { fencedFetcher } from "./fetcher";
 

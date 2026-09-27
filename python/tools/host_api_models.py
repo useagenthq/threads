@@ -110,9 +110,9 @@ def keep_host_shapes(source: str, event_names: frozenset[str]) -> str:
     ]
     text = "".join(kept)
     used = sorted(n for n in dropped if f"{n}" in _names(text))
-    imports = f"from threads._generated.events_v1 import {', '.join(used)}\n"
+    imports = f"from threadsai._generated.events_v1 import {', '.join(used)}\n"
     return text.replace(
-        "from threads._strict_model import", imports + "from threads._strict_model import", 1
+        "from threadsai._strict_model import", imports + "from threadsai._strict_model import", 1
     )
 
 

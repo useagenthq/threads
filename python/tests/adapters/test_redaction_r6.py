@@ -13,7 +13,7 @@ import pytest
 from fakes import Script, sse
 from pydantic import JsonValue
 
-from threads import (
+from threadsai import (
     Completed,
     ConfigError,
     agent,
@@ -22,17 +22,17 @@ from threads import (
     secret,
     sqlite,
 )
-from threads.adapters.models.openai.model import OpenAIModel
-from threads.agents.bindings import AppTool, Fence
-from threads.agents.store import open_store
-from threads.log import ParseError, TurnCompletedEvent
-from threads.loop.guard import block_model_requests
-from threads.loop.scripted import ScriptedModel
-from threads.openai import openai
-from threads.redaction import contains_secret, redact_json, redact_secrets
-from threads.result import Err, Ok
-from threads.secrets import credential, resolve
-from threads.store.verify import verify_export
+from threadsai.adapters.models.openai.model import OpenAIModel
+from threadsai.agents.bindings import AppTool, Fence
+from threadsai.agents.store import open_store
+from threadsai.log import ParseError, TurnCompletedEvent
+from threadsai.loop.guard import block_model_requests
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.openai import openai
+from threadsai.redaction import contains_secret, redact_json, redact_secrets
+from threadsai.result import Err, Ok
+from threadsai.secrets import credential, resolve
+from threadsai.store.verify import verify_export
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 

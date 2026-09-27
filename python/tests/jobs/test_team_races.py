@@ -21,8 +21,8 @@ from pydantic import JsonValue
 from team.team_kit import assert_team_replays
 from team.vectors import TEAM, Obj, obj, seeded, vectors, world_logs
 
-from threads.log import AskClosedEvent as _Closed
-from threads.log import (
+from threadsai.log import AskClosedEvent as _Closed
+from threadsai.log import (
     BranchId,
     Event,
     MailRefusedEvent,
@@ -32,8 +32,8 @@ from threads.log import (
     WaitFinishedEvent,
     WaitStartedEvent,
 )
-from threads.result import Ok
-from threads.store import SqliteStore
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
 
 pytestmark = pytest.mark.jobs
 

@@ -3,8 +3,8 @@ import {
   type Binding,
   checkVersion,
   fault,
-} from "@threads/a2a/protocol";
-import { Principal } from "@threads/core/host";
+} from "@threadsai/a2a/protocol";
+import { Principal } from "threadsai/host";
 import type { HostContext } from "../context";
 import type { Authenticate } from "../http";
 import { cardBytes } from "./card";

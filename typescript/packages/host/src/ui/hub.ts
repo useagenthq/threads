@@ -1,4 +1,4 @@
-import type { KnownEvent } from "@threads/core/host";
+import type { KnownEvent } from "threadsai/host";
 import { partId } from "./framed";
 import type { Delta } from "./live";
 

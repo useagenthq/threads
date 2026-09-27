@@ -11,12 +11,12 @@ from compact_kit import logged
 from hook_kit import ALLOW, Box, Echo, text, use
 from pydantic import JsonValue
 
-from threads import HandedOff, RunContext, agent, scripted_model, sqlite, tool
-from threads.agents import handoff
-from threads.hooks.extension import extension
-from threads.hooks.types import SwitchGate, ToolGate
-from threads.log import Event, HandoffEvent, ToolCallData, ToolResultEvent
-from threads.loop.runtime import Runtime
+from threadsai import HandedOff, RunContext, agent, scripted_model, sqlite, tool
+from threadsai.agents import handoff
+from threadsai.hooks.extension import extension
+from threadsai.hooks.types import SwitchGate, ToolGate
+from threadsai.log import Event, HandoffEvent, ToolCallData, ToolResultEvent
+from threadsai.loop.runtime import Runtime
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

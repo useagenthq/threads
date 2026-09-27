@@ -9,14 +9,14 @@ from typing import Final
 from pydantic import JsonValue, TypeAdapter
 from team.team_kit import add, canonical, index_rows
 
-from threads.log import BranchId, ThreadId
-from threads.log.digest import sha256_hex
-from threads.result import Ok
-from threads.store import SqliteStore
-from threads.store.conn import Conn
-from threads.store.lines import header_line
-from threads.team.policy import MessagePolicyRule
-from threads.team.rebuild import rebuild_team_index
+from threadsai.log import BranchId, ThreadId
+from threadsai.log.digest import sha256_hex
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
+from threadsai.store.conn import Conn
+from threadsai.store.lines import header_line
+from threadsai.team.policy import MessagePolicyRule
+from threadsai.team.rebuild import rebuild_team_index
 
 _RULES: TypeAdapter[MessagePolicyRule] = TypeAdapter(MessagePolicyRule)
 

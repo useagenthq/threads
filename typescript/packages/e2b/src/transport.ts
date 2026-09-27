@@ -1,4 +1,4 @@
-import { type Fetch, sandboxFetch } from "@threads/core/adapter";
+import { type Fetch, sandboxFetch } from "threadsai/adapter";
 
 // Every E2B request, control plane and envd alike, leaves through the adapter's fetch (e2b's
 // `fetch` option, the runtime's own by default) behind the sandbox fence at its real send

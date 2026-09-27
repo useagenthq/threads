@@ -1,5 +1,5 @@
 import { describe, expect } from "bun:test";
-import { CommitUnknown, StoreError } from "@threads/core/store-driver";
+import { CommitUnknown, StoreError } from "threadsai/store-driver";
 import { ok } from "../../core/src/result";
 import { pgTest } from "./kit";
 import {

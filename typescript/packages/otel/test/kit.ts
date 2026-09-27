@@ -5,8 +5,8 @@ import {
   type Store,
   scriptedModel,
   tool,
-} from "@threads/core";
-import { storeConnection } from "@threads/core/host";
+} from "threadsai";
+import { storeConnection } from "threadsai/host";
 import { z } from "zod";
 import { otel } from "../src";
 

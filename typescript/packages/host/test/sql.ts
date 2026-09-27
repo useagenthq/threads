@@ -3,7 +3,7 @@ import {
   type SqlValue,
   type StoreDriver,
   type Tx,
-} from "@threads/core/host";
+} from "threadsai/host";
 
 // Raw SQL for tests: each statement in a transaction of its own (the store has no autocommit).
 

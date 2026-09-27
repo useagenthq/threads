@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "threads-docs",
+      "name": "threadsai-docs",
       "dependencies": {
         "fumadocs-core": "16.15.13",
         "fumadocs-mdx": "15.4.3",

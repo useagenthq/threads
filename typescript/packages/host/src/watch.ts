@@ -1,4 +1,4 @@
-import type { BranchId, ThreadId } from "@threads/core/host";
+import type { BranchId, ThreadId } from "threadsai/host";
 
 // The threads a host looks at on every tick until it sees each one settled: every channel thread
 // and API run branch a crash may have left mid-run or owing replies, and every channel thread

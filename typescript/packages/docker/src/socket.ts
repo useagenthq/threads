@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { request } from "node:http";
 import { homedir } from "node:os";
-import { ConfigError, type Fetch } from "@threads/core/adapter";
+import { ConfigError, type Fetch } from "threadsai/adapter";
 import { unavailable } from "./wire";
 
 // Where the Docker Engine listens, and the Fetch that talks to it over that unix socket.

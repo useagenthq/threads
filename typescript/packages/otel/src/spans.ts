@@ -1,4 +1,4 @@
-import type { ChainEvent } from "@threads/core/internal/feed";
+import type { ChainEvent } from "threadsai/internal/feed";
 import type { Span } from "./span";
 import type { ParentOf } from "./turns";
 import { type Walked, walk } from "./walk";

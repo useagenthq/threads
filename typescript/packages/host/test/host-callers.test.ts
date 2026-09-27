@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { agent, scriptedModel } from "@threads/core";
-import { hostTeamIds, type KnownEvent } from "@threads/core/host";
+import { agent, scriptedModel } from "threadsai";
+import { hostTeamIds, type KnownEvent } from "threadsai/host";
 import { answers, replyTo } from "../../core/test/team/run-kit";
 import {
   alice,

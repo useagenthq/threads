@@ -10,12 +10,12 @@ from corpus import Clock
 from kit import T0, open_store, spec, start
 from pydantic import JsonValue
 
-from threads.log import Event, JsonObject, ToolResultEvent, ToolSpec
-from threads.loop.model import LookupResult, LookupUnknown
-from threads.loop.runtime import Authorize, Runtime
-from threads.loop.scripted import scripted_model
-from threads.loop.tools import Dispatched, Invocation, Output, Termination
-from threads.store import SqliteStore
+from threadsai.log import Event, JsonObject, ToolResultEvent, ToolSpec
+from threadsai.loop.model import LookupResult, LookupUnknown
+from threadsai.loop.runtime import Authorize, Runtime
+from threadsai.loop.scripted import scripted_model
+from threadsai.loop.tools import Dispatched, Invocation, Output, Termination
+from threadsai.store import SqliteStore
 
 type Body = Callable[[Invocation], Awaitable[Dispatched]]
 

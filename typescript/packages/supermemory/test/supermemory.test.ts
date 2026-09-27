@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { agent, scriptedModel, secret, sqlite } from "@threads/core";
-import {
-  dispatched,
-  type Fetch,
-  memoryProviderSuite,
-} from "@threads/core/adapter";
+import { agent, scriptedModel, secret, sqlite } from "threadsai";
+import { dispatched, type Fetch, memoryProviderSuite } from "threadsai/adapter";
 import { z } from "zod";
 import { supermemory } from "../src";
 

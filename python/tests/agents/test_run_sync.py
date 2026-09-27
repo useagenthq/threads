@@ -11,7 +11,7 @@ import pytest
 from loop_kit import Sessions, bash_agent, daytona, text
 from pydantic import BaseModel
 
-from threads import (
+from threadsai import (
     Completed,
     ConfigError,
     RunContext,
@@ -21,9 +21,9 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.agents import run as agent_run
-from threads.cli import store as cli_store
-from threads.host import host
+from threadsai.agents import run as agent_run
+from threadsai.cli import store as cli_store
+from threadsai.host import host
 
 TWO_LOOPS = 2
 

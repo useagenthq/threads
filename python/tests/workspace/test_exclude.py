@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from threads.workspace.exclude import excluded
+from threadsai.workspace.exclude import excluded
 
 VECTORS = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "vectors"
 CASES = json.loads((VECTORS / "workspace-exclude.json").read_text())["cases"]

@@ -5,7 +5,7 @@ Rules: `../AGENTS.md` (Python section, to be written: Pydantic v2, pyright stric
 
 ## Generated models
 
-`src/threads/_generated/events_v1.py` is generated from `../spec/schema/events.v1.schema.json`. Never edit it by hand.
+`src/threadsai/_generated/events_v1.py` is generated from `../spec/schema/events.v1.schema.json`. Never edit it by hand.
 
 ```sh
 uv run python tools/regen_models.py          # regenerate

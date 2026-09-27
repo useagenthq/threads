@@ -1,4 +1,4 @@
-import { type Agent, agent, scriptedModel } from "@threads/core";
+import { type Agent, agent, scriptedModel } from "threadsai";
 
 // An `--agent` module whose support agent changed its instructions since the cases were saved.
 

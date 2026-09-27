@@ -11,9 +11,9 @@ import pytest
 from pydantic import BaseModel, JsonValue
 from starlette.requests import Request
 
-from threads import RunContext, agent, scripted_model, sqlite, tool
-from threads.host import host
-from threads.log import ParkAddress, Principal
+from threadsai import RunContext, agent, scripted_model, sqlite, tool
+from threadsai.host import host
+from threadsai.log import ParkAddress, Principal
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALICE = Principal(issuer="api", tenant="acme", subject="alice")

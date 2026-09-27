@@ -3,7 +3,7 @@ import {
   type KnownEvent,
   knownEvents,
   ThreadId,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { failure } from "../errors";
 import { runBranch } from "../subscribe";
 import type { Call } from "../threads";

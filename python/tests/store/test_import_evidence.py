@@ -3,10 +3,10 @@
 import asyncio
 from pathlib import Path
 
-from threads.log import BranchId, ThreadId
-from threads.result import Err, Ok
-from threads.store import SqliteStore, verify_export
-from threads.store.lines import header_line
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore, verify_export
+from threadsai.store.lines import header_line
 
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000001")
 ROOT = BranchId("0192b000-0000-7000-8000-000000000001")

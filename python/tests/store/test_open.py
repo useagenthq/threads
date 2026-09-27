@@ -5,12 +5,12 @@ from collections.abc import Callable
 
 from store.test_writer import CHILD, DONE, ROOT, STARTED, T0, THREAD, TTL, Clock, run, user
 
-from threads.result import Ok
-from threads.store import SqliteStore, Writer
-from threads.store.conn import Conn
-from threads.store.lease import Lease
-from threads.store.opening import BranchOpening, OpenedBranch, open_branch
-from threads.store.sql import transaction
+from threadsai.result import Ok
+from threadsai.store import SqliteStore, Writer
+from threadsai.store.conn import Conn
+from threadsai.store.lease import Lease
+from threadsai.store.opening import BranchOpening, OpenedBranch, open_branch
+from threadsai.store.sql import transaction
 
 
 def _rows(table: str) -> Callable[[Conn], list[tuple[object, ...]]]:

@@ -7,7 +7,7 @@ from corpus import CASES, cases, load, obj
 from fork_kit import Outcome, assert_expected, run_case, script_of
 from pydantic import JsonValue
 
-from threads.sandbox import fake_sandbox
+from threadsai.sandbox import fake_sandbox
 
 
 def run_fake(name: str, script: dict[str, JsonValue] | None = None) -> Outcome:

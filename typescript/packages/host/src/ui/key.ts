@@ -3,7 +3,7 @@ import {
   type Principal,
   principalKey,
   type ThreadId,
-} from "@threads/core/host";
+} from "threadsai/host";
 
 // A browser's chat key names one thread per (principal, agent, key), by derivation: no lookup
 // table, and the key itself is never recorded (spec/schema/ui/README.md, "Chat key").

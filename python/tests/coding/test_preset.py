@@ -11,13 +11,13 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue
 
-from threads import Agent, ConfigError, agent, fake_sandbox, local_memory, scripted_model
-from threads.agents.definition import dry_pin
-from threads.anthropic import anthropic
-from threads.coding import CODING_INSTRUCTIONS, coding_agent
-from threads.docker import docker
-from threads.loop.model import Model
-from threads.sandbox.protocol import Sandbox
+from threadsai import Agent, ConfigError, agent, fake_sandbox, local_memory, scripted_model
+from threadsai.agents.definition import dry_pin
+from threadsai.anthropic import anthropic
+from threadsai.coding import CODING_INSTRUCTIONS, coding_agent
+from threadsai.docker import docker
+from threadsai.loop.model import Model
+from threadsai.sandbox.protocol import Sandbox
 
 # What the preset pins when nothing is passed, as both languages must pin it.
 GOLDEN = Path(__file__).resolve().parents[3] / "spec/conformance/vectors/coding-preset.json"

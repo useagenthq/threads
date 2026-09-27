@@ -11,12 +11,12 @@ import pytest
 from sandbox_kit import OPEN
 from tree_contract import EXECUTABLE, sample_tree
 
-from threads.adapters.sandboxes.posix import EXPORT_TREE, IMPORT_TREE, WORKSPACE, wrap
-from threads.result import Err, Ok
-from threads.sandbox.protocol import ExecOutput, SandboxContext, SandboxError
-from threads.sandbox.tree.tree import Tree
-from threads.sandbox.trees import Misplaced, place_tree, tree_hash
-from threads.store.artifacts import MemoryArtifacts
+from threadsai.adapters.sandboxes.posix import EXPORT_TREE, IMPORT_TREE, WORKSPACE, wrap
+from threadsai.result import Err, Ok
+from threadsai.sandbox.protocol import ExecOutput, SandboxContext, SandboxError
+from threadsai.sandbox.tree.tree import Tree
+from threadsai.sandbox.trees import Misplaced, place_tree, tree_hash
+from threadsai.store.artifacts import MemoryArtifacts
 
 NOT_FOUND = 127
 

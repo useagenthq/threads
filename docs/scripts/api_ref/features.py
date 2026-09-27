@@ -204,7 +204,7 @@ class Surface:
         src = (
             ROOT / "typescript" / "packages" / kebab / "src"
             if lang == "ts"
-            else ROOT / "python" / "src" / "threads" / f"{kebab.replace('-', '_')}.py"
+            else ROOT / "python" / "src" / "threadsai" / f"{kebab.replace('-', '_')}.py"
         )
         return src.exists()
 

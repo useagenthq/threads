@@ -1,4 +1,4 @@
-import { READ_ONLY, storeConnection } from "@threads/core/host";
+import { READ_ONLY, storeConnection } from "threadsai/host";
 import type { HostContext } from "../context";
 import { occurrences } from "../cron";
 import { isolated } from "../isolated";

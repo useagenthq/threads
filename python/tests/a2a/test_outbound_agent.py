@@ -10,10 +10,10 @@ import asyncio
 
 from outbound_kit import CARD_URL, Answer, Partner, task, text, use
 
-from threads import Completed, Parked, agent, scripted_model, sqlite
-from threads.a2a.remote import remote
-from threads.agents.run import execute
-from threads.log import (
+from threadsai import Completed, Parked, agent, scripted_model, sqlite
+from threadsai.a2a.remote import remote
+from threadsai.agents.run import execute
+from threadsai.log import (
     EffectCommitEvent,
     Event,
     Principal,
@@ -21,7 +21,7 @@ from threads.log import (
     ThreadStartedEvent,
     ToolResultEvent,
 )
-from threads.result import Ok
+from threadsai.result import Ok
 
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")
 

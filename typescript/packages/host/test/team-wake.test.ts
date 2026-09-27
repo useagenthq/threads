@@ -1,17 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import {
-  agent,
-  type Model,
-  openTeam,
-  scriptedModel,
-  sqlite,
-} from "@threads/core";
+import { agent, type Model, openTeam, scriptedModel, sqlite } from "threadsai";
 import {
   type KnownEvent,
   type Principal,
   type Store,
   storeConnection,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import type { TeamId } from "../../core/src/log";
 import { cleanup, expireLeases, stall } from "./api-kit";

@@ -17,12 +17,12 @@ from host.test_api_recovery import (
     until,
 )
 
-from threads import Store, sqlite
-from threads.host import reopen
-from threads.host.app import recovered
-from threads.host.runs import RunTask
-from threads.log import BranchId, ModelRequestEvent, ThreadId, TurnCompletedEvent
-from threads.store import StoreError
+from threadsai import Store, sqlite
+from threadsai.host import reopen
+from threadsai.host.app import recovered
+from threadsai.host.runs import RunTask
+from threadsai.log import BranchId, ModelRequestEvent, ThreadId, TurnCompletedEvent
+from threadsai.store import StoreError
 
 
 def test_a_failed_look_is_tried_again_and_the_turn_completes(

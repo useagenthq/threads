@@ -1,0 +1,388 @@
+"""`host()` (spec/api.json `host`, `Host`): agents bound to a
+store, channels and schedules, served over the typed HTTP API.
+
+`host()` starts nothing. `ready()` confirms the bindings, sends nothing and starts no run; it
+starts the scheduler, whose first tick also drains what a restart left in the inbox. `stop()`
+drains intake in flight and ends the runs, releasing their leases. As an async context manager,
+entering calls `ready` and leaving calls `stop`. Mount `asgi` in any ASGI server.
+"""
+
+import asyncio
+import contextlib
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from types import TracebackType
+from typing import TYPE_CHECKING, Self
+from weakref import WeakKeyDictionary
+
+from threadsai._generated.host_api_v1 import RunAccepted, StartRunRequest
+from threadsai.adapters.loop_resources import holding
+from threadsai.agents.agent import Agent
+from threadsai.agents.config import ConfigError
+from threadsai.agents.open_team import OpenTeamError
+from threadsai.agents.store import Store, open_store
+from threadsai.agents.team_handle import Team
+from threadsai.agents.team_handle_types import TeamCursor, TeamItem
+from threadsai.host import expiry, start, stream, team_stream
+from threadsai.host.a2a.config import A2aOptions, Exposed
+from threadsai.host.a2a.setup import expose_a2a
+from threadsai.host.channel import Challenged, ChannelAdapter, RawRequest, RawResponse
+from threadsai.host.host_team import HostTeam
+from threadsai.host.intake import ChannelIntake
+from threadsai.host.members import HostMemberOptions, check_members, restart_policy
+from threadsai.host.reopen import Reopening
+from threadsai.host.runs import Runner, RunTask
+from threadsai.host.schedules import Schedule, Scheduler
+from threadsai.host.stream import Message
+from threadsai.host.teams import Teams
+from threadsai.host.telemetry import Telemetry
+from threadsai.log import BranchId, EventId, ParseError, Permissions, Principal, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.sandbox.protocol import Sandbox
+from threadsai.store import LOCAL_TENANT
+from threadsai.team.ops import TeamLimits
+from threadsai.team.policy import MessagePolicyRule
+from threadsai.telemetry import Exporter, bind_telemetry
+from threadsai.thread import tree
+from threadsai.thread.handle import Thread, open_thread
+
+if TYPE_CHECKING:
+    from starlette.requests import Request
+    from starlette.types import ASGIApp
+
+    from threadsai.agents.open_team import OpenTeamError
+    from threadsai.agents.team_handle import Team
+
+type Authenticate = Callable[["Request"], Awaitable[Principal | None]]
+"""Maps an HTTP API request to its principal, or None for 401."""
+
+
+_RECOVERY: "WeakKeyDictionary[Host, tuple[asyncio.Event, list[RunTask], Runner]]" = (
+    WeakKeyDictionary()
+)
+"""Each host's start-up recovery pass (set once it has finished), the runs it started and the
+runner that follows them: what the `recovered` seam waits on, never an unrelated run."""
+
+
+class Host:
+    """spec/api.json `Host`."""
+
+    def __init__(  # noqa: PLR0913 - spec/api.json host's options
+        self,
+        store: Store,
+        agents: Mapping[str, Agent[None, object]],
+        channels: Mapping[str, ChannelAdapter],
+        schedules: Sequence[Schedule],
+        authenticate: Authenticate | None,
+        *,
+        ceiling: Permissions | None = None,
+        telemetry: Exporter | None = None,
+        message_policy: Sequence[MessagePolicyRule] = (),
+        members: Mapping[str, HostMemberOptions] = {},
+        a2a: A2aOptions | None = None,
+    ) -> None:
+        check_members(agents, members, message_policy)
+        self._store = store
+        self._agents = agents
+        self._members = dict(members)
+        self._channels = channels
+        self._a2a = a2a
+        self._exposed: Exposed | None = None
+        """The A2A agents this host serves, settled at ready(). None until then, and for a host
+        without the option: nothing is served, because nothing has been checked yet."""
+        self.authenticate: Authenticate | None = authenticate
+        self._runner: Runner = Runner(store, agents, channels, ceiling, message_policy, members)
+        self._intake: ChannelIntake = ChannelIntake(self._runner, channels)
+        self._runner.on_end = self._after_run
+        self._after: set[asyncio.Task[RunTask | None]] = set()
+        """The reply sweeps after the runs that ended here, until each has looked."""
+        self._host_team: HostTeam = HostTeam(
+            {name: self._runner.definition(name) for name in members},
+            {name: restart_policy(options) for name, options in members.items()},
+        )
+        """The tenant-wide host members, bound through the policy-aware definitions."""
+        self._scheduler = Scheduler(self._runner, schedules)
+        self._teams: Teams = Teams(self._runner, self._host_team)
+        """The host as a team worker: it drives every team of the store between their runs."""
+        self._ticking: asyncio.Task[None] | None = None
+        self._held: contextlib.AsyncExitStack | None = None
+        """The host's hold on its loop's adapter connections, from ready() to stop(), so they
+        are kept between runs."""
+        _RECOVERY[self] = (asyncio.Event(), [], self._runner)
+        self._asgi: ASGIApp | None = None
+        self._telemetry = None if telemetry is None else Telemetry(telemetry)
+        if telemetry is not None:
+            bind_telemetry(telemetry, store)
+
+    @property
+    def runner(self) -> Runner:
+        """Internal: the host's run executor, for its own HTTP layer (the UI routes)."""
+        return self._runner
+
+    @property
+    def exposed(self) -> "Exposed | None":
+        """Internal: the checked `a2a` option, for the host's own A2A routes."""
+        return self._exposed
+
+    @property
+    def channels(self) -> tuple[str, ...]:
+        """The host(channels=...) keys; each is served at /channels/<key>/events."""
+        return tuple(self._channels)
+
+    def sandboxes(self) -> tuple[Sandbox, ...]:
+        """One sandbox adapter per provider the agents use: what `threads gc` releases with."""
+        by_provider = {
+            a.definition.sandbox.info.provider: a.definition.sandbox
+            for a in self._agents.values()
+            if a.definition.sandbox is not None
+        }
+        return tuple(by_provider.values())
+
+    @property
+    def asgi(self) -> "ASGIApp":
+        """The HTTP API and channel webhooks as an ASGI app (the `host` extra)."""
+        if self._asgi is None:
+            from threadsai.host.http import app  # noqa: PLC0415 - starlette only when served
+
+            self._asgi = app(self)
+        return self._asgi
+
+    async def ready(self) -> None:
+        """Confirms the bindings: every channel and schedule names a host agent, and every
+        channel secret resolves (missing_secret). Sends nothing."""
+        for name, adapter in self._channels.items():
+            if adapter.agent not in self._agents:
+                raise ConfigError("invalid_config", f"channel {name}: no agent {adapter.agent}")
+            # Every channel thread is offered ask_user: an adapter that can't post a question
+            # is refused here, not when the first question is sent.
+            if not callable(getattr(adapter, "render_text", None)):
+                raise ConfigError(
+                    "invalid_config", f"channel {name}: the adapter has no render_text"
+                )
+        if self._a2a is not None:
+            self._exposed = expose_a2a(self._a2a, self._agents)
+        self._scheduler.check(self._runner.agent)
+        self._runner.resolve_secrets()
+        await open_store(self._store)
+        # The host team of the host's own tenant opens here; another tenant's opens when one of
+        # its threads first addresses a host member (lazy and idempotent, Teams Phase 2).
+        await self._host_team.open(self._runner.store(LOCAL_TENANT), LOCAL_TENANT)
+        self._runner.open()
+        if self._held is None:
+            self._held = contextlib.AsyncExitStack()
+            await self._held.enter_async_context(holding())
+        if self._ticking is None:
+            # Each start has its own pass; cleared, not replaced, so a wait begun before this
+            # start still sees it.
+            _RECOVERY[self][0].clear()
+            _RECOVERY[self][1].clear()
+            self._ticking = asyncio.get_running_loop().create_task(self._tick())
+
+    def _after_run(self, store: Store, thread: ThreadId) -> None:
+        """After every run of a thread (spec/schema/README.md, "Channel replies"): what its intake
+        queued, then the replies its log still owes. A run's own delivery pass runs at its idle
+        halt, so a turn it appends after that (a woken turn, once a background child reports)
+        leaves its answer for this sweep, which resumes the thread only when one is missing."""
+        self._intake.consume(store, thread)
+        sweep = asyncio.get_running_loop().create_task(self._runner.redeliver(store, thread))
+        self._after.add(sweep)
+        sweep.add_done_callback(self._after.discard)
+
+    async def _tick(self) -> None:
+        reopening = Reopening(self._runner)
+        self._runner.on_store_error = reopening.watch
+        try:
+            sq = await open_store(self._runner.store(LOCAL_TENANT))
+            waiting = await sq.tables.unconsumed_threads()
+            for tenant, thread in waiting:
+                self._intake.consume(self._runner.store(tenant), thread)
+            # ponytail: reads every conversation's log once per start; track unsent replies
+            # in a table if hosts carry many conversations.
+            for tenant, thread in await sq.tables.channel_threads():
+                if (tenant, thread) not in waiting:
+                    run = await self._runner.redeliver(self._runner.store(tenant), thread)
+                    if run is not None:
+                        _RECOVERY[self][1].append(run)
+            # ponytail: API runs are found at start only; a live peer's crash waits for a restart.
+            open_runs = await sq.tables.unfinished_runs()
+            waking = [row for row in await sq.tables.wake_branches() if row not in open_runs]
+            _RECOVERY[self][1].extend(await reopening.first((*open_runs, *waking)))
+        finally:
+            _RECOVERY[self][0].set()
+        loops = [
+            self._scheduler.run(),
+            reopening.run(),
+            expiry.run(self._runner),
+            self._teams.run(),
+        ]
+        if self._telemetry is not None:
+            loops.append(self._telemetry.run())
+        await asyncio.gather(*loops)
+
+    async def stop(self) -> None:
+        """Aborts first: every run and follow-on resume is cancelled and none starts, so no
+        consumer waits on its run. A send whose request never reached the fence is abandoned (in
+        doubt, for the next start to reconcile); one that passed it keeps the run's lease until
+        it settles. Then it drains intake in flight. There is no deadline: a tool that ignores
+        cancellation is waited on, since returning while it can act would break the fence.
+        Deadlines belong at the tool or provider boundary."""
+        ticking, self._ticking = self._ticking, None
+        try:
+            if ticking is not None:
+                ticking.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await ticking
+        finally:
+            for sweep in self._after:
+                sweep.cancel()
+            # The team workers stop claiming and let their member runs finish; every row stays
+            # durable for the next host.
+            await self._teams.stop()
+            # A tick that failed (a store error in its first pass) is raised only after the
+            # runs are ended and intake is drained.
+            await self._runner.stop()
+            await self._intake.drain()
+            if self._telemetry is not None:
+                await self._telemetry.last()
+            if self._held is not None:
+                held, self._held = self._held, None
+                await held.aclose()
+
+    async def __aenter__(self) -> Self:
+        await self.ready()
+        return self
+
+    async def __aexit__(
+        self,
+        _type: type[BaseException] | None,
+        _value: BaseException | None,
+        _tb: TracebackType | None,
+    ) -> None:
+        await self.stop()
+
+    async def start_run(
+        self, request: StartRunRequest, *, principal: Principal, idempotency_key: str
+    ) -> Ok[RunAccepted] | Err[ParseError]:
+        """POST /v1/runs: the user_input is durable with its idempotency receipt; the run goes
+        on in the host. `principal` is the authenticated caller, never the local default."""
+        return await start.start_run(self._runner, request, principal, idempotency_key)
+
+    async def subscribe(
+        self, thread_id: ThreadId, run_id: EventId, *, principal: Principal, after_seq: int = 0
+    ) -> Ok[AsyncIterator[Message]] | Err[ParseError]:
+        """GET /v1/threads/{thread_id}/runs/{run_id}/events: the run's events from the log,
+        then its result. Takes no input and starts nothing."""
+        return await stream.subscribe(self._runner, thread_id, run_id, principal, after_seq)
+
+    async def subscribe_team(
+        self, team: str, *, principal: Principal, after: TeamCursor | None = None
+    ) -> Ok[AsyncIterator[TeamItem]] | Err[ParseError]:
+        """GET /v1/teams/{team}/events: a lead team's feed, following. A pure read that starts
+        nothing. Internal: the HTTP layer's, since api.json names the route Team.events."""
+        return await team_stream.subscribe_team(
+            self._runner.store(principal.tenant), team, principal.tenant, after
+        )
+
+    async def team(self, *, principal: Principal) -> "Ok[Team] | Err[OpenTeamError]":
+        """spec/api.json `Host.team`: the host team of the principal's tenant, which holds the
+        tenant's host members, has no lead, never closes and has no HTTP route. not_found with
+        no `members` option, or before that tenant's host team is open."""
+        store = self._runner.store(principal.tenant)
+        return await self._host_team.handle(store, principal, TeamLimits())
+
+    async def thread(
+        self, principal: Principal, thread_id: ThreadId, branch_id: BranchId | None
+    ) -> Ok[Thread] | Err[ParseError]:
+        """The principal's tenant's thread at the branch (default main), with its approval
+        authority and sandbox. Another tenant's thread is not_found."""
+        store = self._runner.store(principal.tenant)
+        # A subagent's thread is governed by the agent at the root of its tree.
+        root = await tree.root_of(store, thread_id)
+        bound = None if root is None else await self._runner.bound(store, root[0])
+        sandbox = None if bound is None else bound.definition.sandbox
+        opened = await open_thread(store, thread_id, branch_id=branch_id, sandbox=sandbox)
+        if isinstance(opened, Err):
+            return opened
+        thread = opened.value
+        authority = await self._runner.authority(store, thread_id)
+        return Ok(Thread(thread.id, thread.branch, store, sandbox=sandbox, authority=authority))
+
+    async def resume(self, thread: Thread, *, wait: bool = False) -> None:
+        """After a control: continue the thread if it can move on. A resume a stop overtook
+        starts nothing. With `wait`, until that run has stopped (a cancel closing the turn
+        before a new input)."""
+        since = self._runner.generation
+        run = await self._runner.resume(thread.store, thread.id, thread.branch, since)
+        if wait and run is not None:
+            await self._runner.through(run)
+
+    def challenge(
+        self, channel: str, query: Mapping[str, str]
+    ) -> Ok[RawResponse] | Err[ParseError]:
+        """A provider's GET subscription check: the adapter's challenge, if it has one."""
+        adapter = self._channels.get(channel)
+        if not isinstance(adapter, Challenged):
+            return Err(ParseError("not_found", f"no channel {channel} with a challenge"))
+        return adapter.challenge(query)
+
+    async def receive(self, channel: str, raw: RawRequest) -> Ok[RawResponse] | Err[ParseError]:
+        """A channel webhook: verified, its whole batch durable in the inbox, then answered."""
+        return await self._intake.receive(channel, raw)
+
+
+def host(  # noqa: PLR0913 - spec/api.json host's options
+    *,
+    store: Store,
+    agents: Mapping[str, Agent[None, object]],
+    channels: Mapping[str, ChannelAdapter] | None = None,
+    schedules: Sequence[Schedule] = (),
+    authenticate: Authenticate | None = None,
+    ceiling: Permissions | None = None,
+    telemetry: Exporter | None = None,
+    message_policy: Sequence[MessagePolicyRule] = (),
+    members: Mapping[str, HostMemberOptions] | None = None,
+    a2a: A2aOptions | None = None,
+) -> Host:
+    """spec/api.json `host`. Starts nothing until `ready()`. Without `authenticate` every /v1
+    route answers 401; channel webhooks still work. `ceiling` caps every run this host starts
+    or resumes (Agent.run `ceiling`). `telemetry` (such as `otel()`) syncs every second beside
+    the scheduler and once more on `stop()`, bounded by 5 s; a slow or unreachable collector
+    never holds up a run. `message_policy` rules let one host agent start, send to, ask, monitor or
+    cancel another beyond what a team grants: they decide after a team's grant and before default
+    deny, and only add. An agent gets the team tools only for the ops some rule with it as `from`
+    allows, and a rule that allows start makes its `from` a lead. Default (): everything else is
+    denied. A rule that names no host agent, an empty allow or a repeated (from, to) pair is
+    refused here (ConfigError). `members` names the host agents that run as one long-lived
+    member per tenant, in a leadless host team every thread of the tenant may address by name,
+    as `message_policy` allows. A host member with `team` or `handoffs`, one that turns
+    compaction off, or one whose tools can need approval without `approvers`, is refused here
+    (ConfigError, naming `members.<name>`). Default None: none.
+    refused here (ConfigError). `a2a` serves the named host agents as A2A 1.0 agents: their cards at
+    /a2a/{agent}/.well-known/agent-card.json and both bindings under /a2a/{agent}. It is checked at
+    ready(); without it nothing A2A is served. Each exposed agent needs a description (never its
+    instructions) and runs under its own budget, $1.00 and ten minutes by default. An agent with
+    handoffs cannot be exposed, and one whose pinned tools can act must name approvers: the calling
+    partner is never one of them."""
+    return Host(
+        store,
+        agents,
+        channels or {},
+        schedules,
+        authenticate,
+        ceiling=ceiling,
+        telemetry=telemetry,
+        message_policy=message_policy,
+        members=members or {},
+        a2a=a2a,
+    )
+
+
+async def recovered(served: Host) -> None:
+    """After the recovery pass the latest `ready()` began has finished and the runs it started
+    to redeliver replies or reopen API runs have ended, with each follow-on resume one of them
+    queued, so a test asserts what recovery did or didn't do without sleeping. It covers that
+    first pass only: an API run another lease refused then is looked at again each second
+    (`Reopening.run`), which this doesn't wait for. Internal: not exported."""
+    done, runs, runner = _RECOVERY[served]
+    await done.wait()
+    for run in runs:
+        await runner.through(run)

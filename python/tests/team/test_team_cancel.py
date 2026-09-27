@@ -23,11 +23,11 @@ from team.run_kit import (
 )
 from team.team_kit import assert_team_replays
 
-from threads import Completed, agent, scripted_model, sqlite
-from threads.log import AskClosedEvent, Event, MemberEndedEvent
-from threads.loop.model import ModelChunk, ModelContext, ModelRequest
-from threads.loop.scripted import ScriptedModel
-from threads.store.sql import int_of
+from threadsai import Completed, agent, scripted_model, sqlite
+from threadsai.log import AskClosedEvent, Event, MemberEndedEvent
+from threadsai.loop.model import ModelChunk, ModelContext, ModelRequest
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.store.sql import int_of
 
 _FINALS: list[JsonValue] = [say("Final.")] * 6
 

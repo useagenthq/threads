@@ -5,14 +5,14 @@ import {
   type Model,
   ModelBlockedError,
   sqlite,
-} from "@threads/core";
+} from "threadsai";
 import {
   BranchId,
   dryPin,
   openStore,
   pinnedLine0,
   ThreadStartedData,
-} from "@threads/core/host";
+} from "threadsai/host";
 
 // Lane 22's dry-pin cases, shared by every first-party model adapter (spec 22, test 4d): the pin
 // `threads eval --agent` makes without setup, secrets or MCP must be byte-equal, in line 0 and

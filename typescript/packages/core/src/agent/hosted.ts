@@ -12,7 +12,7 @@ import type { Store } from "./sqlite";
 import { memberOf } from "./team/lead";
 import { leadStarted } from "./team/runtime";
 
-// What the host (@threads/host) needs from an agent handle beyond run(): the thread_started a new
+// What the host (@threadsai/host) needs from an agent handle beyond run(): the thread_started a new
 // thread of it opens with, so the host can make a run's first input durable together with its
 // own rows (an idempotency receipt, an inbox item) before the loop starts; and an execution
 // that takes whatever inputs the host already recorded, or none, to resume a parked branch.

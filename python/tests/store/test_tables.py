@@ -5,10 +5,10 @@ from collections.abc import Sequence
 
 from test_writer import DONE, STARTED, T0, THREAD, Clock, user
 
-from threads.log import BranchId, ParseError, ThreadId
-from threads.result import Err, Ok
-from threads.store import Draft, SqliteStore, StoredEvent, Writer, approvals, inbox, receipts
-from threads.store.conn import Conn
+from threadsai.log import BranchId, ParseError, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.store import Draft, SqliteStore, StoredEvent, Writer, approvals, inbox, receipts
+from threadsai.store.conn import Conn
 
 BRANCH = BranchId("0192b000-0000-7000-8000-0000000000aa")
 CHALLENGE = "0192c000-0000-7000-8000-000000000001"

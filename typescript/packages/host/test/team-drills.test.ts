@@ -6,12 +6,12 @@ import {
   type Store,
   scriptedModel,
   sqlite,
-} from "@threads/core";
+} from "threadsai";
 import {
   type KnownEvent,
   type Principal,
   storeConnection,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { MemberName } from "../../core/src/log";
 import { type Host, host } from "../src";

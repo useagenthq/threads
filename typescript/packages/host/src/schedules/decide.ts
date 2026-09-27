@@ -13,7 +13,7 @@ import {
   type Tx,
   uuidv7,
   type Writer,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { pinMatches } from "../context";
 import type { Pass } from "./pass";
 import {

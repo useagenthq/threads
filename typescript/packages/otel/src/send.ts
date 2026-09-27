@@ -1,5 +1,5 @@
-import type { SyncError } from "@threads/core";
-import { err, ok, type Result } from "@threads/core/host";
+import type { SyncError } from "threadsai";
+import { err, ok, type Result } from "threadsai/host";
 import type { Config } from "./env";
 
 // One OTLP/HTTP JSON POST. The collector's answer decides the error: a network error, a timeout,

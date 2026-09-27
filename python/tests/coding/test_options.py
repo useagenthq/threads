@@ -13,9 +13,9 @@ from typing import TypeGuard, assert_type
 import pytest
 from pydantic import BaseModel, JsonValue
 
-from threads import RunContext, fake_sandbox, scripted_model, tool
-from threads.agents.agent import Agent
-from threads.agents.factory import (
+from threadsai import RunContext, fake_sandbox, scripted_model, tool
+from threadsai.agents.agent import Agent
+from threadsai.agents.factory import (
     AgentOptions,
     OutputAgentOptions,
     ServerAgentOptions,
@@ -29,8 +29,8 @@ from threads.agents.factory import (
     ToolAgentOptions,
     ToolOutputAgentOptions,
 )
-from threads.agents.team_agent import TeamAgent
-from threads.coding import (
+from threadsai.agents.team_agent import TeamAgent
+from threadsai.coding import (
     CodingAgentOptions,
     CodingOutputOptions,
     CodingServerOptions,
@@ -45,7 +45,7 @@ from threads.coding import (
     CodingToolOutputOptions,
     coding_agent,
 )
-from threads.loop.model import Model
+from threadsai.loop.model import Model
 
 PAIRS = [
     (CodingAgentOptions, AgentOptions),

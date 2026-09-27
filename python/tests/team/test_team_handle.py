@@ -9,7 +9,7 @@ from dataclasses import replace
 from team.run_kit import say, sq_of, types
 from team.team_kit import assert_team_replays
 
-from threads import (
+from threadsai import (
     Completed,
     MemberRef,
     Principal,
@@ -24,26 +24,26 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads.agents.member_results import MemberCompleted
-from threads.agents.run import member_runner
-from threads.agents.store import now_ms
-from threads.agents.team_check import agents_of
-from threads.agents.team_handle import HandleEnv
-from threads.agents.team_handle_types import (
+from threadsai.agents.member_results import MemberCompleted
+from threadsai.agents.run import member_runner
+from threadsai.agents.store import now_ms
+from threadsai.agents.team_check import agents_of
+from threadsai.agents.team_handle import HandleEnv
+from threadsai.agents.team_handle_types import (
     EpochRestarted,
     OperatorSource,
     TeamEvent,
     TeamSendRefused,
     TeamStartRefused,
 )
-from threads.agents.team_log_mail import take_team_log_mail
-from threads.agents.team_tools import Sent, Started
-from threads.agents.team_worker import WorkerEnv
-from threads.agents.teams import member_pin, pins
-from threads.log import BranchId, Event, OperatorRequestEvent
-from threads.result import Err, Ok
-from threads.team.rebuild import rebuild_team_index
-from threads.team.rows import team_row
+from threadsai.agents.team_log_mail import take_team_log_mail
+from threadsai.agents.team_tools import Sent, Started
+from threadsai.agents.team_worker import WorkerEnv
+from threadsai.agents.teams import member_pin, pins
+from threadsai.log import BranchId, Event, OperatorRequestEvent
+from threadsai.result import Err, Ok
+from threadsai.team.rebuild import rebuild_team_index
+from threadsai.team.rows import team_row
 
 BOB = Principal(issuer="api", tenant="local", subject="bob")
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")

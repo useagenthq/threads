@@ -9,9 +9,9 @@ import pytest
 from pydantic import JsonValue
 from schema_check import valid
 
-from threads.log import parse_log_line
-from threads.log.jcs import canonicalize
-from threads.result import Ok
+from threadsai.log import parse_log_line
+from threadsai.log.jcs import canonicalize
+from threadsai.result import Ok
 
 SPEC = Path(__file__).resolve().parents[3] / "spec"
 DOC: JsonValue = json.loads(

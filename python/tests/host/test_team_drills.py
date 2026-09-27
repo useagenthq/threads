@@ -12,7 +12,7 @@ from host.test_api_recovery import until
 from team.run_kit import call, say, sq_of
 from team.team_kit import assert_team_replays
 
-from threads import (
+from threadsai import (
     Completed,
     MemberRef,
     Principal,
@@ -24,14 +24,14 @@ from threads import (
     scripted_model,
     sqlite,
 )
-from threads.agents.store import now_ms, open_store
-from threads.agents.team_answers import CancelRequested
-from threads.host import host
-from threads.host.runs import Runner
-from threads.host.teams import Teams
-from threads.log import BranchId, Event, MessageReceivedEvent, TurnCompletedEvent, UserInputEvent
-from threads.result import Ok
-from threads.store import SqliteStore
+from threadsai.agents.store import now_ms, open_store
+from threadsai.agents.team_answers import CancelRequested
+from threadsai.host import host
+from threadsai.host.runs import Runner
+from threadsai.host.teams import Teams
+from threadsai.log import BranchId, Event, MessageReceivedEvent, TurnCompletedEvent, UserInputEvent
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
 
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")
 

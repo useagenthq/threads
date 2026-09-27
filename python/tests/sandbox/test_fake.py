@@ -7,11 +7,11 @@ import pytest
 from pydantic import JsonValue, ValidationError
 from sandbox_kit import OPEN, KitContext
 
-from threads.log import ParseError
-from threads.loop.model import Found, NotFound
-from threads.result import Err, Ok
-from threads.sandbox import FakeSandbox, SandboxSession, fake_sandbox
-from threads.store.context import CleanupAuthority
+from threadsai.log import ParseError
+from threadsai.loop.model import Found, NotFound
+from threadsai.result import Err, Ok
+from threadsai.sandbox import FakeSandbox, SandboxSession, fake_sandbox
+from threadsai.store.context import CleanupAuthority
 
 NOT_FOUND_EXIT = 127
 

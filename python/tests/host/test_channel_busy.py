@@ -19,12 +19,12 @@ from test_channel_approvals import (
     webhook,
 )
 
-from threads import RunContext, agent, scripted_model, sqlite, tool
-from threads.agents.store import now_ms, open_store, scoped
-from threads.host import host
-from threads.log import BranchId
-from threads.result import Ok
-from threads.store.sql import text_of
+from threadsai import RunContext, agent, scripted_model, sqlite, tool
+from threadsai.agents.store import now_ms, open_store, scoped
+from threadsai.host import host
+from threadsai.log import BranchId
+from threadsai.result import Ok
+from threadsai.store.sql import text_of
 
 
 def _deny(key: str, challenge: str) -> JsonValue:

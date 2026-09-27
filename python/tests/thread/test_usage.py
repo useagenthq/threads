@@ -9,17 +9,17 @@ from pydantic import JsonValue
 from thread.rewrite_log import Line, edit_started, obj, rewrite_log
 from thread.usage_kit import ONE, check, corrupt, priced, run, say, spawn, unpriced, usd
 
-from threads import ConfigError, Store, agent
-from threads.agents.store import now_ms, open_store
-from threads.log import BranchId, ThreadId, UsageTotals
-from threads.log.digest import sha256_hex
-from threads.log.jcs import MAX_SAFE_INTEGER, canonicalize
-from threads.loop.drafts import draft
-from threads.reduce.projections import cost
-from threads.reduce.state import usage_totals
-from threads.result import Err, Ok
-from threads.store.lines import uuid7
-from threads.thread.handle import open_thread
+from threadsai import ConfigError, Store, agent
+from threadsai.agents.store import now_ms, open_store
+from threadsai.log import BranchId, ThreadId, UsageTotals
+from threadsai.log.digest import sha256_hex
+from threadsai.log.jcs import MAX_SAFE_INTEGER, canonicalize
+from threadsai.loop.drafts import draft
+from threadsai.reduce.projections import cost
+from threadsai.reduce.state import usage_totals
+from threadsai.result import Err, Ok
+from threadsai.store.lines import uuid7
+from threadsai.thread.handle import open_thread
 
 
 def totals(input_tokens: int, output_tokens: int, unknown_responses: int) -> UsageTotals:

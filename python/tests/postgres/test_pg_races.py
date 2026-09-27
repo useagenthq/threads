@@ -9,11 +9,11 @@ import pytest
 from pg_kit import Leg, need_postgres, schema_url
 from store.test_writer import DONE, ROOT, T0, THREAD, TTL, user
 
-from threads.log import BranchId, ThreadId
-from threads.postgres.opening import open_postgres
-from threads.result import Ok
-from threads.store import SqliteStore, StoreError, verify_export
-from threads.store.budgets import Cover
+from threadsai.log import BranchId, ThreadId
+from threadsai.postgres.opening import open_postgres
+from threadsai.result import Ok
+from threadsai.store import SqliteStore, StoreError, verify_export
+from threadsai.store.budgets import Cover
 
 ROUNDS = 60
 RACERS = 20

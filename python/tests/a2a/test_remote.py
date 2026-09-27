@@ -6,9 +6,9 @@ Mirrors typescript/packages/a2a/test/remote.test.ts."""
 
 import pytest
 
-from threads.a2a import DEFAULT_TIMEOUT_MS, bearer, remote
-from threads.agents.config import ConfigError
-from threads.secrets import secret
+from threadsai.a2a import DEFAULT_TIMEOUT_MS, bearer, remote
+from threadsai.agents.config import ConfigError
+from threadsai.secrets import secret
 
 CARD = "https://partner.example/card.json"
 TWO_MINUTES_MS = 120_000

@@ -13,9 +13,9 @@ from pydantic import JsonValue
 from team.op_run import run_on
 from team.vectors import obj
 
-from threads.log import BranchId
-from threads.result import Ok
-from threads.store import SqliteStore
+from threadsai.log import BranchId
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
 
 
 async def _run(line: str) -> JsonValue:

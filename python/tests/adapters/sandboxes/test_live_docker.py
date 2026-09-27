@@ -18,11 +18,11 @@ import pytest
 from loop_kit import held
 from sandbox_kit import OPEN
 
-from threads.adapters.sandboxes.posix import collect
-from threads.docker import docker
-from threads.loop.model import Found
-from threads.result import Err, Ok
-from threads.sandbox import SandboxSession, Trees
+from threadsai.adapters.sandboxes.posix import collect
+from threadsai.docker import docker
+from threadsai.loop.model import Found
+from threadsai.result import Err, Ok
+from threadsai.sandbox import SandboxSession, Trees
 
 pytestmark = pytest.mark.live
 

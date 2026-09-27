@@ -8,16 +8,16 @@ from typing import TYPE_CHECKING
 import pytest
 from pydantic import JsonValue
 
-from threads import Completed, ConfigError, agent, fake_sandbox, scripted_model, sqlite
-from threads.agents.results import Thread
-from threads.agents.store import Store
-from threads.log import InjectedEvent, Permissions, Principal, SnapshotEvent, ToolResultEvent
-from threads.memory.local_knowledge import local_knowledge
-from threads.result import Ok
-from threads.sandbox.fake import FakeSandbox
+from threadsai import Completed, ConfigError, agent, fake_sandbox, scripted_model, sqlite
+from threadsai.agents.results import Thread
+from threadsai.agents.store import Store
+from threadsai.log import InjectedEvent, Permissions, Principal, SnapshotEvent, ToolResultEvent
+from threadsai.memory.local_knowledge import local_knowledge
+from threadsai.result import Ok
+from threadsai.sandbox.fake import FakeSandbox
 
 if TYPE_CHECKING:
-    from threads.thread.fork import KnowledgePolicy
+    from threadsai.thread.fork import KnowledgePolicy
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 BYPASS = Permissions(

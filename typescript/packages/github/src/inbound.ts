@@ -4,7 +4,7 @@ import type {
   Inbound,
   RawRequest,
   Secret,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { z } from "zod";
 
 // Webhook intake. GitHub signs the raw body

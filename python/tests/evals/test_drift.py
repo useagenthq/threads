@@ -8,12 +8,12 @@ from pathlib import Path
 from eval_kit import ALLOW, LOOKUP, REFUND, REFUND_TURN, Order, saved, support
 from pydantic import JsonValue
 
-from threads import Agent, EvalReport, RunContext, agent, run_evals, scripted_model, tool
-from threads.agents.bindings import AppTool
-from threads.loop import guard
-from threads.loop.model import ModelInfo
-from threads.loop.scripted import ScriptedModel
-from threads.reduce.handlers import to_json
+from threadsai import Agent, EvalReport, RunContext, agent, run_evals, scripted_model, tool
+from threadsai.agents.bindings import AppTool
+from threadsai.loop import guard
+from threadsai.loop.model import ModelInfo
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.reduce.handlers import to_json
 
 
 async def _exchange(args: Order, _ctx: RunContext[None]) -> str:

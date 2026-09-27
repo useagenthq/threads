@@ -1,4 +1,4 @@
-// @threads/core/store-driver: the store's driver seam, for the in-repo Postgres package only.
+// threadsai/store-driver: the store's driver seam, for the in-repo Postgres package only.
 // Internal: excluded from the API reference and from semver (spec/api.json choice store-sealed).
 
 export { type Store, storeOver } from "./agent/sqlite";

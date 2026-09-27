@@ -1,5 +1,5 @@
-import type { MemoryProvider, Secret } from "@threads/core";
-import { ConfigError } from "@threads/core/adapter";
+import type { MemoryProvider, Secret } from "threadsai";
+import { ConfigError } from "threadsai/adapter";
 
 // mem0() is refused at setup. The official SDK (mem0ai 3.2.0, MemoryClient)
 // sends through the global fetch and axios with no transport option, pings the API from its

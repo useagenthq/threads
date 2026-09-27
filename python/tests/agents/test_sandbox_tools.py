@@ -12,17 +12,26 @@ from local_sandbox import LOCAL_INFO, LocalSandbox
 from pydantic import BaseModel, JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads import Completed, ConfigError, Parked, RunContext, agent, scripted_model, sqlite, tool
-from threads.agents.definition import Definition
-from threads.log import (
+from threadsai import (
+    Completed,
+    ConfigError,
+    Parked,
+    RunContext,
+    agent,
+    scripted_model,
+    sqlite,
+    tool,
+)
+from threadsai.agents.definition import Definition
+from threadsai.log import (
     EffectUnknownEvent,
     Event,
     Permissions,
     ThreadStartedEvent,
     ToolResultEvent,
 )
-from threads.result import Ok
-from threads.secrets import resolve, secret
+from threadsai.result import Ok
+from threadsai.secrets import resolve, secret
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 CANARY = "canary-3f9c1e7b"

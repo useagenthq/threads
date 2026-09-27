@@ -1,4 +1,4 @@
-import { type Fetch, sandboxFetch } from "@threads/core/adapter";
+import { type Fetch, sandboxFetch } from "threadsai/adapter";
 import { z } from "zod";
 import { excerpt, parsed, unavailable } from "./wire";
 

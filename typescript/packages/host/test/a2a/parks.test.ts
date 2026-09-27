@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { textOf as partsText } from "@threads/a2a/protocol";
+import { textOf as partsText } from "@threadsai/a2a/protocol";
 import { z } from "zod";
 import { a2aThreadId } from "../../src/a2a/keys";
 import { taskOf } from "../../src/a2a/state";

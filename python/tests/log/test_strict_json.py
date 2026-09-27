@@ -7,8 +7,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import JsonValue
 
-from threads.log.strict_json import MAX_SAFE_INTEGER, parse_json
-from threads.result import Err, Ok
+from threadsai.log.strict_json import MAX_SAFE_INTEGER, parse_json
+from threadsai.result import Err, Ok
 
 SAFE_INTS = st.integers(min_value=-MAX_SAFE_INTEGER, max_value=MAX_SAFE_INTEGER)
 FLOATS = st.floats(allow_nan=False, allow_infinity=False).filter(

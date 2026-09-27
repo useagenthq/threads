@@ -1,4 +1,4 @@
-import { EventId, Int, Principal, ThreadId } from "@threads/core/host";
+import { EventId, Int, Principal, ThreadId } from "threadsai/host";
 import type { HostContext } from "./context";
 import { failure, json, routeFailure } from "./errors";
 import { startRun } from "./runs";

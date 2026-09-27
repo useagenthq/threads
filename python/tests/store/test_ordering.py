@@ -3,9 +3,9 @@ names in mixed case, with non-ASCII and with digits list in the same order every
 
 from store.test_writer import run
 
-from threads.store import SqliteStore
-from threads.store.conn import Conn
-from threads.team.rows import member_rows
+from threadsai.store import SqliteStore
+from threadsai.store.conn import Conn
+from threadsai.team.rows import member_rows
 
 NAMES = ("Zed", "alpha", "émile", "a-10", "a-9")
 

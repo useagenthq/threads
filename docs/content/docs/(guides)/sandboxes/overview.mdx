@@ -10,8 +10,8 @@ Set `sandbox` on an agent and it gets a remote Linux machine to work in. threads
 <Tab value="TypeScript">
 
 ```ts
-import { agent } from "@threads/core";
-import { e2b } from "@threads/e2b";
+import { agent } from "threadsai";
+import { e2b } from "@threadsai/e2b";
 
 const coder = agent({
   name: "coder",
@@ -25,8 +25,8 @@ const coder = agent({
 <Tab value="Python">
 
 ```python
-from threads import agent
-from threads.e2b import e2b
+from threadsai import agent
+from threadsai.e2b import e2b
 
 coder = agent(
     name="coder",
@@ -43,10 +43,10 @@ coder = agent(
 
 | Provider | TypeScript | Python | Page |
 |---|---|---|---|
-| Docker | `@threads/docker` | `threads.docker` | [Docker](/docs/sandboxes/docker) |
-| E2B | `@threads/e2b` | `threads.e2b` | [E2B](/docs/sandboxes/e2b) |
-| Daytona | `@threads/daytona` | `threads.daytona` | [Daytona](/docs/sandboxes/daytona) |
-| Modal | always refuses | `threads.modal` | [Modal](/docs/sandboxes/modal) |
+| Docker | `@threadsai/docker` | `threadsai.docker` | [Docker](/docs/sandboxes/docker) |
+| E2B | `@threadsai/e2b` | `threadsai.e2b` | [E2B](/docs/sandboxes/e2b) |
+| Daytona | `@threadsai/daytona` | `threadsai.daytona` | [Daytona](/docs/sandboxes/daytona) |
+| Modal | always refuses | `threadsai.modal` | [Modal](/docs/sandboxes/modal) |
 
 ## What the agent gets
 

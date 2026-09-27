@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "threads-typescript",
+      "name": "threadsai-typescript",
       "devDependencies": {
         "@biomejs/biome": "^2.5.14",
         "@types/bun": "^1.4.2",
@@ -13,201 +13,201 @@
     "examples": {
       "name": "threads-examples",
       "dependencies": {
-        "@threads/anthropic": "workspace:*",
-        "@threads/coding": "workspace:*",
-        "@threads/core": "workspace:*",
-        "@threads/host": "workspace:*",
-        "@threads/slack": "workspace:*",
+        "@threadsai/anthropic": "workspace:*",
+        "@threadsai/coding": "workspace:*",
+        "threadsai": "workspace:*",
+        "@threadsai/host": "workspace:*",
+        "@threadsai/slack": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "packages/a2a": {
-      "name": "@threads/a2a",
+      "name": "@threadsai/a2a",
       "version": "0.0.0",
       "dependencies": {
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "packages/adapter-testkit": {
-      "name": "@threads/adapter-testkit",
+      "name": "@threadsai/adapter-testkit",
       "version": "0.0.0",
       "dependencies": {
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "packages/ai-sdk": {
-      "name": "@threads/ai-sdk",
+      "name": "@threadsai/ai-sdk",
       "version": "0.0.0",
       "dependencies": {
         "@ai-sdk/provider": "4.0.17",
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "@types/json-schema": "7.0.15",
         "zod": "^4.6.5",
       },
       "devDependencies": {
-        "@threads/adapter-testkit": "workspace:*",
+        "@threadsai/adapter-testkit": "workspace:*",
       },
     },
     "packages/anthropic": {
-      "name": "@threads/anthropic",
+      "name": "@threadsai/anthropic",
       "version": "0.0.0",
       "dependencies": {
         "@anthropic-ai/sdk": "0.128.0",
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "zod": "^4.6.5",
       },
       "devDependencies": {
-        "@threads/adapter-testkit": "workspace:*",
+        "@threadsai/adapter-testkit": "workspace:*",
       },
     },
     "packages/cli": {
-      "name": "@threads/cli",
+      "name": "@threadsai/cli",
       "version": "0.0.0",
       "bin": {
         "threads": "./src/main.ts",
       },
       "dependencies": {
-        "@threads/core": "workspace:*",
-        "@threads/host": "workspace:*",
-        "@threads/postgres": "workspace:*",
+        "threadsai": "workspace:*",
+        "@threadsai/host": "workspace:*",
+        "@threadsai/postgres": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "packages/coding": {
-      "name": "@threads/coding",
+      "name": "@threadsai/coding",
       "version": "0.0.0",
       "dependencies": {
-        "@threads/anthropic": "workspace:*",
-        "@threads/core": "workspace:*",
-        "@threads/docker": "workspace:*",
+        "@threadsai/anthropic": "workspace:*",
+        "threadsai": "workspace:*",
+        "@threadsai/docker": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "packages/core": {
-      "name": "@threads/core",
+      "name": "threadsai",
       "version": "0.0.0",
       "dependencies": {
         "zod": "^4.6.5",
       },
     },
     "packages/daytona": {
-      "name": "@threads/daytona",
+      "name": "@threadsai/daytona",
       "version": "0.0.0",
       "dependencies": {
         "@daytona/api-client": "0.216.0",
         "@daytona/toolbox-api-client": "0.216.0",
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
       },
       "devDependencies": {
-        "@threads/adapter-testkit": "workspace:*",
+        "@threadsai/adapter-testkit": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "packages/docker": {
-      "name": "@threads/docker",
+      "name": "@threadsai/docker",
       "version": "0.0.0",
       "dependencies": {
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "zod": "^4.6.5",
       },
       "devDependencies": {
-        "@threads/adapter-testkit": "workspace:*",
+        "@threadsai/adapter-testkit": "workspace:*",
       },
     },
     "packages/e2b": {
-      "name": "@threads/e2b",
+      "name": "@threadsai/e2b",
       "version": "0.0.0",
       "dependencies": {
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "zod": "^4.6.5",
       },
       "devDependencies": {
-        "@threads/adapter-testkit": "workspace:*",
+        "@threadsai/adapter-testkit": "workspace:*",
       },
     },
     "packages/github": {
-      "name": "@threads/github",
+      "name": "@threadsai/github",
       "version": "0.0.0",
       "dependencies": {
         "@octokit/rest": "22.0.1",
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "packages/host": {
-      "name": "@threads/host",
+      "name": "@threadsai/host",
       "version": "0.0.0",
       "dependencies": {
-        "@threads/a2a": "workspace:*",
-        "@threads/core": "workspace:*",
+        "@threadsai/a2a": "workspace:*",
+        "threadsai": "workspace:*",
         "zod": "^4.6.5",
       },
       "devDependencies": {
         "@ag-ui/client": "1.0.0",
         "@ag-ui/core": "1.0.0",
-        "@threads/github": "workspace:*",
-        "@threads/slack": "workspace:*",
-        "@threads/whatsapp": "workspace:*",
+        "@threadsai/github": "workspace:*",
+        "@threadsai/slack": "workspace:*",
+        "@threadsai/whatsapp": "workspace:*",
         "ai": "7.0.113",
         "ajv": "8.20.0",
         "rxjs": "7.8.1",
       },
     },
     "packages/mcp": {
-      "name": "@threads/mcp",
+      "name": "@threadsai/mcp",
       "version": "0.0.0",
       "dependencies": {
         "@modelcontextprotocol/sdk": "1.30.0",
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "ajv": "8.20.0",
         "ajv-formats": "3.0.1",
         "zod": "^4.6.5",
       },
     },
     "packages/mem0": {
-      "name": "@threads/mem0",
+      "name": "@threadsai/mem0",
       "version": "0.0.0",
       "dependencies": {
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
       },
     },
     "packages/modal": {
-      "name": "@threads/modal",
+      "name": "@threadsai/modal",
       "version": "0.0.0",
       "dependencies": {
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
       },
     },
     "packages/openai": {
-      "name": "@threads/openai",
+      "name": "@threadsai/openai",
       "version": "0.0.0",
       "dependencies": {
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "openai": "7.22.0",
         "zod": "^4.6.5",
       },
       "devDependencies": {
-        "@threads/adapter-testkit": "workspace:*",
+        "@threadsai/adapter-testkit": "workspace:*",
       },
     },
     "packages/otel": {
-      "name": "@threads/otel",
+      "name": "@threadsai/otel",
       "version": "0.0.0",
       "dependencies": {
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "zod": "^4.6.5",
       },
       "devDependencies": {
-        "@threads/host": "workspace:*",
+        "@threadsai/host": "workspace:*",
       },
     },
     "packages/postgres": {
-      "name": "@threads/postgres",
+      "name": "@threadsai/postgres",
       "version": "0.0.0",
       "dependencies": {
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "pg": "8.23.0",
         "zod": "^4.6.5",
       },
@@ -216,44 +216,44 @@
       },
     },
     "packages/slack": {
-      "name": "@threads/slack",
+      "name": "@threadsai/slack",
       "version": "0.0.0",
       "dependencies": {
         "@slack/web-api": "8.1.1",
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "packages/supermemory": {
-      "name": "@threads/supermemory",
+      "name": "@threadsai/supermemory",
       "version": "0.0.0",
       "dependencies": {
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "supermemory": "4.25.4",
         "zod": "^4.6.5",
       },
       "devDependencies": {
-        "@threads/adapter-testkit": "workspace:*",
+        "@threadsai/adapter-testkit": "workspace:*",
       },
     },
     "packages/whatsapp": {
-      "name": "@threads/whatsapp",
+      "name": "@threadsai/whatsapp",
       "version": "0.0.0",
       "dependencies": {
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "zod": "^4.6.5",
       },
     },
     "packages/zep": {
-      "name": "@threads/zep",
+      "name": "@threadsai/zep",
       "version": "0.0.0",
       "dependencies": {
         "@getzep/zep-cloud": "3.28.0",
-        "@threads/core": "workspace:*",
+        "threadsai": "workspace:*",
         "zod": "^4.6.5",
       },
       "devDependencies": {
-        "@threads/adapter-testkit": "workspace:*",
+        "@threadsai/adapter-testkit": "workspace:*",
       },
     },
   },
@@ -342,49 +342,49 @@
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
-    "@threads/a2a": ["@threads/a2a@workspace:packages/a2a"],
+    "@threadsai/a2a": ["@threadsai/a2a@workspace:packages/a2a"],
 
-    "@threads/adapter-testkit": ["@threads/adapter-testkit@workspace:packages/adapter-testkit"],
+    "@threadsai/adapter-testkit": ["@threadsai/adapter-testkit@workspace:packages/adapter-testkit"],
 
-    "@threads/ai-sdk": ["@threads/ai-sdk@workspace:packages/ai-sdk"],
+    "@threadsai/ai-sdk": ["@threadsai/ai-sdk@workspace:packages/ai-sdk"],
 
-    "@threads/anthropic": ["@threads/anthropic@workspace:packages/anthropic"],
+    "@threadsai/anthropic": ["@threadsai/anthropic@workspace:packages/anthropic"],
 
-    "@threads/cli": ["@threads/cli@workspace:packages/cli"],
+    "@threadsai/cli": ["@threadsai/cli@workspace:packages/cli"],
 
-    "@threads/coding": ["@threads/coding@workspace:packages/coding"],
+    "@threadsai/coding": ["@threadsai/coding@workspace:packages/coding"],
 
-    "@threads/core": ["@threads/core@workspace:packages/core"],
+    "threadsai": ["threadsai@workspace:packages/core"],
 
-    "@threads/daytona": ["@threads/daytona@workspace:packages/daytona"],
+    "@threadsai/daytona": ["@threadsai/daytona@workspace:packages/daytona"],
 
-    "@threads/docker": ["@threads/docker@workspace:packages/docker"],
+    "@threadsai/docker": ["@threadsai/docker@workspace:packages/docker"],
 
-    "@threads/e2b": ["@threads/e2b@workspace:packages/e2b"],
+    "@threadsai/e2b": ["@threadsai/e2b@workspace:packages/e2b"],
 
-    "@threads/github": ["@threads/github@workspace:packages/github"],
+    "@threadsai/github": ["@threadsai/github@workspace:packages/github"],
 
-    "@threads/host": ["@threads/host@workspace:packages/host"],
+    "@threadsai/host": ["@threadsai/host@workspace:packages/host"],
 
-    "@threads/mcp": ["@threads/mcp@workspace:packages/mcp"],
+    "@threadsai/mcp": ["@threadsai/mcp@workspace:packages/mcp"],
 
-    "@threads/mem0": ["@threads/mem0@workspace:packages/mem0"],
+    "@threadsai/mem0": ["@threadsai/mem0@workspace:packages/mem0"],
 
-    "@threads/modal": ["@threads/modal@workspace:packages/modal"],
+    "@threadsai/modal": ["@threadsai/modal@workspace:packages/modal"],
 
-    "@threads/openai": ["@threads/openai@workspace:packages/openai"],
+    "@threadsai/openai": ["@threadsai/openai@workspace:packages/openai"],
 
-    "@threads/otel": ["@threads/otel@workspace:packages/otel"],
+    "@threadsai/otel": ["@threadsai/otel@workspace:packages/otel"],
 
-    "@threads/postgres": ["@threads/postgres@workspace:packages/postgres"],
+    "@threadsai/postgres": ["@threadsai/postgres@workspace:packages/postgres"],
 
-    "@threads/slack": ["@threads/slack@workspace:packages/slack"],
+    "@threadsai/slack": ["@threadsai/slack@workspace:packages/slack"],
 
-    "@threads/supermemory": ["@threads/supermemory@workspace:packages/supermemory"],
+    "@threadsai/supermemory": ["@threadsai/supermemory@workspace:packages/supermemory"],
 
-    "@threads/whatsapp": ["@threads/whatsapp@workspace:packages/whatsapp"],
+    "@threadsai/whatsapp": ["@threadsai/whatsapp@workspace:packages/whatsapp"],
 
-    "@threads/zep": ["@threads/zep@workspace:packages/zep"],
+    "@threadsai/zep": ["@threadsai/zep@workspace:packages/zep"],
 
     "@types/bun": ["@types/bun@1.4.2", "", { "dependencies": { "bun-types": "1.4.2" } }, "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ=="],
 

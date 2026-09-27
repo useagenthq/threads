@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { openThread, sqlite } from "@threads/core";
+import { openThread, sqlite } from "threadsai";
 import {
   BranchId,
   type KnownEvent,
   storeConnection,
   ThreadId,
   tenantStore,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { type Host, host } from "../src";
 import {

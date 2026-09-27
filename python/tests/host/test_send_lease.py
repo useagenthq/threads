@@ -8,13 +8,13 @@ from collections.abc import Mapping
 import pytest
 from host.test_channel_recovery import Replies, text, until, webhook
 
-from threads import agent, scripted_model, sqlite
-from threads.agents import run
-from threads.host import ChannelCapabilities, DeliveryOutcome, host
-from threads.log import JsonObject
-from threads.loop.model import LookupResult, NotFound
-from threads.memory.fence import check
-from threads.store import lease
+from threadsai import agent, scripted_model, sqlite
+from threadsai.agents import run
+from threadsai.host import ChannelCapabilities, DeliveryOutcome, host
+from threadsai.log import JsonObject
+from threadsai.loop.model import LookupResult, NotFound
+from threadsai.memory.fence import check
+from threadsai.store import lease
 
 
 class _FinalLookup(Replies):

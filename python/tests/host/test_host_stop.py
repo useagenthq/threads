@@ -20,15 +20,15 @@ from host.test_channel_recovery import (
     webhook,
 )
 
-from threads import agent, extension, scripted_model, sqlite
-from threads.agents.context import RunContext
-from threads.agents.store import Store, open_store, scoped
-from threads.host import DeliveryOutcome, RawRequest, host
-from threads.host.app import recovered
-from threads.host.runs import Bound, Runner
-from threads.log import BranchId, EffectBeginEvent, Event, JsonObject, ThreadId
-from threads.memory.fence import check
-from threads.result import Ok
+from threadsai import agent, extension, scripted_model, sqlite
+from threadsai.agents.context import RunContext
+from threadsai.agents.store import Store, open_store, scoped
+from threadsai.host import DeliveryOutcome, RawRequest, host
+from threadsai.host.app import recovered
+from threadsai.host.runs import Bound, Runner
+from threadsai.log import BranchId, EffectBeginEvent, Event, JsonObject, ThreadId
+from threadsai.memory.fence import check
+from threadsai.result import Ok
 
 STOP_S = 2.0
 

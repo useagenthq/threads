@@ -7,14 +7,14 @@ from typing import override
 
 from pydantic import JsonValue, TypeAdapter
 
-from threads import Store, Thread, scripted_model
-from threads.agents.store import now_ms, open_store
-from threads.log import BranchId, Event, MessageReceivedEvent, ToolResultEvent
-from threads.loop.model import ModelChunk, ModelContext, ModelRequest
-from threads.loop.scripted import ScriptedModel
-from threads.result import Ok
-from threads.store import SqliteStore
-from threads.team.rows import member_rows
+from threadsai import Store, Thread, scripted_model
+from threadsai.agents.store import now_ms, open_store
+from threadsai.log import BranchId, Event, MessageReceivedEvent, ToolResultEvent
+from threadsai.loop.model import ModelChunk, ModelContext, ModelRequest
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
+from threadsai.team.rows import member_rows
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

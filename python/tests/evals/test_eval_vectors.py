@@ -8,10 +8,10 @@ import pytest
 from pydantic import JsonValue, TypeAdapter
 from test_eval_corpus import pins_of
 
-from threads.evals.drift import Recorded, drift
-from threads.evals.judge import judge_input, verdicts
-from threads.log import Event, ThreadStartedData
-from threads.reduce.handlers import to_json
+from threadsai.evals.drift import Recorded, drift
+from threadsai.evals.judge import judge_input, verdicts
+from threadsai.log import Event, ThreadStartedData
+from threadsai.reduce.handlers import to_json
 
 VECTORS = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "vectors"
 _EVENTS = TypeAdapter[list[Event]](list[Event])

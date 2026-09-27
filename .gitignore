@@ -22,7 +22,7 @@ __pycache__/
 .pytest_cache/
 
 # Generated from spec/ by scripts/generate.sh; never committed
-python/src/threads/_generated/
+python/src/threadsai/_generated/
 typescript/packages/core/src/store/generated/
 typescript/packages/core/src/model/generated/
 typescript/packages/core/src/tools/generated/
@@ -36,4 +36,4 @@ junit.xml
 
 # Built by scripts/build-supervisor.sh; pinned by docker/supervise/binaries.json
 typescript/packages/docker/bin/
-python/src/threads/adapters/sandboxes/docker/bin/
+python/src/threadsai/adapters/sandboxes/docker/bin/

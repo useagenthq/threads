@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { anthropic } from "@threads/anthropic";
+import { anthropic } from "@threadsai/anthropic";
+import { docker } from "@threadsai/docker";
 import {
   type Agent,
   agent,
@@ -11,8 +12,7 @@ import {
   scriptedModel,
   type TeamAgent,
   tool,
-} from "@threads/core";
-import { docker } from "@threads/docker";
+} from "threadsai";
 import { z } from "zod";
 import { dryPin } from "../../core/src/agent/dry-pin";
 import { CODING_INSTRUCTIONS, codingAgent } from "../src";

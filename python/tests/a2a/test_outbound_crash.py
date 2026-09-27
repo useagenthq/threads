@@ -27,7 +27,7 @@ from outbound_kit import (
     use,
 )
 
-from threads.log import (
+from threadsai.log import (
     EffectCommitEvent,
     EffectResolvedEvent,
     EffectUnknownEvent,
@@ -35,10 +35,10 @@ from threads.log import (
     RemoteCallEvent,
     ToolResultEvent,
 )
-from threads.loop.drive import drive
-from threads.loop.recovery import recover
-from threads.loop.runtime import Parked
-from threads.result import Ok
+from threadsai.loop.drive import drive
+from threadsai.loop.recovery import recover
+from threadsai.loop.runtime import Parked
+from threadsai.result import Ok
 
 
 def _lists(d: Drill) -> int:

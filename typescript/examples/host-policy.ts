@@ -6,10 +6,10 @@
  * Needs: ANTHROPIC_API_KEY, SLACK_SIGNING_SECRET, SLACK_BOT_TOKEN
  * Run: threads dev examples/host-policy.ts (it exports the host, as README.md does).
  */
-import { anthropic } from "@threads/anthropic";
-import { agent, secret, sqlite, tool, usd } from "@threads/core";
-import { type Host, host } from "@threads/host";
-import { slack } from "@threads/slack";
+import { anthropic } from "@threadsai/anthropic";
+import { type Host, host } from "@threadsai/host";
+import { slack } from "@threadsai/slack";
+import { agent, secret, sqlite, tool, usd } from "threadsai";
 import { z } from "zod";
 
 const INVOICES: ReadonlyMap<string, string> = new Map([

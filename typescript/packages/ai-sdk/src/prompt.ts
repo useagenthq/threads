@@ -14,13 +14,13 @@ import type {
   RenderLine,
   RenderRequest,
   ResultPart,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import {
   assertNever,
   loadedTools,
   readOrRefuse,
   Unsendable,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { METADATA_FORMAT, PartMetadata, ReplayPart } from "./replay";
 
 // Render v1 → an AI SDK language model prompt and tool list, deterministically (item

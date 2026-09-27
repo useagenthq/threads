@@ -7,12 +7,12 @@ import asyncio
 from team.run_kit import say, sq_of, start
 from team.team_kit import assert_team_replays
 
-from threads import Completed, Principal, TeamRef, agent, open_team, scripted_model, sqlite
-from threads.agents.team_tools import Started
-from threads.loop.defaults import CONTEXT
-from threads.result import Ok
-from threads.store.sql import text_of
-from threads.team.rows import member_rows
+from threadsai import Completed, Principal, TeamRef, agent, open_team, scripted_model, sqlite
+from threadsai.agents.team_tools import Started
+from threadsai.loop.defaults import CONTEXT
+from threadsai.result import Ok
+from threadsai.store.sql import text_of
+from threadsai.team.rows import member_rows
 
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")
 

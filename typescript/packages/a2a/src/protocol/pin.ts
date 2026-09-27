@@ -1,4 +1,4 @@
-import { sha256Hex, unfetchable } from "@threads/core/adapter";
+import { sha256Hex, unfetchable } from "threadsai/adapter";
 import { AgentCard, schemeKind } from "./card";
 import { fetchBytes, type Sending } from "./client";
 import { speaks1_0 } from "./version";

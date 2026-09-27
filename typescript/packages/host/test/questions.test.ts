@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
-import { sqlite } from "@threads/core";
-import { storeConnection } from "@threads/core/host";
+import { sqlite } from "threadsai";
+import { storeConnection } from "threadsai/host";
 import { z } from "zod";
 import { type Host, host } from "../src";
 import { hostTicked } from "../src/host";

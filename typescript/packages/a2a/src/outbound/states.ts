@@ -4,7 +4,7 @@ import {
   type EventDraft,
   JsonValue,
   type ToolContext,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import type { Task } from "../protocol";
 
 // The remote_task_state events an exchange observed. Each is what we SAW, never what we decided,

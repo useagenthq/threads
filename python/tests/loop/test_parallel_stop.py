@@ -12,13 +12,13 @@ from kit import USER, acquire
 from parallel_kit import DONE, Bodies, Setup, begin, calls, fresh, ok, results
 from test_invariants import take_over
 
-from threads.log import Event, ToolResultEvent, TurnCompletedEvent
-from threads.loop.drafts import draft
-from threads.loop.drive import drive
-from threads.loop.parallel import WINDOW
-from threads.loop.runtime import Failed, Idle, Runtime
-from threads.loop.tools import Dispatched, Invocation, Output
-from threads.result import Ok
+from threadsai.log import Event, ToolResultEvent, TurnCompletedEvent
+from threadsai.loop.drafts import draft
+from threadsai.loop.drive import drive
+from threadsai.loop.parallel import WINDOW
+from threadsai.loop.runtime import Failed, Idle, Runtime
+from threadsai.loop.tools import Dispatched, Invocation, Output
+from threadsai.result import Ok
 
 NAMES = tuple(f"r{i}" for i in range(1, 21))
 

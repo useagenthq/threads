@@ -14,7 +14,7 @@ from fakes import Script, sse
 from kit import T0, Tools, open_store, start
 from pydantic import BaseModel, ConfigDict, JsonValue
 
-from threads import (
+from threadsai import (
     Completed,
     ConfigError,
     RunContext,
@@ -23,19 +23,19 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.adapters.loop_resources import holding
-from threads.adapters.models.openai.model import OpenAIModel
-from threads.agents.bindings import AppTool, Fence
-from threads.log import ArtifactRef, CitationPart, Permissions, Principal, TurnCompletedEvent
-from threads.loop.drive import drive
-from threads.loop.guard import block_model_requests
-from threads.loop.runtime import Runtime
-from threads.loop.scripted import ScriptedModel
-from threads.openai import openai
-from threads.result import Err
-from threads.secrets import credential
-from threads.web.fetch import Page
-from threads.web.results import page_output
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.models.openai.model import OpenAIModel
+from threadsai.agents.bindings import AppTool, Fence
+from threadsai.log import ArtifactRef, CitationPart, Permissions, Principal, TurnCompletedEvent
+from threadsai.loop.drive import drive
+from threadsai.loop.guard import block_model_requests
+from threadsai.loop.runtime import Runtime
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.openai import openai
+from threadsai.result import Err
+from threadsai.secrets import credential
+from threadsai.web.fetch import Page
+from threadsai.web.results import page_output
 
 BYPASS = Permissions.model_validate(
     {

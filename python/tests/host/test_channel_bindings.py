@@ -5,12 +5,12 @@ import asyncio
 
 import pytest
 
-from threads import ConfigError, agent, scripted_model, sqlite
-from threads.github import github
-from threads.host import ChannelAdapter, host
-from threads.secrets import secret
-from threads.slack import slack
-from threads.whatsapp import whatsapp
+from threadsai import ConfigError, agent, scripted_model, sqlite
+from threadsai.github import github
+from threadsai.host import ChannelAdapter, host
+from threadsai.secrets import secret
+from threadsai.slack import slack
+from threadsai.whatsapp import whatsapp
 
 
 def _slack(to: str) -> ChannelAdapter:

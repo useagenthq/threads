@@ -21,16 +21,16 @@ from host.test_api_recovery import (
     until,
 )
 
-from threads import Store, agent, sqlite
-from threads.agents import run as run_module
-from threads.agents.store import open_store
-from threads.host import host, reopen
-from threads.host.app import recovered
-from threads.log import ModelRequestEvent, TurnCompletedEvent
-from threads.store import SqliteStore, StoreError
-from threads.store.tables import Tables
+from threadsai import Store, agent, sqlite
+from threadsai.agents import run as run_module
+from threadsai.agents.store import open_store
+from threadsai.host import host, reopen
+from threadsai.host.app import recovered
+from threadsai.log import ModelRequestEvent, TurnCompletedEvent
+from threadsai.store import SqliteStore, StoreError
+from threadsai.store.tables import Tables
 
-LOGGER = "threads"
+LOGGER = "threadsai"
 
 
 def test_a_corrupt_receipt_row_is_skipped_and_the_valid_ones_recover(

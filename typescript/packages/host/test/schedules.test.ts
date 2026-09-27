@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { agent, extension, scriptedModel, sqlite } from "@threads/core";
+import { agent, extension, scriptedModel, sqlite } from "threadsai";
 import {
   deleteThread,
   openStore,
@@ -8,7 +8,7 @@ import {
   storeConnection,
   ThreadId,
   tenantStore,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { z } from "zod";
 import { HostContext } from "../src/context";
 import { occurrences, parseCron } from "../src/cron";

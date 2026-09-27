@@ -4,7 +4,7 @@ import {
   type JsonObject,
   type KnownEvent,
   type ParkAddress,
-} from "@threads/core/host";
+} from "threadsai/host";
 
 // What a run's frames read from the events before one: the purpose of each model request,
 // whether a model step is open, the legacy subagents it started, its tool calls, approval

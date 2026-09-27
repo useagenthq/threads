@@ -10,22 +10,22 @@ from pathlib import Path
 import pytest
 from sandbox_kit import OPEN, KitContext
 
-from threads.adapters.sandboxes.dev import DevSandbox
-from threads.adapters.sandboxes.dev.confine import DEFAULT_TOOL, confinement
-from threads.agents.config import ConfigError
-from threads.dev import dev_sandbox
-from threads.loop.model import Found, NotFound
-from threads.result import Err, Ok
-from threads.sandbox.protocol import (
+from threadsai.adapters.sandboxes.dev import DevSandbox
+from threadsai.adapters.sandboxes.dev.confine import DEFAULT_TOOL, confinement
+from threadsai.agents.config import ConfigError
+from threadsai.dev import dev_sandbox
+from threadsai.loop.model import Found, NotFound
+from threadsai.result import Err, Ok
+from threadsai.sandbox.protocol import (
     LookupSupport,
     SandboxError,
     SandboxInfo,
     SandboxSession,
     Trees,
 )
-from threads.sandbox.tree.tree import Tree, TreeFile
-from threads.sandbox.trees import HashOnly, read_tree
-from threads.store.artifacts import MemoryArtifacts
+from threadsai.sandbox.tree.tree import Tree, TreeFile
+from threadsai.sandbox.trees import HashOnly, read_tree
+from threadsai.store.artifacts import MemoryArtifacts
 
 STALE = KitContext(live=False)
 STUB = "/usr/bin/true"

@@ -8,17 +8,17 @@ from collections.abc import AsyncIterable, Awaitable, Callable, Mapping
 import pytest
 from no_trees import NoTreesSandbox
 
-from threads.agents.builtins import open_session
-from threads.log import BranchId, ThreadId
-from threads.result import Err, Ok
-from threads.sandbox import FakeSandbox, fake_sandbox
-from threads.sandbox.fake_session import FakeSession
-from threads.sandbox.ledger import Tracked, session_lookup
-from threads.sandbox.protocol import SandboxContext
-from threads.sandbox.tree.tree import Tree, TreeFile
-from threads.store import SqliteStore, Writer
-from threads.store.resources import Resource
-from threads.tools.runner import Opened
+from threadsai.agents.builtins import open_session
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.sandbox import FakeSandbox, fake_sandbox
+from threadsai.sandbox.fake_session import FakeSession
+from threadsai.sandbox.ledger import Tracked, session_lookup
+from threadsai.sandbox.protocol import SandboxContext
+from threadsai.sandbox.tree.tree import Tree, TreeFile
+from threadsai.store import SqliteStore, Writer
+from threadsai.store.resources import Resource
+from threadsai.tools.runner import Opened
 
 THREAD = ThreadId("0192a000-0000-7000-8000-000000000042")
 ROOT = BranchId("0192b000-0000-7000-8000-000000000042")

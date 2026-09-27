@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { agent, scriptedModel, sqlite } from "@threads/core";
-import { hostRunner } from "@threads/core/host";
+import { agent, scriptedModel, sqlite } from "threadsai";
+import { hostRunner } from "threadsai/host";
 import { logOf } from "../../../core/test/agent/kit";
 import { unwrap } from "../../../core/test/store/helpers";
 import { remote } from "../../src";

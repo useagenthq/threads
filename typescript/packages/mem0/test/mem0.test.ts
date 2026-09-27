@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { agent, scriptedModel, secret } from "@threads/core";
+import { agent, scriptedModel, secret } from "threadsai";
 import { mem0 } from "../src";
 
 // mem0's SDK can't be fenced at its transport, so the provider is refused at setup (

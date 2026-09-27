@@ -15,7 +15,7 @@ import type {
   ModelInfo,
   ModelRequest,
   Price,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import {
   ConfigError,
   fencedFetch,
@@ -24,7 +24,7 @@ import {
   rejectionFor,
   StaleEpochError,
   staleEpoch,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { z } from "zod";
 import { toPrompt } from "./prompt";
 import { ProviderOptions } from "./replay";
@@ -43,7 +43,7 @@ type Rejected = Extract<ModelChunk, { kind: "rejected" }>;
 type Media = ModelInfo["accepts"][number];
 
 // The platform types spec/api.json names for this package's factory.
-export type { JsonObject, Price } from "@threads/core/adapter";
+export type { JsonObject, Price } from "threadsai/adapter";
 
 /**
  * Builds the AI SDK model with threads' fetch, e.g.

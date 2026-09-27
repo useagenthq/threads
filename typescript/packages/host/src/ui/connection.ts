@@ -1,4 +1,4 @@
-import type { KnownEvent } from "@threads/core/host";
+import type { KnownEvent } from "threadsai/host";
 import type { RunOutcome } from "../outcome";
 import { agUiEvents } from "./ag-ui";
 import { aiSdkChunks } from "./ai-sdk";

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { credentialCases, drain, renderBody } from "@threads/adapter-testkit";
-import { memoryContext } from "@threads/core/adapter";
+import { credentialCases, drain, renderBody } from "@threadsai/adapter-testkit";
+import { memoryContext } from "threadsai/adapter";
 import { anthropic } from "../src";
 
 // Lane 09: the credential defaults to secret("ANTHROPIC_API_KEY") and is resolved at setup.

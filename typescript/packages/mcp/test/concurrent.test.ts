@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { agent, scriptedModel, sqlite, tool } from "@threads/core";
+import { agent, scriptedModel, sqlite, tool } from "threadsai";
 import { z } from "zod";
 import { bound, say, server, session } from "./kit";
 

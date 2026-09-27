@@ -7,9 +7,9 @@ import asyncio
 from team.run_kit import call, events, say, sq_of, start
 from team.team_kit import assert_team_replays
 
-from threads import Completed, agent, scripted_model, sqlite
-from threads.agents.store import scoped
-from threads.log import ToolResultEvent
+from threadsai import Completed, agent, scripted_model, sqlite
+from threadsai.agents.store import scoped
+from threadsai.log import ToolResultEvent
 
 
 def test_a_member_of_another_tenants_team_is_not_addressable() -> None:

@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue
 
-from threads.github import github
-from threads.host import RawRequest
-from threads.result import Err, Ok
-from threads.secrets import secret
+from threadsai.github import github
+from threadsai.host import RawRequest
+from threadsai.result import Err, Ok
+from threadsai.secrets import secret
 
 VECTOR_PATH = Path(__file__).resolve().parents[4] / "spec/conformance/vectors/github-delivery.json"
 

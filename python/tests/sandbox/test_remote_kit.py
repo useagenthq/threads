@@ -14,12 +14,12 @@ from sandbox_deadline_kit import DEADLINE
 from sandbox_kit import OPEN, KitContext
 from sandbox_ledger_kit import LEDGER, Body, run_ledger
 
-from threads.adapters.sandboxes import fence
-from threads.loop.model import Found, LookupResult, NotFound
-from threads.loop.tools import Termination
-from threads.result import Err, Ok
-from threads.sandbox.remote.driver import Confirmed, FinalLookup, Unconfirmed
-from threads.sandbox.remote.sandbox import RemoteInfo, RemoteSandbox
+from threadsai.adapters.sandboxes import fence
+from threadsai.loop.model import Found, LookupResult, NotFound
+from threadsai.loop.tools import Termination
+from threadsai.result import Err, Ok
+from threadsai.sandbox.remote.driver import Confirmed, FinalLookup, Unconfirmed
+from threadsai.sandbox.remote.sandbox import RemoteInfo, RemoteSandbox
 
 INFO = RemoteInfo("memory", "enforced")
 

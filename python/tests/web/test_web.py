@@ -7,18 +7,18 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 
 import pytest
 
-from threads.log import ArtifactRef, CitationPart, TextPart
-from threads.loop.tools import NotSent, Output, Uncertain
-from threads.memory.fence import bound
-from threads.result import Err, Ok
-from threads.search import brave, exa, tavily
-from threads.secrets import secret
-from threads.web.fetch import MAX_REDIRECTS, Moved, Page, get
-from threads.web.guard import Target, blocked, vet
-from threads.web.http import Fence, Request, Response, StdlibTransport, WebError
-from threads.web.markdown import to_markdown
-from threads.web.results import failed, hits_output, page_output
-from threads.web.search import SearchHit, admitted
+from threadsai.log import ArtifactRef, CitationPart, TextPart
+from threadsai.loop.tools import NotSent, Output, Uncertain
+from threadsai.memory.fence import bound
+from threadsai.result import Err, Ok
+from threadsai.search import brave, exa, tavily
+from threadsai.secrets import secret
+from threadsai.web.fetch import MAX_REDIRECTS, Moved, Page, get
+from threadsai.web.guard import Target, blocked, vet
+from threadsai.web.http import Fence, Request, Response, StdlibTransport, WebError
+from threadsai.web.markdown import to_markdown
+from threadsai.web.results import failed, hits_output, page_output
+from threadsai.web.search import SearchHit, admitted
 
 PUBLIC = "93.184.216.34"
 CHUNKED = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n2\r\nde\r\n0\r\n\r\n"

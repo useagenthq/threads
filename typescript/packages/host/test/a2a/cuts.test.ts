@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { AgentCard } from "@threads/a2a/protocol";
+import { AgentCard } from "@threadsai/a2a/protocol";
 import { alice } from "../kit";
 import { talker } from "./agents";
 import { faultName, message, serve, stopAll } from "./kit";

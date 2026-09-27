@@ -1,4 +1,4 @@
-import type { Agent } from "@threads/core";
+import type { Agent } from "threadsai";
 import { support } from "./eval-agents";
 
 // An `--agent` module whose agent has an MCP server that refuses connections: keyless CI must

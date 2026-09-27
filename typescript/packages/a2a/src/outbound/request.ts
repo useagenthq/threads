@@ -1,4 +1,4 @@
-import type { JsonObject } from "@threads/core/adapter";
+import type { JsonObject } from "threadsai/adapter";
 import type { z } from "zod";
 import { outbound, type Wire } from "../protocol";
 import type { Claim } from "./derive";

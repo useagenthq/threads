@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { agent, scriptedModel, tool } from "@threads/core";
+import { agent, scriptedModel, tool } from "threadsai";
 import { z } from "zod";
 import {
   alice,

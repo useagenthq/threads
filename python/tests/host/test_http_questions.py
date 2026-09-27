@@ -8,10 +8,10 @@ from host.test_api_recovery import until
 from host.test_http import as_, run, served, start, text, use
 from pydantic import JsonValue
 
-from threads import agent, scripted_model, sqlite
-from threads.agents.store import open_store, scoped
-from threads.log import ThreadId, ToolResultEvent, TurnCompletedEvent
-from threads.result import Ok
+from threadsai import agent, scripted_model, sqlite
+from threadsai.agents.store import open_store, scoped
+from threadsai.log import ThreadId, ToolResultEvent, TurnCompletedEvent
+from threadsai.result import Ok
 
 COLOR: JsonValue = {"question": "Which color?", "options": ["red", "blue"]}
 

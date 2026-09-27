@@ -50,8 +50,8 @@ uv run --project python ./scripts/generate.sh
           "private": true,
           "type": "module",
           "dependencies": {
-            "@threads/core": "workspace:*",
-            "@threads/anthropic": "workspace:*",
+            "threadsai": "workspace:*",
+            "@threadsai/anthropic": "workspace:*",
             "zod": "^4.6.5"
           }
         }
@@ -72,13 +72,13 @@ uv run --project python ./scripts/generate.sh
 
     | Package | What it adds |
     |---|---|
-    | `@threads/core` | `agent`, `tool`, `sqlite`, `openThread`, memory, knowledge, the scripted model |
-    | `@threads/anthropic`, `@threads/openai`, `@threads/ai-sdk` | Models |
-    | `@threads/docker`, `@threads/e2b`, `@threads/daytona` | Sandboxes |
-    | `@threads/mcp` | MCP servers as tools |
-    | `@threads/supermemory`, `@threads/zep` | Hosted memory |
-    | `@threads/host`, `@threads/slack`, `@threads/whatsapp`, `@threads/github` | The host and its channels |
-    | `@threads/cli` | The `threads` command |
+    | `threadsai` | `agent`, `tool`, `sqlite`, `openThread`, memory, knowledge, the scripted model |
+    | `@threadsai/anthropic`, `@threadsai/openai`, `@threadsai/ai-sdk` | Models |
+    | `@threadsai/docker`, `@threadsai/e2b`, `@threadsai/daytona` | Sandboxes |
+    | `@threadsai/mcp` | MCP servers as tools |
+    | `@threadsai/supermemory`, `@threadsai/zep` | Hosted memory |
+    | `@threadsai/host`, `@threadsai/slack`, `@threadsai/whatsapp`, `@threadsai/github` | The host and its channels |
+    | `@threadsai/cli` | The `threads` command |
   </Tab>
   <Tab value="Python">
     To follow the tutorials from this clone, put `support.py` in `python/` and run it in the
@@ -107,9 +107,9 @@ uv run --project python ./scripts/generate.sh
 
     | Extra | What it adds |
     |---|---|
-    | `anthropic`, `openai`, `litellm` | Models (`threads.anthropic`, `threads.openai`, `threads.litellm`) |
+    | `anthropic`, `openai`, `litellm` | Models (`threadsai.anthropic`, `threadsai.openai`, `threadsai.litellm`) |
     | `docker`, `e2b`, `daytona`, `modal` | Sandboxes |
-    | `mcp` | MCP servers as tools (`threads.mcp`) |
+    | `mcp` | MCP servers as tools (`threadsai.mcp`) |
     | `supermemory`, `zep` | Hosted memory |
     | `host` | The host server and `threads dev` / `threads start` |
     | `slack`, `whatsapp`, `github` | Channels |

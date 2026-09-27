@@ -16,8 +16,8 @@ Real runs become tests. [Save a turn](/docs/evals/saved-cases) you liked, then r
 <Tab value="TypeScript">
 
 ```ts
-import { anthropic } from "@threads/anthropic";
-import { runEvals } from "@threads/core";
+import { anthropic } from "@threadsai/anthropic";
+import { runEvals } from "threadsai";
 import { support } from "./agents";
 
 // In CI, for free.
@@ -40,9 +40,9 @@ console.log(graded.summary); // "11 passed, 1 failed; 24 model calls (12 agent, 
 <Tab value="Python">
 
 ```python
-from threads import Live, run_evals
-from threads.log import Budget
-from threads.anthropic import anthropic
+from threadsai import Live, run_evals
+from threadsai.log import Budget
+from threadsai.anthropic import anthropic
 
 from agents import support
 
@@ -130,7 +130,7 @@ By default the live and judge threads live in a private in-memory store and are 
 
 ```ts
 // agents.ts
-import { anthropic } from "@threads/anthropic";
+import { anthropic } from "@threadsai/anthropic";
 import { support } from "./support";
 
 export default [support];
@@ -143,8 +143,8 @@ export const budget = { max_cost_nanos: 500_000_000 };
 
 ```python
 # agents.py
-from threads.log import Budget
-from threads.anthropic import anthropic
+from threadsai.log import Budget
+from threadsai.anthropic import anthropic
 
 from support import support
 

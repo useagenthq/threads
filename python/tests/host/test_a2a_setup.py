@@ -11,12 +11,12 @@ from collections.abc import Sequence
 import pytest
 from pydantic import BaseModel, JsonValue
 
-from threads import Agent, RunContext, agent, scripted_model, tool
-from threads.agents.config import ConfigError
-from threads.host.a2a.card import card_bytes
-from threads.host.a2a.config import A2aOptions, default_budget
-from threads.host.a2a.setup import expose_a2a
-from threads.log import Principal
+from threadsai import Agent, RunContext, agent, scripted_model, tool
+from threadsai.agents.config import ConfigError
+from threadsai.host.a2a.card import card_bytes
+from threadsai.host.a2a.config import A2aOptions, default_budget
+from threadsai.host.a2a.setup import expose_a2a
+from threadsai.log import Principal
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 LEAD = Principal(issuer="api", tenant="acme", subject="support-leads@acme.example")

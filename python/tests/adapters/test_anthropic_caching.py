@@ -14,17 +14,17 @@ from fakes import FakeContext, Script, collect, line, sse
 from pydantic import JsonValue, TypeAdapter
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads import Completed, ConfigError, agent, sqlite
-from threads.adapters.loop_resources import holding
-from threads.adapters.models.anthropic.model import AnthropicModel
-from threads.adapters.models.anthropic.request import build
-from threads.adapters.models.render import UnsupportedContentError, parse
-from threads.anthropic import anthropic
-from threads.log import Price
-from threads.log.jcs import canonicalize
-from threads.loop.guard import block_model_requests
-from threads.loop.model import Done
-from threads.result import Ok
+from threadsai import Completed, ConfigError, agent, sqlite
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.models.anthropic.model import AnthropicModel
+from threadsai.adapters.models.anthropic.request import build
+from threadsai.adapters.models.render import UnsupportedContentError, parse
+from threadsai.anthropic import anthropic
+from threadsai.log import Price
+from threadsai.log.jcs import canonicalize
+from threadsai.loop.guard import block_model_requests
+from threadsai.loop.model import Done
+from threadsai.result import Ok
 
 VECTOR = Path(__file__).parents[3] / "spec" / "conformance" / "vectors" / "anthropic-requests.json"
 _OBJECT: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])

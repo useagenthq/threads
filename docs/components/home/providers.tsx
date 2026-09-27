@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { panel } from "./section";
 
-// Only providers with a shipped model adapter (typescript/packages, python/src/threads). Keep in step with
+// Only providers with a shipped model adapter (typescript/packages, python/src/threadsai). Keep in step with
 // the Models guide. There are no logos here on purpose: we do not have permission to use anyone's mark.
 const PROVIDERS = [
   { name: "Anthropic", note: "TypeScript · Python" },

@@ -19,8 +19,8 @@ def api(functions: Obj, packages: Obj | None = None) -> Obj:
     return {
         "packages": packages
         or {
-            "core": {"ts": "@threads/core", "py": "threads", "kind": "core", "doc": "Core."},
-            "tsonly": {"ts": "@threads/x", "kind": "adapter", "doc": "TS only."},
+            "core": {"ts": "threadsai", "py": "threadsai", "kind": "core", "doc": "Core."},
+            "tsonly": {"ts": "@threadsai/x", "kind": "adapter", "doc": "TS only."},
         },
         "functions": functions,
         "types": {"ConfigErrorCode": {"kind": "alias", "type": {"enum": CODES}}},
@@ -164,6 +164,6 @@ def test_the_meta_schema_rejects_a_package_without_kind() -> None:
     assert isinstance(real, dict)
     packages = real["packages"]
     assert isinstance(packages, dict)
-    packages["search"] = {"ts": "@threads/core", "doc": "No kind."}
+    packages["search"] = {"ts": "threadsai", "doc": "No kind."}
     errs = Validator(meta).check(meta, real, "api.json")
     assert "api.json/packages/search: missing kind" in errs

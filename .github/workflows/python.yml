@@ -36,7 +36,7 @@ jobs:
         working-directory: .
         run: ./scripts/generate.sh py
       - run: uv run pyright
-      - run: uv run pyright --verifytypes threads --ignoreexternal
+      - run: uv run pyright --verifytypes threadsai --ignoreexternal
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run pytest --junitxml=junit.xml

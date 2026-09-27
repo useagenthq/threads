@@ -4,7 +4,7 @@ import {
   type DeliveryOutcome,
   type Fetch,
   within,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { KnownEvent } from "../../core/src/log";
 import { err } from "../../core/src/result";
 import type { SandboxContext } from "../../core/src/sandbox";

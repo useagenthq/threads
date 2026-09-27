@@ -1,4 +1,4 @@
-import { ConfigError } from "@threads/core";
+import { ConfigError } from "threadsai";
 import { SEMCONV } from "./attrs";
 
 // Configuration: an option, then the traces variable, then the generic one, then the default

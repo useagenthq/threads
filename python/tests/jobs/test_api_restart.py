@@ -15,7 +15,7 @@ from jobs.drill import expire_leases, finish, kill, one_writer_at_a_time, spawn,
 from jobs.stores import drill_open
 from jobs.worker import rows
 
-from threads.log import (
+from threadsai.log import (
     EffectBeginEvent,
     Event,
     ModelResponseEvent,
@@ -23,8 +23,8 @@ from threads.log import (
     TurnCompletedEvent,
     UserInputEvent,
 )
-from threads.reduce import Fold
-from threads.result import Ok
+from threadsai.reduce import Fold
+from threadsai.result import Ok
 
 pytestmark = pytest.mark.jobs
 

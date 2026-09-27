@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { deleteThread, ThreadId } from "@threads/core/host";
+import { deleteThread, ThreadId } from "threadsai/host";
 import { accepted, type Collector, collector } from "./collector";
 import { goldens } from "./goldens";
 import { cursors, exporter } from "./kit";

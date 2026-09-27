@@ -11,10 +11,10 @@ from dataclasses import dataclass, field
 import pytest
 from pydantic import JsonValue, TypeAdapter
 
-from threads import agent, extension, scripted_model, sqlite
-from threads.agents.agent import Agent
-from threads.agents.store import Store, now_ms, open_store, scoped
-from threads.host import (
+from threadsai import agent, extension, scripted_model, sqlite
+from threadsai.agents.agent import Agent
+from threadsai.agents.store import Store, now_ms, open_store, scoped
+from threadsai.host import (
     ChannelCapabilities,
     DeliveryOutcome,
     Inbound,
@@ -24,11 +24,11 @@ from threads.host import (
     VerifiedDelivery,
     host,
 )
-from threads.host import intake as intake_module
-from threads.host.app import recovered
-from threads.host.intake import ChannelIntake
-from threads.host.runs import Runner
-from threads.log import (
+from threadsai.host import intake as intake_module
+from threadsai.host.app import recovered
+from threadsai.host.intake import ChannelIntake
+from threadsai.host.runs import Runner
+from threadsai.log import (
     BranchId,
     Event,
     JsonObject,
@@ -37,10 +37,10 @@ from threads.log import (
     ToolCallEvent,
     TurnCompletedEvent,
 )
-from threads.loop.model import LookupResult, LookupUnknown
-from threads.result import Err, Ok
-from threads.secrets import Secret
-from threads.store.lines import uuid7
+from threadsai.loop.model import LookupResult, LookupUnknown
+from threadsai.result import Err, Ok
+from threadsai.secrets import Secret
+from threadsai.store.lines import uuid7
 
 TEAM = "T1"
 USER = Principal(issuer="fake:T1", tenant=TEAM, subject="U1")

@@ -6,13 +6,13 @@ import asyncio
 
 from pydantic import JsonValue
 
-from threads import Completed, agent, scripted_model, sqlite
-from threads.agents.context import RunContext
-from threads.agents.store import open_store
-from threads.hooks.extension import Observer, extension
-from threads.hooks.observers import ObserverPump
-from threads.log import Budget, Event
-from threads.result import Ok
+from threadsai import Completed, agent, scripted_model, sqlite
+from threadsai.agents.context import RunContext
+from threadsai.agents.store import open_store
+from threadsai.hooks.extension import Observer, extension
+from threadsai.hooks.observers import ObserverPump
+from threadsai.log import Budget, Event
+from threadsai.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 FAILS_AT = 3

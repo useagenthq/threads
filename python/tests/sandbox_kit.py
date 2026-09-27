@@ -2,9 +2,9 @@
 
 from dataclasses import dataclass, field
 
-from threads.log import BranchId, ParseError
-from threads.result import Err, Ok
-from threads.store.context import OwnerAuthority, SandboxAuthority
+from threadsai.log import BranchId, ParseError
+from threadsai.result import Err, Ok
+from threadsai.store.context import OwnerAuthority, SandboxAuthority
 
 TEST_BRANCH = BranchId("0192b000-0000-7000-8000-0000000000ff")
 

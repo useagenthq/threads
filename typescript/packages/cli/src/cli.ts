@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { importThread, openThread, type Store, sqlite } from "@threads/core";
+import { type Host, hostSandboxes } from "@threadsai/host";
+import { importThread, openThread, type Store, sqlite } from "threadsai";
 import {
   BranchId,
   collect,
@@ -11,8 +12,7 @@ import {
   sweepArtifacts,
   ThreadId,
   tenantStore,
-} from "@threads/core/host";
-import { type Host, hostSandboxes } from "@threads/host";
+} from "threadsai/host";
 import { type EvalArgs, evals } from "./eval";
 
 // The `threads` CLI (spec/api.json cli): thin wrappers over library calls, never a feature of its
@@ -24,7 +24,7 @@ export type Io = {
   readonly err: (text: string) => void;
 };
 
-const USAGE = `usage: threads <command> [options]
+const USAGE = `usage: threads <command> [options]   (threadsai runs the same CLI)
   dev [module] [--port N]           run a host module locally; prints each channel's webhook URL
   start [module] [--port N]         the same, for production
   timeline <thread_id> [--branch B] print a branch's steps as JSON lines
@@ -212,7 +212,7 @@ async function serve(
 async function storeAt(at: string): Promise<Store> {
   if (!/^postgres(ql)?:\/\//.test(at)) return sqlite(at);
   // Loaded only for a Postgres store: a SQLite user never loads pg.
-  const { postgres } = await import("@threads/postgres");
+  const { postgres } = await import("@threadsai/postgres");
   return postgres(at);
 }
 

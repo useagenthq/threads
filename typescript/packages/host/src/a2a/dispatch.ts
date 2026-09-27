@@ -9,8 +9,8 @@ import {
   SendMessageRequest,
   type SseFrame,
   SubscribeToTaskRequest,
-} from "@threads/a2a/protocol";
-import { assertNever, type Principal } from "@threads/core/host";
+} from "@threadsai/a2a/protocol";
+import { assertNever, type Principal } from "threadsai/host";
 import type { HostContext } from "../context";
 import type { ExposedAgent } from "./config";
 import { rawMessage } from "./keys";

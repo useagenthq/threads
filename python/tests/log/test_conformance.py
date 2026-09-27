@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from threads.log import Head, Header, LogLine, ParseError, UnknownEvent, parse_log_line
-from threads.result import Err, Ok
+from threadsai.log import Head, Header, LogLine, ParseError, UnknownEvent, parse_log_line
+from threadsai.result import Err, Ok
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 MIN_CASES = 70

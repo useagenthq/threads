@@ -12,7 +12,7 @@ import {
   type SseFrame,
   sseBody,
   VERSION_HEADER,
-} from "@threads/a2a/protocol";
+} from "@threadsai/a2a/protocol";
 
 // How an answer and a refusal look on each binding. The status and the code always come from the
 // protocol core's pinned table, never from a number written here.

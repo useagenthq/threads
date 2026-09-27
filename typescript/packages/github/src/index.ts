@@ -1,4 +1,4 @@
-import type { ChannelAdapter, Fetch, Secret } from "@threads/core/adapter";
+import type { ChannelAdapter, Fetch, Secret } from "threadsai/adapter";
 import { parser, type TenantOf, verifier } from "./inbound";
 import { looker, performer, render, renderText } from "./outbound";
 

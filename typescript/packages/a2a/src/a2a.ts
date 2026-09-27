@@ -1,10 +1,10 @@
-import type { Tool } from "@threads/core";
+import type { Tool } from "threadsai";
 import {
   ConfigError,
   credential,
   type Secret,
   type WebTransport,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { type RemoteToolsOptions, remoteTools } from "./outbound/tools";
 
 // remote() and bearer(): what an app writes to name a partner's A2A agent. Neither does any I/O.

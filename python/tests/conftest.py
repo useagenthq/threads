@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 from pg_kit import ENGINE, postgres_memory
 
-from threads.loop.guard import block_model_requests
-from threads.redaction import forget_secrets
+from threadsai.loop.guard import block_model_requests
+from threadsai.redaction import forget_secrets
 
 block_model_requests()
 

@@ -9,21 +9,21 @@ from itertools import chain, repeat
 import pytest
 from pydantic import JsonValue
 
-from threads import ConfigError, agent, extension, scripted_model, sqlite
-from threads.agents.pinned import pinned_start
-from threads.agents.store import Store, now_ms, open_store
-from threads.host import Schedule, host, occurrences
-from threads.host.cron import parse_cron
-from threads.host.occurrences import log_occurrence
-from threads.host.runs import Runner
-from threads.host.schedule_pass import Pass
-from threads.host.schedule_threads import reserve_due
-from threads.host.schedules import Scheduler
-from threads.log import BranchId, ScheduleFiredEvent, ScheduleSkippedEvent
-from threads.result import Ok
-from threads.store import SqliteStore, Writer
-from threads.store.deletion import delete_thread
-from threads.store.schedules import Due
+from threadsai import ConfigError, agent, extension, scripted_model, sqlite
+from threadsai.agents.pinned import pinned_start
+from threadsai.agents.store import Store, now_ms, open_store
+from threadsai.host import Schedule, host, occurrences
+from threadsai.host.cron import parse_cron
+from threadsai.host.occurrences import log_occurrence
+from threadsai.host.runs import Runner
+from threadsai.host.schedule_pass import Pass
+from threadsai.host.schedule_threads import reserve_due
+from threadsai.host.schedules import Scheduler
+from threadsai.log import BranchId, ScheduleFiredEvent, ScheduleSkippedEvent
+from threadsai.result import Ok
+from threadsai.store import SqliteStore, Writer
+from threadsai.store.deletion import delete_thread
+from threadsai.store.schedules import Due
 
 USAGE: JsonValue = {"input_tokens": 1, "output_tokens": 1}
 REPLY: JsonValue = {

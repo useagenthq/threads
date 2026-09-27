@@ -8,12 +8,12 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from threads.memory import passages
-from threads.memory.conformance import A, B, knowledge_suite, memory_suite
-from threads.memory.guard import Binder, scoped_knowledge, scoped_memory
-from threads.memory.local_knowledge import LocalKnowledge, local_knowledge
-from threads.memory.local_memory import FOREVER_MS, local_memory
-from threads.memory.types import (
+from threadsai.memory import passages
+from threadsai.memory.conformance import A, B, knowledge_suite, memory_suite
+from threadsai.memory.guard import Binder, scoped_knowledge, scoped_memory
+from threadsai.memory.local_knowledge import LocalKnowledge, local_knowledge
+from threadsai.memory.local_memory import FOREVER_MS, local_memory
+from threadsai.memory.types import (
     Binding,
     MemoryHit,
     MemoryRecord,
@@ -22,9 +22,9 @@ from threads.memory.types import (
     RecordRef,
     Scope,
 )
-from threads.result import Err, Ok
-from threads.store import SqliteStore
-from threads.store.conn import Conn
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore
+from threadsai.store.conn import Conn
 
 
 async def _store() -> SqliteStore:

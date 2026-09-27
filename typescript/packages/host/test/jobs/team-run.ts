@@ -1,5 +1,5 @@
-import { agent, LogStore, scriptedModel } from "@threads/core";
-import { BranchId, hostRunner, storeOf, ThreadId } from "@threads/core/host";
+import { agent, LogStore, scriptedModel } from "threadsai";
+import { BranchId, hostRunner, storeOf, ThreadId } from "threadsai/host";
 import { z } from "zod";
 import { beforeRun, sqlAll } from "../sql";
 import { drillDriver } from "./stores";

@@ -11,13 +11,13 @@ from eval_kit import verdicts_reply as verdicts
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads import Live, ModelBlockedError, agent, run_evals, scripted_model, sqlite
-from threads.agents.store import scoped
-from threads.log import Budget, ThreadId
-from threads.loop import guard
-from threads.loop.model import ModelChunk, ModelContext, ModelInfo, ModelRequest
-from threads.result import Ok
-from threads.thread.handle import open_thread
+from threadsai import Live, ModelBlockedError, agent, run_evals, scripted_model, sqlite
+from threadsai.agents.store import scoped
+from threadsai.log import Budget, ThreadId
+from threadsai.loop import guard
+from threadsai.loop.model import ModelChunk, ModelContext, ModelInfo, ModelRequest
+from threadsai.result import Ok
+from threadsai.thread.handle import open_thread
 
 RUBRIC = ("Quotes the 30-day refund window",)
 BUDGET = Budget(max_model_requests=10)

@@ -14,12 +14,12 @@ import uuid
 
 import pytest
 
-from threads.github import github
-from threads.host import ChannelAdapter, DeliveryOutcome, Sent
-from threads.memory.fence import bound
-from threads.secrets import secret
-from threads.slack import slack
-from threads.whatsapp import whatsapp
+from threadsai.github import github
+from threadsai.host import ChannelAdapter, DeliveryOutcome, Sent
+from threadsai.memory.fence import bound
+from threadsai.secrets import secret
+from threadsai.slack import slack
+from threadsai.whatsapp import whatsapp
 
 pytestmark = pytest.mark.live
 

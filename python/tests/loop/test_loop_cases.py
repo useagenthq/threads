@@ -3,7 +3,7 @@
 
 recover: import the writer's own log, acquire the lease (the next epoch), run semantic recovery,
 then resume the loop against the scripts until idle or parked. stub: import, then continue in
-stub mode. The run itself is the eval runner's rerun (threads.evals.rerun): one implementation
+stub mode. The run itself is the eval runner's rerun (threadsai.evals.rerun): one implementation
 for the corpus and for saved cases. Both compare `appended`, the scripted counters, and that the
 result exports and imports cleanly.
 """
@@ -17,12 +17,12 @@ import pytest
 from corpus import CASES, cases, load, matches, now_of, obj, own
 from pydantic import JsonValue, TypeAdapter
 
-from threads.evals.case_dir import CaseSandbox
-from threads.evals.rerun import Ran, RerunInput, rerun
-from threads.loop.drafts import draft
-from threads.loop.runtime import Failed
-from threads.reduce.handlers import to_json
-from threads.store import StoredEvent
+from threadsai.evals.case_dir import CaseSandbox
+from threadsai.evals.rerun import Ran, RerunInput, rerun
+from threadsai.loop.drafts import draft
+from threadsai.loop.runtime import Failed
+from threadsai.reduce.handlers import to_json
+from threadsai.store import StoredEvent
 
 _V1 = TypeAdapter[dict[str, dict[str, JsonValue]]](dict[str, dict[str, JsonValue]])
 

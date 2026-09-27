@@ -43,7 +43,7 @@ export type AgentOptions<Deps, Output> = {
   /** Pinned system text (Render v1 line 0). */
   readonly instructions?: string;
   readonly name?: string;
-  /** App tools and MCP servers (mcp() in @threads/mcp). */
+  /** App tools and MCP servers (mcp() in @threadsai/mcp). */
   readonly tools?: readonly (Tool<unknown, unknown, Deps> | McpServer)[];
   /** Structured final output; absent: the output is the final text. */
   readonly output?: z.ZodType<Output>;

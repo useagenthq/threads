@@ -7,8 +7,8 @@ comma and colon, so the two languages used to write different bytes for the same
 
 from pydantic import JsonValue
 
-from threads.a2a.protocol import Wire, outbound
-from threads.a2a.protocol.wire import sent_rpc_id
+from threadsai.a2a.protocol import Wire, outbound
+from threadsai.a2a.protocol.wire import sent_rpc_id
 
 RPC = Wire("https://partner.example/a2a/refunds", "JSONRPC")
 REST = Wire("https://partner.example/a2a/refunds", "HTTP+JSON")

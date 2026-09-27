@@ -1,0 +1,271 @@
+"""POST /v1/runs idempotency receipts (store.sql `run_receipts`).
+
+The key is unique per tenant and operation. The receipt is inserted in the transaction that
+appends the run's user_input, so a lost response replays it and a crash leaves neither.
+"""
+
+import logging
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Final, Literal
+
+from pydantic import StrictStr, TypeAdapter, ValidationError
+from pydantic.experimental.missing_sentinel import MISSING
+
+from threadsai._generated.events_v1 import Uuid
+from threadsai.log import (
+    BranchId,
+    Event,
+    EventId,
+    ParseError,
+    TextPart,
+    ThreadId,
+    ThreadStartedEvent,
+    UserInputEvent,
+)
+from threadsai.log.digest import canonical_sha256
+from threadsai.log.keys import principal_key
+from threadsai.result import Ok
+from threadsai.store.companion import Companion
+from threadsai.store.conn import Conn
+from threadsai.store.sql import int_of, text_of
+from threadsai.store.verify import StoredEvent
+
+_log = logging.getLogger(__name__)
+_FIELDS = ("tenant_id", "thread_id", "branch_id")
+"""The selected row's columns, by position: a failing field is logged by name."""
+_ROW: TypeAdapter[tuple[StrictStr, Uuid, Uuid]] = TypeAdapter(tuple[StrictStr, Uuid, Uuid])
+
+
+START_RUN: Final = "start_run"
+"""A `POST /v1/runs` run (`Host.start_run`)."""
+UI: Final = "ui"
+"""A UI route's run, keyed `<thread_id>:<client message id>` (spec/schema/ui/README.md)."""
+
+type Operation = Literal["start_run", "ui", "a2a_send"]
+"""The two operations store.sql's CHECK admits. They are wire names: the other language reads a
+receipt by these exact bytes, so a spelling of our own would start the run a second time."""
+
+
+@dataclass(frozen=True, slots=True)
+class Key:
+    """What an Idempotency-Key is bound to."""
+
+    tenant_id: str
+    operation: Operation
+    idempotency_key: str
+    principal_key: str
+    body_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class Receipt:
+    principal_key: str
+    body_hash: str
+    thread_id: ThreadId
+    branch_id: BranchId
+    run_id: EventId
+
+
+def find(conn: Conn, key: Key) -> Receipt | None:
+    row = conn.execute(
+        "SELECT principal_key, body_hash, thread_id, branch_id, run_id FROM run_receipts"
+        " WHERE tenant_id = ? AND operation = ? AND idempotency_key = ?",
+        (key.tenant_id, key.operation, key.idempotency_key),
+    ).fetchone()
+    if row is None:
+        return None
+    principal, body, thread, branch, run = (text_of(v) for v in row)
+    return Receipt(principal, body, ThreadId(thread), BranchId(branch), EventId(run))
+
+
+def unfinished(conn: Conn) -> tuple[tuple[str, ThreadId, BranchId], ...]:
+    """(tenant, thread, branch) of every tenant's API run branches, except those whose last event
+    is a turn_completed: where a crash may have left a run's turn open. The fold decides; this
+    only skips branches that are certainly closed, so a restart doesn't read every API thread's
+    log."""
+    rows = conn.execute(
+        "SELECT DISTINCT r.tenant_id, r.thread_id, r.branch_id FROM run_receipts r"
+        " JOIN branches b ON b.branch_id = r.branch_id AND b.tenant_id = r.tenant_id"
+        " JOIN events e ON e.branch_id = b.branch_id AND e.seq = b.head_seq"
+        " WHERE e.type <> 'turn_completed'"
+    ).fetchall()
+    found: list[tuple[str, ThreadId, BranchId]] = []
+    for row in rows:
+        # Storage is a boundary: a row that fails its schema is skipped and said, never the
+        # reason the valid ones aren't recovered.
+        try:
+            tenant, thread, branch = _ROW.validate_python(row)
+        except ValidationError as error:
+            # Only the branch, bounded, and the fields that failed: the row's text is untrusted.
+            bad = ", ".join(_FIELDS[int(e["loc"][0])] for e in error.errors())
+            _log.warning(
+                "threads store: run_receipts row skipped (branch %.64r; bad field %s)", row[2], bad
+            )
+            continue
+        found.append((tenant, ThreadId(thread), BranchId(branch)))
+    return tuple(found)
+
+
+def insert(key: Key, now: int) -> Companion:
+    """The receipt of the append's user_input. A key another request took first refuses the
+    append: the caller reads that receipt and answers from it."""
+
+    def put(conn: Conn, events: Sequence[StoredEvent]) -> ParseError | None:
+        run = next(e for e in events if isinstance(e, UserInputEvent))
+        done = conn.execute(
+            "INSERT INTO run_receipts (tenant_id, operation, idempotency_key, principal_key,"
+            " body_hash, thread_id, branch_id, run_id, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+            (
+                key.tenant_id,
+                key.operation,
+                key.idempotency_key,
+                key.principal_key,
+                key.body_hash,
+                run.thread_id,
+                run.branch_id,
+                run.event_id,
+                now,
+            ),
+        )
+        if done.rowcount == 1:
+            return None
+        return ParseError("idempotency_key_reused", "the key was taken by another request")
+
+    return put
+
+
+def ui_key(thread_id: str, message_id: str) -> str:
+    return f"{thread_id}:{message_id}"
+
+
+def ui_body_hash(agent: str, text: str) -> str:
+    """A `ui` receipt's body hash: the run's input only (the pinned agent name, the text, the
+    source), so a retry that changes any other client field still matches, and an import can
+    rebuild it from the log."""
+    body = canonical_sha256({"agent": agent, "input": text, "source": "api"})
+    if not isinstance(body, Ok):
+        raise AssertionError("an agent name and a text always canonicalize")
+    return body.value
+
+
+def ui_messages(conn: Conn, tenant_id: str, thread_id: str) -> dict[str, str]:
+    """A thread's `ui` receipts: each run's client message id by run id. Read by the byte range
+    of `<thread_id>:` keys (`;` is the byte after `:`), never LIKE, so the index serves it."""
+    rows = conn.execute(
+        "SELECT idempotency_key, run_id FROM run_receipts WHERE tenant_id = ? AND operation = ?"
+        " AND idempotency_key >= ? AND idempotency_key < ?",
+        (tenant_id, UI, f"{thread_id}:", f"{thread_id};"),
+    ).fetchall()
+    prefix = len(f"{thread_id}:")
+    return {text_of(run): text_of(key)[prefix:] for key, run in rows}
+
+
+def rebuild_ui(conn: Conn, tenant_id: str, events: Sequence[Event], now: int) -> None:
+    """An import's `ui` receipts: one per user_input that carries client_message_id, keyed and
+    hashed as a UI route writes it, so a retry after an import finds its run."""
+    started = next((e for e in events if isinstance(e, ThreadStartedEvent)), None)
+    if started is None:
+        return
+    for e in events:
+        if not isinstance(e, UserInputEvent) or e.data.client_message_id is MISSING:
+            continue
+        conn.execute(
+            "INSERT INTO run_receipts (tenant_id, operation, idempotency_key, principal_key,"
+            " body_hash, thread_id, branch_id, run_id, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+            (
+                tenant_id,
+                UI,
+                ui_key(e.thread_id, e.data.client_message_id),
+                principal_key(e.actor.principal),
+                ui_body_hash(started.data.agent_name, input_text(e)),
+                e.thread_id,
+                e.branch_id,
+                e.event_id,
+                now,
+            ),
+        )
+
+
+def input_text(e: UserInputEvent) -> str:
+    """The text a user_input carries: its text, or its text parts joined."""
+    if e.data.text is not MISSING:
+        return e.data.text
+    parts = () if e.data.content is MISSING else e.data.content
+    return "".join(p.text for p in parts if isinstance(p, TextPart))
+
+
+A2A_SEND: Final = "a2a_send"
+"""An exposed A2A agent's SendMessage, keyed by principal, agent and messageId
+(threads/host/a2a/keys.py). The same literal in both languages, deliberately: two hosts on one
+store read each other's receipts, and one of them may be the TypeScript implementation."""
+
+
+@dataclass(frozen=True, slots=True)
+class TaskReceipt:
+    """An `a2a_send` receipt as the exposed side reads it: which run the task is, and when."""
+
+    idempotency_key: str
+    thread_id: ThreadId
+    branch_id: BranchId
+    run_id: EventId
+    created_at: int
+
+
+def _task(row: Sequence[object]) -> TaskReceipt:
+    key, thread, branch, run, created = row
+    return TaskReceipt(
+        text_of(key), ThreadId(text_of(thread)), BranchId(text_of(branch)), EventId(text_of(run)),
+        int_of(created),
+    )  # fmt: skip
+
+
+def a2a_tasks(conn: Conn, tenant_id: str, principal: str) -> tuple[TaskReceipt, ...]:
+    """A principal's `a2a_send` receipts, newest first: what ListTasks pages over, and what
+    GetTask, SubscribeToTask and CancelTask resolve a task through. The principal is in the WHERE
+    clause rather than checked afterwards, so another caller's task is indistinguishable from one
+    that never existed. Served by the run_receipts (tenant_id, operation, principal_key,
+    created_at) index."""
+    rows = conn.execute(
+        "SELECT idempotency_key, thread_id, branch_id, run_id, created_at FROM run_receipts"
+        " WHERE tenant_id = ? AND operation = ? AND principal_key = ?"
+        " ORDER BY created_at DESC, run_id DESC",
+        (tenant_id, A2A_SEND, principal),
+    ).fetchall()
+    return tuple(_task(row) for row in rows)
+
+
+def a2a_task(conn: Conn, tenant_id: str, principal: str, run_id: str) -> TaskReceipt | None:
+    """One of the principal's `a2a_send` receipts by run id. Separate from `a2a_tasks` because a
+    stream resolves its task on every poll, and reading a whole history to do that would not
+    scale."""
+    row = conn.execute(
+        "SELECT idempotency_key, thread_id, branch_id, run_id, created_at FROM run_receipts"
+        " WHERE tenant_id = ? AND operation = ? AND principal_key = ? AND run_id = ?",
+        (tenant_id, A2A_SEND, principal, run_id),
+    ).fetchone()
+    return None if row is None else _task(row)
+
+
+def record(conn: Conn, key: Key, run: TaskReceipt) -> None:
+    """A receipt for work that is already durable: an A2A continuation records its answer first and
+    its receipt after, since the answer goes to the log through a control, not an input's append.
+    ON CONFLICT DO NOTHING, so writing it again after an unknown commit is a no-op."""
+    conn.execute(
+        "INSERT INTO run_receipts (tenant_id, operation, idempotency_key, principal_key,"
+        " body_hash, thread_id, branch_id, run_id, created_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+        (
+            key.tenant_id,
+            key.operation,
+            key.idempotency_key,
+            key.principal_key,
+            key.body_hash,
+            run.thread_id,
+            run.branch_id,
+            run.run_id,
+            run.created_at,
+        ),
+    )

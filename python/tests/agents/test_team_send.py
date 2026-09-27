@@ -6,9 +6,9 @@ import asyncio
 
 from pydantic import JsonValue
 
-from threads import Completed, Thread, agent, scripted_model, sqlite
-from threads.log import Event, TeamMessageEvent, ToolResultEvent
-from threads.result import Ok
+from threadsai import Completed, Thread, agent, scripted_model, sqlite
+from threadsai.log import Event, TeamMessageEvent, ToolResultEvent
+from threadsai.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

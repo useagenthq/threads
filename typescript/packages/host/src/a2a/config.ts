@@ -1,6 +1,6 @@
-import type { SecurityScheme } from "@threads/a2a/protocol";
-import { ConfigError, usd } from "@threads/core";
-import type { Budget } from "@threads/core/host";
+import type { SecurityScheme } from "@threadsai/a2a/protocol";
+import { ConfigError, usd } from "threadsai";
+import type { Budget } from "threadsai/host";
 import type { z } from "zod";
 import type { HostContext, HostedAgent } from "../context";
 

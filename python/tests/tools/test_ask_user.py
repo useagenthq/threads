@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue
 
-from threads._generated.tools_v1 import AskUserInput
-from threads.log.ask_user import (
+from threadsai._generated.tools_v1 import AskUserInput
+from threadsai.log.ask_user import (
     ask_of,
     ask_problem,
     correction_text,

@@ -19,9 +19,9 @@ An agent runs fine as a plain library call. When you want it reachable from Slac
 <Tab value="TypeScript">
 
 ```ts
-import { secret, sqlite } from "@threads/core";
-import { host } from "@threads/host";
-import { slack } from "@threads/slack";
+import { secret, sqlite } from "threadsai";
+import { host } from "@threadsai/host";
+import { slack } from "@threadsai/slack";
 
 export default host({
   store: sqlite(".threads"),
@@ -40,9 +40,9 @@ export default host({
 <Tab value="Python">
 
 ```python
-from threads import secret, sqlite
-from threads.host import host
-from threads.slack import slack
+from threadsai import secret, sqlite
+from threadsai.host import host
+from threadsai.slack import slack
 
 app = host(
     store=sqlite(".threads"),
@@ -91,7 +91,7 @@ app = host(
 </Field>
 
 <Callout>
-  In TypeScript `ceiling` takes a partial policy, for example `{ deny: ["bash"] }`. In Python it is a complete `Permissions` value from `threads.log`.
+  In TypeScript `ceiling` takes a partial policy, for example `{ deny: ["bash"] }`. In Python it is a complete `Permissions` value from `threadsai.log`.
 </Callout>
 
 ## Secrets

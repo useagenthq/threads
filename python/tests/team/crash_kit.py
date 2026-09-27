@@ -10,14 +10,14 @@ from pathlib import Path
 
 import pytest
 
-from threads import Agent, Principal, RunResult, Store, sqlite
-from threads.agents.run import RunOptions, execute
-from threads.agents.store import open_store
-from threads.log import BranchId, ThreadId
-from threads.result import Ok
-from threads.store import SqliteStore
-from threads.store.sql import text_of
-from threads.thread.handle import Thread
+from threadsai import Agent, Principal, RunResult, Store, sqlite
+from threadsai.agents.run import RunOptions, execute
+from threadsai.agents.store import open_store
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Ok
+from threadsai.store import SqliteStore
+from threadsai.store.sql import text_of
+from threadsai.thread.handle import Thread
 
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")
 

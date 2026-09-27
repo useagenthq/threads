@@ -12,14 +12,14 @@ from pathlib import Path
 
 from pg_kit import ENGINE, URL, admin, drop_schema, schema_url
 
-from threads.agents.store import Store, sqlite
-from threads.log import ParseError
-from threads.postgres.driver import PgConn, raw_connector
-from threads.postgres.opening import open_postgres
-from threads.postgres.placeholders import psycopg as rewrite
-from threads.result import Err, Ok
-from threads.store import SqliteStore
-from threads.store.conn import Cursor, Params
+from threadsai.agents.store import Store, sqlite
+from threadsai.log import ParseError
+from threadsai.postgres.driver import PgConn, raw_connector
+from threadsai.postgres.opening import open_postgres
+from threadsai.postgres.placeholders import psycopg as rewrite
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore
+from threadsai.store.conn import Cursor, Params
 
 type OnStatement = Callable[[str, Params], None]
 

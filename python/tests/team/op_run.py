@@ -9,22 +9,22 @@ from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 from team.vectors import Obj, agents, host_rules, obj, vector_mint
 
-from threads.agents.outcome import output_text
-from threads.log import MemberIdleEvent, MemberRef, Principal, ToolCallEvent, ToolResultEvent
-from threads.reduce.handlers import to_json
-from threads.result import Ok
-from threads.store import Draft, Writer
-from threads.store.writer import DecideTx, Refusal
-from threads.team.ask import AskPlan, ask, open_ask, reply
-from threads.team.batch import Batch
-from threads.team.call import CallContext, call_request, named
-from threads.team.cancel import cancel, request_cancel
-from threads.team.close import reader_of
-from threads.team.constants import TEAM_CONSTANTS
-from threads.team.consume import ConsumeContext, consume
-from threads.team.deadline import deadline
-from threads.team.dynamic import InvalidDefinition, Resolved, Template, resolve_definition
-from threads.team.operator import (
+from threadsai.agents.outcome import output_text
+from threadsai.log import MemberIdleEvent, MemberRef, Principal, ToolCallEvent, ToolResultEvent
+from threadsai.reduce.handlers import to_json
+from threadsai.result import Ok
+from threadsai.store import Draft, Writer
+from threadsai.store.writer import DecideTx, Refusal
+from threadsai.team.ask import AskPlan, ask, open_ask, reply
+from threadsai.team.batch import Batch
+from threadsai.team.call import CallContext, call_request, named
+from threadsai.team.cancel import cancel, request_cancel
+from threadsai.team.close import reader_of
+from threadsai.team.constants import TEAM_CONSTANTS
+from threadsai.team.consume import ConsumeContext, consume
+from threadsai.team.deadline import deadline
+from threadsai.team.dynamic import InvalidDefinition, Resolved, Template, resolve_definition
+from threadsai.team.operator import (
     OperatorContext,
     OperatorInput,
     OperatorOp,
@@ -32,14 +32,14 @@ from threads.team.operator import (
     open_operator,
     ref_target,
 )
-from threads.team.ops import StartPlan, TeamLimits, send, start
-from threads.team.provenance import turn_provenance
-from threads.team.request import Request
-from threads.team.rows import TeamRow, team_of_log
-from threads.team.settle import AppendContext, Completed, SettleContext, Settlement, settle
-from threads.team.supervise import RestartPolicy, SuperviseContext, supervise
-from threads.team.turn_failed import fail_turn
-from threads.team.watch import WaitMode, monitor, open_wait, wait, wait_members
+from threadsai.team.ops import StartPlan, TeamLimits, send, start
+from threadsai.team.provenance import turn_provenance
+from threadsai.team.request import Request
+from threadsai.team.rows import TeamRow, team_of_log
+from threadsai.team.settle import AppendContext, Completed, SettleContext, Settlement, settle
+from threadsai.team.supervise import RestartPolicy, SuperviseContext, supervise
+from threadsai.team.turn_failed import fail_turn
+from threadsai.team.watch import WaitMode, monitor, open_wait, wait, wait_members
 
 
 def _no_text(_text: str) -> JsonValue:

@@ -31,20 +31,20 @@ from team.team_kit import (
     stored,
 )
 
-from threads import sqlite
-from threads.agents.store import now_ms, open_store, scoped
-from threads.agents.team_units import take_mail
-from threads.log import BranchId, MemberEndedEvent, MemberStartedEvent
-from threads.result import Ok
-from threads.store import Draft, SqliteStore
-from threads.store.conn import Conn
-from threads.store.writer import DecideTx, Refusal
-from threads.team.batch import Batch
-from threads.team.host_team import host_team_ids
-from threads.team.provenance import turn_provenance
-from threads.team.rebuild import rebuild_team_index
-from threads.team.rows import ask_row, member_rows
-from threads.team.settle import SettleContext, settle
+from threadsai import sqlite
+from threadsai.agents.store import now_ms, open_store, scoped
+from threadsai.agents.team_units import take_mail
+from threadsai.log import BranchId, MemberEndedEvent, MemberStartedEvent
+from threadsai.result import Ok
+from threadsai.store import Draft, SqliteStore
+from threadsai.store.conn import Conn
+from threadsai.store.writer import DecideTx, Refusal
+from threadsai.team.batch import Batch
+from threadsai.team.host_team import host_team_ids
+from threadsai.team.provenance import turn_provenance
+from threadsai.team.rebuild import rebuild_team_index
+from threadsai.team.rows import ask_row, member_rows
+from threadsai.team.settle import SettleContext, settle
 
 TENANT = "acme"
 IDS = host_team_ids(TENANT)

@@ -1,4 +1,4 @@
-import { fenceHere, type Sinks } from "@threads/core/adapter";
+import { fenceHere, type Sinks } from "threadsai/adapter";
 
 // A session command's output, followed over the toolbox's WebSocket as the Daytona SDK reads it:
 // one byte stream where the markers 01 01 01 and 02 02 02 switch between stdout and stderr.

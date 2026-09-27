@@ -4,10 +4,10 @@ import asyncio
 from dataclasses import replace
 from pathlib import Path
 
-from threads.log import BranchId, ThreadId
-from threads.result import Err, Ok
-from threads.store import SqliteStore
-from threads.store.lease import TTL_MS
+from threadsai.log import BranchId, ThreadId
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore
+from threadsai.store.lease import TTL_MS
 
 ALPHA_THREAD = ThreadId("0192a000-0000-7000-8000-00000000000a")
 ALPHA = BranchId("0192b000-0000-7000-8000-00000000000a")

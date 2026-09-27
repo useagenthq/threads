@@ -8,7 +8,7 @@ import tempfile
 
 from pydantic import BaseModel, JsonValue
 
-from threads import (
+from threadsai import (
     CaseExpectation,
     RunContext,
     agent,
@@ -17,8 +17,8 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.log import Permissions
-from threads.result import Err
+from threadsai.log import Permissions
+from threadsai.result import Err
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 

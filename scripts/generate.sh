@@ -34,8 +34,8 @@ if [ -z "$py" ]; then
   exit 1
 fi
 
-mkdir -p python/src/threads/_generated typescript/packages/core/src/store/generated
-touch python/src/threads/_generated/__init__.py
+mkdir -p python/src/threadsai/_generated typescript/packages/core/src/store/generated
+touch python/src/threadsai/_generated/__init__.py
 "$py" spec/tools/gen_store_sql.py
 "$py" spec/tools/gen_model_catalogs.py
 "$py" spec/tools/gen_unicode_fold.py

@@ -9,11 +9,11 @@ import pytest
 from pydantic import JsonValue
 from tar_kit import chunkings, vector
 
-from threads.result import Err, Ok
-from threads.sandbox.tree.build import Owner, build_tar
-from threads.sandbox.tree.tar import CAPS, Caps, read_tar, store_tar
-from threads.sandbox.tree.tree import encode_tree, masked, parse_tree, tree_manifest_hash
-from threads.store.artifacts import MemoryArtifacts
+from threadsai.result import Err, Ok
+from threadsai.sandbox.tree.build import Owner, build_tar
+from threadsai.sandbox.tree.tar import CAPS, Caps, read_tar, store_tar
+from threadsai.sandbox.tree.tree import encode_tree, masked, parse_tree, tree_manifest_hash
+from threadsai.store.artifacts import MemoryArtifacts
 
 
 def _cases(name: str, key: str = "cases") -> list[dict[str, JsonValue]]:

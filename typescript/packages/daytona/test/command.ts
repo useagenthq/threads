@@ -1,4 +1,4 @@
-import type { Sinks, Started } from "@threads/core/adapter";
+import type { Sinks, Started } from "threadsai/adapter";
 import type { LogSocket } from "../src/logs";
 
 // One mocked session command: its output in Daytona's marked form (01 01 01 before stdout,

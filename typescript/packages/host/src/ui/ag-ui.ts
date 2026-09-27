@@ -3,7 +3,7 @@ import {
   canonicalize,
   type EventOf,
   type KnownEvent,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { RunFacts, Spawned } from "./facts";
 import type { Chunk } from "./frame";
 import {

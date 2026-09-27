@@ -1,4 +1,4 @@
-import type { ParkAddress } from "@threads/core/host";
+import type { ParkAddress } from "threadsai/host";
 import {
   type BranchId,
   type EventId,
@@ -10,7 +10,7 @@ import {
   runResult,
   type Thread,
   type ThreadId,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { z } from "zod";
 
 // host-api RunOutcome: RunResult as data, with ids where the library has a Thread handle. The

@@ -9,9 +9,9 @@ from collections.abc import Sequence
 
 from pydantic import JsonValue
 
-from threads import Completed, Failed, HandedOff, Thread, agent, scripted_model, sqlite
-from threads.agents.bindings import capped
-from threads.log import (
+from threadsai import Completed, Failed, HandedOff, Thread, agent, scripted_model, sqlite
+from threadsai.agents.bindings import capped
+from threadsai.log import (
     Budget,
     BudgetExceededEvent,
     Event,
@@ -30,9 +30,9 @@ from threads.log import (
     ToolSpec,
     UserInputEvent,
 )
-from threads.reduce import Fold
-from threads.result import Ok
-from threads.thread.handle import open_thread
+from threadsai.reduce import Fold
+from threadsai.result import Ok
+from threadsai.thread.handle import open_thread
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALICE = Principal(issuer="slack:T1", tenant="acme", subject="alice")

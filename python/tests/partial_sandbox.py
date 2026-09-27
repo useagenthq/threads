@@ -4,10 +4,10 @@
 from dataclasses import dataclass, replace
 from typing import Literal
 
-from threads.log import SnapshotData
-from threads.result import Err, Ok
-from threads.sandbox import FakeSandbox, LookupSupport, SandboxError, SandboxInfo, SandboxSession
-from threads.sandbox.protocol import Looked, SandboxContext
+from threadsai.log import SnapshotData
+from threadsai.result import Err, Ok
+from threadsai.sandbox import FakeSandbox, LookupSupport, SandboxError, SandboxInfo, SandboxSession
+from threadsai.sandbox.protocol import Looked, SandboxContext
 
 NEITHER = LookupSupport(create="none", snapshot="none")
 

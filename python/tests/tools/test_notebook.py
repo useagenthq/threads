@@ -5,8 +5,8 @@ import json
 
 from pydantic import JsonValue
 
-from threads.result import Err, Ok
-from threads.tools.notebook import Change, edit, render
+from threadsai.result import Err, Ok
+from threadsai.tools.notebook import Change, edit, render
 
 META: dict[str, JsonValue] = {"kernelspec": {"name": "python3"}}
 NB: dict[str, JsonValue] = {

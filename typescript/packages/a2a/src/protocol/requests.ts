@@ -1,4 +1,4 @@
-import { JsonObject } from "@threads/core/adapter";
+import { JsonObject } from "threadsai/adapter";
 import { z } from "zod";
 import { Message, Task, TaskState } from "./task";
 import type { Arr, Opt, Strict } from "./zod";

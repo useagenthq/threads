@@ -1,5 +1,5 @@
 {
-  "name": "@threads/coding",
+  "name": "@threadsai/coding",
   "version": "0.0.0",
   "license": "Apache-2.0",
   "type": "module",
@@ -7,9 +7,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@threads/anthropic": "workspace:*",
-    "@threads/core": "workspace:*",
-    "@threads/docker": "workspace:*",
+    "@threadsai/anthropic": "workspace:*",
+    "threadsai": "workspace:*",
+    "@threadsai/docker": "workspace:*",
     "zod": "^4.6.5"
   }
 }

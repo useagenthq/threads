@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 MODELS = ROOT / "spec" / "models"
-PYTHON = ROOT / "python" / "src" / "threads" / "_generated" / "model_catalogs.py"
+PYTHON = ROOT / "python" / "src" / "threadsai" / "_generated" / "model_catalogs.py"
 TYPESCRIPT = (
     ROOT / "typescript" / "packages" / "core" / "src" / "model" / "generated" / "catalogs.ts"
 )

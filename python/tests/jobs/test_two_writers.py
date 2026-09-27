@@ -19,7 +19,7 @@ from jobs.drill import (
 )
 from jobs.worker import rows
 
-from threads.log import UserInputEvent
+from threadsai.log import UserInputEvent
 
 pytestmark = pytest.mark.jobs
 

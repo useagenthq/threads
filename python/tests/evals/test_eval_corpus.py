@@ -9,13 +9,13 @@ from typing import Literal
 import pytest
 from pydantic import JsonValue, TypeAdapter
 
-from threads.agents.definition import DryPin
-from threads.evals.case_dir import case_names
-from threads.evals.compare import canonical
-from threads.evals.run import Plan, evals_of
-from threads.log import ThreadStartedData
-from threads.loop import guard
-from threads.reduce.handlers import to_json
+from threadsai.agents.definition import DryPin
+from threadsai.evals.case_dir import case_names
+from threadsai.evals.compare import canonical
+from threadsai.evals.run import Plan, evals_of
+from threadsai.log import ThreadStartedData
+from threadsai.loop import guard
+from threadsai.reduce.handlers import to_json
 
 ROOT = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "evals"
 _PINS = TypeAdapter[list[dict[str, JsonValue]]](list[dict[str, JsonValue]])

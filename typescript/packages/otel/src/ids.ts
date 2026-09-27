@@ -1,4 +1,4 @@
-import { sha256Hex } from "@threads/core/internal/feed";
+import { sha256Hex } from "threadsai/internal/feed";
 
 // Span and trace ids derived from the log (spec/otel/README.md, "Ids"): a re-send carries the
 // same ids, and both implementations derive the same ones.

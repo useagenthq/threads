@@ -7,14 +7,14 @@ from pathlib import Path
 
 from pydantic import BaseModel, JsonValue
 
-from threads import Agent, RunContext, Store, agent, scripted_model, tool
-from threads.agents.store import open_store
-from threads.log import BranchId, Permissions
-from threads.log.digest import sha256_hex
-from threads.result import Ok
-from threads.store.conn import Conn
-from threads.store.lines import head_line
-from threads.store.verify import verify_export
+from threadsai import Agent, RunContext, Store, agent, scripted_model, tool
+from threadsai.agents.store import open_store
+from threadsai.log import BranchId, Permissions
+from threadsai.log.digest import sha256_hex
+from threadsai.result import Ok
+from threadsai.store.conn import Conn
+from threadsai.store.lines import head_line
+from threadsai.store.verify import verify_export
 
 CASES = Path(__file__).resolve().parents[2] / "spec" / "otel" / "cases"
 NOW = 1_790_000_060_000

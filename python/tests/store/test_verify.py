@@ -6,12 +6,12 @@ from pathlib import Path
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from threads.log import BranchId
-from threads.log.digest import sha256_hex
-from threads.log.jcs import canonicalize
-from threads.result import Err, Ok
-from threads.store import SqliteStore, verify_export
-from threads.store.lines import head_line
+from threadsai.log import BranchId
+from threadsai.log.digest import sha256_hex
+from threadsai.log.jcs import canonicalize
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore, verify_export
+from threadsai.store.lines import head_line
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
 SIMPLE = (CASES / "reduce-simple-run" / "log.jsonl").read_bytes()

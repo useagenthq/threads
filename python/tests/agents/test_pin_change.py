@@ -4,7 +4,7 @@ continued."""
 
 from pydantic import JsonValue
 
-from threads.agents.pin_change import pin_change
+from threadsai.agents.pin_change import pin_change
 
 
 def _started(

@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from store.test_writer import CHILD, ROOT, T0, THREAD, run
 
-from threads.result import Err, Ok
-from threads.store import SqliteStore, verify_export
-from threads.store.conn import Conn
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore, verify_export
+from threadsai.store.conn import Conn
 
 
 def _roots(conn: Conn) -> list[tuple[object, ...]]:

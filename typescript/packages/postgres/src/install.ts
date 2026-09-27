@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
+import type pg from "pg";
 import {
   err,
   type LogError,
   logError,
   ok,
   type Result,
-} from "@threads/core/store-driver";
-import type pg from "pg";
+} from "threadsai/store-driver";
 import { z } from "zod";
 import { checkout, translated } from "./errors";
 import { STORE_SQL, STORE_VERSION } from "./generated/sql";

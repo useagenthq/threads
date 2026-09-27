@@ -12,7 +12,7 @@ from collections.abc import Sequence
 
 from pydantic import BaseModel, JsonValue
 
-from threads import (
+from threadsai import (
     Agent,
     CaseExpectation,
     Live,
@@ -23,8 +23,8 @@ from threads import (
     sqlite,
     tool,
 )
-from threads.log import Budget, Permissions
-from threads.result import Err
+from threadsai.log import Budget, Permissions
+from threadsai.result import Err
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 REFUSED = "Order 42 arrived 40 days ago, outside the 30-day refund window."

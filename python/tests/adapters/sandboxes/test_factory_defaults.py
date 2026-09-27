@@ -17,16 +17,16 @@ from modal_fake import TOKEN_ID, TOKEN_SECRET, FakeModal, harness
 from sandbox_backend import FakeBackend
 from sandbox_kit import OPEN
 
-from threads.adapters.loop_resources import holding
-from threads.adapters.sandboxes.docker import transport as docker_transport
-from threads.adapters.sandboxes.docker.sandbox import IMAGE
-from threads.adapters.sandboxes.e2b import sandbox as e2b_module
-from threads.agents.config import ConfigError
-from threads.daytona import daytona
-from threads.docker import docker
-from threads.e2b import e2b
-from threads.modal import modal
-from threads.result import Ok
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.sandboxes.docker import transport as docker_transport
+from threadsai.adapters.sandboxes.docker.sandbox import IMAGE
+from threadsai.adapters.sandboxes.e2b import sandbox as e2b_module
+from threadsai.agents.config import ConfigError
+from threadsai.daytona import daytona
+from threadsai.docker import docker
+from threadsai.e2b import e2b
+from threadsai.modal import modal
+from threadsai.result import Ok
 
 HOUR_MS = 3_600_000
 

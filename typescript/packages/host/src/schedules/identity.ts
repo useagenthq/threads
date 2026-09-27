@@ -8,7 +8,7 @@ import {
   ThreadId,
   type Tx,
   uuidv7,
-} from "@threads/core/host";
+} from "threadsai/host";
 import { pinMatches } from "../context";
 import {
   currentThread,

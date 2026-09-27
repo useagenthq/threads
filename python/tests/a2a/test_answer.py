@@ -18,8 +18,8 @@ from client_kit import (
     sent_id,
 )
 
-from threads.a2a.protocol import Answered, Faulted, call
-from threads.web.http import Response
+from threadsai.a2a.protocol import Answered, Faulted, call
+from threadsai.web.http import Response
 
 
 class TestAnAnswerHasToProveItAnswersUs:

@@ -1,4 +1,4 @@
-import { dryPinCases } from "@threads/adapter-testkit";
+import { dryPinCases } from "@threadsai/adapter-testkit";
 import { aiSdk } from "../src";
 import { fakeModel } from "./fake";
 

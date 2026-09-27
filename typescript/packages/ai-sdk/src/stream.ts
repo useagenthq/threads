@@ -3,13 +3,8 @@ import type {
   LanguageModelV4StreamPart,
   LanguageModelV4Usage,
 } from "@ai-sdk/provider";
-import type { ModelChunk, ModelContext, Usage } from "@threads/core/adapter";
-import {
-  JsonObject,
-  JsonValue,
-  OutputPart,
-  putJson,
-} from "@threads/core/adapter";
+import type { ModelChunk, ModelContext, Usage } from "threadsai/adapter";
+import { JsonObject, JsonValue, OutputPart, putJson } from "threadsai/adapter";
 import {
   METADATA_FORMAT,
   type PartMetadata,

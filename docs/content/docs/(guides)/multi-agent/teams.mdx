@@ -18,7 +18,7 @@ The lead starts one researcher and answers. When the researcher is done, the lea
 <Tab value="TypeScript">
 
 ```ts
-import { agent, scriptedModel, sqlite } from "@threads/core";
+import { agent, scriptedModel, sqlite } from "threadsai";
 
 const usage = { input_tokens: 10, output_tokens: 2 };
 const say = (text: string) => ({
@@ -67,7 +67,7 @@ import asyncio
 
 from pydantic import JsonValue
 
-from threads import Completed, agent, scripted_model, sqlite
+from threadsai import Completed, agent, scripted_model, sqlite
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 
@@ -149,7 +149,7 @@ The lead starts two researchers and waits for both before it answers. `wait` ret
 <Tab value="TypeScript">
 
 ```ts
-import { agent, scriptedModel, sqlite } from "@threads/core";
+import { agent, scriptedModel, sqlite } from "threadsai";
 
 const usage = { input_tokens: 10, output_tokens: 2 };
 const say = (text: string) => ({
@@ -203,7 +203,7 @@ import asyncio
 
 from pydantic import JsonValue
 
-from threads import Completed, agent, scripted_model, sqlite
+from threadsai import Completed, agent, scripted_model, sqlite
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 
@@ -401,8 +401,8 @@ Sometimes the lead knows best what help it needs. A dynamic agent lets its model
 <Tab value="TypeScript">
 
 ```ts
-import { anthropic } from "@threads/anthropic";
-import { agent, dynamicAgent, usd } from "@threads/core";
+import { anthropic } from "@threadsai/anthropic";
+import { agent, dynamicAgent, usd } from "threadsai";
 
 const specialist = dynamicAgent({
   name: "specialist",
@@ -424,8 +424,8 @@ const lead = agent({
 <Tab value="Python">
 
 ```python
-from threads import agent, dynamic_agent, usd
-from threads.anthropic import anthropic
+from threadsai import agent, dynamic_agent, usd
+from threadsai.anthropic import anthropic
 
 specialist = dynamic_agent(
     name="specialist",

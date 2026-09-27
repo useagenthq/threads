@@ -8,14 +8,14 @@ import pytest
 from pg_kit import Leg, need_postgres, schema_url
 from team.team_kit import TEAM, TENANT, add, case_logs, verified
 
-from threads.log import BranchId, Event, ThreadId
-from threads.postgres.opening import open_postgres
-from threads.result import Ok
-from threads.store import SqliteStore, StoreError
-from threads.store.appended import Appended
-from threads.store.conn import Conn
-from threads.team.rebuild import rebuild_team_index
-from threads.team.write import feed_rows
+from threadsai.log import BranchId, Event, ThreadId
+from threadsai.postgres.opening import open_postgres
+from threadsai.result import Ok
+from threadsai.store import SqliteStore, StoreError
+from threadsai.store.appended import Appended
+from threadsai.store.conn import Conn
+from threadsai.team.rebuild import rebuild_team_index
+from threadsai.team.write import feed_rows
 
 ROUNDS = 25
 

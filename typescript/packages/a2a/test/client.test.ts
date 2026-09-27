@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { WebTransport } from "@threads/core/adapter";
+import type { WebTransport } from "threadsai/adapter";
 import { call, fetchBytes } from "../src/protocol/client";
 import {
   answering,

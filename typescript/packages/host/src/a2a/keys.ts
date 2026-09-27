@@ -1,4 +1,4 @@
-import { PROVENANCE } from "@threads/a2a/protocol";
+import { PROVENANCE } from "@threadsai/a2a/protocol";
 import {
   canonicalize,
   derivedId,
@@ -10,7 +10,7 @@ import {
   principalKey,
   sha256Hex,
   type ThreadId,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { z } from "zod";
 
 // The receipt key, the context → thread derivation, and the ids the exposed side derives rather

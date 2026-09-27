@@ -16,10 +16,10 @@ from pydantic import BaseModel
 from team.run_kit import answers, reply_to, say
 from team.team_kit import assert_team_replays
 
-from threads import RunContext, agent, sqlite, tool
-from threads.agents.store import Store, open_store, scoped
-from threads.host.members import HostMemberOptions
-from threads.log import (
+from threadsai import RunContext, agent, sqlite, tool
+from threadsai.agents.store import Store, open_store, scoped
+from threadsai.host.members import HostMemberOptions
+from threadsai.log import (
     Event,
     ModelResponseEvent,
     TextPart,
@@ -27,12 +27,12 @@ from threads.log import (
     ToolResultEvent,
     TurnCompletedEvent,
 )
-from threads.team.host_team import host_team_ids
+from threadsai.team.host_team import host_team_ids
 
 if TYPE_CHECKING:
     from pydantic import JsonValue
 
-    from threads.agents.factory import Agent
+    from threadsai.agents.factory import Agent
 
 EXAMPLE = Path(__file__).resolve().parents[2] / "examples" / "host_members.py"
 INVOICES: dict[str, str] = {"INV-1001": "paid", "INV-1002": "overdue"}

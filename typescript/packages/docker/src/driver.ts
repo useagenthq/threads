@@ -3,7 +3,7 @@ import {
   type SandboxDriver,
   type Sinks,
   type Started,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { z } from "zod";
 import { createContainer, type Limits } from "./create";
 import { type Engine, failure } from "./engine";

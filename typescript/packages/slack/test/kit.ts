@@ -1,4 +1,4 @@
-import { type ChannelAdapter, secret } from "@threads/core/adapter";
+import { type ChannelAdapter, secret } from "threadsai/adapter";
 import { type SlackOptions, slack } from "../src";
 
 export const SIGNING = "test-signing-secret-value";

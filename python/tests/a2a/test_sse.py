@@ -8,7 +8,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator, Sequence
 
-from threads.a2a.protocol import MAX_FRAME_BYTES, SseEvent, SseRead, SseRefused, sse_events
+from threadsai.a2a.protocol import MAX_FRAME_BYTES, SseEvent, SseRead, SseRefused, sse_events
 
 
 def _read(chunks: Sequence[bytes]) -> list[SseRead]:

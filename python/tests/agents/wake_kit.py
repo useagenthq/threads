@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator, Mapping, Sequence
 
 from pydantic import JsonValue
 
-from threads import (
+from threadsai import (
     Agent,
     EventItem,
     ModelContext,
@@ -17,10 +17,10 @@ from threads import (
     agent,
     scripted_model,
 )
-from threads.log import Event, Principal, ToolResultLateEvent, TurnCompletedEvent, WokenEvent
-from threads.loop.model import ModelChunk
-from threads.loop.scripted import ScriptedModel
-from threads.result import Ok
+from threadsai.log import Event, Principal, ToolResultLateEvent, TurnCompletedEvent, WokenEvent
+from threadsai.loop.model import ModelChunk
+from threadsai.loop.scripted import ScriptedModel
+from threadsai.result import Ok
 
 USAGE: JsonValue = {"input_tokens": 10, "output_tokens": 2}
 ALICE = Principal(issuer="api", tenant="local", subject="alice")

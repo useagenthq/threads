@@ -1,4 +1,4 @@
-import type { ChannelAdapter } from "@threads/core";
+import type { ChannelAdapter } from "threadsai";
 import {
   type BranchId,
   correctionText,
@@ -9,7 +9,7 @@ import {
   storeConnection,
   ThreadId,
   type VerifiedLog,
-} from "@threads/core/host";
+} from "threadsai/host";
 import type { HostContext } from "./context";
 import { sendOp } from "./deliver";
 import { type Conversation, conversationOf } from "./inbox";

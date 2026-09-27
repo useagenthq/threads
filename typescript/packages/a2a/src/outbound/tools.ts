@@ -1,4 +1,4 @@
-import type { Tool } from "@threads/core";
+import type { Tool } from "threadsai";
 import {
   ConfigError,
   jsonSchema,
@@ -6,7 +6,7 @@ import {
   type ToolContext,
   type ToolImpl,
   type ToolSpec,
-} from "@threads/core/adapter";
+} from "threadsai/adapter";
 import { z } from "zod";
 import type { Remote } from "../a2a";
 import type { Sending } from "../protocol";

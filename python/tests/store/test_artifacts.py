@@ -3,8 +3,8 @@
 import hashlib
 from pathlib import Path
 
-from threads.result import Err, Ok
-from threads.store.artifacts import FileArtifacts, MemoryArtifacts
+from threadsai.result import Err, Ok
+from threadsai.store.artifacts import FileArtifacts, MemoryArtifacts
 
 DATA = b"dropped bytes"
 SHA = hashlib.sha256(DATA).hexdigest()

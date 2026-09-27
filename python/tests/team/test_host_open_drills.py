@@ -20,15 +20,15 @@ import pytest
 from team.crash_kit import CrashError, Point, crashing, reached
 from team.team_kit import assert_team_replays
 
-from threads import sqlite
-from threads.agents.store import now_ms, open_store, scoped
-from threads.log import MemberStartedEvent, TeamOpenedEvent
-from threads.result import Err, Ok
-from threads.store import SqliteStore
-from threads.store.conn import Conn
-from threads.store.sql import int_of
-from threads.team.host_open import ensure_host_team
-from threads.team.host_team import host_team_ids
+from threadsai import sqlite
+from threadsai.agents.store import now_ms, open_store, scoped
+from threadsai.log import MemberStartedEvent, TeamOpenedEvent
+from threadsai.result import Err, Ok
+from threadsai.store import SqliteStore
+from threadsai.store.conn import Conn
+from threadsai.store.sql import int_of
+from threadsai.team.host_open import ensure_host_team
+from threadsai.team.host_team import host_team_ids
 
 TENANT = "acme"
 IDS = host_team_ids(TENANT)

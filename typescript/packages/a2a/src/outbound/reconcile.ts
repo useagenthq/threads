@@ -1,4 +1,4 @@
-import type { LookupResult, ToolContext } from "@threads/core/adapter";
+import type { LookupResult, ToolContext } from "threadsai/adapter";
 import type { Remote } from "../a2a";
 import {
   call,

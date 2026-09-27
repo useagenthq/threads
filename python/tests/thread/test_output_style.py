@@ -8,19 +8,19 @@ import pytest
 from compact_kit import SUMMARY, body, logged, parked, requests, text
 from pydantic import JsonValue
 
-from threads import Completed, ConfigError, agent, scripted_model, sqlite
-from threads.agents.store import now_ms, open_store
-from threads.log import (
+from threadsai import Completed, ConfigError, agent, scripted_model, sqlite
+from threadsai.agents.store import now_ms, open_store
+from threadsai.log import (
     BranchId,
     CompactedEvent,
     InjectedEvent,
     ParseError,
 )
-from threads.result import Err, Ok
-from threads.store import Draft, ForkRequest
-from threads.store.lines import uuid7
-from threads.thread.control import LOCAL_OPERATOR
-from threads.thread.handle import Thread
+from threadsai.result import Err, Ok
+from threadsai.store import Draft, ForkRequest
+from threadsai.store.lines import uuid7
+from threadsai.thread.control import LOCAL_OPERATOR
+from threadsai.thread.handle import Thread
 
 OP = LOCAL_OPERATOR
 STYLES = {"concise": "Answer in at most three sentences.", "plain": "Reply as usual."}

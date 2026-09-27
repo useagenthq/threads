@@ -4,11 +4,11 @@ decision TypeScript's authorize makes (test/agent/authorize-call-spec.test.ts)."
 
 from corpus import CASES, own
 
-from threads.agents.bindings import authorize
-from threads.log import CallId
-from threads.reduce.fold import call_spec
-from threads.result import Ok
-from threads.store import verify_export
+from threadsai.agents.bindings import authorize
+from threadsai.log import CallId
+from threadsai.reduce.fold import call_spec
+from threadsai.result import Ok
+from threadsai.store import verify_export
 
 CASE = CASES / "recover-removed-tool-call-not-executed"
 NOW = 1_790_000_060_000

@@ -17,14 +17,14 @@ from team.team_kit import (
 )
 from thread.rewrite_log import rewrite_log
 
-from threads.agents.store import Store, open_store
-from threads.log import BranchId, Cost, ParseError
-from threads.result import Err, Ok
-from threads.store import ForkRequest
-from threads.team.members import PENDING, open_member, team_members
-from threads.team.rebuild import rebuild_team_index
-from threads.thread.read import read_log
-from threads.thread.usage import tree_cost
+from threadsai.agents.store import Store, open_store
+from threadsai.log import BranchId, Cost, ParseError
+from threadsai.result import Err, Ok
+from threadsai.store import ForkRequest
+from threadsai.team.members import PENDING, open_member, team_members
+from threadsai.team.rebuild import rebuild_team_index
+from threadsai.thread.read import read_log
+from threadsai.thread.usage import tree_cost
 
 POLICY: JsonValue = {
     "currency": "USD",

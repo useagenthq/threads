@@ -25,20 +25,20 @@ from sandbox_backend import FakeBackend
 from sandbox_deadline_kit import LIMITS
 from sandbox_kit import OPEN
 
-from threads import Completed, agent, scripted_model, sqlite
-from threads.adapters import loop_resources
-from threads.adapters.loop_resources import holding
-from threads.adapters.models.anthropic import model as anthropic_model
-from threads.adapters.sandboxes.daytona import DaytonaSandbox
-from threads.adapters.sandboxes.e2b.envd import Envd, Transports
-from threads.adapters.sandboxes.modal.sandbox import SERVER_URL
-from threads.adapters.sandboxes.posix import collect
-from threads.anthropic import anthropic
-from threads.modal import modal
-from threads.result import Err, Ok
-from threads.sandbox import Command, run_exec
-from threads.sandbox import exec as sandbox_exec
-from threads.store import SqliteStore
+from threadsai import Completed, agent, scripted_model, sqlite
+from threadsai.adapters import loop_resources
+from threadsai.adapters.loop_resources import holding
+from threadsai.adapters.models.anthropic import model as anthropic_model
+from threadsai.adapters.sandboxes.daytona import DaytonaSandbox
+from threadsai.adapters.sandboxes.e2b.envd import Envd, Transports
+from threadsai.adapters.sandboxes.modal.sandbox import SERVER_URL
+from threadsai.adapters.sandboxes.posix import collect
+from threadsai.anthropic import anthropic
+from threadsai.modal import modal
+from threadsai.result import Err, Ok
+from threadsai.sandbox import Command, run_exec
+from threadsai.sandbox import exec as sandbox_exec
+from threadsai.store import SqliteStore
 
 
 class Envds:
@@ -118,7 +118,7 @@ def test_an_e2b_close_goes_on_past_a_failing_sandbox_close(
             for key in ("k1", "k2"):
                 assert isinstance(await box.create(key, OPEN), Ok)
 
-    with caplog.at_level(logging.WARNING, "threads"):
+    with caplog.at_level(logging.WARNING, "threadsai"):
         asyncio.run(main())
     assert len(envds.closed) == len(envds.opened)
     assert _closed(made[0])

@@ -11,10 +11,10 @@ import pytest
 from hook_kit import Box, decisions, kinds, run, text, use
 from pydantic import JsonValue
 
-from threads import Completed, ConfigError, Failed, RunContext, agent, scripted_model, sqlite
-from threads.agents.store import open_store
-from threads.hooks.extension import extension
-from threads.hooks.types import (
+from threadsai import Completed, ConfigError, Failed, RunContext, agent, scripted_model, sqlite
+from threadsai.agents.store import open_store
+from threadsai.hooks.extension import extension
+from threadsai.hooks.types import (
     InputDecision,
     ModelGate,
     ResponseGate,
@@ -22,17 +22,17 @@ from threads.hooks.types import (
     StopGate,
     ToolGate,
 )
-from threads.log import (
+from threadsai.log import (
     HookDecisionEvent,
     ModelResponseData,
     ToolCallData,
     ToolResultData,
     UserInputData,
 )
-from threads.log.jcs import canonicalize
-from threads.loop.gates import MAX_RETRIES, MAX_STOP_CONTINUES
-from threads.reduce.state import ReducedState
-from threads.result import Ok
+from threadsai.log.jcs import canonicalize
+from threadsai.loop.gates import MAX_RETRIES, MAX_STOP_CONTINUES
+from threadsai.reduce.state import ReducedState
+from threadsai.result import Ok
 
 LATE_S = 0.15
 """The 50 ms deadline plus slack, under the late hook's 200 ms cleanup: never awaited."""

@@ -9,8 +9,8 @@ import pytest
 from jobs.drill import acked, expire_leases, finish, kill, log, sends, spawn, wait_at
 from jobs.worker import rows
 
-from threads.log import ChannelDeliveryEvent, EffectCommitEvent, UserInputEvent
-from threads.reduce import Fold
+from threadsai.log import ChannelDeliveryEvent, EffectCommitEvent, UserInputEvent
+from threadsai.reduce import Fold
 
 pytestmark = pytest.mark.jobs
 

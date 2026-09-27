@@ -1,5 +1,5 @@
 import { describe, expect } from "bun:test";
-import { StoreError } from "@threads/core/store-driver";
+import { StoreError } from "threadsai/store-driver";
 import { ok } from "../../core/src/result";
 import { LogStore, memoryArtifacts } from "../../core/src/store";
 import { openBunSqlite } from "../../core/src/store/bun-sqlite";
