@@ -39,6 +39,7 @@ touch python/src/threads/_generated/__init__.py
 "$py" spec/tools/gen_store_sql.py
 "$py" spec/tools/gen_model_catalogs.py
 "$py" spec/tools/gen_unicode_fold.py
+"$py" spec/tools/gen_limits.py
 if [ "$target" != "py" ]; then
   "$py" spec/tools/gen_api_surface.py
 fi

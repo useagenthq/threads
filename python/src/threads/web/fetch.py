@@ -6,13 +6,12 @@ from dataclasses import dataclass
 from typing import Final
 from urllib.parse import urljoin
 
+from threads._generated.limits import WEB_FETCH_MAX_BYTES
 from threads.result import Err, Ok
 from threads.web.guard import Resolve, origin, vet
 from threads.web.http import Fence, Request, Transport, WebError
 
 MAX_REDIRECTS: Final = 5
-MAX_BYTES: Final = 10 << 20
-"""ponytail: a page past 10 MiB is cut there; stream to the artifact store if that bites."""
 _REDIRECTS: Final = frozenset({301, 302, 303, 307, 308})
 
 
@@ -44,7 +43,7 @@ async def get(
         if isinstance(target, Err):
             return target
         request = Request("GET", {"Accept": "text/html, text/markdown, text/plain, */*;q=0.5"})
-        sent = await transport.send(target.value, request, fence, MAX_BYTES)
+        sent = await transport.send(target.value, request, fence, WEB_FETCH_MAX_BYTES)
         if isinstance(sent, Err):
             return sent
         response = sent.value

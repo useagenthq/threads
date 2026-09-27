@@ -95,6 +95,7 @@ from . import (
     ui_vectors,
     wake_bars,
     wakes,
+    web_fetch_cap,
     workspace_exclude,
 )
 from .common import CASES, STAGED, STAGED_PHASE_2_DIR, sha
@@ -301,6 +302,7 @@ def _write_all(
     questions.write()
     ui_vectors.write()
     pos_int_vector.write()
+    web_fetch_cap.write()
     coding_preset.write()
     eval_vectors.write()
     eval_simulate_vectors.write()
@@ -337,6 +339,7 @@ def main() -> int:
             problems += anthropic_requests.check() + dynamic.check()
             problems += tool_search_vectors.check() + e2b_wire.check()
             problems += ui_vectors.check() + tar_vectors.check() + pos_int_vector.check()
+            problems += web_fetch_cap.check()
             problems += workspace_exclude.check() + coding_preset.check()
         for p in problems:
             print(f"coverage.json: {p}")

@@ -3,6 +3,7 @@ import type { ToolContext, ToolRun } from "../loop/types";
 import { containsSecret, redactBytes } from "../redact";
 import { type Builtin, builtin, done } from "./builtin";
 import { WebFetchInput } from "./gateway-inputs";
+import { WEB_FETCH_MAX_BYTES } from "./generated/limits";
 import { htmlTitle, htmlToMarkdown } from "./html";
 import { liveTransport, vet, type WebTransport } from "./web-transport";
 
@@ -12,7 +13,6 @@ import { liveTransport, vet, type WebTransport } from "./web-transport";
 // result records the final URL, status and content hash, and cites the fetched artifact.
 
 const MAX_REDIRECTS = 5;
-const MAX_BYTES = 5 << 20;
 /** Text the model sees inline; the whole page stays readable with read_tool_result. */
 const PART_CHARS = 16_384;
 const TIMEOUT_MS = 30_000;
@@ -25,14 +25,14 @@ async function body(res: Response): Promise<Uint8Array> {
   if (reader === undefined) return new Uint8Array(0);
   const parts: Uint8Array[] = [];
   let total = 0;
-  while (total < MAX_BYTES) {
+  while (total < WEB_FETCH_MAX_BYTES) {
     const { done: end, value } = await reader.read();
     if (end) break;
     parts.push(value);
     total += value.length;
   }
   await reader.cancel();
-  const out = new Uint8Array(Math.min(total, MAX_BYTES));
+  const out = new Uint8Array(Math.min(total, WEB_FETCH_MAX_BYTES));
   let at = 0;
   for (const part of parts) {
     out.set(part.subarray(0, out.length - at), at);

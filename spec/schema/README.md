@@ -658,6 +658,12 @@ Every write to the store, and the rule it follows:
 
 Text a tool server or provider chose reaches the model only inside the untrusted wrapper (`<reference source=... untrusted="true">`, escaped as in Render v1), never as bare tool-result text. This covers an MCP result, an MCP JSON-RPC error (`error <code>: <message>`), a memory or knowledge provider's ids and versions, and a web page. An MCP JSON-RPC error is final (the server answered), except `-32001` (request timeout) and `-32000` (connection closed), which leave the outcome unknown. An HTTP transport status (408 included) is never read as a JSON-RPC code.
 
+## Shared limits
+
+`limits.json` holds the numeric limits both implementations must share, and `spec/tools/gen_limits.py` generates them into each language, so neither writes one in code: the same number in two files agrees only until someone changes one.
+
+- `web_fetch.max_bytes` (5 MiB) is where a response is cut. It is the truncation boundary, so it decides the cited artifact's bytes and the content hash the result records: with two caps, the same URL hashes differently in each language and no conformance or replay guarantee over fetched content holds. Shared vector: `spec/conformance/vectors/web-fetch-cap.json`, which pins the boundary and the hash of the kept bytes; each suite checks its own generated constant against the vector, then fetches each case through its own transport.
+
 ## SSRF guard
 
 `web_fetch`, and forge calls to a configured `api_url`, connect only to public unicast addresses: every resolved address is checked, and the connection goes to a checked one. Shared vector: `spec/conformance/vectors/ssrf.json`. Both guards must give its expected answer for every entry.

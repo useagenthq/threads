@@ -1,0 +1,7 @@
+{
+  "description": "Numeric limits both implementations must share. spec/tools/gen_limits.py generates them into each language, so neither writes one in code: the same number in two files is the same number only until someone changes one, which is how web_fetch came to cut at 5 MiB in TypeScript and 10 MiB in Python. A limit that decides what a run records belongs here. Each `doc` becomes one line of generated source, so it stays under 90 characters; the reasoning goes in README.md.",
+  "web_fetch": {
+    "max_bytes": 5242880,
+    "doc": "Most response bytes web_fetch keeps: the truncation boundary, so it fixes the hash."
+  }
+}
