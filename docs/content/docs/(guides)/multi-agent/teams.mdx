@@ -4,7 +4,7 @@ description: A lead agent starts members from the agents its team lists, message
 icon: Users
 ---
 
-import { History, Network, Wallet } from "lucide-react";
+import { Building2, History, Network, Wallet } from "lucide-react";
 
 Give an agent a `team` and it becomes a lead. Its model can start members from the agents the team lists, send them messages, ask them questions, wait for them and cancel them. Each member runs in its own thread with its own model and tools. When a member finishes its task, the lead wakes up with the result and carries on, so `run()` returns the lead's answer after its members have reported.
 
@@ -464,6 +464,10 @@ Your code keeps the rest: permissions, approvals, hooks, skills, memory, the san
 - **The written text is guidance, not a boundary.** It helps the specialist do the right job; the tools, permissions and budgets are what limit it.
 - **Teams only.** A dynamic agent can't be a subagent or a handoff target, and it can't start members of its own.
 
+## A team with no lead
+
+A team belongs to its lead and closes when the lead's run ends. An agent you want one of per tenant — always there, reachable from every conversation — is a **host member** instead: `host({members})` runs it in the tenant's leadless host team, and any thread may send to it or ask it by name. See [Host members](/docs/multi-agent/host-members).
+
 ## The subagent task board
 
 Agents with `subagents` share a simpler task board: `team_task_create`, `team_task_claim`, `team_task_update` and `send_message`, recorded in the lead's log. It is separate from `team` and the two don't share anything. See [Subagents](/docs/multi-agent/subagents).
@@ -473,6 +477,9 @@ Agents with `subagents` share a simpler task board: `team_task_create`, `team_ta
 <Cards>
   <Card title="Subagents" icon={<Network />} href="/docs/multi-agent/subagents">
     Start a helper for one task and get its result back as a tool result.
+  </Card>
+  <Card title="Host members" icon={<Building2 />} href="/docs/multi-agent/host-members">
+    One long-lived agent per tenant, shared by every conversation.
   </Card>
   <Card title="Budgets" icon={<Wallet />} href="/docs/control/budgets">
     Limit what a run, a thread and everything under it may spend.

@@ -24,6 +24,7 @@
     "multi-agent/subagents",
     "multi-agent/handoffs",
     "multi-agent/teams",
+    "multi-agent/host-members",
     "---[Box]Sandboxes---",
     "sandboxes/overview",
     "sandboxes/docker",

@@ -1,0 +1,289 @@
+---
+title: Host members
+description: One long-lived agent per tenant, shared by every conversation, that any thread may ask by name.
+icon: Building2
+---
+
+import { History, Users, Wallet } from "lucide-react";
+
+A [team](/docs/multi-agent/teams) belongs to its lead: the lead starts its members, and when the lead's run ends the team closes. Some agents shouldn't work that way. A billing expert, a policy checker, a triage desk — you want one of those per tenant, always there, reachable from every conversation, not a fresh copy started by whoever happens to need it.
+
+That is a **host member**. You name it in `host({members})` and the host runs it as one long-lived member of the tenant's **host team**: a team with no lead that never closes. Any thread of that tenant can send to it or ask it by name, as your `messagePolicy` allows.
+
+<Callout type="warn">
+A host member is shared by every conversation in the tenant, **its history included**. It is a service, not a user's assistant. Work that belongs to one person belongs in a member the lead starts, or in the thread itself.
+</Callout>
+
+## A host member and a caller
+
+`support` answers customers and knows nothing about invoices. `billing` does, and runs as a host member. The one `messagePolicy` rule that allows `ask` is the only thing that connects them.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+import { anthropic } from "@threads/anthropic";
+import { agent, sqlite, tool, usd } from "@threads/core";
+import { type Host, host } from "@threads/host";
+import { z } from "zod";
+
+const INVOICES: ReadonlyMap<string, string> = new Map([
+  ["INV-1001", "paid"],
+  ["INV-1002", "overdue"],
+]);
+
+// read_only, so billing needs no approvers: a shared member that could stop for a human
+// would hold every other conversation's mail until someone answered.
+const invoiceStatus = tool({
+  name: "invoice_status",
+  description: "Look up an invoice's status by id, e.g. INV-1001.",
+  input: z.object({ id: z.string().regex(/^INV-\d{4}$/) }),
+  runs: "host",
+  effect: "read_only",
+  execute: async ({ id }) => INVOICES.get(id) ?? "unknown invoice",
+});
+
+const sonnet = anthropic("claude-sonnet-5", { maxTokens: 2048 });
+
+const billing = agent({
+  name: "billing",
+  instructions: "Answer invoice questions with invoice_status. Answer asks with reply.",
+  model: sonnet,
+  tools: [invoiceStatus],
+});
+
+const support = agent({
+  name: "support",
+  instructions: "Help customers. For invoice questions, ask billing.",
+  model: sonnet,
+});
+
+const app: Host = host({
+  store: sqlite(".threads"),
+  agents: { support, billing },
+  // billing runs as one member of the tenant's host team, which never closes.
+  members: { billing: { restart: "on_failure", maxRestarts: 3, withinMs: 60_000 } },
+  messagePolicy: [
+    { from: "support", to: "billing", allow: ["ask"], budget: { max_cost_nanos: usd(0.5) } },
+  ],
+});
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from pydantic import BaseModel, Field
+
+from threads import RunContext, agent, sqlite, tool, usd
+from threads.anthropic import anthropic
+from threads.host import host
+from threads.host.members import HostMemberOptions
+from threads.log import Budget
+
+INVOICES: dict[str, str] = {"INV-1001": "paid", "INV-1002": "overdue"}
+
+
+class InvoiceInput(BaseModel):
+    id: str = Field(pattern=r"^INV-\d{4}$")
+
+
+async def invoice_status_body(args: InvoiceInput, ctx: RunContext[None]) -> str:
+    return INVOICES.get(args.id, "unknown invoice")
+
+
+invoice_status = tool(
+    name="invoice_status",
+    description="Look up an invoice's status by id, e.g. INV-1001.",
+    input=InvoiceInput,
+    runs="host",
+    # read_only, so billing needs no approvers: a shared member that could stop for a human
+    # would hold every other conversation's mail until someone answered.
+    effect="read_only",
+    execute=invoice_status_body,
+)
+
+sonnet = anthropic("claude-sonnet-5", max_tokens=2048)
+
+billing = agent(
+    name="billing",
+    instructions="Answer invoice questions with invoice_status. Answer asks with reply.",
+    model=sonnet,
+    tools=[invoice_status],
+)
+support = agent(
+    name="support",
+    instructions="Help customers. For invoice questions, ask billing.",
+    model=sonnet,
+)
+
+app = host(
+    store=sqlite(".threads"),
+    agents={"support": support, "billing": billing},
+    # One billing per tenant, in a leadless host team that never closes.
+    members={"billing": HostMemberOptions(restart="on_failure", max_restarts=3, within_ms=60_000)},
+    message_policy=[
+        {
+            "from": "support",
+            "to": "billing",
+            "allow": ["ask"],
+            "budget": Budget(max_cost_nanos=usd(0.50)),
+        },
+    ],
+)
+```
+
+</Tab>
+</Tabs>
+
+A `support` run asks `billing`, parks until the answer comes back, and carries on. `support` never runs `invoice_status`: its one tool result is the text `billing` replied with.
+
+The full versions of both files, with a Slack channel attached, ship in the repository as `typescript/examples/host-members.ts` and `python/examples/host_members.py`. Both are covered by a test that runs the whole exchange on a scripted model, offline.
+
+## Host teams are not lead teams
+
+| | A lead's team | The host team |
+|---|---|---|
+| Who starts members | The lead's model, with `start` | `host({members})`, on its own |
+| Lifetime | Closes when the lead's run ends | Never closes; one per tenant |
+| Lead | The agent that declares `team` | None |
+| Members' history | Per member, per task | One history per tenant, shared by every conversation |
+| Who may message whom | The team's own grant, which `messagePolicy` adds to | **No grant at all** — only a `messagePolicy` rule allows anything |
+| Reached over HTTP | `GET /v1/teams/{team}/events` | No route; the host team is `404` |
+
+The host team's ids are derived from the tenant, so every process computes the same ones and opening it is idempotent. The host opens it when it becomes ready, and lazily on the first `Host.team` or the first caller that reaches it.
+
+## Callers
+
+A **caller** is any thread of the tenant that is in no team at all. It needs no `team` and no special setup: give its agent a rule that targets a host member and its model gets that team tool.
+
+- A caller is addressed as `{caller: {thread_id, branch_id, agent}}` and renders to a model as `from="<agent>"`.
+- Every host team message carries a provenance principal of its tenant, so one tenant's caller can never reach another tenant's host member.
+- A caller holds no generation of its own. It addresses a host member by name and binds whichever generation is current when the call is read.
+
+In the example, `support` is a caller. Because the only rule with `support` as `from` allows `ask`, `ask` is the only team tool its model is given. `billing`'s own pin gets `reply` and nothing else: no rule has `billing` as `from`.
+
+## messagePolicy decides everything here
+
+Every team operation is decided in the same order:
+
+1. **The team's grant.** In a lead's team, members may send to, ask and monitor each other; the lead may start.
+2. **The host's `messagePolicy` rules**, which only ever *add* to the grant.
+3. **Default deny.**
+
+A host team has no grant, so step 1 never fires for a caller or a host member. Every such operation is decided by a rule or denied. The decision is recorded either way, as `message_policy_decided`, with `source: "message_policy"` and the rule's `{from, to}`, or `source: "default"` for a denial.
+
+Two rules follow from that:
+
+- **A rule with a host member on either side may allow only `send` and `ask`.** Nothing else starts, monitors or cancels a host member — `host({members})` starts it and `Host.team` stops it — and a host member leads no team, so it has nothing of its own to start. A rule that allowed `start` would also make it a lead, which is exactly what refusing a host member with a `team` prevents. Anything else in `allow` is refused at setup.
+- **A model only gets the team tools its rules allow.** An agent with no rule as `from` gets no team tools at all.
+
+A rule's `budget` caps the turn that a `send` or `ask` to a host member opens, reserved under the budget id `hop:<member branch_id>:<turn opener event_id>`. Going over is `budget_exceeded` with `scope: hop`, and it ends only that turn. A host member reserves nothing against the caller's thread budget; the caller pays through its run budget.
+
+## When a turn fails
+
+A host member is shared, so one bad turn must not take the member down with it.
+
+- **A failed turn ends only the turn.** The member goes back to `idle` and keeps its last completed result. Each ask that turn took and never answered closes `failed`, carrying the reason — a model error, `max_turns`, `context_exhausted`, `budget_exhausted` and so on.
+- **When the same append ends the member** — its own thread budget, or a rebind that failed mid-turn — the end bounces each ask that turn had taken with the code `member_ended`, in the same append. The asker closes at once rather than waiting out its deadline.
+
+A host member ends only on its own thread budget, a failed rebind, or a cancel.
+
+## Supervision
+
+`HostMemberOptions` says how the host supervises one member. Every end gets exactly one `supervisor_decided` in the host team log, whatever the policy says.
+
+| Option | Default | What it does |
+|---|---|---|
+| `restart` / `restart` | `"on_failure"` | `"on_failure"` restarts after an end that **failed**. `"never"` always stops. |
+| `maxRestarts` / `max_restarts` | `3` | At most this many restarts inside the window. One more is a stop. |
+| `withinMs` / `within_ms` | `60000` | The sliding window, in milliseconds. At least `1000`. |
+
+A restart happens only when all three hold: the policy is `on_failure`, the window holds fewer restarts than the cap, and **that end was `failed`**. A member ends `failed` on one thing only: a failed rebind, where the agent's definition no longer produces the `config_hash` its thread was started with. An end by `budget_exhausted` or `cancelled` never restarts.
+
+A restart is Erlang-style, not a resume:
+
+- It starts the **next generation in a new thread with empty history**. Nothing the old generation said carries over.
+- It re-pins the agent **as the host holds it now**, so a definition you changed and re-registered is picked up by the restart. That is what makes a restart a recovery rather than a repeat of the same failure.
+- Past the cap, the decision is `stop`, and a stop is **final**. Nothing restarts the member until an operator asks for it.
+
+## Operating one
+
+`Host.team` hands you the tenant's host team. It has no HTTP route, so only your own trusted code reaches it.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+const opened = await app.team({ principal });
+if (opened.ok) {
+  const team = opened.value;
+  for (const m of await team.members()) console.log(m.name, m.state);
+
+  // Start the next generation of a member the supervisor stopped. No task: a host member has none.
+  await team.start("billing");
+
+  // The operator's explicit stop. The member ends cancelled, and a cancel never restarts.
+  const [billing] = (await team.members()).filter((m) => m.name === "billing");
+  if (billing) await team.cancel(billing.ref);
+}
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+from threads.result import Err, Ok
+
+match await app.team(principal=principal):
+    case Ok(team):
+        for m in await team.members():
+            print(m.name, m.state)
+
+        # Start the next generation of a member the supervisor stopped. A host member takes no task.
+        await team.start("billing")
+
+        # The operator's explicit stop. The member ends cancelled, and a cancel never restarts.
+        billing = next(m for m in await team.members() if m.name == "billing")
+        await team.cancel(billing.ref)
+    case Err(error):
+        print(error.code, error.message)  # not_found: this host has no members option
+```
+
+</Tab>
+</Tabs>
+
+A host member's name *is* its agent's name, so `start("billing")` and `cancel` need nothing you have to look up first. `start` is refused `forbidden` for anything that is not a host member the supervisor stopped — a live generation, or one it restarted itself. `Host.team` answers `not_found` when the host has no `members` option.
+
+`team.events()` reads the host team's audit feed, so every start, every policy decision and every `supervisor_decided` is there to replay.
+
+## What setup refuses
+
+`host()` checks all of this synchronously and throws a `ConfigError` before anything is stored. Each message names `members.<name>` or the rule it is about.
+
+| What | Code |
+|---|---|
+| `members` names an agent this host doesn't define | `invalid_config` |
+| The agent has a `team` of its own — a host member leads none | `invalid_config` |
+| The agent lists `handoffs` — a host member can't hand off | `handoff_in_team` |
+| The agent turns compaction off — a host member never ends, so its context has to be compacted | `invalid_config` |
+| The agent has a tool that can need approval, or can ask its user, but no `approvers` | `invalid_config` |
+| `maxRestarts` or `withinMs` is not a positive integer | `invalid_config` |
+| `withinMs` is below `1000` | `invalid_config` |
+| A `messagePolicy` rule with a host member on either side allows anything but `send` and `ask` | `invalid_config` |
+
+The approvers rule is the one that catches people out. A host member's turn that parks — for an approval, for `ask_user`, for an effect in doubt — holds **every other conversation's mail** until it resumes. Keeping a shared member read-only is the easy answer; giving it approvers is the other one.
+
+## Related
+
+<Cards>
+  <Card title="Teams" icon={<Users />} href="/docs/multi-agent/teams">
+    A lead starts members, messages them and wakes up when each one finishes.
+  </Card>
+  <Card title="Budgets" icon={<Wallet />} href="/docs/control/budgets">
+    Limit what a run, a thread and everything under it may spend.
+  </Card>
+  <Card title="Timeline" icon={<History />} href="/docs/evals/timeline">
+    Read everything the host team recorded, step by step.
+  </Card>
+</Cards>
