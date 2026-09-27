@@ -27,7 +27,10 @@ export async function parkNotice(
     (m) => m.kind === "task",
   );
   const team = await teamRow(ctx.tx, row.team_id);
+  const { provenance } = ctx;
   if (task === undefined || team === undefined) return;
+  // A park belongs to the turn that parked: only a settlement with no turn has no provenance.
+  if (provenance === undefined) throw new Error("a park belongs to a turn");
   ctx.batch.add(
     sent({
       mail_id: `${ctx.branchId}:${ctx.batch.nextId()}`,
@@ -35,7 +38,7 @@ export async function parkNotice(
       team: row.team_id,
       from: refOf(team, row),
       to: await addressOf(ctx.tx, row.team_id, task.watcher_branch_id),
-      provenance: ctx.provenance,
+      provenance,
       causal: { thread_id: ctx.threadId, event_id: parked.eventId },
       monitor_id: task.monitor_id,
       reason: parked.reason,

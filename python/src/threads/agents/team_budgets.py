@@ -133,11 +133,15 @@ async def _configured(sq: SqliteStore, row: MemberRow) -> _Recipient | None:
     ancestors are read here."""
     config = await sq.get_artifact(row.config_hash)
     team = await sq.run(lambda c: team_row(c, row.team_id))
-    lead = None if team is None else await sq.root(ThreadId(team.lead_thread_id))
-    if isinstance(config, Err) or team is None or lead is None or isinstance(lead, Err):
+    if isinstance(config, Err) or team is None:
         return None
-    at = (team.lead_thread_id, lead.value)
-    return _Pinned.model_validate_json(config.value), at, ()
+    pinned = _Pinned.model_validate_json(config.value)
+    if team.lead_thread_id is None:  # a host member reserves against no ancestor thread budget
+        return pinned, None, ()
+    lead = await sq.root(ThreadId(team.lead_thread_id))
+    if isinstance(lead, Err):
+        return None
+    return pinned, (team.lead_thread_id, lead.value), ()
 
 
 def run_covering(sq: SqliteStore) -> Callable[[Event], Awaitable[Covering | None]]:

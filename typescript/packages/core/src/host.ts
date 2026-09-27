@@ -3,6 +3,7 @@
 export { dryPin } from "./agent/dry-pin";
 export { InvalidCursorError } from "./agent/errors";
 export type { HostRunner, NewThreadPin } from "./agent/hosted";
+export type { DryPin, MemberEntry } from "./agent/registry";
 export { hostRunner } from "./agent/registry";
 export {
   endedRun,
@@ -25,19 +26,25 @@ export {
   teamEvents,
 } from "./agent/team/feed";
 export type {
+  Team,
   TeamCursor,
   TeamItem,
   TeamSource,
 } from "./agent/team/handle-types";
+export { hostTeam } from "./agent/team/host-team-handle";
 export {
   type HostedTeam,
+  type HostTeam,
   hostedTeams,
+  hostTeams,
+  pendingCallers,
   type TeamLead,
   teamLeadOf,
   teamWorkerFor,
 } from "./agent/team/hosted";
 export { renewTeam } from "./agent/team/runtime";
 export { leaseFree } from "./agent/team/scan";
+export { onTeamLog } from "./agent/team/team-log";
 export { takeMail } from "./agent/team/units";
 export type { TeamWorker } from "./agent/team/worker";
 export { assertNever } from "./assert-never";
@@ -73,6 +80,7 @@ export {
   TeamId,
   ThreadId,
   ThreadStartedData,
+  type ToolSpec,
   Uuid,
 } from "./log";
 export { dueQuestions } from "./loop/questions";
@@ -108,13 +116,19 @@ export {
 export { uuidv7 } from "./store/encode";
 export { dueQuestionBranches } from "./store/questions";
 export { sweepArtifacts } from "./store/retention";
-export { parseRows } from "./store/tables";
+export { LOCAL_TENANT, parseRows } from "./store/tables";
 export { inputText, UI_RECEIPT, uiBodyHash } from "./store/ui-receipts";
 export { pendingWakes, wakeBranches } from "./store/wakes";
 export { claimMail } from "./team/claim";
 export { TEAM_CONSTANTS } from "./team/constants";
+export {
+  ensureHostTeam,
+  type HostMemberStart,
+  type OnTeamLog,
+} from "./team/host-open";
+export { type HostTeamIds, hostTeamIds } from "./team/host-team";
 export { checkMessagePolicy, rulesFrom } from "./team/policy";
-export { pendingHere } from "./team/rows";
+export { memberRows, pendingHere } from "./team/rows";
 export { bindTelemetry } from "./telemetry";
 export { cancelChildren } from "./thread/cancel";
 export { type Alongside, control, resumed } from "./thread/control";

@@ -1,0 +1,19 @@
+---
+title: "HostMemberOptions"
+description: "How the host supervises one host member (the members option)."
+icon: "Braces"
+---
+
+## Fields
+
+<Field name="restart" type={"\"on_failure\" | \"never\""} default={"on_failure"}>
+  on_failure restarts the member after it ends failed (a failed rebind; a caller's turn failure never ends it). An end by its own budget, a lifetime cap, or a cancel never restarts. Every end gets one supervisor_decided.
+</Field>
+
+<Field name="maxRestarts / max_restarts" type={"Int"} default={"3"}>
+  At most this many restarts within within_ms; one more stops the member until an operator starts it (Host.team).
+</Field>
+
+<Field name="withinMs / within_ms" type={"Int"} default={"60000"}>
+  The sliding window of max_restarts, at least 1000 (less is refused at setup, invalid_config).
+</Field>

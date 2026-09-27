@@ -8,6 +8,7 @@ import type {
   TeamId,
   ThreadId,
 } from "../log";
+import { bounce, replyToCaller } from "./cross-bounce";
 import { block, type Define, KEPT_TOOLS } from "./dynamic";
 import { sameJson } from "./json";
 
@@ -32,7 +33,7 @@ export type CrossFailure = {
 type Parent = EventOf<"member_started">["data"]["parent"];
 
 /** What the rule reads across the logs. */
-type Facts = {
+export type Facts = {
   /** Every message_sent envelope, by mail id. */
   readonly sent: ReadonlyMap<string, MailEnvelope>;
   /** Each member thread's parent, as its member_started names it. */
@@ -43,16 +44,18 @@ type Facts = {
   readonly teamLogs: ReadonlyMap<string, TeamLogRef>;
   /** Each dynamic member thread's define and its starter's name (rule 46). */
   readonly defined: ReadonlyMap<string, Defined>;
+  /** Each host member thread's member_started, by thread (rule 43, Phase 2). */
+  readonly hostStarts: ReadonlyMap<string, EventOf<"member_started">["data"]>;
 };
 
 type Defined = { readonly define: Define; readonly starter: string };
 
 type TeamLogRef = { readonly thread: string; readonly branch: string };
 
-const TEAM_LOG = "team_log";
+export const TEAM_LOG = "team_log";
 const member = (team: TeamId, name: string, generation: number): string =>
   `${team}/${name}/${generation}`;
-// A caller (Phase 2) speaks for no log of a Phase 1 team: its mail is refused before this rule.
+/** A caller (Teams Phase 2) speaks for its own branch, in no team. */
 const caller = (c: { readonly branch_id: string }): string =>
   `caller/${c.branch_id}`;
 
@@ -65,6 +68,7 @@ function facts(logs: readonly TeamLogEvents[]): Facts {
     ),
     teamLogs: new Map<string, TeamLogRef>(),
     defined: new Map<string, Defined>(),
+    hostStarts: new Map<string, EventOf<"member_started">["data"]>(),
   };
   for (const log of logs) {
     // The starter a block names: operator in a team log, else the log's own agent.
@@ -83,6 +87,7 @@ function learn(
     readonly identities: Map<string, Set<string>>;
     readonly teamLogs: Map<string, TeamLogRef>;
     readonly defined: Map<string, Defined>;
+    readonly hostStarts: Map<string, EventOf<"member_started">["data"]>;
   },
   log: TeamLogEvents,
   e: KnownEvent,
@@ -92,12 +97,21 @@ function learn(
   if (e.type === "message_sent")
     known.sent.set(e.data.envelope.mail_id, e.data.envelope);
   else if (e.type === "team_opened") own?.add(TEAM_LOG);
-  else if (e.type === "thread_started" && e.data.team !== undefined) {
-    const { id, log_thread_id, log_branch_id } = e.data.team;
-    own?.add(member(id, e.data.agent_name, 1));
-    known.teamLogs.set(id, { thread: log_thread_id, branch: log_branch_id });
+  else if (e.type === "thread_started") {
+    // Any thread can be a caller of its tenant's host team (Phase 2): it speaks for its branch.
+    own?.add(caller({ branch_id: log.branchId }));
+    const named = e.data.team;
+    if (named !== undefined) {
+      own?.add(member(named.id, e.data.agent_name, 1));
+      known.teamLogs.set(named.id, {
+        thread: named.log_thread_id,
+        branch: named.log_branch_id,
+      });
+    }
   } else if (e.type === "member_started") {
     const m = e.data.member;
+    if (e.data.host_member !== undefined)
+      known.hostStarts.set(e.data.thread_id, e.data);
     known.parents.set(e.data.thread_id, e.data.parent);
     if (e.data.define !== undefined)
       known.defined.set(e.data.thread_id, { define: e.data.define, starter });
@@ -207,6 +221,7 @@ function memberPin(
   log: TeamLogEvents,
   known: Facts,
 ): string | undefined {
+  if (e.data.host_member !== undefined) return hostMemberThread(e, known);
   const parent = known.parents.get(log.threadId);
   if (parent !== undefined && !sameJson(e.data.parent ?? null, parent))
     return "a member's parent is not its member_started's";
@@ -232,6 +247,26 @@ function pinnedAsDefined(
     e.data.instructions.endsWith(block(starter, written))
     ? undefined
     : "46: a dynamic member's instructions don't end with its define's block";
+}
+
+/**
+ * Rule 43 (Phase 2): a host member's thread_started names the member_started that started it, in
+ * the host team's log. Reference: spec/tools/fixtures/ref_host_cross.py::host_member_thread.
+ */
+function hostMemberThread(
+  e: EventOf<"thread_started">,
+  known: Facts,
+): string | undefined {
+  const hm = e.data.host_member;
+  const started = known.hostStarts.get(e.thread_id);
+  if (hm === undefined || started === undefined) return undefined;
+  const same =
+    started.member.team === hm.team &&
+    started.member.name === hm.name &&
+    started.member.generation === hm.generation;
+  return same
+    ? undefined
+    : "a host member's thread is not its member_started's";
 }
 
 /** A team log is the thread and branch its lead's thread_started.team names. */
@@ -279,27 +314,6 @@ function sent(
         ? caller(env.from.caller)
         : member(env.from.team, env.from.name, env.from.generation);
   if (!own.has(from)) return "a mail is not in the log `from` names";
-  return env.kind === "bounce" ? bounce(env, log, known) : undefined;
-}
-
-/** A bounce's causal is its refuser's mail_refused; it names an ask exactly when it refused one. */
-function bounce(
-  env: MailEnvelope,
-  log: TeamLogEvents,
-  known: Facts,
-): string | undefined {
-  const refusal = log.events.find((e) => e.event_id === env.causal.event_id);
-  if (refusal?.type !== "mail_refused")
-    return "a bounce's causal is not its mail_refused";
-  const refused = known.sent.get(refusal.data.mail_id);
-  if (refused === undefined) return undefined;
-  if (!sameJson(env.provenance, refused.provenance))
-    return "a bounce's provenance is not its refused mail's";
-  if (refused.kind !== "ask")
-    return env.ask_id === undefined
-      ? undefined
-      : "only an ask's bounce names an ask";
-  return env.ask_id === refused.ask_id && env.result !== undefined
-    ? undefined
-    : "an ask's bounce must name the ask and carry the result";
+  if (env.kind === "bounce") return bounce(env, log, known);
+  return replyToCaller(env, known);
 }

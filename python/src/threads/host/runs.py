@@ -8,7 +8,7 @@ in flight is one task per branch; a resume starts one only when none is in fligh
 
 import asyncio
 import contextlib
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from weakref import WeakKeyDictionary
 
@@ -21,6 +21,7 @@ from threads.agents.store import Store, open_store, scoped
 from threads.host.channel import ChannelAdapter
 from threads.host.deliver import deliver, undelivered
 from threads.host.emit import Emit
+from threads.host.pinned import pinned_agent, reachable
 from threads.host.policy import ruled
 from threads.host.send import Conversation, SendServer
 from threads.host.ui.hub import LiveHub
@@ -31,13 +32,12 @@ from threads.log import (
     Permissions,
     Principal,
     ThreadId,
-    ThreadStartedEvent,
     UserInputEvent,
 )
 from threads.reduce.fold import loop_parked
 from threads.result import Ok
 from threads.secrets import resolve
-from threads.store import SqliteStore, StoreError
+from threads.store import StoreError
 from threads.team.policy import MessagePolicyRule
 from threads.thread import tree
 from threads.thread.authority import Checked
@@ -69,13 +69,14 @@ class Bound:
 
 
 class Runner:
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917 - the host's options the runner binds
         self,
         root: Store,
         agents: Mapping[str, Agent[None, object]],
         channels: Mapping[str, ChannelAdapter],
         ceiling: Permissions | None = None,
         message_policy: Sequence[MessagePolicyRule] = (),
+        members: Collection[str] = (),
     ) -> None:
         self._root = root
         self._ceiling = ceiling
@@ -83,7 +84,7 @@ class Runner:
         # Every agent runs under the host's rules: they decide its team calls, give it its team
         # tools and, with a start rule, make it a lead (lane 29C). One definition per host, so a
         # thread's pin and its continuations see the same rules.
-        self._defs = ruled(agents, message_policy)
+        self._defs = ruled(agents, message_policy, members)
         # A thread a host answers for (a channel conversation, an API call) is offered ask_user.
         self._answering = {k: replace(d, answerer=True) for k, d in self._defs.items()}
         self._channels = channels
@@ -112,6 +113,14 @@ class Runner:
         """Each branch's latest failure in this process: a run that failed with nothing in the
         log to say so (a refusal, an unavailable model) is answered from here. Every other
         outcome is read from the log."""
+
+    def definition(self, name: str) -> Definition[None]:
+        """A host agent's definition as this host binds it: under the host's rules (lane 29C),
+        which is the only handle a host member's outbound calls are decided through (29D)."""
+        found = self._defs.get(name)
+        if found is None:
+            raise KeyError(f"this host defines no agent {name}")
+        return found
 
     def store(self, tenant: str) -> Store:
         """The tenant's view of the host store, one per tenant."""
@@ -150,11 +159,11 @@ class Runner:
                 adapter, conversation.address, credentials, conversation.installation_id
             )
             # After a handoff the conversation's thread runs the target the channel agent names.
-            pinned = await _pinned(sq, thread_id)
+            pinned = await pinned_agent(sq, thread_id)
             base = self.bound_to(adapter.agent, answerer=pinned is None or pinned[1]).definition
-            found = base if pinned is None else _named(base, pinned[0])
+            found = base if pinned is None else reachable(base, pinned[0])
             return None if found is None else Bound(found, to)
-        pinned = await _pinned(sq, thread_id)
+        pinned = await pinned_agent(sq, thread_id)
         name = None if pinned is None else pinned[0]
         key = next((k for k, a in self._agents.items() if a.definition.name == name), None)
         return None if key is None or pinned is None else self.bound_to(key, answerer=pinned[1])
@@ -373,24 +382,3 @@ class Runner:
             for task in tasks:
                 task.cancel()
             await asyncio.wait(tasks)
-
-
-async def _pinned(sq: SqliteStore, thread_id: ThreadId) -> tuple[str, bool] | None:
-    """The agent a thread pinned at its start, and whether it pinned ask_user; None before it
-    started."""
-    root = await sq.root(thread_id)
-    read = None if not isinstance(root, Ok) else await sq.read(root.value, 0)
-    if read is None or not isinstance(read, Ok):
-        return None
-    events = read.value.fold.events
-    started = next((e for e in events if isinstance(e, ThreadStartedEvent)), None)
-    if started is None:
-        return None
-    return started.data.agent_name, any(t.name == "ask_user" for t in started.data.tools)
-
-
-def _named(definition: Definition[None], name: str) -> Definition[None] | None:
-    """The agent, or a handoff target reachable from it, with this name."""
-    if definition.name == name:
-        return definition
-    return next((d for h in definition.handoffs if (d := _named(h, name)) is not None), None)

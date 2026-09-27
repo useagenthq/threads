@@ -60,6 +60,12 @@ export async function pinnedOrLater<T>(
   }
 }
 
+/** The roles a team worker drives: a started member, and a host team's own (Teams Phase 2). */
+export const WORKED: ReadonlySet<MemberRow["role"]> = new Set([
+  "member",
+  "host_member",
+]);
+
 export async function closed(db: StoreDriver, team: string): Promise<boolean> {
   const row = await reading(db, (tx) => teamRow(tx, team));
   return (row?.closed_at ?? null) !== null;
@@ -74,7 +80,11 @@ export async function teamsUnder(
   for (let i = 0; i < teams.length; i += 1) {
     const [rows, all] = await reading(db, async (tx) => [
       await memberRows(tx, teams[i] ?? ""),
-      await tx.all("SELECT lead_thread_id, team_id FROM teams"),
+      // A host team (Phase 2) is leadless, so no member leads it and its null lead is not a row
+      // this walk can follow.
+      await tx.all(
+        "SELECT lead_thread_id, team_id FROM teams WHERE lead_thread_id IS NOT NULL",
+      ),
     ]);
     const members = rows.map((r) => r.thread_id);
     const led = z

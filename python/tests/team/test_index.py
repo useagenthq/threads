@@ -12,11 +12,13 @@ from team.team_kit import (
     TEAM,
     appendable,
     case_logs,
+    deleted_callers,
     index_rows,
     rebuild_all,
     rechain,
     stored,
     team_cases,
+    tombstone,
     verified,
 )
 
@@ -48,6 +50,7 @@ def test_rebuild_equals_the_reference_fold(case: str) -> None:
 
     async def main() -> dict[str, JsonValue]:
         store = await stored(case_logs(case))
+        await tombstone(store, deleted_callers(CASES / case))
         await rebuild_all(store, case_logs(case))
         return await store.run(index_rows)
 
@@ -71,6 +74,7 @@ def test_append_time_writes_equal_the_rebuild(case: str) -> None:
             team_log = TeamLog(fold.thread_id, branch)
             queues.append((team_log, list(fold.events), turn_openers(log.value)))
         await store.run(lambda c: _append_all(c, queues))
+        await tombstone(store, deleted_callers(CASES / case))
         written = await store.run(index_rows)
         await rebuild_all(store, case_logs(case))
         rebuilt = await store.run(index_rows)

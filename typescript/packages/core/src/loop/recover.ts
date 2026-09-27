@@ -73,14 +73,15 @@ export async function recover(s: Session): Promise<Halt | undefined> {
 }
 
 /**
- * A question settled (answered or expired) since the last request: the turn waited for it, and the
- * loop sends the answer on, so nothing was interrupted.
+ * A park resumed since the last request: the turn waited on it, and the loop sends what came back
+ * on, so nothing was interrupted. Any address counts — a question answered or expired, a team ask
+ * answered, failed or bounced, a wait finished, a child settled. The park is what stopped the
+ * turn, so a `resumed` after the last request always leaves the loop work to send (lane 29D: a
+ * caller's ask that the host's tick answered after the run that parked had ended).
  */
 function answeredSinceRequest(s: Session): boolean {
   const request = s.events.findLastIndex((e) => e.type === "model_request");
-  return s.events
-    .slice(request + 1)
-    .some((e) => e.type === "resumed" && e.data.address.kind === "input");
+  return s.events.slice(request + 1).some((e) => e.type === "resumed");
 }
 
 /** A cancel_requested in the open turn that no cancelled has answered yet. */

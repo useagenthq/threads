@@ -1,7 +1,9 @@
-"""Teams Phase 2 before its build (spec/conformance/README.md, "Staged cases"): every case under
-staged-phase-2 is a valid case whose lines all pass the line schema, and a reader refuses each
-Phase 2 form as unsupported_critical_event, never reducing it as ordinary work. The same checks as
-TypeScript's test/log/phase2-wire.test.ts."""
+"""Teams Phase 2 before the rest of its build (spec/conformance/README.md, "Staged cases"):
+every case still under staged-phase-2 is a valid case whose lines all pass the line schema, and
+a reader refuses its unbuilt form as unsupported_critical_event, never reducing it as ordinary
+work. Since lane 29D that form is supervision's (rule 51): `supervisor_decided`, and the
+`member_started{restart_of}` that follows a decision. The same checks as TypeScript's
+test/log/phase2-wire.test.ts."""
 
 import json
 from pathlib import Path
@@ -37,18 +39,13 @@ def test_a_phase_2_case_is_valid_its_lines_parse_and_its_forms_are_refused(case:
     assert REFUSED in codes
 
 
-LOGS = STAGED / "host-caller-ask-answered" / "logs"
+LOGS = STAGED / "host-supervisor-restart" / "logs"
 
 
-def test_the_host_team_log_is_refused_at_its_host_team_opened() -> None:
-    assert _read(LOGS / "team.jsonl") == (REFUSED, 1)
+def test_a_host_team_log_reads_up_to_its_first_supervisor_decision() -> None:
+    """Its team_opened{kind: host} and its first member_started{host_member} are lane 29D's."""
+    assert _read(LOGS / "team.jsonl") == (REFUSED, 3)
 
 
-def test_a_host_members_log_is_refused_at_its_host_member_thread_started() -> None:
-    assert _read(LOGS / "billing.jsonl") == (REFUSED, 1)
-
-
-def test_a_callers_log_reads_up_to_its_first_caller_mail() -> None:
-    lines = (LOGS / "support.jsonl").read_text(encoding="utf-8").splitlines()
-    sent = next(i for i, line in enumerate(lines) if '"type":"message_sent"' in line)
-    assert _read(LOGS / "support.jsonl") == (REFUSED, sent)
+def test_a_host_members_log_reads_whole() -> None:
+    assert _read(LOGS / "billing.jsonl") == ("ok", 0)

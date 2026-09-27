@@ -1,6 +1,6 @@
 import { TEAM_CONSTANTS } from "../../team/constants";
 import { type HandleEnv, leadOf } from "./operator-request";
-import { agentsOf } from "./runtime";
+import { agentsOf, memberEntries } from "./runtime";
 import { TeamWorker } from "./worker";
 
 // team.ask and team.wait wait for the team log's outcome (spec/schema/README.md, "Teams", the
@@ -19,13 +19,19 @@ export async function drive<T>(
 ): Promise<T> {
   const first = await outcome();
   if (first !== undefined) return first;
-  const { deferTools } = await leadOf(env.log, env.ref.id);
+  // A host team is leadless: its members rebind against the host's registry, and there is no
+  // lead whose defer_tools they inherit.
+  const lead = env.lead;
+  const deferTools =
+    lead === undefined
+      ? undefined
+      : (await leadOf(env.log, env.ref.id)).deferTools;
   const worker = new TeamWorker({
     store: env.store,
     log: env.log,
     artifacts: env.artifacts,
     team: env.ref.id,
-    agents: agentsOf(env.lead.team ?? []),
+    agents: env.agents ?? memberEntries(agentsOf(lead?.team ?? [])),
     ...(env.mint === undefined ? {} : { mint: env.mint }),
     ...(deferTools === undefined ? {} : { deferTools }),
   });

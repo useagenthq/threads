@@ -6,7 +6,7 @@ Teams contract.
 
 import copy
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from pydantic import JsonValue, TypeAdapter
@@ -22,6 +22,7 @@ from threads.log import (
     MessageSentEvent,
     OperatorRequestEvent,
     ParseError,
+    TeamOpenedEvent,
     ThreadId,
     ThreadStartedEvent,
     UserInputEvent,
@@ -32,6 +33,7 @@ from threads.result import Err, Ok
 from threads.store import SqliteStore, VerifiedLog, sql, verify_export
 from threads.store.conn import Conn
 from threads.team.cross import TeamLogEvents, check_team_logs
+from threads.team.host_logs import prune_caller_rows
 from threads.team.rebuild import rebuild_team_index, team_branches
 
 CASES = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "cases"
@@ -179,11 +181,15 @@ async def rebuild_all(store: SqliteStore, logs: Mapping[str, bytes]) -> None:
 
 
 def teams_of(logs: Mapping[str, bytes]) -> dict[str, str]:
-    """Every team a lead among the logs names, with that lead's label."""
+    """Every team the logs name, with the label of the log that names it: a lead's own log, or
+    for a leadless host team (Teams Phase 2) its team log."""
     out: dict[str, str] = {}
     for label, raw in logs.items():
         read = verified(raw)
         assert isinstance(read, Ok), label
+        first = next(iter(read.value.fold.events), None)
+        if isinstance(first, TeamOpenedEvent) and first.data.kind == "host":
+            out[first.data.team] = label
         started = next(
             (e for e in read.value.fold.events if isinstance(e, ThreadStartedEvent)), None
         )
@@ -208,7 +214,9 @@ def appendable(conn: Conn, e: Event) -> bool:
     if isinstance(e, MessageReceivedEvent | UserInputEvent | MailRefusedEvent):
         mail = e.data.mail_id
         return mail is MISSING or _exists(conn, "SELECT 1 FROM mail WHERE mail_id = ?", mail)
-    if isinstance(e, ThreadStartedEvent) and e.data.parent is not MISSING:
+    if isinstance(e, ThreadStartedEvent) and (
+        e.data.parent is not MISSING or e.data.host_member is not MISSING
+    ):
         return _exists(conn, "SELECT 1 FROM team_members WHERE thread_id = ?", e.thread_id)
     if isinstance(e, MessageSentEvent) and e.data.envelope.monitor_id is not MISSING:
         monitor = e.data.envelope.monitor_id
@@ -242,3 +250,28 @@ async def assert_team_replays(store: SqliteStore, team: str) -> None:
     live = await store.run(index_rows)
     assert await rebuild_team_index(store, team) == Ok(None)
     assert await store.run(index_rows) == live
+
+
+def deleted_callers(case: Path) -> list[ThreadId]:
+    """`input.deleted` of a team case: caller threads the case's delete already tombstoned."""
+    inputs = json.loads((case / "case.json").read_text())["input"]
+    return [ThreadId(str(t)) for t in inputs.get("deleted", [])]
+
+
+async def tombstone(store: SqliteStore, threads: Sequence[ThreadId]) -> None:
+    """Records the case's deleted callers as its delete left them: a tombstone each, and their
+    host-team mail and asks rows gone (Teams Phase 2, R29-1)."""
+    if not threads:
+        return
+    tenant = store.tables.tenant_id
+
+    def write(conn: Conn) -> None:
+        for thread in threads:
+            conn.execute(
+                "INSERT INTO tombstones (thread_id, tenant_id, deleted_at) VALUES (?, ?, 0)"
+                " ON CONFLICT DO NOTHING",
+                (thread, tenant),
+            )
+        prune_caller_rows(conn, threads)
+
+    await store.run(write)

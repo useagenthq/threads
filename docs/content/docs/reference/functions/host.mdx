@@ -21,6 +21,7 @@ function host(options: {
   schedules?: readonly Schedule[];
   authenticate?: (request: Request) => Promise<Principal | null>;
   messagePolicy?: readonly MessagePolicyRule[];
+  members?: Record<string, HostMemberOptions>;
 }): Host
 ```
 
@@ -38,6 +39,7 @@ def host(
     schedules: Sequence[Schedule] = (),
     authenticate: Callable[[starlette.requests.Request], Awaitable[Principal | None]] | None = None,
     message_policy: Sequence[MessagePolicyRule] = (),
+    members: Mapping[str, HostMemberOptions] = {},
 ) -> Host
 ```
 
@@ -80,6 +82,10 @@ def host(
 
 <Field name="messagePolicy / message_policy" type={"readonly MessagePolicyRule[]"} default={"[]"}>
   Rules that let one host agent start, send to, ask, monitor or cancel another beyond what a team grants (wait is decided as monitor). They decide after a team's grant and before default deny, for every op of every sender, and only add. Each (from, to) pair appears once (a repeat is refused at setup with duplicate_name), so a logged decision names its rule by from and to. A from or to that names no host agent is refused at setup (invalid_config); so is an empty allow, a rule to a host member that allows start, monitor or cancel, and a rule between host members that allows anything but send or ask (invalid_config, naming the rule). An agent gets the team tools only for the ops some rule with it as from allows. A rule that allows start makes its from a lead; one whose rules target only host members makes it a caller, in no team. Default []: everything else is denied. Every decision is logged as message_policy_decided.
+</Field>
+
+<Field name="members" type={"Record<string, HostMemberOptions>"} default={"{}"}>
+  Host agents that run as one long-lived member per tenant, keyed by agent name. A host member is shared by every conversation in the tenant, its history included, so user-private work belongs in a started member instead. Every thread of the tenant may address one by its name, as messagePolicy allows. One turn that parks it (an approval, ask_user, an effect in doubt) holds every other conversation's mail until it resumes, so keep effectful tools off shared members. A restart starts a new thread with empty history. A caller's turn failure ends only that turn, and each unanswered ask closes failed. When the turn ends the member instead (its own lifetime budget, a failed rebind), the asks that turn took stay open until their deadline. A host member with handoffs is refused at setup (handoff_in_team, naming members.&lt;name>). So is one with team, whose context policy turns compaction off, or with a tool that can need approval (or ask_user) but no approvers (invalid_config, naming members.&lt;name>; for approvers: "a host member is shared by every conversation in the tenant, so its approvals need approvers; add approvers to agent '&lt;name>'"). Default &#123;&#125;: none.
 </Field>
 
 ## Returns

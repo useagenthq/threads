@@ -71,7 +71,13 @@ async def settled(rt: Runtime, drafts: Sequence[Draft]) -> Appended:
         batch = Batch(tx.fold.seq, tx.now, team.mint)
         provenance = turn_provenance(tx.conn, tx.fold.events)
         ctx = SettleContext(
-            tx.conn, batch, _thread(rt), rt.writer.branch_id, provenance, lambda _t: big
+            tx.conn,
+            batch,
+            _thread(rt),
+            rt.writer.branch_id,
+            provenance,
+            lambda _t: big,
+            tuple(tx.fold.host.turn_asks),
         )
         parked = any(isinstance(e, ParkedEvent) for e in tx.fold.events)
         for d in kept:
@@ -138,7 +144,15 @@ async def _end_cancelled(rt: Runtime) -> Halt | None:
         provenance = turn_provenance(ctx.conn, ctx.fold.events)
         if provenance is None:
             raise AssertionError("a member's task opened a turn")
-        at = SettleContext(ctx.conn, ctx.batch, ctx.thread_id, ctx.branch_id, provenance, _no_put)
+        at = SettleContext(
+            ctx.conn,
+            ctx.batch,
+            ctx.thread_id,
+            ctx.branch_id,
+            provenance,
+            _no_put,
+            tuple(ctx.fold.host.turn_asks),
+        )
         settle(at, {"status": "cancelled"})
 
     return await _decided(rt, ended)

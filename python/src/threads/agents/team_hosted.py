@@ -3,6 +3,7 @@ Phase 2, "The host is a team worker"): the teams to drive, and a worker for one 
 calls the store operations lane 21 built; this adds none. Mirrors TypeScript's
 agent/team/hosted.ts."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from threads.agents.definition import Definition
@@ -10,7 +11,7 @@ from threads.agents.run import member_runner
 from threads.agents.store import Store
 from threads.agents.team_check import agents_of
 from threads.agents.team_worker import TeamWorker, WorkerEnv
-from threads.agents.teams import member_pin
+from threads.agents.teams import host_member_pin, member_pin
 from threads.store import SqliteStore
 from threads.store.conn import Conn
 from threads.store.sql import text_of
@@ -18,13 +19,23 @@ from threads.store.sql import text_of
 
 @dataclass(frozen=True, slots=True)
 class HostedTeam:
-    """An open team a host drives, with the lead it wakes (design §2.7.2)."""
+    """An open lead team a host drives, with the lead it wakes (design §2.7.2)."""
 
     team_id: str
     tenant_id: str
     lead_thread_id: str
     lead_branch_id: str | None
     """None until the lead's first append; its worker has nothing to drive until then."""
+
+
+@dataclass(frozen=True, slots=True)
+class HostTeamRow:
+    """A tenant's host team (Teams Phase 2). It has no lead, so nothing here binds one and
+    nothing wakes one: only its members are driven, and its callers are woken by their own
+    pending mail."""
+
+    team_id: str
+    tenant_id: str
 
 
 _TEAMS = """
@@ -37,9 +48,15 @@ _TEAMS = """
 """
 
 
+_HOST_TEAMS = """
+    SELECT team_id, tenant_id FROM teams
+     WHERE kind = 'host' AND closed_at IS NULL ORDER BY team_id
+"""
+
+
 def hosted_teams(conn: Conn) -> list[HostedTeam]:
-    """Every open team a host drives: the roots, whose lead is in no other team. A nested lead is
-    a member of its parent's team, and that team's worker drives it (members_under)."""
+    """Every open lead team a host drives: the roots, whose lead is in no other team. A nested
+    lead is a member of its parent's team, and that team's worker drives it (members_under)."""
     rows = conn.execute(_TEAMS).fetchall()
     return [
         HostedTeam(
@@ -50,6 +67,24 @@ def hosted_teams(conn: Conn) -> list[HostedTeam]:
         )
         for team, tenant, thread, branch in rows
     ]
+
+
+def host_teams(conn: Conn) -> list[HostTeamRow]:
+    """Every tenant's host team (Teams Phase 2), a listing of its own: it joins no lead row,
+    because a host team has none."""
+    rows = conn.execute(_HOST_TEAMS).fetchall()
+    return [HostTeamRow(text_of(team), text_of(tenant)) for team, tenant in rows]
+
+
+def host_worker_for(
+    store: Store, sq: SqliteStore, team: HostTeamRow, agents: Mapping[str, Definition[None]]
+) -> TeamWorker:
+    """A host team's worker: its members come from the host's own registry, pinned as host
+    members, since a host team has no lead to bind or inherit from."""
+    env = WorkerEnv(
+        store, sq, lambda: team.team_id, dict(agents), host_member_pin, member_runner(store)
+    )
+    return TeamWorker(env)
 
 
 def team_worker_for(

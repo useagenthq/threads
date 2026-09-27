@@ -13,10 +13,12 @@ import {
   type Envelope,
   type PutText,
   refused,
+  replyAddress,
   sent,
 } from "./mail";
 import {
   type MemberRow,
+  mailEnvelope,
   memberRows,
   monitorsOn,
   openAsks,
@@ -53,9 +55,19 @@ export type AppendContext = {
 
 /** What a settling append reads besides: the turn it closes, and where big text goes. */
 export type SettleContext = AppendContext & {
-  /** The provenance of the turn the settlement closes: its notifications belong to it. */
-  readonly provenance: Provenance;
+  /**
+   * The provenance of the turn the settlement closes: its notifications belong to it. Undefined
+   * only where there is no turn — a host member whose rebind failed at materialize, which has no
+   * monitor to notify either (Phase 2).
+   */
+  readonly provenance: Provenance | undefined;
   readonly put: PutText;
+  /**
+   * A host member's asks its last turn took and never answered (coordinator decision 6,
+   * 2026-09-26): its end bounces each one member_ended, since the end's refusal of pending mail
+   * cannot reach a row that is already consumed.
+   */
+  readonly takenAsks?: readonly string[];
 };
 
 const HOST = {
@@ -116,7 +128,41 @@ export async function settle(
   for (const row of rows) {
     await fire(ctx, await teamOf(row), row, "member_ended", settled, result);
     await refuseAll(ctx, await teamOf(row), row, result, true);
+    await bounceTaken(ctx, await teamOf(row), row, result, settled);
     if (row.role === "lead") await close(ctx, await teamOf(row), row, settled);
+  }
+}
+
+/**
+ * A host member's end bounces every ask it consumed and never answered (coordinator decision 6):
+ * those rows are no longer pending, so the end's refusal cannot reach them, and without this they
+ * would wait out their deadlines. Reference: spec/tools/fixtures/ref_host.py.
+ */
+async function bounceTaken(
+  ctx: SettleContext,
+  team: TeamRow,
+  row: MemberRow,
+  result: Result,
+  settled: string,
+): Promise<void> {
+  if (row.role !== "host_member") return;
+  for (const askId of ctx.takenAsks ?? []) {
+    const ask = await mailEnvelope(ctx.tx, askId);
+    if (ask === undefined) continue;
+    ctx.batch.add(
+      sent({
+        mail_id: mailId(ctx),
+        kind: "bounce",
+        team: row.team_id,
+        from: refOf(team, row),
+        to: replyAddress(ask),
+        provenance: ask.provenance,
+        causal: causal(ctx, settled),
+        code: "member_ended",
+        ask_id: askId,
+        result,
+      }),
+    );
   }
 }
 
@@ -139,6 +185,8 @@ async function fire(
 ): Promise<void> {
   for (const m of await monitorsOn(ctx.tx, row.team_id, row)) {
     if (!FIRES[type].has(m.kind)) continue;
+    if (ctx.provenance === undefined)
+      throw new Error("a fired monitor belongs to a turn");
     ctx.batch.add(
       sent({
         mail_id: mailId(ctx),
@@ -187,19 +235,12 @@ function bounce(
   why: string,
   result: Result,
 ): Envelope {
-  const { from } = mail;
-  const back: Envelope["to"] =
-    "operator" in from
-      ? "team_log"
-      : "caller" in from
-        ? { caller: from.caller }
-        : { name: from.name, generation: from.generation };
   return {
     mail_id: mailId(ctx),
     kind: "bounce",
     team: row.team_id,
     from: refOf(team, row),
-    to: back,
+    to: replyAddress(mail),
     provenance: mail.provenance,
     causal: causal(ctx, why),
     code: "member_ended",
@@ -220,6 +261,10 @@ async function close(
   const live = (await memberRows(ctx.tx, lead.team_id)).filter(
     (r) => r.role === "member" && r.state !== "ended",
   );
+  if (live.length === 0) return;
+  const { provenance } = ctx;
+  // A lead always ends inside a turn: only a settlement with no turn has no provenance.
+  if (provenance === undefined) throw new Error("a lead's end closes a turn");
   for (const r of live)
     ctx.batch.add(
       sent({
@@ -228,7 +273,7 @@ async function close(
         team: lead.team_id,
         from: refOf(team, lead),
         to: { name: r.name, generation: r.generation },
-        provenance: ctx.provenance,
+        provenance,
         causal: causal(ctx, settled),
       }),
     );

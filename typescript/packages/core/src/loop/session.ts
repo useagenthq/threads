@@ -194,6 +194,7 @@ export class Session {
           ...ctx,
           provenance,
           put: (text) => this.store(text, "text/plain"),
+          takenAsks: tx.chain.fold.team.host.turnAsks,
         },
         how,
       );

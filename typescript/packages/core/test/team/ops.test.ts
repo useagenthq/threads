@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { BranchId } from "../../src/log";
+import { BranchId, ThreadId } from "../../src/log";
 import { knownEvents } from "../../src/reduce";
 import type { Writer } from "../../src/store";
+import { deleteThread } from "../../src/store/deletion";
 import { materialize } from "../../src/team/materialize";
 import type { Fixture } from "../store/helpers";
 import { unwrap } from "../store/helpers";
@@ -14,6 +15,7 @@ import {
   rows,
   seeded,
   TEAM,
+  teamOf,
   type Vector,
   vectorMint,
   worldLogs,
@@ -23,7 +25,7 @@ import {
 // through this runtime's own store ops reaches the reference's outcome, appends the same event
 // types per log and makes the same row changes; the team then replays.
 
-/** A vector tagged for a later lane is not run by this build. */
+/** A vector tagged for a later lane is not run by this build; the 29D ones are untagged. */
 const runs = (v: Vector): boolean => v.lane === undefined;
 
 async function materializeOp(fx: Fixture, v: Vector): Promise<unknown> {
@@ -53,10 +55,25 @@ async function writerOf(fx: Fixture, v: Vector): Promise<Writer> {
   );
 }
 
+/** Deleting a caller (Teams Phase 2, R29-1): busy while it can still run, else its rows go. */
+async function deleteOp(fx: Fixture, v: Vector): Promise<unknown> {
+  const log = worldLogs(v)[v.by];
+  if (log === undefined) throw new Error(`no log ${v.by}`);
+  const gone = await deleteThread(
+    fx.store.driver,
+    "acme",
+    ThreadId.parse(log.thread_id),
+    v.now,
+  );
+  return gone.ok
+    ? { status: "deleted" }
+    : { status: "refused", code: gone.error.code };
+}
+
 async function run(fx: Fixture, v: Vector): Promise<unknown> {
-  return v.op === "materialize"
-    ? materializeOp(fx, v)
-    : runOn(await writerOf(fx, v), v);
+  if (v.op === "materialize") return materializeOp(fx, v);
+  if (v.op === "delete") return deleteOp(fx, v);
+  return runOn(await writerOf(fx, v), v);
 }
 
 /** The event types appended per log label since `heads`. */
@@ -95,17 +112,19 @@ describe("team op vectors, run by this runtime", () => {
         ...["start", "send", "ask", "reply", "wait", "monitor", "cancel"],
         ...["deadline", "consume"],
         ...["materialize", "idle", "end"],
+        ...["turn_failure", "delete"],
       ]),
     );
     // Pinned: a vector that drops out of the selection fails here, not silently.
-    expect(mine).toHaveLength(107);
+    expect(mine).toHaveLength(118);
     expect(mine.filter((v) => v.by === "team")).toHaveLength(29);
   });
 
   for (const v of mine)
     test(v.name, async () => {
       const fx = await seeded(v);
-      const before = await rows(fx);
+      const team = teamOf(v);
+      const before = await rows(fx, team);
       const heads = new Map<string, number>();
       for (const [label, log] of Object.entries(worldLogs(v)))
         heads.set(
@@ -115,7 +134,7 @@ describe("team op vectors, run by this runtime", () => {
         );
       expect(await run(fx, v)).toEqual(v.expect.outcome);
       expect(await appended(fx, v, heads)).toEqual(v.expect.appended);
-      expect(changes(before, await rows(fx))).toEqual(v.expect.rows);
-      await assertTeamReplays(fx.store, TEAM);
+      expect(changes(before, await rows(fx, team))).toEqual(v.expect.rows);
+      await assertTeamReplays(fx.store, team);
     });
 });

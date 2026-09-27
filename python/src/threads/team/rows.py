@@ -12,9 +12,9 @@ from threads.log import MailEnvelope, StoredMemberResult
 from threads.store.conn import Conn
 from threads.store.sql import int_of, text_of
 
-type Role = Literal["lead", "member"]
+type Role = Literal["lead", "member", "host_member"]
 type State = Literal["starting", "running", "idle", "parked", "ended"]
-_ROLES: dict[str, Role] = {"lead": "lead", "member": "member"}
+_ROLES: dict[str, Role] = {"lead": "lead", "member": "member", "host_member": "host_member"}
 _STATES: dict[str, State] = {
     "starting": "starting",
     "running": "running",
@@ -28,7 +28,8 @@ _STATES: dict[str, State] = {
 class TeamRow:
     team_id: str
     tenant_id: str
-    lead_thread_id: str
+    lead_thread_id: str | None
+    """None for a host team, which has no lead (Teams Phase 2)."""
     team_log_branch_id: str
     closed_at: int | None
 
@@ -79,7 +80,8 @@ def _team(
         return None
     team_id, tenant, lead, log, closed = row
     closed_at = None if closed is None else int_of(closed)
-    return TeamRow(text_of(team_id), text_of(tenant), text_of(lead), text_of(log), closed_at)
+    lead_thread = None if lead is None else text_of(lead)
+    return TeamRow(text_of(team_id), text_of(tenant), lead_thread, text_of(log), closed_at)
 
 
 def _member(row: tuple[object, ...]) -> MemberRow:
@@ -142,23 +144,52 @@ def bytes_of(value: object) -> bytes:
 
 
 def pending_to(conn: Conn, team: str, name: str | None) -> list[MailEnvelope]:
-    """Pending mail to a member's name (or to the team log), in (created_at, mail_id) order."""
+    """Pending mail to a member's name, or to the team log when `name` is None, in
+    (created_at, mail_id) order. `to_kind` is explicit: a caller's row has a null `to_name`
+    too, and the team log must never take one (Teams Phase 2)."""
     rows = conn.execute(
-        "SELECT envelope FROM mail WHERE team_id = ? AND to_name IS NOT DISTINCT FROM ?"
-        " AND state = 'pending'"
+        "SELECT envelope FROM mail WHERE team_id = ? AND to_kind = ?"
+        " AND to_name IS NOT DISTINCT FROM ? AND state = 'pending'"
         " ORDER BY created_at, mail_id",
-        (team, name),
+        (team, "team_log" if name is None else "member", name),
+    ).fetchall()
+    return _envelopes(rows)
+
+
+def pending_to_caller(conn: Conn, branch: str) -> list[MailEnvelope]:
+    """Pending mail to a caller thread: a host member's replies and bounces, found by the
+    caller's branch (the mail_pending_caller index)."""
+    rows = conn.execute(
+        "SELECT envelope FROM mail WHERE to_branch_id = ? AND to_kind = 'caller'"
+        " AND state = 'pending' ORDER BY created_at, mail_id",
+        (branch,),
     ).fetchall()
     return _envelopes(rows)
 
 
 def pending_here(conn: Conn, thread: str, branch: str) -> list[MailEnvelope]:
-    """Pending mail to a writer: its thread's own rows, or the team log when it is one."""
+    """Pending mail to a writer: its thread's own rows, the team log when it is one, else the
+    replies and bounces it holds as a caller (Teams Phase 2)."""
     rows = own_rows(conn, thread)
     if rows:
         return pending_for(conn, rows)
     team = team_of_log(conn, branch)
-    return [] if team is None else pending_to(conn, team.team_id, None)
+    if team is not None:
+        return pending_to(conn, team.team_id, None)
+    return pending_to_caller(conn, branch)
+
+
+def pending_callers(conn: Conn, team: str) -> list[tuple[str, str]]:
+    """(thread, branch) of every caller of this team with pending mail: whom the host wakes so
+    its parked ask call resumes (Teams Phase 2)."""
+    rows = conn.execute(
+        "SELECT DISTINCT b.thread_id, m.to_branch_id FROM mail m"
+        " JOIN branches b ON b.branch_id = m.to_branch_id"
+        " WHERE m.team_id = ? AND m.to_kind = 'caller' AND m.state = 'pending'"
+        " ORDER BY m.to_branch_id",
+        (team,),
+    ).fetchall()
+    return [(text_of(t), text_of(b)) for t, b in rows]
 
 
 def pending_for(conn: Conn, rows: Sequence[MemberRow]) -> list[MailEnvelope]:

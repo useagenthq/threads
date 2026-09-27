@@ -5,9 +5,10 @@ import { parseLogLine } from "../../src/log";
 import { verifyExport } from "../../src/verify/verify";
 import { caseSchema } from "../conformance/schema";
 
-// Teams Phase 2 before its build (spec/conformance/README.md, "Staged cases"): every case under
-// staged-phase-2 is a valid case whose lines all pass the line schema, and a reader refuses each
-// Phase 2 form as unsupported_critical_event, never reducing it as ordinary work.
+// Teams Phase 2's supervision before its build (spec/conformance/README.md, "Staged cases"):
+// every case still under staged-phase-2 is a valid case whose lines all pass the line schema, and
+// a reader refuses its supervision forms as unsupported_critical_event, never reducing one as
+// ordinary work. The rest of Phase 2 is live (lane 29D) and its cases are in cases/.
 
 const STAGED = join(
   import.meta.dir,
@@ -49,28 +50,19 @@ describe("staged Phase 2 cases", () => {
     });
 });
 
-describe("Phase 2 forms before the build", () => {
-  const dir = "host-caller-ask-answered/logs";
-  test("the host team log is refused at its team_opened{kind: host}", () => {
+describe("supervision forms before lane 29E", () => {
+  const dir = "host-supervisor-restart/logs";
+  test("the host team log reads up to its supervisor_decided", () => {
+    const lines = readFileSync(join(STAGED, `${dir}/team.jsonl`), "utf8");
+    const decided = lines
+      .split("\n")
+      .findIndex((l) => l.includes('"type":"supervisor_decided"'));
     expect(read(`${dir}/team.jsonl`)).toEqual({
       code: "unsupported_critical_event",
-      seq: 1,
+      seq: decided,
     });
   });
-  test("a host member's log is refused at its thread_started{host_member}", () => {
-    expect(read(`${dir}/billing.jsonl`)).toEqual({
-      code: "unsupported_critical_event",
-      seq: 1,
-    });
-  });
-  test("a caller's log reads up to its first caller mail", () => {
-    const lines = readFileSync(join(STAGED, `${dir}/support.jsonl`), "utf8");
-    const sent = lines
-      .split("\n")
-      .findIndex((l) => l.includes('"type":"message_sent"'));
-    expect(read(`${dir}/support.jsonl`)).toEqual({
-      code: "unsupported_critical_event",
-      seq: sent,
-    });
+  test("a host member's own log is live: nothing of it is a supervision form", () => {
+    expect(read(`${dir}/billing.jsonl`)).toEqual({ code: "ok", seq: 0 });
   });
 });

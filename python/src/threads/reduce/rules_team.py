@@ -20,8 +20,10 @@ from threads.log import (
     OperatorRefusedEvent,
     OperatorRequestEvent,
     OperatorSender,
+    Parent1,
     ParkedEvent,
     ParseError,
+    Provenance,
     TeamOpenedEvent,
     UserInputEvent,
     WaitFinishedEvent,
@@ -129,11 +131,13 @@ def _ask_closed(fold: Fold, event: AskClosedEvent) -> ParseError | None:
 
 
 def _member_end(fold: Fold, event: MemberEndedEvent | MemberIdleEvent) -> ParseError | None:
-    """Rules 37 and 38: a member ends once, and idles only after its turn ended well."""
+    """Rules 37 and 38: a member ends once, and idles only after its turn ended well. A host
+    member's member_idle{turn_failed} closes a failed turn instead, and is rule 53's."""
     if fold.team.ended:
         return reject(event, f"{event.type} after member_ended")
-    idle_ok = not fold.in_turn and fold.team.last_end == "end_turn"
-    if isinstance(event, MemberIdleEvent) and not idle_ok:
+    if not isinstance(event, MemberIdleEvent) or event.data.turn_failed is not MISSING:
+        return None
+    if fold.in_turn or fold.team.last_end != "end_turn":
         return reject(event, "member_idle without its turn's turn_completed{end_turn}")
     return None
 
@@ -233,23 +237,31 @@ def _started(fold: Fold, event: MemberStartedEvent) -> ParseError | None:
     why = _defined(event)
     if why is not None:
         return reject(event, why)
-    parent, provenance, team = event.data.parent, event.data.provenance, fold.team
-    # Only a host member's start (Phase 2, refused first by rules_phase2) has neither.
+    if fold.host.host_team:
+        return None  # a host member's start has no parent and no lead: rules 50 and 51 check it
+    parent, provenance = event.data.parent, event.data.provenance
     if parent is MISSING or provenance is MISSING:
         return reject(event, "a member_started without a parent is a host member's")
-    if team.team_log:
-        if parent.thread_id != team.lead_thread:
-            return reject(event, "an operator start's parent is not the lead's thread")
-        root = provenance.root_request
-        if root.thread_id == event.thread_id and root.event_id in team.request_events:
-            return None
-        return reject(event, "an operator start before its operator_request")
+    if fold.team.team_log:
+        return _operator_start(fold, event, parent, provenance)
     itself = (parent.thread_id, parent.branch_id, parent.event_id) == (
         event.thread_id,
         event.branch_id,
         event.event_id,
     )
     return None if itself else reject(event, "a lead's member_started does not name itself")
+
+
+def _operator_start(
+    fold: Fold, event: MemberStartedEvent, parent: Parent1, provenance: Provenance
+) -> ParseError | None:
+    """Rules 42 and 45: a team log's member_started names the lead and follows its request."""
+    if parent.thread_id != fold.team.lead_thread:
+        return reject(event, "an operator start's parent is not the lead's thread")
+    root = provenance.root_request
+    if root.thread_id == event.thread_id and root.event_id in fold.team.request_events:
+        return None
+    return reject(event, "an operator start before its operator_request")
 
 
 def _defined(event: MemberStartedEvent) -> str | None:

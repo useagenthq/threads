@@ -1,4 +1,5 @@
 import { type KnownEvent, type MailEnvelope, principalKey } from "../log";
+import { applyHost, emptyHost, type HostFold } from "./host";
 import type { EventOf, Fold, ParkAddress } from "./state";
 
 // Teams (spec/schema/README.md, "Teams"): what one log's events leave for semantic rules 31 and
@@ -60,6 +61,8 @@ export type TeamFold = {
   readonly requests: Set<string>;
   /** operator_request event ids in this log (rule 42). */
   readonly requestEvents: Set<string>;
+  /** The Teams Phase 2 part: host teams, host members and callers (rules 50, 52-55). */
+  readonly host: HostFold;
 };
 
 export function emptyTeam(): TeamFold {
@@ -85,6 +88,7 @@ export function emptyTeam(): TeamFold {
     taskMonitors: new Set(),
     requests: new Set(),
     requestEvents: new Set(),
+    host: emptyHost(),
   };
 }
 
@@ -168,6 +172,7 @@ export function applyTeam(fold: Fold, e: KnownEvent): void {
   applyTurn(fold, e);
   applyMail(fold, e);
   applyMonitors(fold.team, e);
+  applyHost(fold.team.host, e);
 }
 
 function applyLog(team: TeamFold, e: KnownEvent): void {

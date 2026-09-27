@@ -22,6 +22,9 @@ export const TEAM_TABLES: readonly string[] = [
 
 const BranchRow = z.strictObject({ branch_id: BranchId });
 
+/** Only a host team has callers, so only its rows name a branch outside every team. */
+const HOST_TEAMS = "SELECT team_id FROM teams WHERE kind = 'host'";
+
 export async function branchesOf(
   tx: Tx,
   thread: string,
@@ -35,12 +38,15 @@ export async function branchesOf(
   return rows.ok ? ok(rows.value.map((r) => r.branch_id)) : rows;
 }
 
-const TeamRow = z.strictObject({ team_id: TeamId, lead_thread_id: z.string() });
+const TeamRow = z.strictObject({
+  team_id: TeamId,
+  lead_thread_id: z.string().nullable(),
+});
 
 /**
  * The teams the set takes (Gate 1 §4.15 rule 2): those whose `teams.lead_thread_id` is doomed,
  * in this tenant. A team id is never taken from a log: an imported team_opened could name
- * another tenant's team.
+ * another tenant's team. A host team is leadless and never closes, so nothing takes it.
  */
 export async function doomedTeams(
   tx: Tx,
@@ -58,9 +64,52 @@ export async function doomedTeams(
   return ok(
     new Set(
       rows.value.flatMap((r) =>
-        doomed.has(r.lead_thread_id) ? [r.team_id] : [],
+        r.lead_thread_id !== null && doomed.has(r.lead_thread_id)
+          ? [r.team_id]
+          : [],
       ),
     ),
+  );
+}
+
+/**
+ * Why a caller branch can still run (Teams Phase 2, R29-1): it is the asker of an open ask, the
+ * recipient of an unconsumed reply or bounce, or the sender of a mail no host member has consumed.
+ * A MailId is `<sender branch_id>:<call or event id>`, so a prefix names the branch's own sends;
+ * `mail` has no sender column.
+ */
+export async function callerHolds(
+  tx: Tx,
+  branch: BranchId,
+): Promise<string | undefined> {
+  const found = await tx.all(
+    `SELECT 1 FROM asks WHERE team_id IN (${HOST_TEAMS}) AND asker_branch_id = ? AND state = 'open'
+      UNION ALL SELECT 1 FROM mail WHERE team_id IN (${HOST_TEAMS}) AND state = 'pending'
+        AND (to_branch_id = ? OR mail_id LIKE ?) LIMIT 1`,
+    [branch, branch, `${branch}:%`],
+  );
+  return found.length > 0
+    ? `branch ${branch} has an open ask, an unconsumed answer or a mail a host member has not taken`
+    : undefined;
+}
+
+/**
+ * Every host-team `mail` and `asks` row naming a doomed branch as caller: its sends, the answers
+ * addressed to it, and the asks it opened. A rebuild skips them too, so the wiped-and-rebuilt
+ * index equals the index this delete left.
+ */
+export async function deleteCallerRows(
+  tx: Tx,
+  branch: BranchId,
+): Promise<void> {
+  await tx.run(
+    `DELETE FROM mail WHERE team_id IN (${HOST_TEAMS})
+      AND (to_branch_id = ? OR mail_id LIKE ?)`,
+    [branch, `${branch}:%`],
+  );
+  await tx.run(
+    `DELETE FROM asks WHERE team_id IN (${HOST_TEAMS}) AND asker_branch_id = ?`,
+    [branch],
   );
 }
 

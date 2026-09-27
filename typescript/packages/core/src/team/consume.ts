@@ -11,6 +11,7 @@ import {
   ownRows,
   pendingFor,
   pendingTo,
+  pendingToCaller,
   teamOfLog,
   teamRow,
 } from "./rows";
@@ -67,7 +68,11 @@ export function mayResume(env: MailEnvelope): boolean {
 export async function consume(ctx: ConsumeContext): Promise<Consumed> {
   if (ctx.chain.fold.team.teamLog) return consumeTeamLog(ctx);
   const rows = await ownRows(ctx.tx, ctx.threadId);
-  const pending = await pendingFor(ctx.tx, rows);
+  // A caller (Teams Phase 2) is in no team: its pending mail is the host team's, by branch.
+  const pending =
+    rows.length > 0
+      ? await pendingFor(ctx.tx, rows)
+      : await pendingToCaller(ctx.tx, ctx.branchId);
   if (pending.length === 0) return { status: "nothing_pending" };
   const ended = rows.find((r) => r.state === "ended");
   if (ended !== undefined) return await refuseEnded(ctx, ended);

@@ -54,6 +54,10 @@ async function startMember(
   task: string,
   options: TeamStartOptions,
 ): Promise<TeamStartResult> {
+  // A host team is leadless: nothing starts a member in it (host({members}) does, and lane 29E
+  // restarts one). Refused before any writer, so nothing is recorded.
+  if (env.lead === undefined) return { status: "refused", code: "forbidden" };
+  const lead0 = env.lead;
   const { idempotencyKey, budget, ...chosen } = options;
   const args = {
     agent,
@@ -64,7 +68,7 @@ async function startMember(
   const lead = await leadOf(env.log, env.ref.id);
   // Read before the append: the lead's and its ancestors' budgets cover the new member.
   const starter = await ancestorsOf(env.log, lead.parent);
-  const pin = pins(env.lead.team ?? [], lead.deferTools);
+  const pin = pins(lead0.team ?? [], lead.deferTools);
   const { pinned, resolved } = await startPin(
     pin,
     env.artifacts,

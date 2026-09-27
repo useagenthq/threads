@@ -174,10 +174,22 @@ export function worldLogs(v: Vector): Readonly<Record<string, WorldLog>> {
   return world.logs;
 }
 
-/** The team the vectors' worlds share. */
+/** The team the lead-team worlds share. */
 export const TEAM: TeamId = TeamIdSchema.parse(
   "0192c000-0000-7000-8000-000000000001",
 );
+
+/** The team a world's logs open: a host team's is the tenant's derived one (Teams Phase 2). */
+export function teamOf(v: Vector): TeamId {
+  for (const log of Object.values(worldLogs(v)))
+    for (const id of log.events) {
+      const e = DOC.events[id];
+      if (e?.["type"] !== "team_opened") continue;
+      const data = z.object({ team: TeamIdSchema }).parse(e["data"]);
+      return data.team;
+    }
+  throw new Error(`world ${v.given.world} opens no team`);
+}
 
 /**
  * A store holding the vector's world at its clock, the team index rebuilt from its logs, and every
@@ -190,7 +202,7 @@ export async function seeded(v: Vector, db?: StoreDriver): Promise<Fixture> {
     verified(exported(ref)),
   );
   await storeLogs(fx.store, logs);
-  unwrap(await rebuildTeamIndex(fx.store, TEAM));
+  unwrap(await rebuildTeamIndex(fx.store, teamOf(v)));
   for (const config of configs()) await fx.artifacts.put(config);
   return fx;
 }
@@ -211,13 +223,16 @@ function configs(): readonly Uint8Array[] {
 }
 
 /** The index rows, per table, as the vectors list them. */
-export async function rows(fx: Fixture): Promise<Record<string, unknown[]>> {
+export async function rows(
+  fx: Fixture,
+  team: TeamId = TEAM,
+): Promise<Record<string, unknown[]>> {
   const branches = (await query(fx.db, "SELECT branch_id FROM branches")).map(
     (r) => z.object({ branch_id: BranchId }).parse(r).branch_id,
   );
   const { team_feed: _feed, ...tables } = await teamIndexRows(
     fx.db,
-    [TEAM],
+    [team],
     branches,
   );
   return tables;

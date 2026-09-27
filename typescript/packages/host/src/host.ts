@@ -14,16 +14,23 @@ import {
   type Sandbox,
   type Store,
   storeConnection,
+  type Team,
   ThreadId,
   wakeBranches,
 } from "@threads/core/host";
 import { consume } from "./consume";
 import { type HostCeiling, HostContext } from "./context";
 import { failure } from "./errors";
+import { hostTeamOf, openHostTeam, openHostTeams } from "./host-members";
 import { type Authenticate, api } from "./http";
 import { channelThreads } from "./inbox";
 import { challenge, receive } from "./intake";
 import { isolated } from "./isolated";
+import {
+  checkHostMembers,
+  checkMemberRules,
+  type HostMemberOptions,
+} from "./members";
 import { unfinishedRuns } from "./receipts";
 import { Recovery } from "./recovery";
 import { type RunAccepted, type StartRunCode, startRun } from "./runs";
@@ -63,11 +70,25 @@ export type HostOptions = {
    * that allows start makes its `from` a lead. Default []: everything else is denied.
    */
   readonly messagePolicy?: readonly MessagePolicyRule[];
+  /**
+   * Host agents that run as one long-lived member per tenant, keyed by agent name (Teams Phase 2).
+   * Every thread of the tenant may address one by its name, as messagePolicy allows. Default {}.
+   */
+  readonly members?: Readonly<Record<string, HostMemberOptions>>;
 };
 
 export type Host = {
   /** Mount in Next, Hono, Bun.serve. */
   readonly fetch: (request: Request) => Promise<Response>;
+  /**
+   * The host team of the principal's tenant, as a Team: it holds the tenant's host members, has no
+   * lead, never closes and has no HTTP route. not_found without a members option.
+   */
+  readonly team: (options: {
+    readonly principal: Principal;
+  }) => Promise<
+    Result<Team, { readonly code: "not_found"; readonly message: string }>
+  >;
   /** The channel keys; each one's webhook is POST /channels/<key>/events. */
   readonly channels: readonly string[];
   readonly startRun: (
@@ -132,9 +153,28 @@ export function host(options: HostOptions): Host {
   let timer: ReturnType<typeof setInterval> | undefined;
   let ticking: Promise<void> | undefined;
   let tickWaiters: (() => void)[] = [];
+  const members = checkHostMembers(
+    options.members ?? {},
+    new Map(Object.values(options.agents).map((a) => [a.name, a])),
+    (name) =>
+      [...ctx.agents.values()].some(
+        (a) => a.name === name && a.runner.approvers !== undefined,
+      ),
+  );
+  checkMemberRules(
+    options.messagePolicy ?? [],
+    new Set(members.map((m) => m.agent)),
+  );
   const watch = new Watch();
   const recovery = new Recovery(ctx);
-  const teams = new Teams(ctx);
+  const teams = new Teams(ctx, members);
+  // A caller's first turn may already address a host member, so the tenant's host team opens
+  // before any run of that tenant executes, not only on the next team tick.
+  // ponytail: one already_open attempt per run, since the open is a single indexed read.
+  if (members.length > 0)
+    ctx.beforeRun = async (tenant) => {
+      await openHostTeam(ctx, members, tenant);
+    };
   // A run of this host that meets a store outage is run on by recovery, with backoff.
   ctx.onStoreOutage = (tenant, thread, error) => {
     recovery.failed(thread.branch, error);
@@ -233,6 +273,7 @@ export function host(options: HostOptions): Host {
 
   const made: Host = {
     channels: [...ctx.channels.keys()],
+    team: ({ principal }) => hostTeamOf(ctx, members, principal),
     fetch: async (request) => {
       const { pathname } = new URL(request.url);
       const channel = /^\/channels\/([^/]+)\/events$/.exec(pathname);
@@ -258,6 +299,8 @@ export function host(options: HostOptions): Host {
       if (typeof bound === "string")
         throw new ConfigError("invalid_config", bound);
       await storeConnection(ctx.store);
+      // Every tenant's host team opens before anything addresses one of its members.
+      await openHostTeams(ctx, members);
       telemetry?.start();
       const startedAt = Date.now();
       timer = setInterval(() => {

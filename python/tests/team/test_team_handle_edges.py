@@ -53,7 +53,8 @@ from threads.log.digest import sha256_hex
 from threads.result import Err, Ok
 from threads.store.sql import blob_of
 from threads.team.dynamic import InvalidDefinition
-from threads.team.materialize import MaterializeOptions, Rebind, materialize
+from threads.team.materialize import materialize
+from threads.team.materialize_types import MaterializeOptions, Rebind
 from threads.team.rows import team_row
 
 OPERATOR = Principal(issuer="api", tenant="local", subject="operator")
@@ -173,7 +174,7 @@ def test_a_crash_inside_the_team_logs_receipt_leaves_the_notice_pending_the_next
             await team.start("writer", "Draft.")
             sq = await open_store(sqlite(str(tmp_path)))
 
-            async def unavailable(_s: MemberStartedEvent, _t: MailEnvelope) -> Rebind:
+            async def unavailable(_s: MemberStartedEvent, _t: MailEnvelope | None) -> Rebind:
                 return Rebind("pin_unavailable")
 
             # The rebind fails: the member ends at once and notifies its starter, the team log.

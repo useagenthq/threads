@@ -33,11 +33,15 @@ def closed(conn: Conn, team: str) -> bool:
     return found is not None and found.closed_at is not None
 
 
+WORKED = frozenset({"member", "host_member"})
+"""The roles a team worker drives: a started member, and a host team's own (Teams Phase 2)."""
+
+
 def members_under(conn: Conn, root: str) -> list[MemberRow]:
     """The member rows of the team and of every team led by one of its members, recursively."""
     teams, out = [root], list[MemberRow]()
     while teams:
-        rows = [r for r in member_rows(conn, teams.pop()) if r.role == "member"]
+        rows = [r for r in member_rows(conn, teams.pop()) if r.role in WORKED]
         out += rows
         for r in rows:
             led = conn.execute(

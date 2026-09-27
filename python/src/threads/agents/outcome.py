@@ -19,6 +19,8 @@ from threads.agents.results import (
 from threads.log import (
     BudgetExceededEvent,
     Event,
+    EventId,
+    MessageReceivedEvent,
     ModelResponseEvent,
     ModelResponseRecoveredEvent,
     OutputValidatedEvent,
@@ -49,8 +51,10 @@ def result(rt: runtime.Runtime, halt: Halt, thread: Thread) -> RunResult[str]:
 def _run_result(events: Sequence[Event], thread: Thread) -> RunResult[str]:
     """The ended run of the latest input: completed with the answer after its last wake, or
     the outcome of its turn that ended otherwise."""
-    request = next(e for e in reversed(events) if isinstance(e, UserInputEvent))
-    end = run_end(events, request.event_id)
+    request = _latest_request(events)
+    if request is None:
+        raise AssertionError("an idle run had an input")
+    end = run_end(events, request)
     if end.status == "cancelled" and not end.turn:
         # A cancel while the run waited on its children ends it outside any turn.
         return Cancelled(thread)
@@ -59,6 +63,20 @@ def _run_result(events: Sequence[Event], thread: Thread) -> RunResult[str]:
     if not isinstance(done, TurnCompletedEvent):
         raise AssertionError("an idle run ended its turn")
     return ended(turn, done.data.reason, thread)
+
+
+def _latest_request(events: Sequence[Event]) -> EventId | None:
+    """The run the log's last turn belongs to: its latest input. A host member has no user_input
+    at all (Teams Phase 2), and only then is the run the one the mail that opened its turn names
+    as its root request -- a later message_received in a thread that does take input is ordinary
+    mail of the input's own run, not a run of its own."""
+    for event in reversed(events):
+        if isinstance(event, UserInputEvent):
+            return event.event_id
+    for event in reversed(events):
+        if isinstance(event, MessageReceivedEvent):
+            return EventId(event.data.envelope.provenance.root_request.event_id)
+    return None
 
 
 def ended(events: Sequence[Event], reason: str, thread: Thread) -> RunResult[str]:

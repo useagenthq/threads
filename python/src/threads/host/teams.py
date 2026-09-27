@@ -16,16 +16,26 @@ import uuid
 from typing import TYPE_CHECKING
 
 from threads.agents.store import now_ms, open_store
-from threads.agents.team_hosted import HostedTeam, hosted_teams, team_worker_for
+from threads.agents.team_hosted import (
+    HostedTeam,
+    HostTeamRow,
+    host_teams,
+    host_worker_for,
+    hosted_teams,
+    team_worker_for,
+)
 from threads.agents.team_scan import lease_free
 from threads.agents.team_units import take_mail
 from threads.host.runs import Runner
+
+if TYPE_CHECKING:
+    from threads.host.host_team import HostTeam
 from threads.log import BranchId, ThreadId
 from threads.result import Ok
 from threads.store import LOCAL_TENANT, SqliteStore, StoreError
 from threads.team.claim import claim_mail
 from threads.team.constants import TEAM_CONSTANTS
-from threads.team.rows import pending_here
+from threads.team.rows import pending_callers, pending_here
 
 if TYPE_CHECKING:
     from threads.agents.team_worker import TeamWorker
@@ -40,8 +50,9 @@ _log = logging.getLogger(__name__)
 class Teams:
     """Every team this host drives, until each closes or the host stops."""
 
-    def __init__(self, runner: Runner) -> None:
+    def __init__(self, runner: Runner, host_team: "HostTeam | None" = None) -> None:
         self._runner = runner
+        self._host_team = host_team
         self._workers: dict[str, TeamWorker] = {}
         self._token = f"host-{uuid.uuid4().hex}"
         """This host's claim token: a row it claimed is one it will wake the lead for."""
@@ -60,14 +71,23 @@ class Teams:
         """A worker for every open team, and the mail an idle lead has waiting."""
         if self._stopped:
             return
+        host_team = self._host_team
+        if host_team is not None:
+            # A member configured since the last open gets its row; the open itself is
+            # idempotent (Teams Phase 2, the lazy open).
+            await host_team.open(self._runner.store(LOCAL_TENANT), LOCAL_TENANT)
         sq = await open_store(self._runner.store(LOCAL_TENANT))
         teams = await sq.run(hosted_teams)
-        live = {t.team_id for t in teams}
+        hosts = await sq.run(host_teams)
+        live = {t.team_id for t in (*teams, *hosts)}
         for team in [t for t in self._workers if t not in live]:
             await self._drop(team)
         for team in teams:
             await self._ensure(team)
             await self._wake(team)
+        for host in hosts:
+            await self._ensure_host(host)
+            await self._wake_callers(host)
 
     async def stop(self) -> None:
         """Stops claiming and waits for the work in flight, leaving every row durable for the
@@ -105,11 +125,22 @@ class Teams:
         self._workers[team.team_id] = worker
         worker.start()
 
+    async def _ensure_host(self, team: HostTeamRow) -> None:
+        """A host team's worker (Teams Phase 2): its members come from this host's registry,
+        and it has no lead to wake."""
+        host_team = self._host_team
+        if host_team is None or not host_team.agents or team.team_id in self._workers:
+            return
+        store = self._runner.store(team.tenant_id)
+        worker = host_worker_for(store, await open_store(store), team, host_team.agents)
+        self._workers[team.team_id] = worker
+        worker.start()
+
     async def _wake(self, team: HostedTeam) -> None:
         """A lead with a free lease: its pending mail consumed under its own writer, then the turn
         that consume opened, or one a crash left open, is run on. A lease held elsewhere (a run of
         this host included) leaves both to its holder, which consumes at its next step boundary."""
-        branch = team.lead_branch_id
+        branch, thread = team.lead_branch_id, team.lead_thread_id
         if branch is None or self._runner.running(BranchId(branch)):
             return
         store = self._runner.store(team.tenant_id)
@@ -117,14 +148,28 @@ class Teams:
         now = now_ms()
         if not await sq.run(lambda c: lease_free(c, branch, now)):
             return
-        taken = await self._take(sq, team, BranchId(branch))
+        taken = await self._take(sq, thread, BranchId(branch))
         read = await sq.read(BranchId(branch), now_ms())
         if taken or (isinstance(read, Ok) and read.value.fold.in_turn):
-            await self._runner.resume(store, ThreadId(team.lead_thread_id), BranchId(branch))
+            await self._runner.resume(store, ThreadId(thread), BranchId(branch))
 
-    async def _take(self, sq: SqliteStore, team: HostedTeam, branch: BranchId) -> bool:
-        """The lead's pending mail, claimed first so two hosts don't both wake it."""
-        thread, now = team.lead_thread_id, now_ms()
+    async def _wake_callers(self, team: HostTeamRow) -> None:
+        """A host team's callers (Teams Phase 2): a thread in no team whose ask a host member
+        has answered. The same wake as a lead's — its pending mail consumed under its own
+        writer, then its run resumed — found by the caller rows of this team's mail."""
+        store = self._runner.store(team.tenant_id)
+        sq = await open_store(store)
+        for thread, branch in await sq.run(lambda c: pending_callers(c, team.team_id)):
+            if self._runner.running(BranchId(branch)):
+                continue
+            if not await sq.run(lambda c, b=branch: lease_free(c, b, now_ms())):
+                continue
+            if await self._take(sq, thread, BranchId(branch)):
+                await self._runner.resume(store, ThreadId(thread), BranchId(branch))
+
+    async def _take(self, sq: SqliteStore, thread: str, branch: BranchId) -> bool:
+        """A writer's pending mail, claimed first so two hosts don't both wake it."""
+        now = now_ms()
         pending = await sq.run(lambda c: pending_here(c, thread, branch))
         if not pending:
             return False

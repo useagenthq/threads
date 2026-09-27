@@ -25,7 +25,7 @@ const Row = z.strictObject({
   generation: PosInt,
   agent: z.string(),
   state: z.enum(["starting", "running", "idle", "parked", "ended"]),
-  role: z.enum(["lead", "member"]),
+  role: z.enum(["lead", "member", "host_member"]),
   branch_id: BranchId.nullable(),
   result: z.instanceof(Uint8Array).nullable(),
 });

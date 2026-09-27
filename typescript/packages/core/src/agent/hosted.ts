@@ -4,10 +4,12 @@ import type { EventDraft } from "../store";
 import { type MessagePolicyRule, ruleStarts } from "../team/policy";
 import type { Agent } from "./agent";
 import { execute } from "./execute";
+import type { MemberEntry } from "./registry";
 import type { RunResult, ThreadRef } from "./result";
 import type { Hooks, RunOptions } from "./run";
 import { pinnedAfterSetup, putSpecs, type Resolved } from "./run";
 import type { Store } from "./sqlite";
+import { memberOf } from "./team/lead";
 import { leadStarted } from "./team/runtime";
 
 // What the host (@threads/host) needs from an agent handle beyond run(): the thread_started a new
@@ -56,6 +58,12 @@ export type HostRunner = {
   /** agent({handoffs}): a channel conversation continues with the target after a handoff. */
   readonly targets: readonly { readonly name: string }[];
   /**
+   * What a team needs of this agent, under the same rules: how a host member's branches are
+   * rebound and run (Teams Phase 2). A host team has no grant of its own, so only this
+   * policy-aware entry can allow a host member's own send or ask.
+   */
+  readonly member: MemberEntry;
+  /**
    * The same runner under the host's messagePolicy: its rules decide this agent's team calls,
    * give it its team tools and, with a start rule, make it a lead (lane 29C). One runner per
    * host, so a thread's pin and its continuations see the same rules.
@@ -90,6 +98,8 @@ export function hosted<Deps, Output>(
     approvers,
     sandbox: def.sandbox,
     targets: def.targets,
+    // A host member pins as a member of the host team, which grants nothing: reply plus its rules.
+    member: memberOf(def, true),
     withPolicy: (policy) => hosted(ruled(def, policy), approvers),
   };
 }

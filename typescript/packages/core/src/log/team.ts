@@ -141,6 +141,7 @@ export const TurnFailure: Strict<{
     description:
       "Why a host member's turn failed (Phase 2). Only that turn ends: its unanswered asks close failed and the member goes back to idle.",
   });
+export type TurnFailure = z.infer<typeof TurnFailure>;
 
 type Result<S extends string, F extends z.core.$ZodLooseShape> = Strict<
   { member: typeof MemberRef; status: Lit<S> } & F

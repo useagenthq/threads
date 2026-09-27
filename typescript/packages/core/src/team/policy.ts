@@ -53,18 +53,27 @@ export function ruleFor(
 }
 
 /**
- * The team tools a pin offers: all seven for a lead (agent({team})) and for a team's member; for
- * an agent with host rules and no team of its own, one per op some rule with it as `from` allows,
- * so its line 0 never shows a tool that is always denied.
+ * The team tools a pin offers, so line 0 never shows a tool that is always denied:
+ * - all seven for a lead (agent({team})) and for a lead's member, which the team's grant covers;
+ * - for a host member (Teams Phase 2), `reply` — answering asks is the whole point of it — plus
+ *   one tool per op some rule with it as `from` allows. A host team has no grant of its own, so
+ *   the seven-tool set would both over-grant it and change its config_hash;
+ * - for a caller, or a rule-only lead, the rule-derived set alone.
+ *
+ * Reference: spec/tools/fixtures/host_pieces.py (BILLING_TOOLS is ("reply",), and a caller whose
+ * only rule allows ask pins ("ask",)).
  */
 export function teamTools(
   own: readonly string[] | undefined,
   member: boolean,
   rules: readonly MessagePolicyRule[],
+  hostMember = false,
 ): readonly string[] {
-  if (own !== undefined || member) return TEAM_TOOLS;
-  const ops = new Set(rules.flatMap((r) => r.allow));
-  return [...ops].flatMap((op) => TOOLS[op]);
+  const allowed = [...new Set(rules.flatMap((r) => r.allow))].flatMap(
+    (op) => TOOLS[op],
+  );
+  if (hostMember) return ["reply", ...allowed.filter((t) => t !== "reply")];
+  return own !== undefined || member ? TEAM_TOOLS : allowed;
 }
 
 /** The agents an agent's rules let it start. A rule allowing `start` makes its `from` a lead. */

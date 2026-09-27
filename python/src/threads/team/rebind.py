@@ -16,7 +16,7 @@ from threads.reduce import Fold
 from threads.reduce.fold import EffectStatus, loop_pending
 from threads.reduce.handlers import to_json
 from threads.store.lines import Draft
-from threads.team.materialize import RebindCode
+from threads.team.materialize_types import RebindCode
 from threads.team.park import park_notice
 from threads.team.provenance import turn_provenance
 from threads.team.settle import AppendContext, SettleContext, settle
@@ -42,10 +42,16 @@ def rebind_failed(ctx: AppendContext, fold: Fold, code: RebindCode, now: int) ->
         "status": "failed",
         "error": {"code": code, "message": f"rebind failed: {code}"},
     }
-    settle(
-        SettleContext(ctx.conn, ctx.batch, ctx.thread_id, ctx.branch_id, provenance, _no_text),
-        failed,
+    at = SettleContext(
+        ctx.conn,
+        ctx.batch,
+        ctx.thread_id,
+        ctx.branch_id,
+        provenance,
+        _no_text,
+        tuple(fold.host.turn_asks),
     )
+    settle(at, failed)
 
 
 def _key(ctx: AppendContext, call_id: str) -> str:

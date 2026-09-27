@@ -16,16 +16,17 @@ from threads.log import MailEnvelope, MemberRef, MemberStartedEvent
 from threads.loop.team_runtime import TeamAgentPin
 from threads.store.lines import uuid7
 from threads.team.dynamic import OPERATOR
-from threads.team.materialize import Rebind
+from threads.team.materialize_types import Rebind
 
 
 def bound(
-    agents: Mapping[str, Definition[None]], started: MemberStartedEvent, task: MailEnvelope
+    agents: Mapping[str, Definition[None]], started: MemberStartedEvent, task: MailEnvelope | None
 ) -> Definition[None] | None:
     """The definition a member runs, rebound by its agent's name; None when it is gone."""
     found = agents.get(started.data.agent)
     define = started.data.define
-    if found is None or define is MISSING:
+    # A host member has no task and is never dynamic (only a lead's team lists templates).
+    if found is None or define is MISSING or task is None:
         return found
     # A caller never sends a task (the envelope's rule), so a nameless sender is the operator.
     sender = task.from_
@@ -40,7 +41,7 @@ async def rebind(
     agents: Mapping[str, Definition[None]],
     pin: Callable[[Definition[None]], Awaitable[TeamAgentPin]],
     started: MemberStartedEvent,
-    task: MailEnvelope,
+    task: MailEnvelope | None,
 ) -> Rebind | Literal["later"]:
     """The member's rebind, or "later" when its setup failed for now."""
     found = bound(agents, started, task)

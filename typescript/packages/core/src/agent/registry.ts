@@ -113,8 +113,11 @@ export type MemberEntry = {
 export type MemberEnv = {
   readonly store: Store;
   readonly thread: ThreadRef;
-  /** The member's parent: the lead's member_started (or thread_started). */
-  readonly parent: NonNullable<EventOf<"member_started">["data"]["parent"]>;
+  /**
+   * The member's parent: the lead's member_started (or thread_started). A host member is a root
+   * thread of its tenant and has none (Teams Phase 2).
+   */
+  readonly parent?: NonNullable<EventOf<"member_started">["data"]["parent"]>;
   /** The principal of the member's task: its turns' actor. */
   readonly principal: Principal;
   readonly holder: string;

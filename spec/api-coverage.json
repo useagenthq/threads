@@ -155,6 +155,23 @@
       "tests/host/test_http.py::test_thread_routes_are_scoped_parsed_and_recorded"
     ]
   },
+  "Host.team": {
+    "ts": [
+      "packages/host/test/host-members.test.ts > the host team of a tenant > Host.team is not_found without a members option, and a handle with one"
+    ],
+    "py": [
+      "tests/host/test_host_members.py::test_the_host_team_is_not_found_without_a_members_option",
+      "tests/host/test_host_members.py::test_the_host_team_binds_its_members_without_rebinding_a_lead"
+    ]
+  },
+  "Host.team.principal": {
+    "ts": [
+      "packages/host/test/host-members.test.ts > the host team of a tenant > two tenants get two host teams, and neither names the other's"
+    ],
+    "py": [
+      "tests/host/test_host_members.py::test_two_tenants_derive_two_host_teams"
+    ]
+  },
   "KnowledgeProvider.get": {
     "ts": [
       "packages/core/test/memory/local.test.ts > provider suite > localKnowledge: a hit cites an exact version and span of the admitted bytes"

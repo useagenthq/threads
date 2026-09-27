@@ -76,9 +76,15 @@ class Definition[D]:
     may start and, without a team of its own, the only team tools it is offered."""
     rule_agents: "tuple[Definition[None], ...]" = ()
     """The host agents `rules` name, since a rule-only lead's own team is empty."""
+    host_members: "tuple[Definition[None], ...]" = ()
+    """The host's `members` agents (Teams Phase 2), so a thread that may address one can open
+    its tenant's host team before it does. Host policy, never pinned."""
     team_limits: TeamLimits = field(default_factory=TeamLimits)
     in_team: bool = False
     """Pinned as a team's member: offered the team tools."""
+    host_member: bool = False
+    """Pinned as a host member (Teams Phase 2): in a team with no grant, so it is offered reply
+    and whatever its own host rules allow, never all seven team tools."""
     answerer: bool = False
     """A host answers for the run (a channel conversation or an HTTP API call): ask_user is
     offered. Never for agent.run(), a schedule or a subagent."""
@@ -194,7 +200,7 @@ class Definition[D]:
                 spawn=bool(self.subagents),
                 team=bool(self.subagents) or self.member,
                 handoffs=bool(self.handoffs),
-                members=team_tools(self.team, self.in_team, self.rules),
+                members=team_tools(self.team, self.in_team, self.rules, self.host_member),
                 answerer=self.answerer and not self.member,
             ),
             gated=self.catalog.gated(),

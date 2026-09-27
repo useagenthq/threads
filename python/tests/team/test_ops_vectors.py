@@ -17,15 +17,18 @@ from team.vectors import (
     obj,
     rows,
     seeded,
+    teams_in,
     vector_mint,
     vectors,
     world_logs,
 )
 
-from threads.log import BranchId, MailEnvelope, MemberStartedEvent
+from threads.log import BranchId, MailEnvelope, MemberStartedEvent, ThreadId
 from threads.result import Err, Ok
 from threads.store import SqliteStore, Writer
-from threads.team.materialize import MaterializeOptions, Rebind, materialize
+from threads.store.deletion import delete_thread
+from threads.team.materialize import materialize
+from threads.team.materialize_types import MaterializeOptions, Rebind
 
 MINE = [v for v in vectors() if "lane" not in v]
 """A vector tagged for a later lane waits for that sub-lane's build."""
@@ -49,7 +52,7 @@ async def _materialize(store: SqliteStore, v: Obj) -> JsonValue:
     status = inp["rebind"]
     assert status in ("ok", "pin_unavailable", "pin_mismatch", "setup_failed")
 
-    async def rebind(_started: MemberStartedEvent, _task: MailEnvelope) -> Rebind:
+    async def rebind(_started: MemberStartedEvent, _task: MailEnvelope | None) -> Rebind:
         return Rebind(status)
 
     o = MaterializeOptions(
@@ -63,9 +66,22 @@ async def _materialize(store: SqliteStore, v: Obj) -> JsonValue:
     return {"status": m.status}
 
 
+async def _delete(store: SqliteStore, v: Obj) -> JsonValue:
+    """Deleting the `by` thread (R29-1): busy while it is a caller with work in flight, else
+    its rows and its host team's mail and asks naming it go in one transaction."""
+    thread = ThreadId(str(world_logs(v)[str(v["by"])]["thread_id"]))
+    now = _clock(v)()
+    got = await store.run(lambda c: delete_thread(c, store.tables.tenant_id, thread, now))
+    if isinstance(got, Err):
+        return {"status": "refused", "code": got.error.code}
+    return {"status": "deleted"}
+
+
 async def _run(store: SqliteStore, v: Obj) -> JsonValue:
     if v["op"] == "materialize":
         return await _materialize(store, v)
+    if v["op"] == "delete":
+        return await _delete(store, v)
     return await run_on(await _writer(store, v), v)
 
 
@@ -92,9 +108,10 @@ def test_the_selection_covers_this_builds_ops() -> None:
         *("start", "send", "ask", "reply", "wait", "monitor", "cancel"),
         *("deadline", "consume"),
         *("materialize", "idle", "end"),
+        *("turn_failure", "delete"),
     }
     # Pinned: a vector that drops out of the selection fails here, not silently.
-    assert len(MINE) == 107  # noqa: PLR2004 - the pinned selection size
+    assert len(MINE) == 118  # noqa: PLR2004 - the pinned selection size
     assert sum(v["by"] == "team" for v in MINE) == 29  # noqa: PLR2004 - of them, the operator's
 
 
@@ -113,7 +130,8 @@ def test_vector(v: Obj) -> None:
             assert await _run(store, v) == expect["outcome"]
             assert await _appended(store, v, heads) == expect["appended"]
             assert changes(before, await store.run(rows)) == expect["rows"]
-            await assert_team_replays(store, TEAM)
+            for team in teams_in(v):
+                await assert_team_replays(store, team)
         finally:
             await store.close()
 

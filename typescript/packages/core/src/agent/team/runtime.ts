@@ -9,7 +9,7 @@ import { leads } from "../../team/policy";
 import { cancelPendingFor } from "../../team/rows";
 import type { DeferTools } from "../defer";
 import { ConfigError } from "../errors";
-import { memberEntry } from "../registry";
+import { type MemberEntry, memberEntry } from "../registry";
 import type { Plan, Resolved } from "../run";
 import type { OpenStore } from "../sqlite";
 import { recipientOf, runCovering } from "./budgets";
@@ -64,8 +64,11 @@ export function teamOf<Deps, Output>(
 ):
   | { readonly runtime: TeamRuntime; readonly stop: () => Promise<void> }
   | undefined {
-  if (!leads(def.team, def.rules ?? []) && plan.member === undefined)
-    return undefined;
+  const rules = def.rules ?? [];
+  // A caller (Teams Phase 2): a thread in no team whose host rules let it send to or ask a host
+  // member. It runs no worker of its own; the host's team tick wakes it when its answer lands.
+  const caller = !leads(def.team, rules) && plan.member === undefined;
+  if (caller && rules.length === 0) return undefined;
   // Members inherit the lead's resolved defer_tools unless they set their own.
   const deferTools = writer.chain.fold.policy?.context?.defer_tools;
   const thread = writer.chain.segments[0]?.header.thread_id;
@@ -81,6 +84,11 @@ export function teamOf<Deps, Output>(
     principal: plan.principal,
     ...(def.rules === undefined ? {} : { rules: def.rules }),
   };
+  if (caller)
+    return {
+      runtime: { ...base, notify: () => undefined },
+      stop: async () => undefined,
+    };
   if (plan.member !== undefined)
     return {
       runtime: {
@@ -101,7 +109,7 @@ export function teamOf<Deps, Output>(
     log: opened.log,
     artifacts: opened.artifacts,
     team,
-    agents: agentsOf(def.members),
+    agents: memberEntries(agentsOf(def.members)),
     ...(plan.signal === undefined ? {} : { signal: plan.signal }),
     ...(deferTools === undefined ? {} : { deferTools }),
   });
@@ -166,6 +174,21 @@ export function agentsOf(
     agentsOf(memberEntry(agent)?.team ?? [], into);
   }
   return into;
+}
+
+/**
+ * What a team needs of each agent it may run, by name: what a worker rebinds and runs a member
+ * with. A host team's come from the host's registry under its rules instead (HostRunner.member).
+ */
+export function memberEntries(
+  agents: ReadonlyMap<string, object>,
+): ReadonlyMap<string, MemberEntry> {
+  return new Map(
+    [...agents].flatMap(([name, handle]) => {
+      const entry = memberEntry(handle);
+      return entry === undefined ? [] : [[name, entry] as const];
+    }),
+  );
 }
 
 /** The starter a block names for Team.start: no agent in a team may take its name. */

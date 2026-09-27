@@ -15,6 +15,7 @@ from threads.store.losses import record_losses
 from threads.store.sql import export, text_of, transaction
 from threads.store.started import Opened, opened_threads, owner_of
 from threads.store.verify import verify_export
+from threads.team.host_logs import caller_busy, prune_caller_rows
 
 TEAM_TABLES: Final = (
     "teams",
@@ -72,10 +73,16 @@ def _delete_set(
         "SELECT thread_id FROM threads WHERE tenant_id = ?", (tenant_id,)
     ).fetchall()
     alive = {text_of(t) for (t,) in existing}
-    refused = _outside_its_team(opened, doomed, alive) or _running(conn, doomed, now)
+    refused = (
+        _outside_its_team(opened, doomed, alive)
+        or _running(conn, doomed, now)
+        or _caller_in_flight(conn, doomed)
+    )
     if refused is not None:
         return Err(refused)  # decided before any write, so the refusal writes nothing
     _delete_teams(conn, tenant_id, _doomed_teams(conn, tenant_id, doomed))
+    # A caller is in no team, so its host-team mail and asks go with it (Teams Phase 2, R29-1).
+    prune_caller_rows(conn, doomed)
     for thread in doomed:
         _delete_one(conn, tenant_id, thread, now)
     return Ok(len(doomed))
@@ -84,10 +91,12 @@ def _delete_set(
 def _doomed_teams(conn: Conn, tenant_id: str, doomed: Collection[ThreadId]) -> list[str]:
     """The teams a doomed lead leads, by `teams.lead_thread_id` in this tenant (Gate 1 §4.15
     rule 2). A team id is never taken from a log: an imported team_opened could name another
-    tenant's team. Filtered here, not in SQL, so a large tenant never passes SQLite's variable
-    limit."""
+    tenant's team. A host team has no lead and goes only with its tenant. Filtered here, not in
+    SQL, so a large tenant never passes SQLite's variable limit."""
     rows = conn.execute(
-        "SELECT team_id, lead_thread_id FROM teams WHERE tenant_id = ?", (tenant_id,)
+        "SELECT team_id, lead_thread_id FROM teams WHERE tenant_id = ? AND lead_thread_id"
+        " IS NOT NULL",
+        (tenant_id,),
     ).fetchall()
     return [text_of(team) for team, lead in rows if text_of(lead) in doomed]
 
@@ -152,6 +161,16 @@ def _running(conn: Conn, doomed: Collection[ThreadId], now: int) -> DeleteError 
         if live is not None:
             return _busy(thread, f"branch {text_of(live[0])} holds a live lease")
         why = next((w for b in _branches(conn, thread) if (w := _unsettled(conn, b, now))), None)
+        if why is not None:
+            return _busy(thread, why)
+    return None
+
+
+def _caller_in_flight(conn: Conn, doomed: Collection[ThreadId]) -> DeleteError | None:
+    """busy while a doomed thread is a caller with work in flight (Teams Phase 2, R29-1): an
+    open ask, an unconsumed reply or bounce, or mail a host member has not taken."""
+    for thread in doomed:
+        why = caller_busy(conn, _branches(conn, thread))
         if why is not None:
             return _busy(thread, why)
     return None

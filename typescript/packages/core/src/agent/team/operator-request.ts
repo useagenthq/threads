@@ -31,10 +31,20 @@ export type HandleEnv = {
   readonly artifacts: ArtifactStore;
   readonly ref: TeamRef;
   readonly principal: Principal;
-  /** The lead that ran, as this process defines it: the agents start resolves. */
-  readonly lead: MemberEntry;
+  /**
+   * The lead that ran, as this process defines it: the agents start resolves. Absent for a host
+   * team (Teams Phase 2), which is leadless: nothing starts a member in it.
+   */
+  readonly lead?: MemberEntry;
   /** The store the team's members run on, when the handle drives them. */
   readonly store: Store;
+  /** A leadless team's limits, which would otherwise come from its lead's teamLimits. */
+  readonly limits?: TeamLimits;
+  /**
+   * What a leadless team's members are rebound and run with, by agent name: the host's own
+   * registry under its rules. A lead's team gives them through `lead.team` instead.
+   */
+  readonly agents?: ReadonlyMap<string, MemberEntry>;
   readonly busyBoundMs?: number;
   readonly mint?: Mint;
 };
@@ -127,7 +137,11 @@ function putText(env: HandleEnv): Request["put"] {
   };
 }
 
-export const limitsOf = (env: HandleEnv): TeamLimits => env.lead.teamLimits;
+export const limitsOf = (env: HandleEnv): TeamLimits => {
+  const limits = env.lead?.teamLimits ?? env.limits;
+  if (limits === undefined) throw new Error("a team handle has limits");
+  return limits;
+};
 
 /** The lead as a member's parent, and the defer_tools its members inherit. */
 export async function leadOf(

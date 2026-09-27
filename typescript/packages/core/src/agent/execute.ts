@@ -241,7 +241,9 @@ function linkOf(plan: Plan<unknown>): ChildPin | undefined {
       parent: { ...child.parent, relation: "subagent" },
       tools: child.tools,
     };
-  if (member !== undefined) return { parent: member.parent };
+  // A host member is a root thread: it is a member with no parent to link to (Phase 2).
+  if (member?.parent !== undefined) return { parent: member.parent };
+  if (member !== undefined) return undefined;
   return target === undefined ? undefined : { parent: target.parent };
 }
 

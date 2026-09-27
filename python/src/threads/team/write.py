@@ -7,7 +7,18 @@ from typing import TYPE_CHECKING, Final
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads._generated.events_v1 import Team
-from threads.log import ParseError, TeamOpenedEvent, ThreadStartedEvent
+from threads.log import (
+    AskClosedEvent,
+    BranchId,
+    CallerAddress,
+    Event,
+    MailRefusedEvent,
+    MessageReceivedEvent,
+    MessageSentEvent,
+    ParseError,
+    TeamOpenedEvent,
+    ThreadStartedEvent,
+)
 
 # Modules, not their names: opening runs these hooks for the branch it opens (a cycle).
 from threads.store import lease, opening
@@ -30,7 +41,7 @@ def team_rows(conn: Conn, a: Appended) -> ParseError | None:
     deferred)."""
     opens = any(isinstance(e, ThreadStartedEvent | TeamOpenedEvent) for e in a.events)
     if not opens and not _teams_of(conn, a):
-        return None
+        return caller_rows(conn, a)
     taken = _taken_team(conn, a)
     if taken is not None:
         message = f"team {taken} already exists; a lead's first append opens it"
@@ -39,6 +50,46 @@ def team_rows(conn: Conn, a: Appended) -> ParseError | None:
     insert_rows(conn, log, a.events)
     change_rows(conn, log, a.events, a.opened)
     return None
+
+
+def caller_rows(conn: Conn, a: Appended) -> ParseError | None:
+    """A caller (Teams Phase 2) is in no team, so its branch writes no member, monitor or feed
+    row; but its own log is the only record of the mail it sent and the receipts it took, so the
+    append writes the mail and asks rows those events carry."""
+    events = [e for e in a.events if _callers_own(conn, a.branch_id, e)]
+    if not events:
+        return None
+    log = TeamLog(a.thread_id, a.branch_id)
+    insert_rows(conn, log, events)
+    change_rows(conn, log, events, frozenset())
+    return None
+
+
+def _callers_own(conn: Conn, branch: BranchId, e: Event) -> bool:
+    """Whether this event carries a row of the host team that names this branch as caller."""
+    if isinstance(e, MessageSentEvent | MessageReceivedEvent):
+        env = e.data.envelope
+        ends = (env.from_, env.to)
+        return any(isinstance(x, CallerAddress) and x.caller.branch_id == branch for x in ends)
+    if isinstance(e, MailRefusedEvent):
+        return _one(
+            conn,
+            "SELECT 1 FROM mail WHERE mail_id = ? AND to_branch_id = ?",
+            e.data.mail_id,
+            branch,
+        )
+    if isinstance(e, AskClosedEvent):
+        return _one(
+            conn,
+            "SELECT 1 FROM asks WHERE ask_id = ? AND asker_branch_id = ?",
+            e.data.ask_id,
+            branch,
+        )
+    return False
+
+
+def _one(conn: Conn, query: str, *params: object) -> bool:
+    return conn.execute(query, params).fetchone() is not None
 
 
 def _taken_team(conn: Conn, a: Appended) -> str | None:

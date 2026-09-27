@@ -6,9 +6,8 @@ complete end-of-member append instead, and no model request is ever made for it.
 spec/tools/fixtures/ops_start.py."""
 
 import json
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Final, Literal
 
 from pydantic import JsonValue, TypeAdapter
 from pydantic.experimental.missing_sentinel import MISSING
@@ -28,22 +27,17 @@ from threads.store.conn import Conn
 from threads.store.lease import Lease
 from threads.store.lines import Draft, uuid7
 from threads.store.opening import BranchOpening
-from threads.store.worker import Clock
-from threads.team.batch import Batch, Mint
+from threads.team.batch import Batch
 from threads.team.cancel_start import start_cancelled
+from threads.team.materialize_host import materialize_host
+from threads.team.materialize_types import (
+    LINE_ZERO,
+    Materialized,
+    MaterializeOptions,
+    Rebind,
+)
 from threads.team.rows import MemberRow, member_named, pending_to, team_row
 from threads.team.settle import AppendContext, SettleContext, settle
-
-type RebindCode = Literal["pin_unavailable", "pin_mismatch", "setup_failed"]
-
-
-@dataclass(frozen=True, slots=True)
-class Rebind:
-    """What rebinding the member's definition by name found: ok (with a nested lead's own team,
-    which its first append opens), or why not."""
-
-    status: Literal["ok", "pin_unavailable", "pin_mismatch", "setup_failed"]
-    team: Mapping[str, JsonValue] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,44 +48,12 @@ class _Cancel:
 
 
 @dataclass(frozen=True, slots=True)
-class Materialized:
-    status: Literal["materialized", "not_starting", "cancelled", "rebind_failed"]
-    writer: Writer | None = None
-    code: RebindCode | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class MaterializeOptions:
-    rebind: Callable[[MemberStartedEvent, MailEnvelope], Awaitable[Rebind]]
-    """Rebinds the member's definition from its member_started and task (whose sender is the
-    starter a dynamic member's block names)."""
-    holder: str
-    """The lease holder the member's first writer runs under."""
-    ttl_ms: int
-    clock: Clock
-    mint: Mint | None = None
-    branch_id: BranchId | None = None
-    """The member's branch id; a new one by default."""
-
-
-@dataclass(frozen=True, slots=True)
 class _Starting:
     row: MemberRow
     task: MailEnvelope
     started: MemberStartedEvent
 
 
-_LINE_ZERO: Final = (
-    "agent_name",
-    "instructions",
-    "model",
-    "model_params",
-    "adapter",
-    "tools",
-    "policy",
-    "sandbox_provider",
-)
-"""thread_started takes the pinned config's line-0 fields; the rest of the config is hashed only."""
 _OBJECT: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
 
 
@@ -99,6 +61,9 @@ async def materialize(
     store: SqliteStore, team: str, name: str, o: MaterializeOptions
 ) -> Ok[Materialized] | Err[ParseError]:
     """Materializes the member `name` of `team`, or reports why nothing was opened."""
+    row = await store.run(lambda c: member_named(c, team, name))
+    if row is not None and row.role == "host_member":
+        return await materialize_host(store, team, row, o)
     found = await _starting(store, team, name, o.clock())
     if isinstance(found, Err) or found.value is None:
         return found if isinstance(found, Err) else Ok(Materialized("not_starting"))
@@ -153,7 +118,7 @@ async def _read(
     if isinstance(config, Err):
         return config
     raw = _OBJECT.validate_python(json.loads(config.value))
-    return Ok((text.value, {k: raw[k] for k in _LINE_ZERO if k in raw}))
+    return Ok((text.value, {k: raw[k] for k in LINE_ZERO if k in raw}))
 
 
 async def _task_text(store: SqliteStore, task: MailEnvelope) -> Ok[str] | Err[ParseError]:

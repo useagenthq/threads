@@ -104,3 +104,17 @@ def test_a_task_taken_by_another_principal() -> None:
 
     logs["researcher"] = rechain(logs["researcher"], _edit_first("user_input", forge))
     assert _check(logs) == ("researcher", 2)
+
+
+def test_a_member_ended_bounce_whose_result_is_not_its_ends() -> None:
+    """Rule 43 (Teams Phase 2, decision 6): an ended host member's bounce answers an ask it had
+    taken, so no mail_refused pins it — only the end's own result does."""
+    logs = case_logs("host-member-end-bounces-taken-ask")
+
+    def forge(e: Line) -> None:
+        env = _obj(_data(e)["envelope"])
+        result = _obj(env["result"])
+        env["result"] = {"member": result["member"], "status": "cancelled"}
+
+    logs["billing"] = rechain(logs["billing"], _edit_first("message_sent", forge))
+    assert _check(logs) == ("billing", 6)

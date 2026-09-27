@@ -18,8 +18,10 @@ import { turnProvenance } from "../../src/team/provenance";
 import type { Request } from "../../src/team/request";
 import { type TeamRow, teamOfLog } from "../../src/team/rows";
 import { type Settlement, settle } from "../../src/team/settle";
+import { turnFailure } from "../../src/team/turn-failure";
 import { monitor, openWait, wait, waitMembers } from "../../src/team/watch";
 import { StartInput } from "../../src/tools/team-inputs";
+import { Failure, Hop, TurnEnd } from "./op-inputs";
 import { DOC, TEAM, type Vector, vectorMint } from "./vectors";
 
 // One op vector's op under its writer, at the writer's clock, through this runtime's own store
@@ -330,6 +332,25 @@ function lastText(events: readonly { type: string }[]): string {
     .join("");
 }
 
+/** A host member's turn-only failure (rule 53): the ending append under its own writer. */
+async function turnFailureOp(w: Writer, v: Op): Promise<unknown> {
+  const hop = Hop.optional().parse(v.input["hop"]);
+  let out: unknown;
+  await decided(w, async (ctx) => {
+    out = await turnFailure(
+      ctx,
+      TurnEnd.parse(v.input["turn"]),
+      Failure.parse(v.input["error"]),
+      ...(hop === undefined
+        ? []
+        : ([
+            { ...hop, scope: "hop", observed_is_upper_bound: false },
+          ] as const)),
+    );
+  });
+  return out;
+}
+
 /** The op under `w`: its outcome as the vector states it. */
 export function runOn(w: Writer, v: Op): Promise<unknown> {
   switch (v.op) {
@@ -349,6 +370,8 @@ export function runOn(w: Writer, v: Op): Promise<unknown> {
     case "idle":
     case "end":
       return settleOp(w, v);
+    case "turn_failure":
+      return turnFailureOp(w, v);
     default:
       throw new Error(`op ${v.op} runs on a store, not a writer`);
   }

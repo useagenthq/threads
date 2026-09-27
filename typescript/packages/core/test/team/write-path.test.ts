@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { CASE_NAMES, loadCase, plain } from "../conformance/cases";
+import { z } from "zod";
+import { CASE_NAMES, type Case, loadCase, plain } from "../conformance/cases";
 import { fixture } from "../store/helpers";
 import {
   assertTeamReplays,
@@ -16,12 +17,23 @@ import { reappend } from "./writes";
 // by event through writers into a fresh store leaves exactly the index rows the case expects,
 // and a wipe and rebuild of each team leaves them again.
 
+/**
+ * A case whose caller was deleted has no write path left to replay: its log is gone, so the
+ * appends that inserted its rows can't be made again. Its rebuild is checked by the team runner.
+ */
+const Deleted = z.object({ deleted: z.array(z.string()).optional() });
+const replayable = (c: Case): boolean =>
+  Deleted.safeParse(c.input ?? {}).data?.deleted === undefined;
+
 const recorded = [
   ...CASE_NAMES.map((name) => loadCase(name)),
   ...stagedNames().map((name) => loadCase(name, STAGED)),
 ].filter(
   (c) =>
-    c.kind === "team" && c.error === undefined && c.team.index !== undefined,
+    c.kind === "team" &&
+    c.error === undefined &&
+    c.team.index !== undefined &&
+    replayable(c),
 );
 
 describe("the team index on the write path", () => {

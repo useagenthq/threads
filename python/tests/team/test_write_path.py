@@ -8,7 +8,16 @@ from pathlib import Path
 
 import pytest
 from pydantic import JsonValue, TypeAdapter
-from team.team_kit import CASES, TENANT, assert_team_replays, index_rows, teams_of, verified
+from team.team_kit import (
+    CASES,
+    TENANT,
+    assert_team_replays,
+    deleted_callers,
+    index_rows,
+    teams_of,
+    tombstone,
+    verified,
+)
 from team.writes import reappend
 
 from threads.result import Ok
@@ -49,6 +58,7 @@ def test_appends_leave_the_expected_rows_and_a_rebuild_leaves_them_again(case: P
         store = opened.value
         reads = [verified(raw) for raw in logs.values()]
         await reappend(store, [r.value for r in reads if isinstance(r, Ok)])
+        await tombstone(store, deleted_callers(case))
         assert await store.run(index_rows) == expected["index"]
         for team in teams_of(logs):
             await assert_team_replays(store, team)

@@ -4,7 +4,6 @@ import { TEAM_CONSTANTS } from "../../team/constants";
 import type { DynamicChoice } from "../../team/dynamic";
 import { materialize, type Rebind } from "../../team/materialize";
 import type { MemberRow } from "../../team/rows";
-import { memberEntry } from "../registry";
 import { pinnedOrLater } from "./scan";
 import type { WorkerEnv } from "./worker";
 
@@ -28,8 +27,7 @@ export async function rebindMember(
     readonly choice: DynamicChoice | undefined;
   },
 ): Promise<Rebind | "later"> {
-  const handle = env.agents.get(pin.agent);
-  const entry = handle === undefined ? undefined : memberEntry(handle);
+  const entry = env.agents.get(pin.agent);
   if (entry === undefined) return { status: "pin_unavailable" };
   const pinned = await pinnedOrLater(() =>
     entry.pinned(env.deferTools, pin.choice),

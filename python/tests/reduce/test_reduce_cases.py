@@ -41,7 +41,7 @@ CASE_KEYS = frozenset(
 EXPECTED_KEYS = frozenset(
     {"outcome", "error", "state", "committed_bytes", "appended", "sandbox", "fork", "resources"}
     | {"render", "head_verified", "stubs", "responses", "inbox", "decisions", "projections"}
-    | {"threads", "api", "user_inputs", "states", "index", "tree", "messages"}
+    | {"threads", "api", "user_inputs", "states", "index", "tree", "messages", "feed"}
 )
 OWN_RUNNER = frozenset({"policy", "recover", "stub", "fork", "intake", "host", "team", "ui"})
 """Kinds another runner owns: policy (tests/permissions), recover and stub (tests/loop), fork

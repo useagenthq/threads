@@ -13,10 +13,11 @@ from threads.result import Err, Ok
 from threads.store import wakes
 from threads.store.conn import Conn, one
 from threads.store.deletion import TEAM_TABLES
-from threads.store.sql import export, int_of, transaction
+from threads.store.sql import export, int_of, text_of, transaction
 from threads.store.started import Opened, opened_threads
 from threads.store.verify import VerifiedLog, verify_export
 from threads.team.cross import TeamLogEvents, check_team_logs
+from threads.team.host_logs import drop_deleted_callers, host_team_branches
 from threads.team.index import TeamLog, change_rows, insert_rows, turn_openers
 
 if TYPE_CHECKING:
@@ -31,11 +32,12 @@ class _Read:
 
 def team_branches(conn: Conn, tenant_id: str, team_id: str) -> list[TeamLog]:
     """The team's logs, by branch: its lead's, every member's (parent team_member through the
-    lead) and its team log; empty when no lead names the team."""
+    lead) and its team log; empty when nothing names the team. A host team has no lead, so it is
+    found at the ids its tenant derives (Teams Phase 2)."""
     opened = opened_threads(conn, tenant_id)
     lead = next((o for o in opened if _leads(o, team_id)), None)
     if lead is None:
-        return []
+        return host_team_branches(conn, tenant_id, team_id, opened)
     logs = [
         TeamLog(o.thread_id, o.branch_id)
         for o in opened
@@ -92,7 +94,7 @@ def refold_team(conn: Conn, tenant: str, team_id: str) -> Ok[None] | Err[ParseEr
     if broken is not None:
         message = f"{broken.branch_id}: {broken.message}"
         return Err(ParseError("invalid_transition", message, broken.seq))
-    _refold(conn, team_id, reads)
+    _refold(conn, tenant, team_id, reads)
     return Ok(None)
 
 
@@ -108,7 +110,18 @@ def _read_all(conn: Conn, logs: Sequence[TeamLog]) -> list[_Read] | Err[ParseErr
     return reads
 
 
-def _refold(conn: Conn, team_id: str, reads: Sequence[_Read]) -> None:
+def _feed_branches(conn: Conn, team_id: str) -> set[str]:
+    """The branches in the team's feed: its members' (the lead's included) and its team log. A
+    caller's events are in no feed (Teams Phase 2)."""
+    rows = conn.execute(
+        "SELECT branch_id FROM team_members WHERE team_id = ? AND branch_id IS NOT NULL"
+        " UNION SELECT team_log_branch_id FROM teams WHERE team_id = ?",
+        (team_id, team_id),
+    ).fetchall()
+    return {text_of(b) for (b,) in rows}
+
+
+def _refold(conn: Conn, tenant: str, team_id: str, reads: Sequence[_Read]) -> None:
     (epoch,) = one(
         conn.execute(
             "SELECT COALESCE(MAX(epoch), 0) FROM team_feed WHERE team_id = ?", (team_id,)
@@ -122,8 +135,13 @@ def _refold(conn: Conn, team_id: str, reads: Sequence[_Read]) -> None:
         insert_rows(conn, r.log, r.verified.fold.events, team_id)
     for r in reads:
         change_rows(conn, r.log, r.verified.fold.events, turn_openers(r.verified), team_id)
+    drop_deleted_callers(conn, tenant, team_id)
+    in_feed = _feed_branches(conn, team_id)
     feed = sorted(
-        (r.log.branch_id, e.seq) for r in reads for e, _ in r.verified.segments[-1].events
+        (r.log.branch_id, e.seq)
+        for r in reads
+        if r.log.branch_id in in_feed
+        for e, _ in r.verified.segments[-1].events
     )
     conn.executemany(
         "INSERT INTO team_feed (team_id, epoch, feed_offset, branch_id, seq)"

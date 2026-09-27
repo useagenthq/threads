@@ -18,11 +18,15 @@ from threads._generated.host_api_v1 import RunAccepted, StartRunRequest
 from threads.adapters.loop_resources import holding
 from threads.agents.agent import Agent
 from threads.agents.config import ConfigError
+from threads.agents.open_team import OpenTeamError
 from threads.agents.store import Store, open_store
+from threads.agents.team_handle import Team
 from threads.agents.team_handle_types import TeamCursor, TeamItem
 from threads.host import expiry, start, stream, team_stream
 from threads.host.channel import Challenged, ChannelAdapter, RawRequest, RawResponse
+from threads.host.host_team import HostTeam
 from threads.host.intake import ChannelIntake
+from threads.host.members import HostMemberOptions, check_members
 from threads.host.reopen import Reopening
 from threads.host.runs import Runner, RunTask
 from threads.host.schedules import Schedule, Scheduler
@@ -33,6 +37,7 @@ from threads.log import BranchId, EventId, ParseError, Permissions, Principal, T
 from threads.result import Err, Ok
 from threads.sandbox.protocol import Sandbox
 from threads.store import LOCAL_TENANT
+from threads.team.ops import TeamLimits
 from threads.team.policy import MessagePolicyRule
 from threads.telemetry import Exporter, bind_telemetry
 from threads.thread import tree
@@ -41,6 +46,9 @@ from threads.thread.handle import Thread, open_thread
 if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.types import ASGIApp
+
+    from threads.agents.open_team import OpenTeamError
+    from threads.agents.team_handle import Team
 
 type Authenticate = Callable[["Request"], Awaitable[Principal | None]]
 """Maps an HTTP API request to its principal, or None for 401."""
@@ -67,18 +75,25 @@ class Host:
         ceiling: Permissions | None = None,
         telemetry: Exporter | None = None,
         message_policy: Sequence[MessagePolicyRule] = (),
+        members: Mapping[str, HostMemberOptions] = {},
     ) -> None:
+        check_members(agents, members, message_policy)
         self._store = store
         self._agents = agents
+        self._members = dict(members)
         self._channels = channels
         self.authenticate: Authenticate | None = authenticate
-        self._runner: Runner = Runner(store, agents, channels, ceiling, message_policy)
+        self._runner: Runner = Runner(store, agents, channels, ceiling, message_policy, members)
         self._intake: ChannelIntake = ChannelIntake(self._runner, channels)
         self._runner.on_end = self._after_run
         self._after: set[asyncio.Task[RunTask | None]] = set()
         """The reply sweeps after the runs that ended here, until each has looked."""
+        self._host_team: HostTeam = HostTeam(
+            {name: self._runner.definition(name) for name in members}
+        )
+        """The tenant-wide host members, bound through the policy-aware definitions."""
         self._scheduler = Scheduler(self._runner, schedules)
-        self._teams: Teams = Teams(self._runner)
+        self._teams: Teams = Teams(self._runner, self._host_team)
         """The host as a team worker: it drives every team of the store between their runs."""
         self._ticking: asyncio.Task[None] | None = None
         self._held: contextlib.AsyncExitStack | None = None
@@ -133,6 +148,9 @@ class Host:
         self._scheduler.check(self._runner.agent)
         self._runner.resolve_secrets()
         await open_store(self._store)
+        # The host team of the host's own tenant opens here; another tenant's opens when one of
+        # its threads first addresses a host member (lazy and idempotent, Teams Phase 2).
+        await self._host_team.open(self._runner.store(LOCAL_TENANT), LOCAL_TENANT)
         self._runner.open()
         if self._held is None:
             self._held = contextlib.AsyncExitStack()
@@ -249,6 +267,13 @@ class Host:
             self._runner.store(principal.tenant), team, principal.tenant, after
         )
 
+    async def team(self, *, principal: Principal) -> "Ok[Team] | Err[OpenTeamError]":
+        """spec/api.json `Host.team`: the host team of the principal's tenant, which holds the
+        tenant's host members, has no lead, never closes and has no HTTP route. not_found with
+        no `members` option, or before that tenant's host team is open."""
+        store = self._runner.store(principal.tenant)
+        return await self._host_team.handle(store, principal, TeamLimits())
+
     async def thread(
         self, principal: Principal, thread_id: ThreadId, branch_id: BranchId | None
     ) -> Ok[Thread] | Err[ParseError]:
@@ -299,6 +324,7 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
     ceiling: Permissions | None = None,
     telemetry: Exporter | None = None,
     message_policy: Sequence[MessagePolicyRule] = (),
+    members: Mapping[str, HostMemberOptions] | None = None,
 ) -> Host:
     """spec/api.json `host`. Starts nothing until `ready()`. Without `authenticate` every /v1
     route answers 401; channel webhooks still work. `ceiling` caps every run this host starts
@@ -309,7 +335,11 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
     deny, and only add. An agent gets the team tools only for the ops some rule with it as `from`
     allows, and a rule that allows start makes its `from` a lead. Default (): everything else is
     denied. A rule that names no host agent, an empty allow or a repeated (from, to) pair is
-    refused here (ConfigError)."""
+    refused here (ConfigError). `members` names the host agents that run as one long-lived
+    member per tenant, in a leadless host team every thread of the tenant may address by name,
+    as `message_policy` allows. A host member with `team` or `handoffs`, one that turns
+    compaction off, or one whose tools can need approval without `approvers`, is refused here
+    (ConfigError, naming `members.<name>`). Default None: none."""
     return Host(
         store,
         agents,
@@ -319,6 +349,7 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
         ceiling=ceiling,
         telemetry=telemetry,
         message_policy=message_policy,
+        members=members or {},
     )
 
 

@@ -60,6 +60,7 @@ const ExpectedFile = z.strictObject({
   states: z.record(z.string(), z.unknown()).optional(),
   index: z.record(z.string(), z.unknown()).optional(),
   tree: z.unknown().optional(),
+  feed: z.unknown().optional(),
   committed_bytes: z.int().min(0).optional(),
   head_verified: z.boolean().optional(),
   projections: z.record(z.string(), z.unknown()).optional(),
@@ -190,11 +191,12 @@ export type Case = {
   readonly state: unknown;
   /** team: each log by label, in input.logs order. */
   readonly logs: ReadonlyMap<string, Uint8Array>;
-  /** team: the expected states, index and tree. */
+  /** team: the expected states, index, tree and (Teams Phase 2) feed reads. */
   readonly team: {
     readonly states: unknown;
     readonly index: unknown;
     readonly tree: unknown;
+    readonly feed: unknown;
   };
   readonly projections: Readonly<Record<string, unknown>> | undefined;
   readonly committedBytes: number | undefined;
@@ -293,6 +295,7 @@ export function loadCase(name: string, root: string = CASES_DIR): Case {
       states: expected.states,
       index: expected.index,
       tree: expected.tree,
+      feed: expected.feed,
     },
     artifacts: readArtifacts(dir),
     request: readBytes(join(dir, "request.bytes")),

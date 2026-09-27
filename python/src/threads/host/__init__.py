@@ -20,6 +20,7 @@ from threads.host.channel import (
     Sent,
     VerifiedDelivery,
 )
+from threads.host.members import HostMemberOptions
 from threads.host.schedules import Schedule
 from threads.host.stream import Message as SseMessage
 
@@ -33,6 +34,7 @@ __all__ = [
     "DeliveryError",
     "DeliveryOutcome",
     "Host",
+    "HostMemberOptions",
     "Ignore",
     "Inbound",
     "LookupCapability",

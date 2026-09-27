@@ -15,6 +15,7 @@ from threads.log import (
     MemberRef,
     MemberStartedEvent,
     MessageReceivedEvent,
+    Provenance,
     TeamRefusal,
     ToolCallEvent,
 )
@@ -25,6 +26,7 @@ from threads.store.conn import Conn
 from threads.store.lines import Draft
 from threads.team.batch import Batch
 from threads.team.dynamic import InvalidDefinition
+from threads.team.host_team import host_team_ids
 from threads.team.mail import PutText
 from threads.team.policy import MessagePolicyRule, rule_for
 from threads.team.provenance import turn_provenance
@@ -52,12 +54,17 @@ class CallContext:
 
 @dataclass(frozen=True, slots=True)
 class Caller:
-    """The caller as one team's member: its row there, its ref, its turn's provenance."""
+    """Who is acting: a member of one team, or a caller thread in no team, which acts in its
+    tenant's host team (Teams Phase 2)."""
 
     team: TeamRow
-    row: MemberRow
-    ref: dict[str, JsonValue]
+    row: MemberRow | None
+    """None for a caller thread: it has no team_members row."""
+    ref: JsonValue
+    """What an envelope's `from` names: a MemberRef, or a `{caller}` address."""
     provenance: JsonValue
+    agent: str
+    """The acting agent's name, which a host rule is keyed by."""
 
 
 type CallRefusal = TeamRefusal | Literal["unknown_ask", "already_replied", "ask_closed"]
@@ -74,14 +81,37 @@ class Refusal:
 
 def caller_of(ctx: CallContext) -> Caller:
     """The team the caller acts in: the one it leads (a nested lead starts its own members),
-    else the one it is a member of."""
+    the one it is a member of, or, for a thread in no team, its tenant's host team, which it
+    addresses as a caller (Teams Phase 2)."""
     rows = own_rows(ctx.conn, ctx.call.thread_id)
     row = next((r for r in rows if r.role == "lead"), rows[0] if rows else None)
-    team = None if row is None else team_row(ctx.conn, row.team_id)
     provenance = turn_provenance(ctx.conn, ctx.fold.events)
-    if row is None or team is None or provenance is None:
+    if provenance is None:
         raise AssertionError("a team tool call outside a team")
-    return Caller(team, row, ref_of(team, row), provenance)
+    if row is None:
+        return _calling_thread(ctx, provenance)
+    team = team_row(ctx.conn, row.team_id)
+    if team is None:
+        raise AssertionError("a team tool call outside a team")
+    return Caller(team, row, ref_of(team, row), provenance, row.agent)
+
+
+def _calling_thread(ctx: CallContext, provenance: JsonValue) -> Caller:
+    """A caller: a thread outside the host team, addressing it as `{caller}`. Its host team is
+    the one its principal's tenant derives, opened before the op addresses a member."""
+    started = ctx.fold.started
+    tenant = Provenance.model_validate(provenance).principal.tenant
+    team = team_row(ctx.conn, host_team_ids(tenant).team)
+    if started is None or team is None:
+        raise AssertionError("a team tool call outside a team")
+    address: JsonValue = {
+        "caller": {
+            "thread_id": ctx.call.thread_id,
+            "branch_id": ctx.call.branch_id,
+            "agent": started.agent_name,
+        }
+    }
+    return Caller(team, None, address, provenance, started.agent_name)
 
 
 def call_mail_id(ctx: CallContext) -> str:
@@ -108,7 +138,7 @@ def decision(ctx: CallContext, caller: Caller, op: PolicyOp, target: str) -> Dec
     rules, which only add, then default deny."""
     if _granted(ctx, caller, op, target):
         return Decision("team")
-    rule = rule_for(ctx.rules, caller.row.agent, target, op)
+    rule = rule_for(ctx.rules, caller.agent, target, op)
     return Decision("default") if rule is None else Decision("message_policy", rule)
 
 
@@ -207,7 +237,11 @@ def call_request(ctx: CallContext) -> Request:
 
 def _granted(ctx: CallContext, caller: Caller, op: PolicyOp, target: str) -> bool:
     """The team's Phase 1 grant to a member: a lead starts, a member's starter (its member_started
-    is in the caller's own log) cancels it, and members send, ask and monitor one another."""
+    is in the caller's own log) cancels it, and members send, ask and monitor one another. There
+    is no grant inside a host team (Teams Phase 2): a caller's and a host member's ops are
+    decided by the host's message_policy rules alone."""
+    if caller.row is None or caller.row.role == "host_member":
+        return False
     if op == "start":
         return caller.row.role == "lead"
     if op != "cancel":
@@ -226,6 +260,9 @@ def addressed(ctx: CallContext, caller: Caller, name: str) -> MemberRow | Refusa
     """The member a model addresses by name, at the generation the caller's own log last
     recorded for it (its member_started, or a receipt's sender), else the current row's."""
     row = member_named(ctx.conn, caller.team.team_id, name)
+    if caller.row is None:
+        # A caller holds no generation: the tool binds the current row, read in this transaction.
+        return row if row is not None else Refusal("unknown_member")
     seen = _bound(ctx.fold.events, name)
     generation = seen if seen is not None else (0 if row is None else row.generation)
     if row is None or generation > row.generation:

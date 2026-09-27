@@ -24,7 +24,7 @@ export async function teamRows(a: Appended): Promise<Result<void, LogError>> {
   if (!opens) {
     const teams = await teamsOf(a);
     if (!teams.ok) return teams;
-    if (teams.value.length === 0) return ok(undefined);
+    if (teams.value.length === 0 && !(await isCaller(a))) return ok(undefined);
   }
   const taken = await takenTeam(a);
   if (taken !== undefined)
@@ -86,6 +86,38 @@ export async function openTeamLog(
       );
   }
   return ok(undefined);
+}
+
+/** The event types that carry a caller's mail or move its rows. */
+const MAIL: ReadonlySet<string> = new Set([
+  "message_sent",
+  "message_received",
+  "mail_refused",
+  "ask_closed",
+]);
+
+/**
+ * A branch in no team that the host team's mail names as a caller (Teams Phase 2): it writes the
+ * `mail` and `asks` rows its own events carry, and nothing else — a caller is in no team, so it
+ * has no member row, no monitor and no feed row (its host member's own receipt is what the feed
+ * holds). Either it sends caller mail in this append, or the store already holds a row naming it.
+ */
+async function isCaller(a: Appended): Promise<boolean> {
+  // A plain thread's append carries no mail at all, and asks nothing of the store.
+  if (!a.events.some((e) => MAIL.has(e.type))) return false;
+  const sends = a.events.some(
+    (e) =>
+      e.type === "message_sent" &&
+      "caller" in e.data.envelope.from &&
+      e.data.envelope.from.caller.branch_id === a.branchId,
+  );
+  if (sends) return true;
+  const found = await a.tx.all(
+    `SELECT 1 FROM mail WHERE to_kind = 'caller' AND to_branch_id = ?
+      UNION ALL SELECT 1 FROM asks WHERE asker_branch_id = ? LIMIT 1`,
+    [a.branchId, a.branchId],
+  );
+  return found.length > 0;
 }
 
 /** A team a lead's thread_started names that the store already holds: a second root for it. */

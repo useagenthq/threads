@@ -19,20 +19,19 @@ import type { Tx } from "../store/driver";
 const utf8 = new TextDecoder();
 const json = (bytes: Uint8Array): unknown => JSON.parse(utf8.decode(bytes));
 
-// A lead's team only: a host team's row (Phase 2, no lead) is never written by this version, whose
-// readers refuse team_opened{kind: host}, so reading one is a broken invariant.
+// A lead's team, or a tenant's host team (Phase 2), which is leadless: its lead_thread_id is null.
 const TeamRow: Strict<{
   team_id: typeof TeamId;
   tenant_id: z.ZodString;
-  kind: z.ZodLiteral<"lead">;
-  lead_thread_id: typeof ThreadId;
+  kind: EnumOf<readonly ["lead", "host"]>;
+  lead_thread_id: z.ZodNullable<typeof ThreadId>;
   team_log_branch_id: typeof BranchId;
   closed_at: z.ZodNullable<z.ZodInt>;
 }> = z.strictObject({
   team_id: TeamId,
   tenant_id: z.string(),
-  kind: z.literal("lead"),
-  lead_thread_id: ThreadId,
+  kind: z.enum(["lead", "host"]),
+  lead_thread_id: ThreadId.nullable(),
   team_log_branch_id: BranchId,
   closed_at: z.int().nullable(),
 });
@@ -49,7 +48,7 @@ const MemberRow: Strict<{
   team_id: typeof TeamId;
   name: typeof MemberName;
   generation: typeof PosInt;
-  role: EnumOf<readonly ["lead", "member"]>;
+  role: EnumOf<readonly ["lead", "member", "host_member"]>;
   agent: z.ZodString;
   config_hash: z.ZodString;
   thread_id: typeof ThreadId;
@@ -59,7 +58,7 @@ const MemberRow: Strict<{
   team_id: TeamId,
   name: MemberName,
   generation: PosInt,
-  role: z.enum(["lead", "member"]),
+  role: z.enum(["lead", "member", "host_member"]),
   agent: z.string(),
   config_hash: z.string(),
   thread_id: ThreadId,
@@ -164,7 +163,11 @@ export function refOf(team: TeamRow, row: MemberRow): MemberRef {
   };
 }
 
-/** Pending mail to a member's name (or to the team log), in (created_at, mail_id) order. */
+/**
+ * Pending mail to a member's name, or to the team log with a null name. `to_kind` is explicit:
+ * without it a null name would also match a caller's row (Phase 2), and a team log's consume
+ * would swallow a caller's reply or bounce.
+ */
 export async function pendingTo(
   tx: Tx,
   team: string,
@@ -172,14 +175,17 @@ export async function pendingTo(
 ): Promise<readonly MailEnvelope[]> {
   return z.array(MailRow).parse(
     await tx.all(
-      `SELECT envelope FROM mail WHERE team_id = ? AND to_name IS NOT DISTINCT FROM ? AND state = 'pending'
-          ORDER BY created_at, mail_id`,
-      [team, name],
+      `SELECT envelope FROM mail WHERE team_id = ? AND to_kind = ? AND to_name IS NOT DISTINCT FROM ?
+          AND state = 'pending' ORDER BY created_at, mail_id`,
+      [team, name === null ? "team_log" : "member", name],
     ),
   );
 }
 
-/** Pending mail to a writer: its thread's own rows, or the team log when it is one. */
+/**
+ * Pending mail to a writer: its thread's own rows, the team log when it is one, else the caller's
+ * replies and bounces on this branch (Teams Phase 2: a caller is in no team).
+ */
 export async function pendingHere(
   tx: Tx,
   thread: ThreadId,
@@ -188,7 +194,22 @@ export async function pendingHere(
   const rows = await ownRows(tx, thread);
   if (rows.length > 0) return await pendingFor(tx, rows);
   const team = await teamOfLog(tx, branch);
-  return team === undefined ? [] : await pendingTo(tx, team.team_id, null);
+  if (team !== undefined) return await pendingTo(tx, team.team_id, null);
+  return await pendingToCaller(tx, branch);
+}
+
+/** Pending mail to a caller branch, in (created_at, mail_id) order (mail_pending_caller). */
+export async function pendingToCaller(
+  tx: Tx,
+  branch: string,
+): Promise<readonly MailEnvelope[]> {
+  return z.array(MailRow).parse(
+    await tx.all(
+      `SELECT envelope FROM mail WHERE to_branch_id = ? AND to_kind = 'caller' AND state = 'pending'
+        ORDER BY created_at, mail_id`,
+      [branch],
+    ),
+  );
 }
 
 /** Pending mail to any of a thread's own rows (a nested lead has two), in one order. */
@@ -200,8 +221,8 @@ export async function pendingFor(
   const pairs = rows.map(() => "(?, ?)").join(", ");
   return z.array(MailRow).parse(
     await tx.all(
-      `SELECT envelope FROM mail WHERE state = 'pending' AND (team_id, to_name) IN (VALUES ${pairs})
-        ORDER BY created_at, mail_id`,
+      `SELECT envelope FROM mail WHERE state = 'pending' AND to_kind = 'member'
+        AND (team_id, to_name) IN (VALUES ${pairs}) ORDER BY created_at, mail_id`,
       rows.flatMap((r) => [r.team_id, r.name]),
     ),
   );

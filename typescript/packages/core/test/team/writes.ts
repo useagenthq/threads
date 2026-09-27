@@ -8,8 +8,9 @@ import { type Fixture, unwrap } from "../store/helpers";
 import { appendable } from "./kit";
 
 // The write path of a recorded team: its logs appended again, event by event, through real
-// writers. The lead's first append opens the team log (so the recorded team_opened is not
-// appended again), and every other log opens with branch.open.
+// writers. The lead's first append opens its team log (so that recorded team_opened is not
+// appended again); a host team's log has no lead and opens itself, as ensureHostTeam does, and
+// every other log opens with branch.open.
 
 const HOLDER = "replay";
 // The clock follows each event's own time, which moves back and forth between logs.
@@ -95,7 +96,9 @@ export async function reappend(
 ): Promise<void> {
   const queues: Queue[] = logs.map((log) => {
     const events = [...knownEvents(log)];
-    const teamLog = events[0]?.type === "team_opened";
+    const first = events[0];
+    // Only a lead's team log is opened by another append; a host team's opens itself.
+    const teamLog = first?.type === "team_opened" && first.data.kind !== "host";
     return {
       log,
       teamLog,

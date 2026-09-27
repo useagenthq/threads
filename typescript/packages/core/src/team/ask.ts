@@ -13,7 +13,7 @@ import {
   refusal,
 } from "./call";
 import { TEAM_CONSTANTS } from "./constants";
-import { bodyOf, sent } from "./mail";
+import { bodyOf, replyAddress, sent } from "./mail";
 import { deliverable, type TeamLimits } from "./ops";
 import { parkCall } from "./park";
 import type { Request, Target } from "./request";
@@ -163,13 +163,8 @@ export async function reply(
       mail_id: id,
       kind: "reply",
       team: caller.team.team_id,
-      from: caller.ref,
-      to:
-        "operator" in asked.from
-          ? "team_log"
-          : "caller" in asked.from
-            ? { caller: asked.from.caller }
-            : { name: asked.from.name, generation: asked.from.generation },
+      from: caller.from,
+      to: replyAddress(asked),
       provenance: asked.provenance,
       causal: causalOf(ctx),
       ask_id: args.ask_id,

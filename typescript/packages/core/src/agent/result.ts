@@ -69,9 +69,14 @@ export function runResult<Output>(
       last?.type === "parked" ? last.data.reason : "effect_unknown";
     return { status: "parked", reason, pending: parked, thread };
   }
-  const request = events.findLast((e) => e.type === "user_input");
+  // A host member has no user_input of its own (Teams Phase 2): the run its last turn belongs to
+  // is the one the mail that opened that turn names as its root request.
+  const request =
+    events.findLast((e) => e.type === "user_input")?.event_id ??
+    events.findLast((e) => e.type === "message_received")?.data.envelope
+      .provenance.root_request.event_id;
   if (request === undefined) throw new Error("an idle run had an input");
-  return endedRun(runEnd(events, request.event_id), thread, decode);
+  return endedRun(runEnd(events, request), thread, decode);
 }
 
 /**

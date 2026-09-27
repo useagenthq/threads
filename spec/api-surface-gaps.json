@@ -1,16 +1,7 @@
 [
-  {"name": "AskOutcome", "lang": "py", "kind": "changed", "lane": "29-teams-phase2-29d"},
-  {"name": "AskOutcome", "lang": "ts", "kind": "changed", "lane": "29-teams-phase2-29d"},
   {"name": "ChannelAdapter", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
   {"name": "ChannelCapabilities", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
   {"name": "DeliveryOutcome", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
-  {"name": "Host.team", "lang": "py", "kind": "missing", "lane": "91-ma-p2"},
-  {"name": "Host.team", "lang": "ts", "kind": "missing", "lane": "91-ma-p2"},
-  {"name": "HostMemberOptions", "lang": "py", "kind": "missing", "lane": "91-ma-p2"},
-  {"name": "HostMemberOptions", "lang": "ts", "kind": "missing", "lane": "91-ma-p2"},
-  {"name": "HostMemberOptions.max_restarts", "lang": "ts", "kind": "missing", "lane": "91-ma-p2"},
-  {"name": "HostMemberOptions.restart", "lang": "ts", "kind": "missing", "lane": "91-ma-p2"},
-  {"name": "HostMemberOptions.within_ms", "lang": "ts", "kind": "missing", "lane": "91-ma-p2"},
   {"name": "Inbound", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
   {"name": "LookupCapability", "lang": "py", "kind": "placement", "lane": "01-api-surface-gate", "at": "host"},
   {"name": "McpServer", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
@@ -21,7 +12,5 @@
   {"name": "SandboxContext", "lang": "py", "kind": "missing", "lane": "01-api-surface-gate"},
   {"name": "VerifiedDelivery", "lang": "ts", "kind": "placement", "lane": "01-api-surface-gate", "at": "core"},
   {"name": "assertNever", "lang": "py", "kind": "missing", "lane": "90-ma-p1"},
-  {"name": "host.members", "lang": "py", "kind": "missing", "lane": "91-ma-p2"},
-  {"name": "host.members", "lang": "ts", "kind": "missing", "lane": "91-ma-p2"},
   {"name": "tool.output", "lang": "py", "kind": "missing", "lane": "05-python-output-fallback"}
 ]

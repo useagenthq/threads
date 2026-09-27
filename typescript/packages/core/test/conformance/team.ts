@@ -7,7 +7,8 @@ import {
   type ThreadId,
 } from "../../src/log";
 import { knownEvents, reduce } from "../../src/reduce";
-import type { LogStore } from "../../src/store";
+import type { LogStore, StoreDriver } from "../../src/store";
+import { writing } from "../../src/store/driver";
 import { checkTeamLogs } from "../../src/team/cross";
 import { teamMembers } from "../../src/team/members";
 import { rebuildTeamIndex } from "../../src/team/rebuild";
@@ -15,6 +16,7 @@ import { type VerifiedLog, verifyExport } from "../../src/verify";
 import { fixture, rows as query } from "../store/helpers";
 import { storeLogs, teamIndexRows } from "../team/kit";
 import { type Case, plain } from "./cases";
+import { FeedReads, feedAnswers } from "./team-feed";
 
 // The `team` kind (spec/conformance/README.md): import and reduce every log, check rule 43
 // across them, fold the index into a fresh store from the logs alone, then walk the lead's tree.
@@ -24,6 +26,7 @@ type Found = {
   readonly states: Record<string, unknown>;
   readonly index: unknown;
   readonly tree: unknown;
+  readonly feed: unknown;
 };
 type Labelled = {
   readonly label: string;
@@ -72,6 +75,31 @@ function leadsOf(logs: readonly Labelled[]): readonly Lead[] {
   });
 }
 
+/** A host team among the logs (Teams Phase 2): leadless, found by its own team_opened. */
+function hostTeamsOf(logs: readonly Labelled[]): readonly TeamId[] {
+  return logs.flatMap((l) =>
+    knownEvents(l.log).flatMap((e) =>
+      e.type === "team_opened" && e.data.kind === "host" ? [e.data.team] : [],
+    ),
+  );
+}
+
+/** The caller threads the case tombstoned: a mail or ask naming one is not rebuilt. */
+async function tombstone(
+  db: StoreDriver,
+  tenant: string,
+  threads: readonly string[],
+  now: number,
+): Promise<void> {
+  for (const thread of threads)
+    await writing(db, (tx) =>
+      tx.run(
+        "INSERT INTO tombstones (thread_id, tenant_id, deleted_at) VALUES (?, ?, ?)",
+        [thread, tenant, now],
+      ),
+    );
+}
+
 /** The tenant the team is indexed under: its lead principal's, as team_opened records it. */
 function tenantOf(logs: readonly Labelled[]): string {
   for (const l of logs)
@@ -85,7 +113,7 @@ const Row = z.strictObject({
   thread_id: z.string(),
   name: z.string(),
   generation: z.int(),
-  role: z.enum(["lead", "member"]),
+  role: z.enum(["lead", "member", "host_member"]),
 });
 
 /**
@@ -115,20 +143,38 @@ async function tree(
       counted.push(row.name);
       continue;
     }
-    const lead = leads.find((l) => l.team === row.team_id);
-    if (lead === undefined) throw new Error(`no lead of ${row.team_id}`);
-    const members = await teamMembers(store, lead.log);
-    if (!members.ok) return failure(members.error, lead.label);
-    const member = members.value.find(
-      (m) => m.name === row.name && m.generation === row.generation,
-    );
-    if (member === undefined) throw new Error(`no member ${row.name}`);
-    const open = await member.open();
-    if (!open.ok) return failure(open.error, lead.label);
-    (open.value === "pending" ? pending : counted).push(row.name);
+    // A host team has no lead, so no cost walk reaches its members (Teams Phase 2).
+    if (row.role === "host_member") continue;
+    const walked = await walk(store, leads, row);
+    if ("code" in walked) return walked;
+    (walked.pending ? pending : counted).push(row.name);
   }
   return { counted, pending };
 }
+
+/** One member row as its lead's walk finds it: counted, or pending in the starting window. */
+async function walk(
+  store: LogStore,
+  leads: readonly Lead[],
+  row: z.infer<typeof Row>,
+): Promise<{ readonly pending: boolean } | Failure> {
+  const lead = leads.find((l) => l.team === row.team_id);
+  if (lead === undefined) throw new Error(`no lead of ${row.team_id}`);
+  const members = await teamMembers(store, lead.log);
+  if (!members.ok) return failure(members.error, lead.label);
+  const member = members.value.find(
+    (m) => m.name === row.name && m.generation === row.generation,
+  );
+  if (member === undefined) throw new Error(`no member ${row.name}`);
+  const open = await member.open();
+  if (!open.ok) return failure(open.error, lead.label);
+  return { pending: open.value === "pending" };
+}
+
+const TeamInput = z.object({
+  deleted: z.array(z.string()).optional(),
+  feed: FeedReads.optional(),
+});
 
 async function run(c: Case): Promise<Found | Failure> {
   const logs = imported(c);
@@ -144,24 +190,41 @@ async function run(c: Case): Promise<Found | Failure> {
       { code: "invalid_transition", seq: broken.seq },
       logs.find((l) => l.branchId === broken.branchId)?.label,
     );
-  const { store, db } = await fixture(tenantOf(logs));
+  const tenant = tenantOf(logs);
+  const input = TeamInput.parse(c.input ?? {});
+  const { store, db } = await fixture(tenant);
   await storeLogs(
     store,
     logs.map((l) => l.log),
   );
+  await tombstone(db, tenant, input.deleted ?? [], c.now);
   const leads = leadsOf(logs);
-  for (const lead of leads) {
-    const rebuilt = await rebuildTeamIndex(store, lead.team);
-    if (!rebuilt.ok) return failure(rebuilt.error, lead.label);
+  const teams = [...leads.map((l) => l.team), ...hostTeamsOf(logs)];
+  for (const team of teams) {
+    const rebuilt = await rebuildTeamIndex(store, team);
+    if (!rebuilt.ok)
+      return failure(rebuilt.error, leads.find((l) => l.team === team)?.label);
   }
   const index = await teamIndexRows(
     db,
-    leads.map((l) => l.team),
+    teams,
     logs.map((l) => l.branchId),
   );
   const walked = await tree(store, leads);
+  const feed =
+    input.feed === undefined
+      ? undefined
+      : await feedAnswers(store, oneTeam(teams), input.feed);
   await db.close();
-  return "code" in walked ? walked : { states, index, tree: walked };
+  return "code" in walked ? walked : { states, index, tree: walked, feed };
+}
+
+/** The feed a case reads: its one team. */
+function oneTeam(teams: readonly TeamId[]): TeamId {
+  const [only] = teams;
+  if (only === undefined || teams.length > 1)
+    throw new Error("a feed projection reads one team");
+  return only;
 }
 
 /** Runs one `team` case and compares its outcome. */
@@ -174,5 +237,12 @@ export async function runTeam(c: Case): Promise<void> {
   if ("code" in got) throw new Error(`${got.code} at ${got.log}@${got.seq}`);
   expect(plain(got.states)).toEqual(plain(c.team.states));
   expect(plain(got.index)).toEqual(plain(c.team.index));
-  expect(plain(got.tree)).toEqual(plain(c.team.tree));
+  expect(got.tree).toEqual(
+    c.team.tree === undefined
+      ? { counted: [], pending: [] }
+      : plain(c.team.tree),
+  );
+  expect(got.feed).toEqual(
+    c.team.feed === undefined ? undefined : plain(c.team.feed),
+  );
 }

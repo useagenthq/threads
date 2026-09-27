@@ -15,7 +15,10 @@ from threads.result import Ok
 from threads.store import SqliteStore
 from threads.store.conn import Conn
 from threads.store.lines import header_line
+from threads.team.policy import MessagePolicyRule
 from threads.team.rebuild import rebuild_team_index
+
+_RULES: TypeAdapter[MessagePolicyRule] = TypeAdapter(MessagePolicyRule)
 
 FILE = Path(__file__).resolve().parents[3] / "spec" / "conformance" / "vectors" / "team-ops.json"
 type Obj = dict[str, JsonValue]
@@ -66,13 +69,28 @@ def _exported(ref: Obj) -> bytes:
     return b"\n".join(lines) + b"\n"
 
 
+def teams_in(v: Obj) -> list[str]:
+    """Every team the world's logs open: a lead's, or a leadless host team's (Teams Phase 2)."""
+    events = obj(DOC["events"])
+    out: list[str] = []
+    for ref in world_logs(v).values():
+        ids = ref["events"]
+        assert isinstance(ids, list)
+        for ident in ids:
+            e = obj(events[str(ident)])
+            if e["type"] == "team_opened":
+                out.append(str(obj(e["data"])["team"]))
+    return out
+
+
 async def seeded(v: Obj, path: str = ":memory:") -> SqliteStore:
     """A store holding the vector's world, its team index rebuilt, every pinned config stored."""
     opened = await SqliteStore.open(path, tenant_id="acme")
     assert isinstance(opened, Ok)
     store = opened.value
     await add(store, {label: _exported(ref) for label, ref in world_logs(v).items()}, "acme")
-    assert await rebuild_team_index(store, TEAM) == Ok(None)
+    for team in teams_in(v):
+        assert await rebuild_team_index(store, team) == Ok(None)
     for config in configs():
         await store.put_artifact(config)
     return store
@@ -91,6 +109,13 @@ def configs() -> list[bytes]:
         if sha256_hex(raw) == data["config_hash"]:
             out.append(raw)
     return out
+
+
+def host_rules(v: Obj) -> tuple[MessagePolicyRule, ...]:
+    """The host's message_policy rules of a vector (Teams Phase 2), as the host holds them."""
+    given = obj(v["given"]).get("rules", [])
+    assert isinstance(given, list)
+    return tuple(_RULES.validate_python(r) for r in given)
 
 
 def agents() -> dict[str, str]:

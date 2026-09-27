@@ -13,7 +13,8 @@ from threads.result import Err, Ok
 from threads.store import SqliteStore
 from threads.store.deletion import delete_thread
 from threads.store.sql import int_of
-from threads.team.materialize import MaterializeOptions, Rebind, materialize
+from threads.team.materialize import materialize
+from threads.team.materialize_types import MaterializeOptions, Rebind
 
 VECTOR = next(v for v in vectors() if v["name"] == "materialize-opens-branch")
 MEMBER_BRANCH = BranchId("0192b000-0000-7000-8000-0000000000b2")
@@ -47,7 +48,7 @@ def test_delete_first_the_row_check_finds_the_member_gone_and_nothing_is_opened(
     async def main() -> None:
         store = await seeded(VECTOR)
 
-        async def rebind(_started: MemberStartedEvent, _task: MailEnvelope) -> Rebind:
+        async def rebind(_started: MemberStartedEvent, _task: MailEnvelope | None) -> Rebind:
             # The barrier: the lead is deleted after the prework, before the write transaction.
             deleted = await store.run(lambda c: delete_thread(c, "acme", _lead(), NOW))
             assert isinstance(deleted, Ok), deleted
@@ -69,7 +70,7 @@ def test_materialize_first_the_members_live_lease_makes_the_delete_busy() -> Non
     async def main() -> None:
         store = await seeded(VECTOR)
 
-        async def rebind(_started: MemberStartedEvent, _task: MailEnvelope) -> Rebind:
+        async def rebind(_started: MemberStartedEvent, _task: MailEnvelope | None) -> Rebind:
             return Rebind("ok")
 
         o = MaterializeOptions(rebind, "worker", 30_000, _clock, vector_mint, MEMBER_BRANCH)

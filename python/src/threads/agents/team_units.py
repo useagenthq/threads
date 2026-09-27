@@ -14,7 +14,7 @@ from threads.store.writer import DecideTx, Refusal
 from threads.team.batch import Batch, Mint
 from threads.team.close import reader_of
 from threads.team.consume import ConsumeContext, Consumed, consume
-from threads.team.materialize import RebindCode
+from threads.team.materialize_types import RebindCode
 from threads.team.rebind import rebind_failed
 from threads.team.settle import AppendContext
 

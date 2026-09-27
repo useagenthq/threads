@@ -1,6 +1,7 @@
 """The write path of a recorded team: its logs appended again, event by event, through real
-writers. The lead's first append opens the team log (so the recorded team_opened is not appended
-again), and every other log opens with branch.open."""
+writers. A lead's first append opens its team log (so that recorded team_opened is not appended
+again); a host team's log has no lead and opens itself, as every other log does, with
+branch.open."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -49,14 +50,30 @@ async def reappend(store: SqliteStore, logs: Sequence[VerifiedLog]) -> None:
     queues: list[_Queue] = []
     for log in logs:
         events = list(log.fold.events)
-        team_log = bool(events) and isinstance(events[0], TeamOpenedEvent)
+        first = next(iter(events), None)
+        # A host team's log is lazily opened by its own team_opened, not by a lead's append.
+        team_log = isinstance(first, TeamOpenedEvent) and first.data.kind != "host"
         queues.append(_Queue(log, team_log, events[1:] if team_log else events))
-    moved = True
-    while moved:
+    while any(q.events for q in queues):
         moved = False
         for q in queues:
             moved = await _drain(store, clock, q) or moved
+        if not moved and not await _force(store, clock, queues):
+            break
     assert [len(q.events) for q in queues] == [0] * len(queues)
+
+
+async def _force(store: SqliteStore, clock: ReplayClock, queues: Sequence[_Queue]) -> bool:
+    """Nothing is ready: append the next event anyway. A receipt whose sender's log is not here
+    (a deleted caller's) moves a row no log inserts, which changes nothing, as UPDATE does."""
+    for q in queues:
+        if not q.events:
+            continue
+        clock.now = q.events[0].time
+        if await _append(store, clock, q, q.events[0]):
+            q.events.pop(0)
+            return True
+    return False
 
 
 async def _drain(store: SqliteStore, clock: ReplayClock, q: _Queue) -> bool:

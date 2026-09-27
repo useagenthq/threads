@@ -22,6 +22,7 @@ from threads.log import (
     Event,
     MailEnvelope,
     MailRefusedEvent,
+    MemberEndedEvent,
     MemberRef,
     MemberStartedEvent,
     MessageReceivedEvent,
@@ -35,6 +36,12 @@ from threads.log import (
 )
 from threads.reduce import Fold, apply
 from threads.reduce.team_fold import mail_renders
+from threads.team.cross_host import (
+    ended_bounce,
+    host_member_thread,
+    reply_to_caller,
+    turn_failed_bounce,
+)
 from threads.team.dynamic import KEPT, OPERATOR, block
 from threads.team.index import json_bytes
 
@@ -160,6 +167,8 @@ def _team(logs: Sequence[TeamLogEvents]) -> _Team:
     starters: dict[ThreadId, str] = {}
     logged = {e.thread_id for _, e in events if isinstance(e, TeamOpenedEvent)}
     leads = {e.thread_id: e.data.agent_name for _, e in events if isinstance(e, ThreadStartedEvent)}
+    for log in logs:
+        identities.setdefault(log.thread_id, set()).add(f"caller/{log.branch_id}")
     for log, e in events:
         if isinstance(e, TeamOpenedEvent):
             identities.setdefault(log.thread_id, set()).add("team_log")
@@ -188,15 +197,25 @@ def _check(e: Event, log: TeamLogEvents, mine: frozenset[Identity], team: _Team)
     if isinstance(e, TeamOpenedEvent):
         return _named(e, log, team)
     if isinstance(e, ThreadStartedEvent):
-        start = team.started.get(e.thread_id)
-        parent = None if e.data.parent is MISSING else e.data.parent
-        want = None if start is None or start.data.parent is MISSING else start.data.parent
-        if start is not None and _link(parent) != _link(want):
-            return "a member's parent is not its member_started's"
+        return _opened_thread(e, team)
     if isinstance(e, UserInputEvent) and e.data.mail_id is not MISSING:
         task = team.sent.get(e.data.mail_id)
         if task is not None and e.actor.principal != task.provenance.principal:
             return "a task's input principal is not its mail's provenance principal"
+    return None
+
+
+def _opened_thread(e: ThreadStartedEvent, team: _Team) -> str | None:
+    """A member's thread_started is the one its member_started names: its parent (Phase 1), or
+    its host_member (Phase 2)."""
+    host = host_member_thread(e, team.started)
+    if host is not None:
+        return host
+    start = team.started.get(e.thread_id)
+    parent = None if e.data.parent is MISSING else e.data.parent
+    want = None if start is None or start.data.parent is MISSING else start.data.parent
+    if start is not None and _link(parent) != _link(want):
+        return "a member's parent is not its member_started's"
     return None
 
 
@@ -213,8 +232,8 @@ def _link(p: Parent | Parent1 | None) -> tuple[str, str, str, str] | None:
 
 
 def _caller(c: CallerAddress) -> Identity:
-    """A caller (Phase 2) speaks for no log of a Phase 1 team: its mail is refused before this
-    rule."""
+    """A caller (Phase 2) is identified by its branch: its mail and the receipts addressed to it
+    are in the log of that branch."""
     return f"caller/{c.caller.branch_id}"
 
 
@@ -246,7 +265,11 @@ def _sent(
 ) -> str | None:
     if _from(env) not in mine:
         return "a mail is not in the log its from names"
-    return _bounce(env, log, team) if env.kind == "bounce" else None
+    if env.code == "turn_failed":  # Phase 2: its causal is a failed turn, not a mail_refused
+        return turn_failed_bounce(env, log.events, team.sent)
+    if env.kind == "bounce":
+        return _bounce(env, log, team)
+    return reply_to_caller(env, team.sent)
 
 
 def _bounce(env: MailEnvelope, log: TeamLogEvents, team: _Team) -> str | None:
@@ -254,6 +277,8 @@ def _bounce(env: MailEnvelope, log: TeamLogEvents, team: _Team) -> str | None:
     and names an ask exactly when it refused one."""
     cause = env.causal.event_id
     refusal = next((e for e in log.events if e.event_id == cause), None)
+    if isinstance(refusal, MemberEndedEvent):  # Phase 2: an ended host member's taken asks
+        return ended_bounce(env, refusal, team.sent)
     if not isinstance(refusal, MailRefusedEvent):
         return "a bounce's causal is not its mail_refused"
     refused = team.sent.get(refusal.data.mail_id)

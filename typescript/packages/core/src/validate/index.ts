@@ -16,6 +16,15 @@ import {
   checkToolResult,
 } from "./calls";
 import { checkModeChanged, checkOutput, checkToolsChanged } from "./config";
+import {
+  checkHostAskClosed,
+  checkHostIdle,
+  checkHostPlacement,
+  checkHostReceived,
+  checkHostSent,
+  checkHostStarted,
+  checkWhileFailing,
+} from "./host";
 import { checkNotYetPhase2 } from "./phase2";
 import {
   checkCause,
@@ -65,6 +74,8 @@ export function validateNext(
   const violation =
     checkNotYetPhase2(line.event) ??
     checkTeamLog(fold, line.event) ??
+    checkHostPlacement(fold, line.event) ??
+    checkWhileFailing(fold, line.event) ??
     check(fold, line.event);
   return violation === undefined
     ? ok(undefined)
@@ -172,8 +183,9 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "monitor_set":
       return undefined;
     case "member_started":
-      return checkStarted(fold, e);
+      return checkStarted(fold, e) ?? checkHostStarted(fold, e);
     case "member_idle":
+      return checkMemberEnd(fold, e) ?? checkHostIdle(fold, e);
     case "member_ended":
       return checkMemberEnd(fold, e);
     case "wait_started":
@@ -181,19 +193,19 @@ function check(fold: Fold, e: KnownEvent): Violation {
     case "member_observed":
       return checkWaits(fold, e);
     case "message_sent":
-      return checkSent(fold, e);
+      return checkSent(fold, e) ?? checkHostSent(fold, e);
     case "message_received":
-      return checkReceived(fold, e);
+      return checkReceived(fold, e) ?? checkHostReceived(fold, e);
     case "mail_refused":
       return checkRefused(fold, e);
     case "ask_closed":
-      return checkAskClosed(fold, e);
+      return checkAskClosed(fold, e) ?? checkHostAskClosed(fold, e);
     case "operator_request":
     case "operator_refused":
     case "message_policy_decided":
       return checkOperator(fold, e);
     case "supervisor_decided":
-      return undefined; // refused by checkNotYetPhase2 until the Phase 2 build
+      return undefined; // refused by checkNotYetPhase2 until the supervision build (lane 29E)
     default:
       return assertNever(e);
   }

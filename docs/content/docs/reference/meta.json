@@ -158,6 +158,7 @@
     "types/TeamSource",
     "types/TeamItem",
     "types/StoreCorruptError",
-    "types/MessagePolicyRule"
+    "types/MessagePolicyRule",
+    "types/HostMemberOptions"
   ]
 }

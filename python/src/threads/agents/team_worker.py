@@ -12,44 +12,36 @@ backoff, never ended. Mirrors TypeScript's agent/team/worker.ts."""
 import asyncio
 import contextlib
 import uuid
-from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Literal
 
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads.agents.definition import Definition
-from threads.agents.store import Store, now_ms
+from threads.agents.store import now_ms
 from threads.agents.team_budgets import ancestors_of, started_cap
+from threads.agents.team_host_member import HostMembers
 from threads.agents.team_log_mail import take_team_log_mail
 from threads.agents.team_rebind import bound, rebind
 from threads.agents.team_scan import closed, lease_free, members_under, principal_of
 from threads.agents.team_units import end_unbound, take_mail
+from threads.agents.team_worker_env import MemberRun, WorkerEnv
 from threads.log import (
     BranchId,
     MailEnvelope,
     MemberStartedEvent,
     Parent,
-    Principal,
     ThreadId,
     ThreadStartedEvent,
 )
 from threads.log import UserInputEvent as _Input
-from threads.loop.covering import Covering
-from threads.loop.team_runtime import TeamAgentPin
 from threads.result import Err
-from threads.store import SqliteStore, lease
-from threads.team.batch import Mint
+from threads.store import lease
 from threads.team.claim import claim_mail
 from threads.team.constants import TEAM_CONSTANTS
 from threads.team.consume import may_resume
 from threads.team.deadline import next_deadline
-from threads.team.materialize import (
-    MaterializeOptions,
-    Rebind,
-    materialize,
-    started_by,
-)
+from threads.team.materialize import materialize, started_by
+from threads.team.materialize_types import MaterializeOptions, Rebind
 from threads.team.rows import (
     MemberRow,
     cancel_pending_for,
@@ -58,40 +50,6 @@ from threads.team.rows import (
     pending_for,
     team_row,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class MemberRun:
-    """One member branch, as the worker runs it."""
-
-    thread: ThreadId
-    branch: BranchId
-    parent: Parent
-    principal: Principal
-    """The principal of the member's task: its turns' actor."""
-    holder: str
-    notify: Callable[[], None]
-    covering: tuple[Covering, ...]
-    """Every ancestor's budget: it covers the member too."""
-    abort: asyncio.Event = field(default_factory=asyncio.Event)
-    """Set when the worker stops this run for a cancel: its model call ends at once."""
-
-
-@dataclass(frozen=True, slots=True)
-class WorkerEnv:
-    store: Store
-    sq: SqliteStore
-    team: Callable[[], str | None]
-    """The lead's team: None until its first append names it."""
-    agents: Mapping[str, Definition[None]]
-    """Every agent of the lead's team tree, by name."""
-    pin: Callable[[Definition[None]], Awaitable[TeamAgentPin]]
-    run: Callable[[Definition[None], MemberRun], Awaitable[None]]
-    mint: Mint | None = None
-    claim_ttl_ms: int = TEAM_CONSTANTS.claim_ttl_ms
-    setup_attempts: int = TEAM_CONSTANTS.setup_attempts
-    """How many setup failures in a row end a member setup_failed; tests inject fewer."""
-
 
 type Unit = Callable[[], Awaitable[bool]]
 """Work on a member: False when it could do nothing (lease held elsewhere, setup failed for now)."""
@@ -322,7 +280,9 @@ class TeamWorker:
             return await self._member(row, writer.branch_id, holder)
         return True
 
-    async def _settled_rebind(self, started: MemberStartedEvent, task: MailEnvelope) -> Rebind:
+    async def _settled_rebind(
+        self, started: MemberStartedEvent, task: MailEnvelope | None
+    ) -> Rebind:
         """materialize's rebind: a setup that failed for now stops it (_LaterError)."""
         got = self._counted(
             started.data.thread_id, await rebind(self._env.agents, self._env.pin, started, task)
@@ -360,6 +320,9 @@ class TeamWorker:
             raise AssertionError(f"member {row.name}: {read.error.message}")
         events = read.value.fold.events
         started = next((e for e in events if isinstance(e, ThreadStartedEvent)), None)
+        if started is not None and started.data.host_member is not MISSING:
+            host = HostMembers(self._env, self._counted, self.notify, self._aborts)
+            return await host.run(row, branch, holder)
         task = next((e for e in events if isinstance(e, _Input)), None)
         if started is None or task is None or not isinstance(started.data.parent, Parent):
             raise AssertionError(f"member {row.name} has no task")

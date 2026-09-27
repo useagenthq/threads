@@ -2,7 +2,7 @@
 new team; its loop gets the team tools' runtime; and the lead of an in-process run drives its
 team's worker for as long as the run is open."""
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, replace
 
@@ -15,7 +15,7 @@ from threads.agents.dynamic_agent import member_definition
 from threads.agents.pinned import outside_any_branch
 from threads.agents.servers import with_servers
 from threads.agents.setup import set_up
-from threads.agents.store import Store
+from threads.agents.store import Store, now_ms
 from threads.agents.team_budgets import recipient_of, run_covering
 from threads.agents.team_check import agents_of
 from threads.agents.team_worker import MemberRun, TeamWorker, WorkerEnv
@@ -27,6 +27,7 @@ from threads.loop.teams import settled
 from threads.store import SqliteStore, Writer
 from threads.store.lines import uuid7
 from threads.team.dynamic import KEPT, Choice, Template
+from threads.team.host_open import ensure_host_team
 from threads.team.policy import leads, startable
 from threads.team.rows import cancel_pending_for
 
@@ -42,15 +43,16 @@ def lead_started[D](
     return {**started, "team": team}
 
 
-async def member_pin[D](definition: Definition[D]) -> TeamAgentPin:
+async def member_pin[D](definition: Definition[D], *, host: bool = False) -> TeamAgentPin:
     """Its pin as a team member, after setup: config_hash, the canonical config, and what one
-    request of it reserves; a template's also what a start may choose. Raises ConfigError, also
-    for a dynamic member whose chosen tool its template no longer has."""
+    request of it reserves; a template's also what a start may choose. `host` pins it as a host
+    member instead, whose team grants nothing (Teams Phase 2). Raises ConfigError, also for a
+    dynamic member whose chosen tool its template no longer has."""
     await set_up(definition)
     async with AsyncExitStack() as stack:
         connected = await with_servers(definition, stack, outside_any_branch)
         resolved, _ = await with_workspace(connected)
-        member = replace(resolved, in_team=True)
+        member = replace(resolved, in_team=True, host_member=host)
         started, config = member.pin()
         specs = member.spec_artifacts()
         names = [s.name for s in member.specs()]
@@ -115,7 +117,28 @@ async def _nothing() -> None:
     pass
 
 
-def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs a member
+def _quiet() -> None:
+    """A caller drives no team worker, so an append of its own wakes nothing here."""
+
+
+async def host_member_pin(definition: Definition[None]) -> TeamAgentPin:
+    """A host member's pin: what its own start, its rebind and Host.team all hash it as."""
+    return await member_pin(definition, host=True)
+
+
+async def open_host_team(sq: SqliteStore, tenant: str, members: Sequence[Definition[None]]) -> None:
+    """The tenant's host team, opened before a thread of it addresses a host member. Each
+    member's pin is stored before the member_started that names it, as a start's is."""
+    configs: dict[str, str] = {}
+    for definition in members:
+        pinned = await host_member_pin(definition)
+        for raw in (pinned.config, *pinned.specs):
+            await sq.put_artifact(raw)
+        configs[definition.name] = pinned.config_hash
+    await ensure_host_team(sq, tenant, configs, holder=f"open-{uuid7(now_ms())}", clock=now_ms)
+
+
+async def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs a member
     definition: Definition[D],
     member: MemberRun | None,
     writer: Writer,
@@ -124,10 +147,11 @@ def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs 
     run: Callable[[Definition[None], MemberRun], Awaitable[None]],
     principal: Principal,
 ) -> TeamSide | None:
-    """A team thread's runtime and what stops it; None for any other thread. One run, one
-    authority (design §2.6): its ordinary mail is its own principal's; mail of another waits for
-    a run under that one."""
-    if not leads(definition.team, definition.rules) and member is None:
+    """A team thread's runtime and what stops it; None for any other thread, a caller aside.
+    One run, one authority (design §2.6): its ordinary mail is its own principal's; mail of
+    another waits for a run under that one."""
+    own = leads(definition.team, definition.rules)
+    if not own and member is None and not definition.host_members:
         return None
     pin, limits = pins(definition), definition.team_limits
     thread = writer.fold.thread_id
@@ -137,6 +161,23 @@ def team_of[D](  # noqa: PLR0913, PLR0917 - the run, its store, and how it runs 
     async def cancel_pending() -> bool:
         return await sq.run(lambda c: cancel_pending_for(c, thread))
 
+    # A thread that may address a host member opens its tenant's host team first: the ids are
+    # derived, so a concurrent open is already_open (Teams Phase 2, the lazy open).
+    if definition.host_members:
+        await open_host_team(sq, principal.tenant, definition.host_members)
+    if not own and member is None:
+        # A caller: in no team, driving no members, but it may send to and ask a host member.
+        runtime = TeamRuntime(
+            pin,
+            limits,
+            settled,
+            _quiet,
+            principal=principal,
+            recipient=recipient_of(sq),
+            cancel_pending=cancel_pending,
+            rules=definition.rules,
+        )
+        return TeamSide(runtime, _nothing)
     if member is not None:
         runtime = TeamRuntime(
             pin,

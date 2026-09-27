@@ -4,6 +4,7 @@ from collections.abc import Mapping
 
 from threads.log import Event, Header, ParseError, UnknownEvent
 from threads.reduce import (
+    rules_host,
     rules_loaded,
     rules_misc,
     rules_phase2,
@@ -43,6 +44,7 @@ def apply(fold: Fold, event: Event | UnknownEvent) -> ParseError | None:
         handler = _HANDLERS.get(type(event))
         error = (
             rules_phase2.not_yet(event)
+            or rules_host.check(fold, event)
             or rules_team.check(fold, event)
             or (None if handler is None else handler(fold, event))
         )
@@ -54,6 +56,7 @@ def apply(fold: Fold, event: Event | UnknownEvent) -> ParseError | None:
     if not isinstance(event, UnknownEvent):
         fold.events.append(event)
         team_fold.advance(fold, event)
+        rules_host.advance(fold, event)
         rules_wake.advance(fold, event)
     if not fold.pending and not fold.open_requests:
         fold.boundaries.add(event.seq)

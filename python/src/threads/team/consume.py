@@ -25,6 +25,7 @@ from threads.team.rows import (
     own_rows,
     pending_for,
     pending_to,
+    pending_to_caller,
     team_of_log,
     team_row,
 )
@@ -74,6 +75,8 @@ def consume(ctx: ConsumeContext) -> Consumed:
     if ctx.fold.team.team_log:
         return _consume_team_log(ctx)
     rows = own_rows(ctx.conn, ctx.thread_id)
+    if not rows:
+        return _consume_caller(ctx)
     pending = pending_for(ctx.conn, rows)
     if not pending:
         return Consumed("nothing_pending")
@@ -89,6 +92,19 @@ def consume(ctx: ConsumeContext) -> Consumed:
         if _take(ctx, state, env):
             state.taken.append(env.mail_id)
     return Consumed("consumed", tuple(state.taken))
+
+
+def _consume_caller(ctx: ConsumeContext) -> Consumed:
+    """A caller (Teams Phase 2) is in no team, so it has no row to read pending mail by. What
+    reaches it is a host member's reply or bounce, both control mail: each closes the ask its
+    call is parked on, resumes it and records that call's one result."""
+    pending = pending_to_caller(ctx.conn, ctx.branch_id)
+    if not pending:
+        return Consumed("nothing_pending")
+    for env in pending:
+        if env.mail_id not in ctx.batch.taken():
+            take_answer(ctx, env)
+    return Consumed("consumed", tuple(env.mail_id for env in pending))
 
 
 def _consume_team_log(ctx: ConsumeContext) -> Consumed:

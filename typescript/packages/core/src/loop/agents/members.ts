@@ -104,7 +104,15 @@ async function endCancelled(s: Session): Promise<Halt | undefined> {
     if (provenance === undefined)
       throw new Error("a member's task opened a turn");
     const put = (text: string) => s.store(text, "text/plain");
-    await settle({ ...ctx, provenance, put }, { status: "cancelled" });
+    await settle(
+      {
+        ...ctx,
+        provenance,
+        put,
+        takenAsks: ctx.chain.fold.team.host.turnAsks,
+      },
+      { status: "cancelled" },
+    );
   });
 }
 

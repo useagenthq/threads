@@ -156,7 +156,8 @@ async def _execute[D](  # noqa: PLR0913, PLR0917 - execute's arguments
             definition, sq.put_artifact, child=launch is not None
         )
         runner = member_runner(store)
-        side = team_side(servers, team_of(definition, member, writer, store, sq, runner, principal))
+        found = await team_of(definition, member, writer, store, sq, runner, principal)
+        side = team_side(servers, found)
         thread_id = writer.fold.thread_id
         if thread_id is None:
             raise AssertionError("an acquired branch has a thread")
@@ -387,7 +388,7 @@ def member_runner(store: Store) -> Callable[[Definition[None], MemberRun], Await
             "store": store,
             "principal": m.principal,
         }
-        member = replace(definition, in_team=True)
+        member = replace(definition, in_team=True, host_member=m.host_member)
         await execute(member, None, options, None, _drop, member=m)
 
     return run

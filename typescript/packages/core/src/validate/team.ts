@@ -111,8 +111,10 @@ export function checkMemberEnd(
   e: EventOf<"member_ended" | "member_idle">,
 ): Violation {
   if (fold.team.ended) return invalid(`${e.type} after member_ended`);
-  return e.type === "member_idle" &&
-    (fold.turnOpen || fold.team.lastEnd !== "end_turn")
+  if (e.type !== "member_idle") return undefined;
+  // A host member's member_idle{turn_failed} closes a failed turn: rule 53, not 38.
+  if (e.data.turn_failed !== undefined) return undefined;
+  return fold.turnOpen || fold.team.lastEnd !== "end_turn"
     ? invalid("member_idle without its turn's turn_completed{end_turn}")
     : undefined;
 }
@@ -272,10 +274,11 @@ export function checkStarted(
 ): Violation {
   const defined = checkDefine(e.data);
   if (defined !== undefined) return defined;
+  // A host member's start has no parent and no provenance: rules 50 and 51 (validate/host.ts).
+  if (e.data.host_member !== undefined) return undefined;
   const { parent, provenance } = e.data;
-  // Only a host member's start (Phase 2, refused first by checkNotYetPhase2) has neither.
   if (parent === undefined || provenance === undefined)
-    return invalid("a member_started without a parent is a host member's");
+    return invalid("a member_started needs a parent and a provenance");
   const { team } = fold;
   if (team.teamLog) {
     if (parent.thread_id !== team.leadThread)

@@ -1,18 +1,14 @@
 import { z } from "zod";
 import type { EventOf } from "../fold/state";
-import {
-  canonicalize,
-  type MemberRef,
-  type Provenance,
-  type TeamRefusal,
-} from "../log";
+import { canonicalize, type Provenance, type TeamRefusal } from "../log";
 import type { EventDraft } from "../store/admit";
 import type { Tx } from "../store/driver";
 import type { Chain } from "../verify";
 import type { Batch } from "./batch";
 import type { ReadText } from "./close";
 import type { InvalidDefinition } from "./dynamic";
-import type { PutText } from "./mail";
+import { hostTeamIds } from "./host-team";
+import type { Envelope, PutText } from "./mail";
 import { type MessagePolicyRule, ruleFor } from "./policy";
 import { turnProvenance } from "./provenance";
 import type { PolicyOp, Request, Target } from "./request";
@@ -43,11 +39,17 @@ export type CallContext = {
   readonly rules: readonly MessagePolicyRule[];
 };
 
-/** The caller as one team's member: its row there, its ref, its turn's provenance. */
+/**
+ * Who is calling: a member of one team (its row there), or a caller thread in no team, of its
+ * tenant's host team (Teams Phase 2). Either way its `from` is the address its mail carries and
+ * `agent` is the agent a host rule keys its decision on.
+ */
 export type Caller = {
   readonly team: TeamRow;
-  readonly row: MemberRow;
-  readonly ref: MemberRef;
+  /** The caller's own member row; undefined for a caller thread, which is in no team. */
+  readonly row: MemberRow | undefined;
+  readonly from: Envelope["from"];
+  readonly agent: string;
   readonly provenance: Provenance;
 };
 
@@ -82,18 +84,48 @@ export function isRefusal(value: unknown): value is Refusal {
 }
 
 /**
- * The team the caller acts in: the one it leads (a nested lead starts its own members), else
- * the one it is a member of. Undefined for a thread in no team.
+ * The team the caller acts in: the one it leads (a nested lead starts its own members), the one it
+ * is a member of, else — for a thread in no team — its tenant's host team, which it addresses as a
+ * caller (Teams Phase 2). Undefined when no team is reachable.
  */
 export async function callerOf(ctx: CallContext): Promise<Caller | undefined> {
+  const provenance = await turnProvenance(ctx.tx, ctx.chain);
+  if (provenance === undefined) return undefined;
   const rows = await ownRows(ctx.tx, ctx.call.thread_id);
   const row = rows.find((r) => r.role === "lead") ?? rows[0];
-  const team =
-    row === undefined ? undefined : await teamRow(ctx.tx, row.team_id);
-  const provenance = await turnProvenance(ctx.tx, ctx.chain);
-  if (row === undefined || team === undefined || provenance === undefined)
-    return undefined;
-  return { team, row, ref: refOf(team, row), provenance };
+  if (row === undefined) return await hostCaller(ctx, provenance);
+  const team = await teamRow(ctx.tx, row.team_id);
+  if (team === undefined) return undefined;
+  const from = refOf(team, row);
+  return { team, row, from, agent: row.agent, provenance };
+}
+
+/** A thread in no team, calling its tenant's host team: its address is `{caller}` (rule 52). */
+async function hostCaller(
+  ctx: CallContext,
+  provenance: Provenance,
+): Promise<Caller | undefined> {
+  const { teamId } = hostTeamIds(provenance.principal.tenant);
+  const team = await teamRow(ctx.tx, teamId);
+  const started = ctx.chain.events.find(
+    (l) => l.kind === "event" && l.event.type === "thread_started",
+  );
+  if (team === undefined || started?.kind !== "event") return undefined;
+  if (started.event.type !== "thread_started") return undefined;
+  const agent = started.event.data.agent_name;
+  return {
+    team,
+    row: undefined,
+    from: {
+      caller: {
+        thread_id: ctx.call.thread_id,
+        branch_id: ctx.call.branch_id,
+        agent,
+      },
+    },
+    agent,
+    provenance,
+  };
 }
 
 /** The call's mail: `<sender branch_id>:<call_id>`. */
@@ -128,7 +160,7 @@ export function decision(
   target: string,
 ): Decision {
   if (granted(ctx, caller, op, target)) return { source: "team" };
-  const rule = ruleFor(ctx.rules, caller.row.agent, target, op);
+  const rule = ruleFor(ctx.rules, caller.agent, target, op);
   if (rule === undefined) return { source: "default" };
   return { source: "message_policy", rule: { from: rule.from, to: rule.to } };
 }
@@ -215,7 +247,7 @@ export async function callRequest(ctx: CallContext): Promise<Request> {
     batch: ctx.batch,
     put: ctx.put,
     team: caller.team,
-    from: caller.ref,
+    from: caller.from,
     provenance: caller.provenance,
     causal: causalOf(ctx),
     mailId: callMailId(ctx),
@@ -238,7 +270,9 @@ export async function callRequest(ctx: CallContext): Promise<Request> {
 
 /**
  * The team's Phase 1 grant to a member: a lead starts, a member's starter (its member_started is in
- * the caller's own log) cancels it, and members send, ask and monitor one another.
+ * the caller's own log) cancels it, and members send, ask and monitor one another. A host team has
+ * no grant at all (Teams Phase 2): only a messagePolicy rule allows a caller's or a host member's
+ * op, so every such decision's source is message_policy or default.
  */
 function granted(
   ctx: CallContext,
@@ -246,7 +280,9 @@ function granted(
   op: PolicyOp,
   target: string,
 ): boolean {
-  if (op === "start") return caller.row.role === "lead";
+  const role = caller.row?.role;
+  if (role === undefined || role === "host_member") return false;
+  if (op === "start") return role === "lead";
   if (op !== "cancel") return true;
   return ctx.chain.events.some(
     (l) =>
@@ -279,7 +315,9 @@ export async function addressed(
   name: string,
 ): Promise<MemberRow | Refusal> {
   const row = await memberNamed(ctx.tx, caller.team.team_id, name);
-  const generation = bound(ctx.chain, name) ?? row?.generation ?? 0;
+  // A caller holds no generation: it binds the target's current one, read in this transaction.
+  const held = caller.row === undefined ? undefined : bound(ctx.chain, name);
+  const generation = held ?? row?.generation ?? 0;
   if (row === undefined || generation > row.generation)
     return refusal("unknown_member");
   return generation < row.generation ? refusal("stale_member") : row;

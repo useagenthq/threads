@@ -28,6 +28,7 @@ from threads.log import (
     ToolResultData,
     ToolResultLateData,
     ToolSpec,
+    TurnFailure,
     UnknownEvent,
     UserInputEvent,
 )
@@ -113,6 +114,37 @@ class Team:
 
 
 @dataclass(slots=True)
+class Host:
+    """What one log's events leave for the Teams Phase 2 rules 50-55 (rules_host). Ids are the
+    wire's AskId and MemberName strings."""
+
+    host_team: bool = False
+    """The log starts with team_opened{kind: host} (rules 50 and 51)."""
+    host_member: bool = False
+    """thread_started carries host_member (rules 50, 52, 53 and 55)."""
+    branch: str = ""
+    agent: str = ""
+    """thread_started.agent_name: the agent a caller's own mail names (rule 52)."""
+    generations: dict[str, int] = field(default_factory=dict[str, int])
+    """Each host member name's latest generation (rule 51's first clause; lane 29E supervises
+    the rest)."""
+    turn_asks: list[str] = field(default_factory=list[str])
+    """Asks the open turn took and has not answered (rule 53)."""
+    answered: set[str] = field(default_factory=set[str])
+    """Asks this log replied to or bounced (rules 35 and 53)."""
+    failing: bool = False
+    """A turn ended other than end_turn or cancelled: its bounces and idle are due (rule 53)."""
+    error: TurnFailure | None = None
+    """That turn's error, once its first bounce named it (rule 53)."""
+    code: str = ""
+    """The TurnFailure code that turn's end maps to (rule 53)."""
+    turn_class: str | None = None
+    """The sender class of the open turn's ordinary mail (rule 55)."""
+    bounces_in: dict[str, TurnFailure] = field(default_factory=dict[str, TurnFailure])
+    """Received turn_failed bounces: ask id -> its error (rule 54)."""
+
+
+@dataclass(slots=True)
 class Fold:
     now: int
     """The injected clock (epoch ms); snapshot expiry is judged against it."""
@@ -185,6 +217,8 @@ class Fold:
     """Background wake bookkeeping (rules_wake)."""
     team: Team = field(default_factory=Team)
     """Team bookkeeping (team_fold)."""
+    host: Host = field(default_factory=Host)
+    """Teams Phase 2 bookkeeping (rules_host)."""
 
 
 def loop_pending(fold: Fold) -> list[CallId]:

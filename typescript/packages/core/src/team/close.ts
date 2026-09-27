@@ -151,9 +151,8 @@ async function askValue(
     case "cancelled":
       return { ask_id: askId, status: outcome.status };
     case "failed":
-      throw new Error(
-        "ask_closed{failed} is Phase 2: validate_next refuses it",
-      );
+      // Teams Phase 2: the host member's turn failed, byte for byte the bounce's error.
+      return { ask_id: askId, status: "failed", error: outcome.error };
     default:
       return assertNever(outcome);
   }
@@ -182,6 +181,17 @@ export async function completeAsk(
         { status: "answered", reply: env.mail_id },
         got,
       );
+    // A turn_failed bounce closes the ask failed (rule 54); any other carries the ended result.
+    if (env.code === "turn_failed") {
+      if (env.error === undefined)
+        throw new Error("a turn_failed bounce carries its error");
+      return await closeAsk(
+        ctx,
+        askId,
+        { status: "failed", error: env.error },
+        got,
+      );
+    }
     const result = env.result;
     if (result === undefined || result.status === "completed")
       throw new Error("an ask's bounce carries the ended member's result");

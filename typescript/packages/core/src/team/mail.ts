@@ -28,6 +28,18 @@ export async function addressOf(
     : { name: row.name, generation: row.generation };
 }
 
+/**
+ * Where an answer to `mail` goes: back to its sender's address — the team log for an operator
+ * request, the caller thread for a caller (Teams Phase 2), else the member at its generation. Used
+ * by a reply, a member_ended bounce and a turn_failed bounce alike.
+ */
+export function replyAddress(mail: MailEnvelope): Address {
+  const from = mail.from;
+  if ("operator" in from) return "team_log";
+  if ("caller" in from) return { caller: from.caller };
+  return { name: from.name, generation: from.generation };
+}
+
 /** A text body: inline up to the inline cap, else an artifact ref written before the append. */
 export async function bodyOf(
   text: string,

@@ -69,7 +69,11 @@ async function withTeam<Output>(
 /** What a team needs of an agent it lists: its pin as a member, and a runner for its branches. */
 export function memberOf<Deps, Output>(
   def: Resolved<Deps, Output>,
+  hostMember = false,
 ): MemberEntry {
+  // A host member's every pin — its start, its rebind and each continuation — carries the flag,
+  // so its config_hash is stable and its team tools stay reply plus what its rules allow.
+  const pinDef = hostMember ? { ...def, hostMember: true as const } : def;
   const keys = def.models?.map(([k]) => k);
   return {
     handsOff: def.handoffs.length > 0,
@@ -77,7 +81,7 @@ export function memberOf<Deps, Output>(
     team: def.team === undefined ? undefined : def.members,
     configHash: async (as) => {
       const { config } = await pinnedAfterSetup(
-        def,
+        pinDef,
         as.member,
         as.deferTools,
         as.answerer,
@@ -97,7 +101,7 @@ export function memberOf<Deps, Output>(
           },
         }),
     pinned: async (deferTools, choice) => {
-      const member = choice === undefined ? def : memberDef(def, choice);
+      const member = choice === undefined ? pinDef : memberDef(pinDef, choice);
       const { config, started, artifacts } = await pinnedAfterSetup(
         member,
         true,
@@ -121,13 +125,16 @@ export function memberOf<Deps, Output>(
     },
     run: async (env) => {
       await execute(
-        env.dynamic === undefined ? def : memberDef(def, env.dynamic),
+        env.dynamic === undefined ? pinDef : memberDef(pinDef, env.dynamic),
         {
           store: env.store,
           principal: env.principal,
           thread: env.thread,
           holder: env.holder,
-          member: { parent: env.parent, notify: env.notify },
+          member: {
+            ...(env.parent === undefined ? {} : { parent: env.parent }),
+            notify: env.notify,
+          },
           ...(env.deferTools === undefined
             ? {}
             : { deferTools: env.deferTools }),

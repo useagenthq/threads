@@ -185,10 +185,14 @@ async def _never_began(rt: Runtime, state: CallState, spec: ToolSpec) -> Halt | 
 
 
 def _answered_since_request(rt: Runtime) -> bool:
-    """A resumed of a question after the turn's last model_request: its answer is still to send."""
+    """A park resumed after the turn's last model_request: what came back is still to send. Any
+    address counts -- a question answered or expired, a team ask answered, failed or bounced, a
+    wait finished, a child settled. The park is what stopped the turn, so a resumed after the last
+    request always leaves the loop work to send (lane 29D: a caller's ask that the host's tick
+    answered after the run that parked had ended)."""
     for event in reversed(rt.events):
         if isinstance(event, ModelRequestEvent):
             return False
-        if isinstance(event, ResumedEvent) and event.data.address.kind == "input":
+        if isinstance(event, ResumedEvent):
             return True
     return False

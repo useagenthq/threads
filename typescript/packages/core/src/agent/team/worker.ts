@@ -17,9 +17,10 @@ import {
   pendingFor,
 } from "../../team/rows";
 import type { DeferTools } from "../defer";
-import { memberEntry } from "../registry";
+import type { MemberEntry } from "../registry";
 import type { Store } from "../sqlite";
 import { ancestorsOf, startedCap } from "./budgets";
+import { runHostMember } from "./host-member";
 import { takeTeamLogMail } from "./log-mail";
 import {
   closed,
@@ -27,6 +28,7 @@ import {
   leaseFree,
   principalOf,
   teamsUnder,
+  WORKED,
 } from "./scan";
 import { materializeOrLater, rebindMember } from "./setup";
 import { endUnbound, takeMail } from "./units";
@@ -47,8 +49,8 @@ export type WorkerEnv = {
   readonly log: LogStore;
   readonly artifacts: ArtifactStore;
   readonly team: TeamId;
-  /** Every agent of the lead's team tree, by name. */
-  readonly agents: ReadonlyMap<string, object>;
+  /** What each agent the team may run is rebound and run with, by name. */
+  readonly agents: ReadonlyMap<string, MemberEntry>;
   readonly signal?: AbortSignal;
   readonly mint?: Mint;
   /** How long a claim holds a pending row; tests inject a shorter one. */
@@ -166,7 +168,7 @@ export class TeamWorker {
         this.#env.mint,
       );
       for (const row of await reading(db, (tx) => memberRows(tx, team)))
-        if (row.role === "member") await this.#visit(db, row, recovering, now);
+        if (WORKED.has(row.role)) await this.#visit(db, row, recovering, now);
     }
   }
 
@@ -334,13 +336,25 @@ export class TeamWorker {
     if (!read.ok) throw new Error(`member ${row.name}: ${read.error.message}`);
     const events = knownEvents(read.value);
     const started = events.find((e) => e.type === "thread_started");
+    if (started?.type !== "thread_started")
+      throw new Error(`member ${row.name} has no thread_started`);
+    // A host member has no task and no parent: its own path runs it (Teams Phase 2).
+    if (started.data.host_member !== undefined)
+      return await runHostMember(this.#env, row, {
+        branch,
+        configHash: started.data.config_hash,
+        chain: read.value,
+        holder,
+        signal,
+        notify: this.notify,
+        rebind: (agent, hash) =>
+          this.#rebind(row.thread_id, agent, hash, undefined),
+      });
     const task = events.find((e) => e.type === "user_input");
-    const parent =
-      started?.type === "thread_started" ? started.data.parent : undefined;
+    const parent = started.data.parent;
     if (parent?.relation !== "team_member" || task?.type !== "user_input")
       throw new Error(`member ${row.name} has no task`);
-    const handle = this.#env.agents.get(row.agent);
-    const entry = handle === undefined ? undefined : memberEntry(handle);
+    const entry = this.#env.agents.get(row.agent);
     const choice = await recordedChoice(this.#env.log, row, task.data.mail_id);
     const rebind = await this.#rebind(
       row.thread_id,

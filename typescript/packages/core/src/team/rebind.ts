@@ -60,6 +60,7 @@ export async function rebindFailed(
       put: () => {
         throw new Error("a failed rebind's result has no text");
       },
+      takenAsks: fold.team.host.turnAsks,
     },
     { status: "failed", error: { code, message: `rebind failed: ${code}` } },
   );

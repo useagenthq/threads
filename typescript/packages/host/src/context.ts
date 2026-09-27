@@ -58,6 +58,12 @@ export class HostContext {
   onStoreOutage:
     | ((tenant: string, thread: Thread, error: StoreError) => void)
     | undefined;
+  /**
+   * Run before every run of the tenant executes: host({members}) opens the tenant's host team
+   * there, so a caller's very first turn can already address a host member by name instead of
+   * waiting for the next team tick (Teams Phase 2, the lazy open).
+   */
+  beforeRun: ((tenant: string) => Promise<void>) | undefined;
   readonly #stop = new AbortController();
   /** Aborted once the host stops: every run and every send not yet settled gives up on it. */
   readonly stopping: AbortSignal = this.#stop.signal;
@@ -154,6 +160,7 @@ export class HostContext {
       if (this.stopping.aborted) return { kind: "stopped" };
       const store = this.storeFor(tenant);
       try {
+        await this.beforeRun?.(tenant);
         // A reply begun before a crash is reconciled through the channel's lookup first: the
         // agent's recovery has no channel_send tool and would park it.
         await this.#reply(tenant, thread);

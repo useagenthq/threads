@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
-from team.vectors import Obj, agents, obj, vector_mint
+from team.vectors import Obj, agents, host_rules, obj, vector_mint
 
 from threads.agents.outcome import output_text
 from threads.log import MemberIdleEvent, MemberRef, Principal, ToolCallEvent, ToolResultEvent
@@ -36,7 +36,8 @@ from threads.team.ops import StartPlan, TeamLimits, send, start
 from threads.team.provenance import turn_provenance
 from threads.team.request import Request
 from threads.team.rows import TeamRow, team_of_log
-from threads.team.settle import Completed, SettleContext, Settlement, settle
+from threads.team.settle import AppendContext, Completed, SettleContext, Settlement, settle
+from threads.team.turn_failed import fail_turn
 from threads.team.watch import WaitMode, monitor, open_wait, wait, wait_members
 
 
@@ -220,7 +221,8 @@ async def _call(w: Writer, v: Obj) -> JsonValue:
     out: list[JsonValue] = []
 
     def decide(tx: DecideTx, batch: Batch) -> None:
-        ctx = CallContext(tx.conn, tx.fold, batch, call, _no_text, reader_of(tx.read))
+        rules = host_rules(v)
+        ctx = CallContext(tx.conn, tx.fold, batch, call, _no_text, reader_of(tx.read), rules)
         out.append(_model_op(ctx, v))
 
     await _decided(w, decide)
@@ -279,6 +281,25 @@ async def _settle(w: Writer, v: Obj) -> JsonValue:
     return {"status": "idle", "result": to_json(result)}
 
 
+async def _turn_failure(w: Writer, v: Obj) -> JsonValue:
+    """A host member's failed turn (rule 53): the hop cap that ended it, if any, then
+    turn_completed, its asks' turn_failed bounces and member_idle{turn_failed}."""
+    inp = obj(v["input"])
+    hop, end, error = inp.get("hop"), obj(inp["turn"]), obj(inp["error"])
+    out: list[JsonValue] = []
+
+    def decide(tx: DecideTx, batch: Batch) -> None:
+        if hop is not None:
+            capped = {**obj(hop), "scope": "hop", "observed_is_upper_bound": False}
+            batch.add(Draft("budget_exceeded", capped))
+        ctx = AppendContext(tx.conn, batch, _thread(w), w.branch_id)
+        failed = fail_turn(ctx, tx.fold, end, error)
+        out.append({"status": "idle", "failed": list(failed.failed)})
+
+    await _decided(w, decide)
+    return out[0]
+
+
 async def run_on(w: Writer, v: Obj) -> JsonValue:
     """The op under `w`: its outcome as the vector states it."""
     match v["op"]:
@@ -292,5 +313,7 @@ async def run_on(w: Writer, v: Obj) -> JsonValue:
             return await _deadline(w, v)
         case "idle" | "end":
             return await _settle(w, v)
+        case "turn_failure":
+            return await _turn_failure(w, v)
         case op:
             raise AssertionError(f"op {op} runs on a store, not a writer")

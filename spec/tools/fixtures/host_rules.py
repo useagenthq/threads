@@ -103,15 +103,16 @@ def _end_bounces(root: pathlib.Path) -> None:
     team, bill, support, ask = asked()
     take(bill, ask)
     ended = bill.add("member_ended", {"result": ENDED})
-    cancelled: Obj = {**ENDED, "status": "cancelled"}
-    wrong: Obj = {**ended_bounce(bill, ask, ENDED, ended), "result": cancelled}
+    # A well-formed FailedResult that is not the end's, so the rule catches it, not the schema.
+    mismatch: Obj = {"code": "pin_mismatch", "message": "rebind failed: pin_mismatch"}
+    wrong: Obj = {**ended_bounce(bill, ask, ENDED, ended), "result": {**ENDED, "error": mismatch}}
     bad = bill.add("message_sent", {"envelope": wrong})
     reject_at(
         root,
         "end-bounce-result-mismatch-rejected",
         "Rule 43: a bounce whose causal is its sender's own member_ended carries that end's "
-        "result. billing's end bounces support's taken ask with a cancelled result instead of "
-        "the end's: invalid_transition at the bounce.",
+        "result. billing's end bounces support's taken ask with another failure's error instead "
+        "of the end's: invalid_transition at the bounce.",
         {"team": team, "billing": bill, "support": support},
         ("billing", bad),
     )

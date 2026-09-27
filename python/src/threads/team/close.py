@@ -107,8 +107,8 @@ def _ask_value(ctx: CloseContext, ask_id: str, outcome: dict[str, JsonValue]) ->
             "status": status,
             "result": public_result(outcome["result"], ctx.read),
         }
-    if status == "failed":
-        raise AssertionError("ask_closed{failed} is Phase 2: validate_next refuses it")
+    if status == "failed":  # Teams Phase 2: a host member's turn failed, and only that turn
+        return {"ask_id": ask_id, "status": status, "error": outcome["error"]}
     return {"ask_id": ask_id, "status": status}
 
 
@@ -123,6 +123,11 @@ def complete_ask(ctx: CloseContext, ask_id: str, *, cancelled: bool, due: bool) 
         got = ctx.batch.add(received(env))
         if kind == "reply":
             return close_ask(ctx, ask_id, {"status": "answered", "reply": env.mail_id}, got)
+        if env.code == "turn_failed":  # Teams Phase 2: the host member's turn failed, not it
+            if env.error is MISSING:
+                raise AssertionError("a turn_failed bounce carries its turn's error")
+            failed: dict[str, JsonValue] = {"status": "failed", "error": to_json(env.error)}
+            return close_ask(ctx, ask_id, failed, got)
         if env.result is MISSING:
             raise AssertionError("an ask's bounce carries the ended member's result")
         result = to_json(env.result)

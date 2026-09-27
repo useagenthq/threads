@@ -24,6 +24,38 @@ Python: an async context manager (__aenter__ calls ready, __aexit__ calls stop).
 
 ## Methods
 
+### team
+
+The host team of the principal's tenant, as a Team: it holds the tenant's host members, has no lead, never closes and has no HTTP route, so only trusted code reaches it. For a host member's name, start means its next generation after a stop, and cancel stops it for good.
+
+<Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
+<Tab value="TypeScript">
+
+```ts
+team(options: {
+  principal: Principal;
+}): Promise<Result<Team>>
+```
+
+</Tab>
+<Tab value="Python">
+
+```python
+async def team(
+    *,
+    principal: Principal,
+) -> Ok[Team] | Err[Failure]
+```
+
+</Tab>
+</Tabs>
+
+<Field name="principal" type={"Principal"} required>
+  Who acts through the handle; its tenant picks the host team. A host with no members option answers not_found.
+</Field>
+
+**Returns an error value** with one of these codes: `not_found`.
+
 ### startRun / start_run
 
 POST /v1/runs. Makes the user_input durable together with the idempotency key and returns; the run proceeds in the host. The key binds tenant, the full principal (issuer, tenant, subject), the operation and the request hash: the same key, principal and request replays the same receipt and starts nothing; a different request is idempotency_key_reused; a different principal in the same tenant is idempotency_key_principal_mismatch, and never sees the other principal's receipt.

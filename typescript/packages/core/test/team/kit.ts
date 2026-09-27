@@ -203,13 +203,16 @@ export function caseLogs(
 /** Every team a lead among the logs leads, in log order. */
 export function teamsOf(logs: readonly VerifiedLog[]): readonly TeamId[] {
   return logs.flatMap((log) =>
-    log.events.flatMap((line) =>
-      line.kind === "event" &&
-      line.event.type === "thread_started" &&
-      line.event.data.team !== undefined
-        ? [line.event.data.team.id]
-        : [],
-    ),
+    log.events.flatMap((line) => {
+      if (line.kind !== "event") return [];
+      const e = line.event;
+      // A host team (Teams Phase 2) is leadless: its own team_opened names it.
+      if (e.type === "team_opened")
+        return e.data.kind === "host" ? [e.data.team] : [];
+      return e.type === "thread_started" && e.data.team !== undefined
+        ? [e.data.team.id]
+        : [];
+    }),
   );
 }
 

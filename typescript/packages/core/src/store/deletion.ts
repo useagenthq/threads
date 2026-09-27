@@ -3,7 +3,14 @@ import { BranchId, ThreadId } from "../log";
 import { err, ok, type Result } from "../result";
 import { verifyLines } from "../verify";
 import { type LogError, logError } from "../verify/error";
-import { branchesOf, deleteOne, deleteTeam, doomedTeams } from "./delete-rows";
+import {
+  branchesOf,
+  callerHolds,
+  deleteCallerRows,
+  deleteOne,
+  deleteTeam,
+  doomedTeams,
+} from "./delete-rows";
 import type { Sql, Tx } from "./driver";
 import { branchLines } from "./lines";
 import { type Opened, openedThreads } from "./started";
@@ -85,6 +92,9 @@ async function deleteSet(
   if (!teams.ok) return teams;
   for (const team of teams.value) await deleteTeam(tx, tenantId, team);
   for (const thread of all.filter((t) => doomed.has(t))) {
+    const branches = await branchesOf(tx, thread);
+    if (!branches.ok) return branches;
+    for (const branch of branches.value) await deleteCallerRows(tx, branch);
     const gone = await deleteOne(tx, tenantId, thread, now);
     if (!gone.ok) return gone;
   }
@@ -182,7 +192,8 @@ async function running(
     const branches = await branchesOf(tx, thread);
     if (!branches.ok) return branches;
     for (const branch of branches.value) {
-      const why = await unsettled(tx, branch);
+      const why =
+        (await unsettled(tx, branch)) ?? (await callerHolds(tx, branch));
       if (why !== undefined) return err(busy(thread, why));
     }
   }

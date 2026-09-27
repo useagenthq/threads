@@ -8,12 +8,30 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue, TypeAdapter
 from pydantic.experimental.missing_sentinel import MISSING
-from team.team_kit import CASES, holding, index_rows, team_cases, verified
+from team.team_kit import (
+    CASES,
+    deleted_callers,
+    holding,
+    index_rows,
+    team_cases,
+    tombstone,
+    verified,
+)
 
 from threads.agents.store import Store, open_store
+from threads.agents.team_feed import InvalidCursorError, team_events
+from threads.agents.team_handle_types import (
+    EpochRestarted,
+    MemberSource,
+    OperatorSource,
+    TeamCursor,
+    TeamItem,
+    TeamSource,
+)
 from threads.log import ParseError, TeamOpenedEvent, ThreadStartedEvent
+from threads.reduce.handlers import to_json
 from threads.result import Err
-from threads.store import LOCAL_TENANT, VerifiedLog
+from threads.store import LOCAL_TENANT, SqliteStore, VerifiedLog
 from threads.store.sql import int_of, text_of
 from threads.team.cross import TeamLogEvents, check_team_logs
 from threads.team.index import opened_tenant as _opened_tenant
@@ -49,6 +67,16 @@ def _leads(logs: dict[str, VerifiedLog]) -> dict[str, tuple[str, VerifiedLog]]:
     return out
 
 
+def _teams(logs: dict[str, VerifiedLog]) -> dict[str, None]:
+    """Every team the case's logs name, in log order: a lead's, and a leadless host team's."""
+    out: dict[str, None] = {}
+    for log in logs.values():
+        first = next(iter(log.fold.events), None)
+        if isinstance(first, TeamOpenedEvent) and first.data.kind == "host":
+            out[first.data.team] = None
+    return {**dict.fromkeys(_leads(logs)), **out}
+
+
 def _tenant(logs: dict[str, VerifiedLog]) -> str:
     """The team's tenant, as its team_opened records it."""
     opened = (e for log in logs.values() for e in log.fold.events)
@@ -72,7 +100,7 @@ def _imported(case: Path) -> tuple[dict[str, bytes], dict[str, VerifiedLog]] | F
 
 
 async def run(case: Path) -> Found:
-    """The case's outcome: {states, index, tree}, or its first failure."""
+    """The case's outcome: {states, index, tree, feed}, or its first failure."""
     imported = _imported(case)
     if isinstance(imported, dict):
         return imported
@@ -90,14 +118,74 @@ async def run(case: Path) -> Found:
     states: Found = {label: log.state.to_json() for label, log in logs.items()}
     store = await holding(raw, _tenant(logs))
     sq = await open_store(store)
+    await tombstone(sq, deleted_callers(case))
     leads = _leads(logs)
-    for team in leads:
+    for team in _teams(logs):
         rebuilt = await rebuild_team_index(sq, team)
         if isinstance(rebuilt, Err):
             return _failure(rebuilt.error, None)
     index = await sq.run(index_rows)
     tree = await _tree(store, leads)
-    return tree if "code" in tree else {"states": states, "index": index, "tree": tree}
+    if "code" in tree:
+        return tree
+    found: Found = {"states": states, "index": index, "tree": tree}
+    reads = _feed_reads(case)
+    if reads is not None:
+        found["feed"] = [await _feed(sq, next(iter(_teams(logs))), after) for after in reads]
+    return found
+
+
+def _feed_reads(case: Path) -> list[JsonValue] | None:
+    """`input.feed`: one team.events read per entry, each `{}` or `{after: cursor}`."""
+    inputs = _load(case / "case.json")["input"]
+    assert isinstance(inputs, dict)
+    reads = inputs.get("feed")
+    if reads is None:
+        return None
+    assert isinstance(reads, list)
+    return reads
+
+
+async def _feed(sq: SqliteStore, team: str, read: JsonValue) -> JsonValue:
+    """One team.events read over the rebuilt feed, as the `feed` projection records it."""
+    assert isinstance(read, dict)
+    cursor = read.get("after")
+    after = None if cursor is None else TeamCursor(**_ints(cursor))
+    try:
+        items = [_item(i) for i in [x async for x in team_events(sq, team, after)]]
+    except InvalidCursorError:
+        return {"error": "invalid_cursor"}
+    return {"items": items}
+
+
+def _ints(cursor: JsonValue) -> dict[str, int]:
+    assert isinstance(cursor, dict)
+    return {k: v for k, v in cursor.items() if isinstance(v, int)}
+
+
+def _item(item: TeamItem) -> JsonValue:
+    cursor: JsonValue = {"epoch": item.cursor.epoch, "offset": item.cursor.offset}
+    if isinstance(item, EpochRestarted):
+        return {"kind": item.kind, "cursor": cursor}
+    return {
+        "kind": item.kind,
+        "cursor": cursor,
+        "source": _source(item.source),
+        "branch_id": item.event.branch_id,
+        "seq": item.event.seq,
+    }
+
+
+def _source(source: TeamSource) -> JsonValue:
+    if isinstance(source, MemberSource):
+        return {"kind": source.kind, "member": to_json(source.member)}
+    if isinstance(source, OperatorSource):
+        return {
+            "kind": source.kind,
+            "principal": to_json(source.principal),
+            "request": source.request,
+        }
+    return {"kind": source.kind}
 
 
 async def _tree(store: Store, leads: dict[str, tuple[str, VerifiedLog]]) -> Found:
@@ -121,6 +209,8 @@ async def _tree(store: Store, leads: dict[str, tuple[str, VerifiedLog]]) -> Foun
         if role == "lead":  # where a walk starts: counted, never a child
             counted.append(name)
             continue
+        if team not in leads:  # a host member: its leadless team has no tree to walk
+            continue
         label, lead = leads[team]
         members = {(m.name, m.generation): m for m in await team_members(store, lead)}
         opened = await open_member(store, lead, members[(name, generation)])
@@ -141,4 +231,6 @@ def test_team_case(name: str) -> None:
     assert "code" not in got, got
     assert got["states"] == expected["states"]
     assert got["index"] == expected["index"]
-    assert got["tree"] == expected["tree"]
+    if "tree" in expected:  # a leadless host team has no tree to walk
+        assert got["tree"] == expected["tree"]
+    assert got.get("feed") == expected.get("feed")

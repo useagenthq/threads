@@ -7,6 +7,7 @@ import type {
   MemberRef,
   ParkReason as ParkReasonSchema,
   ThreadId,
+  TurnFailure,
 } from "../log";
 
 // The results of the team tools ask, reply, wait and monitor (spec/api.json), in the TypeScript
@@ -91,6 +92,12 @@ export type AskOutcome =
       readonly result: MemberResult;
     }
   | { readonly status: "cancelled"; readonly askId: AskId }
+  /** Teams Phase 2: the host member's turn failed, and its turn_failed bounce closed the ask. */
+  | {
+      readonly status: "failed";
+      readonly askId: AskId;
+      readonly error: TurnFailure;
+    }
   | {
       readonly status: "needs_input";
       readonly askId: AskId;

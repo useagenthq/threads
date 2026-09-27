@@ -16,6 +16,8 @@ import { type LogError, logError } from "../verify/error";
 import { Batch, MINT, type Mint } from "./batch";
 import { startCancelled } from "./cancel-start";
 import type { DynamicChoice } from "./dynamic";
+import { LINE_ZERO } from "./line-zero";
+import { materializeHost } from "./materialize-host";
 import type { RebindCode } from "./rebind";
 import {
   type MemberRow,
@@ -77,18 +79,7 @@ type Starting = {
 };
 
 // thread_started takes the pinned config's line-0 fields; the rest of the config is hashed only.
-const Pinned = z.object(
-  ThreadStartedFields.pick({
-    agent_name: true,
-    instructions: true,
-    model: true,
-    model_params: true,
-    adapter: true,
-    tools: true,
-    policy: true,
-    sandbox_provider: true,
-  }).shape,
-);
+const Pinned = z.object(ThreadStartedFields.pick(LINE_ZERO).shape);
 
 /** Materializes the member `name` of `team`, or reports why nothing was opened. */
 export async function materialize(
@@ -97,6 +88,13 @@ export async function materialize(
   name: string,
   o: MaterializeOptions,
 ): Promise<Result<Materialized, LogError>> {
+  const own = await store.driver.transaction(
+    (tx) => memberNamed(tx, team, name),
+    READ_ONLY,
+  );
+  // A host member has no task: its own open records thread_started{host_member} alone (Phase 2).
+  if (own?.role === "host_member")
+    return await materializeHost(store, team, own, o);
   const found = await starting(store, team, name);
   if (!found.ok) return found;
   if (found.value === undefined) return ok({ status: "not_starting" });

@@ -70,6 +70,11 @@ export type PinOptions = {
    * may start and, without a team of its own, the only team tools it is offered.
    */
   readonly rules?: readonly MessagePolicyRule[];
+  /**
+   * A host member (Teams Phase 2): it is in the host team, which grants nothing, so its team tools
+   * are `reply` plus what its rules allow, never the seven a lead's member is offered.
+   */
+  readonly hostMember?: true;
   /** The agents behind team, in order: each dynamic one adds a line to the listing. */
   readonly members: readonly { readonly name: string }[];
   /** A member of a dynamic agent: what its starter chose (lane 26). */
@@ -164,7 +169,7 @@ function pinned(
   const o = { ...base, context: { ...base.context, defer_tools: deferTools } };
   const user = [...o.tools, ...extensionTools(o.extensions, o.mcp)];
   const deferred = deferredNames(ownTools(user, within, o.dynamic), deferTools);
-  const team = teamTools(o.team, member, o.rules ?? []);
+  const team = teamTools(o.team, member, o.rules ?? [], o.hostMember === true);
   const artifacts: Uint8Array[] = [];
   const pinnedSpec = (t: {
     readonly name: string;

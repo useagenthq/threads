@@ -56,6 +56,10 @@ class _Crashing(sqlite3.Connection):
         return super().execute(sql, parameters)
 
 
+NEVER = Point("nothing", lambda _c, _sql, _p: False)
+"""A point that never fires: open with it, seed the world, then `arm` the real one."""
+
+
 async def crashing(where: Path, monkeypatch: pytest.MonkeyPatch, point: Point) -> Store:
     """A store on `where` whose connection dies once at `point`."""
     store = sqlite(str(where))
@@ -64,6 +68,12 @@ async def crashing(where: Path, monkeypatch: pytest.MonkeyPatch, point: Point) -
         await open_store(store)
     _Crashing.point = point.at
     return store
+
+
+def arm(point: Point) -> None:
+    """Arms the next crash on a store already opened with `crashing`: a drill whose world has
+    to be seeded first opens with `NEVER` and arms its real point once the world is durable."""
+    _Crashing.point = point.at
 
 
 def reached() -> bool:

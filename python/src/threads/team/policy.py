@@ -57,13 +57,24 @@ def rule_for(
 
 
 def team_tools(
-    own: Sequence[Named] | None, member: bool, rules: Sequence[MessagePolicyRule]
+    own: Sequence[Named] | None,
+    member: bool,
+    rules: Sequence[MessagePolicyRule],
+    host_member: bool = False,
 ) -> frozenset[str]:
     """The team tools a pin offers: all seven for a lead (agent(team=...)) and for a team's member;
     for an agent with host rules and no team of its own, one per op some rule with it as `from`
-    allows, so its line 0 never shows a tool that is always denied."""
+    allows, so its line 0 never shows a tool that is always denied. A host member (Teams Phase 2)
+    is in a team that grants nothing, so it gets that same rule-derived set plus `reply`, which
+    answering the asks it is there for needs."""
+    if host_member:
+        return frozenset({"reply"}) | _allowed(rules)
     if own is not None or member:
         return PINNED_MEMBERS
+    return _allowed(rules)
+
+
+def _allowed(rules: Sequence[MessagePolicyRule]) -> frozenset[str]:
     return frozenset[str]().union(*(_TOOLS[op] for r in rules for op in r["allow"]))
 
 

@@ -2,7 +2,7 @@
   "name": "end-bounce-result-mismatch-rejected",
   "family": "agents_teams",
   "kind": "team",
-  "description": "Rule 43: a bounce whose causal is its sender's own member_ended carries that end's result. billing's end bounces support's taken ask with a cancelled result instead of the end's: invalid_transition at the bounce.",
+  "description": "Rule 43: a bounce whose causal is its sender's own member_ended carries that end's result. billing's end bounces support's taken ask with another failure's error instead of the end's: invalid_transition at the bounce.",
   "clock": {
     "now": 1790000060000
   },

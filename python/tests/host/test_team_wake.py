@@ -187,7 +187,10 @@ async def conversation(store: Store) -> BranchId:
 # includes channel_send, which only the host's own channel binding can reproduce, so a Python
 # process has no operator handle on a channel lead's team to start a member with. The host's wake
 # path is the same for both (it reads the lead's mail, never its channel), and the API lead above
-# covers it. Reported as a parity issue for lane 29D's Host.team().
+# covers it. Lane 29D's `Host.team()` does not close this: it is a handle on the leadless host
+# team, which binds host members from the host's own registry and never rebinds a lead at all.
+# Closing it needs a host-side operator handle on a *lead* team, which would bind the lead the
+# way the host itself does (channel send included) instead of through `open_team`.
 
 
 async def _posted(sent: list[str], count: int) -> bool:

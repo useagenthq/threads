@@ -151,16 +151,19 @@ async function configured(
 ): Promise<Recipient | undefined> {
   const bytes = await artifacts.get(row.config_hash);
   const team = await teamRow(tx, row.team_id);
-  const lead =
-    team === undefined ? undefined : await log.mainBranch(team.lead_thread_id);
-  if (!bytes.ok || team === undefined || lead === undefined || !lead.ok)
-    return undefined;
+  if (!bytes.ok || team === undefined) return undefined;
   const pinned = Pinned.parse(
     JSON.parse(new TextDecoder().decode(bytes.value)),
   );
+  // A host member's team is leadless and its thread is a root: it reserves against no ancestor
+  // thread budget, the caller's included (the caller pays through its run budget).
+  const leadThread = team.lead_thread_id;
+  if (leadThread === null) return { pinned, parent: undefined, cap: [] };
+  const lead = await log.mainBranch(leadThread);
+  if (!lead.ok) return undefined;
   return {
     pinned,
-    parent: { thread_id: team.lead_thread_id, branch_id: lead.value },
+    parent: { thread_id: leadThread, branch_id: lead.value },
     cap: [],
   };
 }

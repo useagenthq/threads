@@ -10,15 +10,17 @@ from typing import Final
 
 from pydantic import JsonValue
 
-from threads.log import MailEnvelope, MemberRef
+from threads.log import MailEnvelope
 from threads.reduce.handlers import to_json
 from threads.store.conn import Conn
 from threads.store.lines import Draft
 from threads.team.batch import Batch
+from threads.team.cross_host import reply_to
 from threads.team.mail import PutText, address_of, body_of, refused, sent
 from threads.team.rows import (
     MemberRow,
     TeamRow,
+    mail_envelope,
     member_rows,
     monitors_on,
     open_asks,
@@ -57,6 +59,10 @@ class SettleContext(AppendContext):
     provenance: JsonValue
     """The provenance of the turn the settlement closes: its notifications belong to it."""
     put: PutText
+    taken_asks: tuple[str, ...] = ()
+    """A host member's asks its last turn took and never answered (coordinator decision 6,
+    2026-09-26): its end bounces each one member_ended, since the end's refusal of pending mail
+    cannot reach a row that is already consumed."""
 
 
 _FIRES: Final = {
@@ -100,8 +106,36 @@ def settle(ctx: SettleContext, how: Settlement) -> None:
     for row in rows:
         _fire(ctx, team_of(row), row, "member_ended", settled, result)
         refuse_all(ctx, team_of(row), row, result, bounce_all=True)
+        _bounce_taken(ctx, team_of(row), row, result, settled)
         if row.role == "lead":
             _close(ctx, team_of(row), row, settled)
+
+
+def _bounce_taken(
+    ctx: SettleContext, team: TeamRow, row: MemberRow, result: JsonValue, settled: str
+) -> None:
+    """A host member's end bounces every ask it consumed and never answered (decision 6): those
+    rows are no longer pending, so the end's refusal cannot reach them, and without this they
+    would wait out their deadlines."""
+    if row.role != "host_member":
+        return
+    for ask_id in ctx.taken_asks:
+        ask = mail_envelope(ctx.conn, ask_id)
+        if ask is None:
+            continue
+        env: dict[str, JsonValue] = {
+            "mail_id": _mail_id(ctx),
+            "kind": "bounce",
+            "team": row.team_id,
+            "from": ref_of(team, row),
+            "to": reply_to(ask),
+            "provenance": to_json(ask.provenance),
+            "causal": _causal(ctx, settled),
+            "code": "member_ended",
+            "ask_id": ask_id,
+            "result": result,
+        }
+        ctx.batch.add(sent(env))
 
 
 def _mail_id(ctx: AppendContext) -> str:
@@ -161,18 +195,12 @@ def _bounce(  # noqa: PLR0913, PLR0917 - a bounce: where, whose, of what, why an
     why: str,
     result: JsonValue,
 ) -> dict[str, JsonValue]:
-    sender = mail.from_
-    back: JsonValue = (
-        {"name": sender.name, "generation": sender.generation}
-        if isinstance(sender, MemberRef)
-        else "team_log"
-    )
     env: dict[str, JsonValue] = {
         "mail_id": _mail_id(ctx),
         "kind": "bounce",
         "team": row.team_id,
         "from": ref_of(team, row),
-        "to": back,
+        "to": reply_to(mail),
         "provenance": to_json(mail.provenance),
         "causal": _causal(ctx, why),
         "code": "member_ended",
