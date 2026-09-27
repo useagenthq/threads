@@ -16,12 +16,15 @@ from pydantic.experimental.missing_sentinel import MISSING
 from threads._generated.a2a_v1 import (
     Message,
     Part,
+    RawPart,
     SendMessageResponse,
     StreamResponse,
     Task,
     TaskArtifactUpdateEvent,
     TaskState,
     TaskStatusUpdateEvent,
+    TextPart,
+    UrlPart,
 )
 
 TASK_STATES: Final[tuple[TaskState, ...]] = (
@@ -119,9 +122,9 @@ def stream_payload(item: StreamResponse) -> StreamPayload | None:
 
 def text_of(parts: Sequence[Part]) -> str:
     """The text of every text part, joined: what a model is shown of a remote's answer."""
-    return "".join(p.text for p in parts if p.text is not MISSING)
+    return "".join(p.text for p in parts if isinstance(p, TextPart))
 
 
 def is_file_part(part: Part) -> bool:
     """A file part, which the cut refuses wherever it arrives: text and JSON parts only."""
-    return part.raw is not MISSING or part.url is not MISSING
+    return isinstance(part, RawPart | UrlPart)

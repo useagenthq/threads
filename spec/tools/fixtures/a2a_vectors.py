@@ -41,7 +41,9 @@ README = CASES.parents[1] / "schema" / "a2a" / "README.md"
 
 # `| JSONParseError | -32700 | 400 |` in the README's error-code table. Reading the table rather
 # than repeating it means a vector row can never disagree with the document it came from.
-ERROR_ROW = re.compile(r"^\| `(\w+Error)` \| `(-?\d+)` \| (\d{3}) \|$", re.MULTILINE)
+ERROR_ROW = re.compile(
+    r"^\| `(\w+Error)` \| `(-?\d+)` \| (\d{3}) \| `([A-Z][A-Z0-9_]*)` \|$", re.MULTILINE
+)
 ERRORS_EXPECTED = 14
 
 # The eight states we accept, and the two groups the pinned spec calls terminal and interrupted.
@@ -123,7 +125,10 @@ def _errors() -> list[JsonValue]:
             f"the table's shape changed, so a2a_vectors.py needs re-reading, not a new number"
         )
     # The row's name is the error's name: it is what the row pins.
-    return [{"name": name, "code": int(code), "status": int(status)} for name, code, status in rows]
+    return [
+        {"name": name, "code": int(code), "status": int(status), "reason": reason}
+        for name, code, status, reason in rows
+    ]
 
 
 def _task_states() -> list[JsonValue]:

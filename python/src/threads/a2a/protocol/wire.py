@@ -91,25 +91,28 @@ class Outbound:
     verb: Literal["GET", "POST"]
     body: str | None
     accept: str
+    rpc_id: str | None
+    """The id this request put in its envelope, which the answer has to carry back. None on
+    HTTP+JSON, which has no envelope and so nothing to correlate."""
 
 
 _STREAM_ACCEPT: Final = "text/event-stream"
 _JSON_ACCEPT: Final = "application/a2a+json, application/json"
 
 
-def outbound(wire: Wire, method: Method, params: dict[str, JsonValue]) -> Outbound:
+def outbound(wire: Wire, method: Method, params: dict[str, JsonValue], rpc_id: str) -> Outbound:
     """The HTTP request one call becomes. `id` is taken out of the message for the path; every
     other field of a GET operation becomes a query parameter."""
     accept = _STREAM_ACCEPT if streams(method) else _JSON_ACCEPT
     if wire.binding == "JSONRPC":
-        envelope = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
-        return Outbound(wire.url, "POST", json.dumps(envelope), accept)
+        envelope = {"jsonrpc": "2.0", "id": rpc_id, "method": method, "params": params}
+        return Outbound(wire.url, "POST", json.dumps(envelope), accept, rpc_id)
     shape = HTTP[method]
     base = wire.url.rstrip("/")
     raw_id = params.get("id")
     path = shape.path.replace("{id}", quote(raw_id if isinstance(raw_id, str) else "", safe=""))
     if shape.where == "body":
-        return Outbound(f"{base}{path}", shape.verb, json.dumps(params), accept)
+        return Outbound(f"{base}{path}", shape.verb, json.dumps(params), accept, None)
     query = [
         (key, value if isinstance(value, str) else json.dumps(value))
         for key, value in params.items()
@@ -117,7 +120,7 @@ def outbound(wire: Wire, method: Method, params: dict[str, JsonValue]) -> Outbou
     ]
     # Also as a query parameter, which the spec allows and some clients prefer.
     query.append(("A2A-Version", A2A_VERSION))
-    return Outbound(f"{base}{path}?{urlencode(query)}", shape.verb, None, accept)
+    return Outbound(f"{base}{path}?{urlencode(query)}", shape.verb, None, accept, None)
 
 
 _JSON: Final = TypeAdapter[JsonValue](JsonValue)

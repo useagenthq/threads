@@ -57,24 +57,45 @@ client written against the prose interoperates.
 
 ## Error codes
 
-Taken from the pinned specification's §5.4 mapping table, not from memory:
+Taken from the pinned specification's §5.4 mapping table, not from memory. The reason is the
+`google.rpc.ErrorInfo` reason that names the same error on the HTTP+JSON binding, which the proto
+does not carry because it imports no `google/rpc`; it is the error's own name in the
+`UPPER_SNAKE_CASE` the binding uses, and `spec/conformance/vectors/a2a.json` pins all four columns
+so both languages agree.
 
-| Error | JSON-RPC code | HTTP status |
-|---|---|---|
-| `JSONParseError` | `-32700` | 400 |
-| `InvalidRequestError` | `-32600` | 400 |
-| `MethodNotFoundError` | `-32601` | 404 |
-| `InvalidParamsError` | `-32602` | 400 |
-| `InternalError` | `-32603` | 500 |
-| `TaskNotFoundError` | `-32001` | 404 |
-| `TaskNotCancelableError` | `-32002` | 400 |
-| `PushNotificationNotSupportedError` | `-32003` | 400 |
-| `UnsupportedOperationError` | `-32004` | 400 |
-| `ContentTypeNotSupportedError` | `-32005` | 400 |
-| `InvalidAgentResponseError` | `-32006` | 500 |
-| `ExtendedAgentCardNotConfiguredError` | `-32007` | 400 |
-| `ExtensionSupportRequiredError` | `-32008` | 400 |
-| `VersionNotSupportedError` | `-32009` | 400 |
+| Error | JSON-RPC code | HTTP status | ErrorInfo reason |
+|---|---|---|---|
+| `JSONParseError` | `-32700` | 400 | `JSON_PARSE` |
+| `InvalidRequestError` | `-32600` | 400 | `INVALID_REQUEST` |
+| `MethodNotFoundError` | `-32601` | 404 | `METHOD_NOT_FOUND` |
+| `InvalidParamsError` | `-32602` | 400 | `INVALID_PARAMS` |
+| `InternalError` | `-32603` | 500 | `INTERNAL` |
+| `TaskNotFoundError` | `-32001` | 404 | `TASK_NOT_FOUND` |
+| `TaskNotCancelableError` | `-32002` | 400 | `TASK_NOT_CANCELABLE` |
+| `PushNotificationNotSupportedError` | `-32003` | 400 | `PUSH_NOTIFICATION_NOT_SUPPORTED` |
+| `UnsupportedOperationError` | `-32004` | 400 | `UNSUPPORTED_OPERATION` |
+| `ContentTypeNotSupportedError` | `-32005` | 400 | `CONTENT_TYPE_NOT_SUPPORTED` |
+| `InvalidAgentResponseError` | `-32006` | 500 | `INVALID_AGENT_RESPONSE` |
+| `ExtendedAgentCardNotConfiguredError` | `-32007` | 400 | `EXTENDED_AGENT_CARD_NOT_CONFIGURED` |
+| `ExtensionSupportRequiredError` | `-32008` | 400 | `EXTENSION_SUPPORT_REQUIRED` |
+| `VersionNotSupportedError` | `-32009` | 400 | `VERSION_NOT_SUPPORTED` |
+
+## `google.rpc.ErrorInfo`
+
+The HTTP+JSON binding answers an error as a `google.rpc.Status`, whose `details` **MUST** carry a
+`google.rpc.ErrorInfo`; a JSON-RPC error **SHOULD** carry the same ErrorInfo in its `error.data`. The
+vendored proto imports no `google/rpc`, so the shape is pinned by our own schema
+(`spec/schema/a2a.v1.schema.json`, `$defs.ErrorInfo`) and named in `spec/tools/check_a2a_pin.py` as a
+message of another protocol, with that reason.
+
+We implement the asymmetry the binding states: an HTTP+JSON error body with no ErrorInfo we
+recognise is refused as `InvalidAgentResponseError` rather than read, while a JSON-RPC error's
+ErrorInfo is checked only when it is there. We emit it on both bindings. `domain` is `a2a.dev`,
+because `domain` scopes `reason` and two A2A implementations must name an error the same way;
+inbound we read any domain and check only the reason.
+
+A 401 is the one status that overrides the table: it is a challenge a client has to see, so a 401
+carrying any reason is accepted rather than checked against that error's own status.
 
 ## Our extension
 

@@ -97,8 +97,10 @@ export * from "./sandbox/remote";
 export type { EventDraft } from "./store/admit";
 /** The host's network, for an adapter that owns its own bytes: SSRF-checked and address-pinned. */
 export {
+  hostOf,
   liveTransport,
   type Sent,
+  unfetchable,
   vet,
   type WebTransport,
 } from "./tools/web-transport";

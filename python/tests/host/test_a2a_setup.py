@@ -197,6 +197,16 @@ class TestTheCard:
         card = json.loads(card_bytes(exposed, "support", exposed.agents["support"], ORIGIN))
         assert isinstance(card, dict)
         assert card["securitySchemes"] == {"corp": {"oauth2SecurityScheme": {}}}
+        # Derived from the declared names, not hardcoded to bearer: a custom scheme set gets its
+        # requirement too.
+        assert card["securityRequirements"] == [{"schemes": {"corp": {"list": []}}}]
+
+    def test_a_declared_scheme_comes_with_the_requirement_that_says_it_is_required(self) -> None:
+        # Declaring a scheme and no requirement is what a conforming partner reads as "nothing is
+        # required": it calls unauthenticated and gets our 401. Ours infers "auth required" from the
+        # scheme set being non-empty, which is exactly why this was invisible from inside.
+        card = self._card(talker())
+        assert card["securityRequirements"] == [{"schemes": {"bearer": {"list": []}}}]
 
     def test_the_same_config_and_origin_always_publish_the_same_bytes(self) -> None:
         bot = talker()

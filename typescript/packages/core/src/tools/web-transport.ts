@@ -26,18 +26,39 @@ export type WebTransport = {
   ) => Promise<Response>;
 };
 
+/** The host of a URL, with the brackets an IPv6 literal is written in taken off. */
+export function hostOf(url: URL): string {
+  return url.hostname.replace(/^\[|\]$/g, "");
+}
+
+/**
+ * Why a URL could never be fetched, or undefined when it might be — decided without resolving
+ * anything: a scheme we fetch, no credentials in the URL, and a host that is either a name or a
+ * public IP literal. A name passes here and is decided by `vet`, which resolves it; that is the
+ * only moment its addresses are known, so a name must not be judged before then.
+ *
+ * Choosing between URLs that are not being fetched yet (an agent card's interfaces) needs exactly
+ * this, and needs it without a lookup, so the one list of non-public ranges is read from here too.
+ */
+export function unfetchable(url: URL): string | undefined {
+  if (url.protocol !== "https:" && url.protocol !== "http:")
+    return `only http and https URLs are fetched, not ${url.protocol}`;
+  if (url.username !== "" || url.password !== "")
+    return "a URL with credentials is not fetched";
+  const host = hostOf(url);
+  return isIP(host) !== 0 && !isPublicAddress(host)
+    ? `${host} is a non-public address`
+    : undefined;
+}
+
 /** The checked address to connect to, or why the URL is refused. */
 export async function vet(
   url: URL,
   transport: WebTransport,
 ): Promise<{ readonly address: string } | { readonly denied: string }> {
-  if (url.protocol !== "https:" && url.protocol !== "http:")
-    return {
-      denied: `only http and https URLs are fetched, not ${url.protocol}`,
-    };
-  if (url.username !== "" || url.password !== "")
-    return { denied: "a URL with credentials is not fetched" };
-  const host = url.hostname.replace(/^\[|\]$/g, "");
+  const why = unfetchable(url);
+  if (why !== undefined) return { denied: why };
+  const host = hostOf(url);
   let addresses: readonly string[];
   try {
     addresses = isIP(host) === 0 ? await transport.resolve(host) : [host];

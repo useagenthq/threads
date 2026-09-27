@@ -4,6 +4,7 @@ event-stream rules require (a `\\r\\n`, `\\n` or `\\r` line break; a blank line 
 leading space after the colon is dropped; several `data:` lines join with `\\n`; a `:` comment is
 ignored)."""
 
+import codecs
 import re
 from collections.abc import AsyncIterable, AsyncIterator, Iterable
 from dataclasses import dataclass, field
@@ -88,16 +89,56 @@ class _Assembler:
         return None
 
 
-async def sse_events(chunks: AsyncIterable[bytes]) -> AsyncIterator[SseEvent]:
-    """A response body's SSE events, as its chunks arrive."""
+MAX_FRAME_BYTES: Final = 1 << 20
+"""A frame over this many bytes is refused rather than buffered. One `data:` block is a task or a
+status update, so it is small; without a cap a peer can hold a line open forever and we would
+accumulate it all and then drop it silently. The check is on the buffered string's length in
+characters, which is never more than its UTF-8 byte length, so the refusal can only come at or after
+this many bytes and never before."""
+
+
+@dataclass(frozen=True, slots=True)
+class SseRefused:
+    """Why a peer's stream stopped being readable. A value and the last thing the stream yields: a
+    caller that cannot tell a clean end from a corrupt one has no way to report what happened."""
+
+    why: str
+
+
+type SseRead = SseEvent | SseRefused
+
+
+async def sse_events(chunks: AsyncIterable[bytes]) -> AsyncIterator[SseRead]:
+    """A response body's SSE events, as its chunks arrive.
+
+    One incremental decoder spans every chunk, because a socket splits wherever it likes and a
+    multi-byte character split across a boundary is not an error — it is half a character, and the
+    other half is in the next chunk. Decoding each chunk alone turned `é` into two U+FFFD, and
+    U+FFFD is legal inside a JSON string, so the frame still parsed and corrupted text was handed on
+    as if the peer had sent it. Strict, so bytes that really are not UTF-8 are a refusal we report
+    rather than damage we pass along."""
     assembler = _Assembler()
+    decoder = codecs.getincrementaldecoder("utf-8")("strict")
     buffered = ""
     async for chunk in chunks:
-        ready, buffered = split(buffered + chunk.decode(errors="replace"), ended=False)
+        try:
+            buffered += decoder.decode(chunk)
+        except UnicodeDecodeError as error:
+            yield SseRefused(f"the stream is not valid UTF-8: {error}")
+            return
+        ready, buffered = split(buffered, ended=False)
         for line in ready:
             event = assembler.feed(line)
             if event is not None:
                 yield event
+        if len(buffered) > MAX_FRAME_BYTES:
+            yield SseRefused(f"a single stream line is over {MAX_FRAME_BYTES} bytes")
+            return
+    try:
+        buffered += decoder.decode(b"", True)
+    except UnicodeDecodeError as error:
+        yield SseRefused(f"the stream ends mid-character: {error}")
+        return
     ready, _ = split(buffered, ended=True)
     for line in ready:
         event = assembler.feed(line)

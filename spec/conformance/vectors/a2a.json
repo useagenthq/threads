@@ -3,72 +3,86 @@
     {
       "name": "JSONParseError",
       "code": -32700,
-      "status": 400
+      "status": 400,
+      "reason": "JSON_PARSE"
     },
     {
       "name": "InvalidRequestError",
       "code": -32600,
-      "status": 400
+      "status": 400,
+      "reason": "INVALID_REQUEST"
     },
     {
       "name": "MethodNotFoundError",
       "code": -32601,
-      "status": 404
+      "status": 404,
+      "reason": "METHOD_NOT_FOUND"
     },
     {
       "name": "InvalidParamsError",
       "code": -32602,
-      "status": 400
+      "status": 400,
+      "reason": "INVALID_PARAMS"
     },
     {
       "name": "InternalError",
       "code": -32603,
-      "status": 500
+      "status": 500,
+      "reason": "INTERNAL"
     },
     {
       "name": "TaskNotFoundError",
       "code": -32001,
-      "status": 404
+      "status": 404,
+      "reason": "TASK_NOT_FOUND"
     },
     {
       "name": "TaskNotCancelableError",
       "code": -32002,
-      "status": 400
+      "status": 400,
+      "reason": "TASK_NOT_CANCELABLE"
     },
     {
       "name": "PushNotificationNotSupportedError",
       "code": -32003,
-      "status": 400
+      "status": 400,
+      "reason": "PUSH_NOTIFICATION_NOT_SUPPORTED"
     },
     {
       "name": "UnsupportedOperationError",
       "code": -32004,
-      "status": 400
+      "status": 400,
+      "reason": "UNSUPPORTED_OPERATION"
     },
     {
       "name": "ContentTypeNotSupportedError",
       "code": -32005,
-      "status": 400
+      "status": 400,
+      "reason": "CONTENT_TYPE_NOT_SUPPORTED"
     },
     {
       "name": "InvalidAgentResponseError",
       "code": -32006,
-      "status": 500
+      "status": 500,
+      "reason": "INVALID_AGENT_RESPONSE"
     },
     {
       "name": "ExtendedAgentCardNotConfiguredError",
       "code": -32007,
-      "status": 400
+      "status": 400,
+      "reason": "EXTENDED_AGENT_CARD_NOT_CONFIGURED"
     },
     {
       "name": "ExtensionSupportRequiredError",
       "code": -32008,
-      "status": 400
+      "status": 400,
+      "reason": "EXTENSION_SUPPORT_REQUIRED"
     },
     {
       "name": "VersionNotSupportedError",
       "code": -32009,
-      "status": 400
+      "status": 400,
+      "reason": "VERSION_NOT_SUPPORTED"
     }
   ],
   "task_states": [

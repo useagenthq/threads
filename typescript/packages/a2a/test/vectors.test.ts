@@ -25,7 +25,12 @@ const FILE = join(
 
 const Doc = z.object({
   errors: z.array(
-    z.object({ name: z.string(), code: z.number(), status: z.number() }),
+    z.object({
+      name: z.string(),
+      code: z.number(),
+      status: z.number(),
+      reason: z.string(),
+    }),
   ),
   task_states: z.array(
     z.object({
@@ -80,9 +85,15 @@ describe("vectors/a2a.json errors", () => {
       const name = A2A_ERROR_NAMES.find((known) => known === row.name);
       if (name === undefined)
         throw new Error(`${row.name} is not an A2A error`);
-      expect<{ readonly code: number; readonly status: number }>(
-        A2A_ERRORS[name],
-      ).toEqual({ code: row.code, status: row.status });
+      expect<{
+        readonly code: number;
+        readonly status: number;
+        readonly reason: string;
+      }>(A2A_ERRORS[name]).toEqual({
+        code: row.code,
+        status: row.status,
+        reason: row.reason,
+      });
     });
 });
 
@@ -135,8 +146,11 @@ async function eventsOf(
   perByte: boolean,
 ): Promise<readonly { readonly id: string | null; readonly data: string }[]> {
   const out: { id: string | null; data: string }[] = [];
-  for await (const event of sseEvents(bodyOf(raw, perByte)))
-    out.push({ id: event.id ?? null, data: event.data });
+  for await (const read of sseEvents(bodyOf(raw, perByte))) {
+    // The vector holds only well-formed streams, so a refusal here is a failure of ours.
+    if (read.kind === "refused") throw new Error(read.why);
+    out.push({ id: read.event.id ?? null, data: read.event.data });
+  }
   return out;
 }
 

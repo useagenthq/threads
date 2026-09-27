@@ -8,7 +8,13 @@ from collections.abc import Mapping
 from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
-from threads._generated.a2a_v1 import Message, Part, SendMessageRequest, Task, TaskStatus
+from threads._generated.a2a_v1 import (
+    Message,
+    SendMessageRequest,
+    Task,
+    TaskStatus,
+    TextPart,
+)
 from threads.a2a.protocol import A2aFault, fault, is_file_part, text_of
 from threads.agents.store import now_ms, open_store
 from threads.host.a2a.config import ExposedAgent
@@ -167,7 +173,7 @@ def _too_deep(principal: Principal, name: str, message: Message) -> Task:
             message=Message(
                 messageId=task_id,
                 role="ROLE_AGENT",
-                parts=[Part(text="call chain too deep")],
+                parts=[TextPart(text="call chain too deep")],
             ),
         ),
     )

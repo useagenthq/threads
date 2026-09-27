@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { A2A_JSON, AgentCard } from "@threads/a2a/protocol";
 import { reader, talker } from "./agents";
 import { serve, stopAll } from "./kit";
@@ -30,10 +30,56 @@ test("the card is byte-exact for a fixture host", async () => {
   expect(version).toMatch(/^[0-9a-f]{64}$/);
   // Canonical JSON, so this is the card's exact bytes and not a shape that happens to match.
   expect(text).toBe(
-    '{"capabilities":{"extendedAgentCard":false,"extensions":[{"description":"A SendMessage that repeats a messageId from the same authenticated caller returns the original task and starts nothing.","params":{"window_ms":604800000},"uri":"https://threadsai.dev/a2a/ext/idempotent-send/v1"}],"pushNotifications":false,"streaming":true},"defaultInputModes":["text/plain","application/json"],"defaultOutputModes":["text/plain","application/json"],"description":"Answers questions about orders.","name":"support","securitySchemes":{"bearer":{"httpAuthSecurityScheme":{"scheme":"bearer"}}},"skills":[{"description":"Answers questions about orders.","id":"support","name":"support","tags":["text"]}],"supportedInterfaces":[{"protocolBinding":"JSONRPC","protocolVersion":"1.0","url":"http://host.test/a2a/support"},{"protocolBinding":"HTTP+JSON","protocolVersion":"1.0","url":"http://host.test/a2a/support"}],"version":' +
+    '{"capabilities":{"extendedAgentCard":false,"extensions":[{"description":"A SendMessage that repeats a messageId from the same authenticated caller returns the original task and starts nothing.","params":{"window_ms":604800000},"uri":"https://threadsai.dev/a2a/ext/idempotent-send/v1"}],"pushNotifications":false,"streaming":true},"defaultInputModes":["text/plain","application/json"],"defaultOutputModes":["text/plain","application/json"],"description":"Answers questions about orders.","name":"support","securityRequirements":[{"schemes":{"bearer":{"list":[]}}}],"securitySchemes":{"bearer":{"httpAuthSecurityScheme":{"scheme":"bearer"}}},"skills":[{"description":"Answers questions about orders.","id":"support","name":"support","tags":["text"]}],"supportedInterfaces":[{"protocolBinding":"JSONRPC","protocolVersion":"1.0","url":"http://host.test/a2a/support"},{"protocolBinding":"HTTP+JSON","protocolVersion":"1.0","url":"http://host.test/a2a/support"}],"version":' +
       JSON.stringify(version) +
       "}",
   );
+});
+
+describe("what the card says about authentication", () => {
+  test("a declared scheme comes with the requirement that says it is required", async () => {
+    // Declaring a scheme and no requirement is what a conforming partner reads as "nothing is
+    // required": it calls unauthenticated and gets our 401. Ours infers "auth required" from the
+    // scheme set being non-empty, which is exactly why this was invisible from inside.
+    const on = await serve({
+      agents: { support: talker("hi") },
+      a2a: { expose: ONE },
+    });
+    const card: Record<string, unknown> = await (
+      await on.raw("GET", "/a2a/support/.well-known/agent-card.json")
+    ).json();
+    expect(card["securitySchemes"]).toEqual({
+      bearer: { httpAuthSecurityScheme: { scheme: "bearer" } },
+    });
+    expect(card["securityRequirements"]).toEqual([
+      { schemes: { bearer: { list: [] } } },
+    ]);
+  });
+
+  test("the requirement is derived from the declared names, not hardcoded to bearer", async () => {
+    const on = await serve({
+      agents: { support: talker("hi") },
+      a2a: {
+        expose: ONE,
+        securitySchemes: {
+          oidc: {
+            openIdConnectSecurityScheme: {
+              openIdConnectUrl: "https://idp.example",
+            },
+          },
+          key: { apiKeySecurityScheme: { location: "header", name: "X-Key" } },
+        },
+      },
+    });
+    const card: Record<string, unknown> = await (
+      await on.raw("GET", "/a2a/support/.well-known/agent-card.json")
+    ).json();
+    // One requirement per declared scheme, so satisfying any one of them is enough.
+    expect(card["securityRequirements"]).toEqual([
+      { schemes: { key: { list: [] } } },
+      { schemes: { oidc: { list: [] } } },
+    ]);
+  });
 });
 
 async function versionOf(

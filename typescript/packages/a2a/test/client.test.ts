@@ -1,144 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import type { Sent, WebTransport } from "@threads/core/adapter";
+import type { WebTransport } from "@threads/core/adapter";
 import { call, fetchBytes } from "../src/protocol/client";
-import type { Wire } from "../src/protocol/wire";
+import {
+  answering,
+  failing,
+  json,
+  REST,
+  RPC,
+  rpcOk,
+  sending,
+  TASK,
+} from "./kit";
 
 // The invariant-3 boundary: one request answers exactly one of five outcomes, and `not_sent` is the
-// only one that lets a caller send again on its own. Each test here drives one decision, so
-// widening `not_sent` by a single error code breaks a named test rather than passing quietly.
-
-const WIRE: Wire = {
-  url: "https://partner.example/a2a/refunds",
-  binding: "JSONRPC",
-};
-const RPC: Wire = WIRE;
-const REST: Wire = {
-  url: "https://partner.example/a2a/refunds",
-  binding: "HTTP+JSON",
-};
-
-const TASK = {
-  id: "task-1",
-  contextId: "ctx-1",
-  status: { state: "TASK_STATE_WORKING" },
-};
-
-const sending = (transport: WebTransport) => ({
-  transport,
-  signal: new AbortController().signal,
-  timeoutMs: 5_000,
-});
-
-/** A transport that answers one response, and records what it was asked to send. */
-function answering(
-  make: (url: string, init: Sent) => Response | Promise<Response>,
-): WebTransport & { readonly sent: { url: string; init: Sent }[] } {
-  const sent: { url: string; init: Sent }[] = [];
-  return {
-    sent,
-    resolve: async () => ["93.184.216.34"],
-    fetch: async (url, _address, init) => {
-      sent.push({ url, init });
-      return await make(url, init);
-    },
-  };
-}
-
-/** A transport that fails the request with a node-style error code. */
-function failing(code: string | undefined, name = "Error"): WebTransport {
-  return {
-    resolve: async () => ["93.184.216.34"],
-    fetch: async () => {
-      const error = new Error(`transport said ${code ?? name}`);
-      error.name = name;
-      if (code !== undefined) Object.assign(error, { code });
-      throw error;
-    },
-  };
-}
-
-const json = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-
-describe("an answer the peer gave", () => {
-  test("a JSON-RPC result is ok, unwrapped", async () => {
-    const transport = answering(() =>
-      json({ jsonrpc: "2.0", id: 1, result: { task: TASK } }),
-    );
-    const answer = await call(
-      RPC,
-      "SendMessage",
-      { message: {} },
-      sending(transport),
-    );
-    expect(answer.kind).toBe("ok");
-    if (answer.kind !== "ok") throw new Error("unreachable");
-    expect(answer.value).toEqual({ task: TASK });
-  });
-
-  test("an HTTP+JSON body is ok as it came", async () => {
-    const transport = answering(() => json(TASK));
-    const answer = await call(
-      REST,
-      "GetTask",
-      { id: "task-1" },
-      sending(transport),
-    );
-    expect(answer.kind).toBe("ok");
-    // A GET carries its fields in the query string, and the id in the path.
-    expect(transport.sent[0]?.url).toContain("/tasks/task-1");
-    expect(transport.sent[0]?.init.body).toBeUndefined();
-  });
-
-  test("a JSON-RPC error is a fault, named by its code, not a doubt", async () => {
-    const transport = answering(() =>
-      json({ jsonrpc: "2.0", id: 1, error: { code: -32001, message: "gone" } }),
-    );
-    const answer = await call(
-      RPC,
-      "GetTask",
-      { id: "task-1" },
-      sending(transport),
-    );
-    expect(answer.kind).toBe("fault");
-    if (answer.kind !== "fault") throw new Error("unreachable");
-    expect(answer.fault.name).toBe("TaskNotFoundError");
-  });
-
-  test("an HTTP+JSON error status carries its A2A code", async () => {
-    const transport = answering(() =>
-      json({ code: -32004, message: "terminal" }, 400),
-    );
-    const answer = await call(
-      REST,
-      "SubscribeToTask",
-      { id: "task-1" },
-      sending(transport),
-    );
-    expect(answer.kind).toBe("fault");
-    if (answer.kind !== "fault") throw new Error("unreachable");
-    expect(answer.fault.name).toBe("UnsupportedOperationError");
-  });
-
-  test("a code outside the table is an InternalError that quotes the peer", async () => {
-    const transport = answering(() =>
-      json({ jsonrpc: "2.0", id: 1, error: { code: -31999, message: "odd" } }),
-    );
-    const answer = await call(
-      RPC,
-      "GetTask",
-      { id: "task-1" },
-      sending(transport),
-    );
-    expect(answer.kind).toBe("fault");
-    if (answer.kind !== "fault") throw new Error("unreachable");
-    expect(answer.fault.name).toBe("InternalError");
-    expect(answer.fault.message).toContain("-31999");
-  });
-});
+// only one that lets a caller send again on its own. Each test here drives one decision, so widening
+// `not_sent` by a single error code breaks a named test rather than passing quietly. What a peer's
+// answer has to prove before it is read is in answer.test.ts.
 
 describe("the request provably never left", () => {
   // Only failures that happen strictly before the request bytes are written. Each of these is a
@@ -266,56 +143,9 @@ describe("the outcome is uncertain", () => {
   });
 });
 
-describe("a streaming answer", () => {
-  test("SSE items parse as StreamResponse, in order", async () => {
-    const body = [
-      `data: {"jsonrpc":"2.0","id":1,"result":{"task":${JSON.stringify(TASK)}}}\n\n`,
-      'data: {"jsonrpc":"2.0","id":1,"result":{"statusUpdate":{"taskId":"task-1","contextId":"ctx-1","status":{"state":"TASK_STATE_COMPLETED"}}}}\n\n',
-    ].join("");
-    const transport = answering(
-      () =>
-        new Response(body, {
-          headers: { "content-type": "text/event-stream" },
-        }),
-    );
-    const answer = await call(
-      RPC,
-      "SendStreamingMessage",
-      { message: {} },
-      sending(transport),
-    );
-    expect(answer.kind).toBe("stream");
-    if (answer.kind !== "stream") throw new Error("unreachable");
-    const items = await Array.fromAsync(answer.items);
-    expect(items).toHaveLength(2);
-    expect(items[0]?.task?.id).toBe("task-1");
-    expect(items[1]?.statusUpdate?.status.state).toBe("TASK_STATE_COMPLETED");
-  });
-
-  test("an item that is not a StreamResponse ends the stream rather than being guessed at", async () => {
-    const body = `data: {"task":${JSON.stringify(TASK)}}\n\ndata: {"unknownField":1}\n\ndata: {"message":{"messageId":"m","role":"ROLE_AGENT","parts":[]}}\n\n`;
-    const transport = answering(
-      () =>
-        new Response(body, {
-          headers: { "content-type": "text/event-stream" },
-        }),
-    );
-    const answer = await call(
-      REST,
-      "SendStreamingMessage",
-      { message: {} },
-      sending(transport),
-    );
-    if (answer.kind !== "stream") throw new Error("unreachable");
-    expect(await Array.fromAsync(answer.items)).toHaveLength(1);
-  });
-});
-
 describe("what goes on the wire", () => {
   test("every request declares A2A-Version 1.0 and asks for a2a+json", async () => {
-    const transport = answering(() =>
-      json({ jsonrpc: "2.0", id: 1, result: { task: TASK } }),
-    );
+    const transport = rpcOk({ task: TASK });
     await call(RPC, "SendMessage", { message: {} }, sending(transport));
     const sent = transport.sent[0]?.init;
     if (sent === undefined) throw new Error("the transport was asked to send");
@@ -324,9 +154,7 @@ describe("what goes on the wire", () => {
   });
 
   test("the credential rides in the header only, and extensions are declared when relied on", async () => {
-    const transport = answering(() =>
-      json({ jsonrpc: "2.0", id: 1, result: { task: TASK } }),
-    );
+    const transport = rpcOk({ task: TASK });
     await call(
       RPC,
       "SendMessage",

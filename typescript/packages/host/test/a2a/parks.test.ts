@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { textOf as partsText } from "@threads/a2a/protocol";
 import { z } from "zod";
 import { a2aThreadId } from "../../src/a2a/keys";
 import { taskOf } from "../../src/a2a/state";
@@ -17,11 +18,7 @@ afterEach(stopAll);
 const ONE = { support: { description: "Support." } };
 
 function textOf(t: Awaited<ReturnType<typeof task>>): string {
-  return z
-    .array(z.object({ text: z.string().optional() }))
-    .parse(t.status.message?.parts ?? [])
-    .map((p) => p.text ?? "")
-    .join("");
+  return partsText(t.status.message?.parts ?? []);
 }
 
 /** Polls GetTask until the status message says `text`, reporting what it said instead. */
@@ -137,8 +134,7 @@ test("every park reason shows WORKING and says what it waits for", async () => {
     const status = parked(reason);
     expect(status.state).not.toBe("TASK_STATE_FAILED");
     expect(status.state).not.toBe("TASK_STATE_COMPLETED");
-    expect(status.message?.parts?.[0]?.text).toBeString();
-    expect(status.message?.parts?.[0]?.text).not.toBe("");
+    expect(partsText(status.message?.parts ?? [])).not.toBe("");
   }
 });
 

@@ -3,6 +3,7 @@ bytes, or a thread's `remote_card` event) keeps the bytes, so a card that change
 moves a conversation that has already started. `pin_card` is separate from `fetch_card` so pinned
 bytes can be verified with no network, which is what makes replay hermetic."""
 
+import ipaddress
 from dataclasses import dataclass
 from typing import Final, Literal
 
@@ -15,6 +16,7 @@ from threads.a2a.protocol.client import Sending, fetch_bytes
 from threads.a2a.protocol.version import speaks_1_0
 from threads.a2a.protocol.wire import Binding, Wire, binding_of
 from threads.log.digest import sha256_hex
+from threads.web.guard import blocked, origin
 
 IDEMPOTENT_SEND: Final = "https://threadsai.dev/a2a/ext/idempotent-send/v1"
 PROVENANCE: Final = "https://threadsai.dev/a2a/provenance/v1"
@@ -79,17 +81,52 @@ def pin_card(raw: bytes, card_url: str, has_bearer: bool) -> PinnedCard | PinFai
     )
 
 
+def _unusable(url: str) -> str | None:
+    """Why an interface URL is one we could never call, or None.
+
+    The send-time guard would catch all of this, but by then the interface is pinned and every call
+    on the remote answers `not_sent` forever, so a URL we cannot use must lose the selection rather
+    than win it and fail later. `origin` and `blocked` are the guard's own, so there is one list of
+    non-public ranges and one rule about credentials in a URL.
+
+    A DNS name is deliberately not resolved here: a card is pinned once and used for a long time, so
+    judging a name against one moment's DNS would pin the wrong answer. `vet` decides names at send
+    time, when their addresses are actually known."""
+    found = origin(url)
+    if found is None:
+        return f"{url} is not a URL we can call (https only, and no credentials in the URL)"
+    scheme, host, _port = found
+    if scheme != "https":
+        return f"a remote is called over https, not {scheme}"
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return None
+    return f"{host} is not a public address" if blocked(host) else None
+
+
 def _choose(card: AgentCard) -> Wire | None:
-    """The first interface that speaks 1.0 in a binding we speak, preferring JSON-RPC."""
+    """The first interface that speaks 1.0 in a binding we speak and a URL we could call, preferring
+    JSON-RPC. Every candidate is vetted inside the loop, so a card that offers an unusable URL first
+    and a good one second pins the good one."""
     for want in _PREFERRED:
         for offered in card.supportedInterfaces:
-            if speaks_1_0(offered.protocolVersion) and binding_of(offered.protocolBinding) == want:
+            if (
+                speaks_1_0(offered.protocolVersion)
+                and binding_of(offered.protocolBinding) == want
+                and _unusable(offered.url) is None
+            ):
                 return Wire(offered.url, want)
     return None
 
 
 def _offered(card: AgentCard) -> str:
-    return ", ".join(f"{i.protocolBinding} {i.protocolVersion}" for i in card.supportedInterfaces)
+    """Every interface a card offers, with the reason we passed over one where there is one."""
+    return ", ".join(
+        f"{i.protocolBinding} {i.protocolVersion}"
+        + (f" ({why})" if (why := _unusable(i.url)) is not None else "")
+        for i in card.supportedInterfaces
+    )
 
 
 def _satisfiable(card: AgentCard, *, has_bearer: bool) -> PinFailure | None:

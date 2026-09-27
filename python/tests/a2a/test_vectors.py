@@ -48,11 +48,15 @@ def test_the_error_table_names_every_error_we_answer_with() -> None:
 
 
 @pytest.mark.parametrize("row", _rows("errors"), ids=_name)
-def test_an_error_code_and_status(row: Row) -> None:
+def test_an_error_code_status_and_reason(row: Row) -> None:
     # Looked up by walking the table, so the row's name being one of ours is part of the assertion.
     coded = [c for name, c in A2A_ERRORS.items() if name == _name(row)]
     assert coded, f"{_name(row)} is not an A2A error"
-    assert (coded[0].code, coded[0].status) == (row["code"], row["status"])
+    assert (coded[0].code, coded[0].status, coded[0].reason) == (
+        row["code"],
+        row["status"],
+        row["reason"],
+    )
 
 
 @pytest.mark.parametrize("row", _rows("task_states"), ids=_name)

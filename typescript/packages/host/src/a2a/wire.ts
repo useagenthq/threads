@@ -2,6 +2,7 @@ import {
   A2A_JSON,
   type A2aFault,
   type Binding,
+  errorInfo,
   fault,
   httpStatus,
   jsonRpcCode,
@@ -40,6 +41,20 @@ export function answer(envelope: Envelope, value: unknown): Response {
 }
 
 /**
+ * The HTTP+JSON error body: a `google.rpc.Status` whose `details` carry the `google.rpc.ErrorInfo`
+ * the binding requires. The status names the error and the reason names it again in the form the
+ * other binding uses, so a partner reading either one agrees with us; `code` stays the JSON-RPC
+ * code, which is the number both of our bindings and the pinned table speak.
+ */
+function httpBody(f: A2aFault): string {
+  return JSON.stringify({
+    code: jsonRpcCode(f.name),
+    message: `${f.name}: ${f.message}`,
+    details: [errorInfo(f.name)],
+  });
+}
+
+/**
  * A refusal. JSON-RPC answers HTTP 200 with the error in its envelope; HTTP+JSON answers the
  * status from the pinned table with a body carrying the same JSON-RPC code.
  */
@@ -49,16 +64,10 @@ export function refuse(envelope: Envelope, f: A2aFault): Response {
         status: 200,
         headers: { "content-type": "application/json" },
       })
-    : new Response(
-        JSON.stringify({
-          code: jsonRpcCode(f.name),
-          message: `${f.name}: ${f.message}`,
-        }),
-        {
-          status: httpStatus(f.name),
-          headers: { "content-type": A2A_JSON },
-        },
-      );
+    : new Response(httpBody(f), {
+        status: httpStatus(f.name),
+        headers: { "content-type": A2A_JSON },
+      });
 }
 
 /**
@@ -68,12 +77,7 @@ export function refuse(envelope: Envelope, f: A2aFault): Response {
 export function unauthenticated(envelope: Envelope): Response {
   const f = fault("InvalidRequestError", "this request is not authenticated");
   const body =
-    envelope.binding === "JSONRPC"
-      ? rpcFault(envelope.id, f)
-      : JSON.stringify({
-          code: jsonRpcCode(f.name),
-          message: `${f.name}: ${f.message}`,
-        });
+    envelope.binding === "JSONRPC" ? rpcFault(envelope.id, f) : httpBody(f);
   return new Response(body, {
     status: 401,
     headers: {

@@ -1,38 +1,17 @@
 import { liveTransport, vet, type WebTransport } from "@threads/core/adapter";
-import { type A2aFault, errorByCode, fault } from "./errors";
-import { type Method, rpcOutcome } from "./jsonrpc";
-import { sseEvents } from "./sse";
-import { StreamResponse as StreamItem, type StreamResponse } from "./task";
+import { type Answer, bodyBytes, message, single, stream } from "./answer";
+import type { Method } from "./jsonrpc";
 import {
   A2A_JSON,
   A2A_VERSION,
   EXTENSIONS_HEADER,
   VERSION_HEADER,
 } from "./version";
-import { outbound, parseJson, streams, type Wire } from "./wire";
+import { outbound, streams, type Wire } from "./wire";
 
-// One A2A request. The adapter owns the bytes, so the caller sees exactly which of the four
-// outcomes it got, and those four are the ones the effect machinery needs:
-//
-//   ok        the peer answered; the result is parsed a layer up
-//   fault     the peer answered an A2A error, which is an answer, not a doubt
-//   not_sent  the connection was refused or the TLS handshake failed: no byte was written
-//   unknown   anything else after dispatch: a timeout, or a connection that opened and broke
-//
-// `not_sent` is deliberately narrow. Treating a doubtful case as "not sent" would let an effect
-// repeat silently (invariant 3), so only errors that happen strictly before the request is written
-// count, and everything else is uncertainty.
-
-export type Answer =
-  | { readonly kind: "ok"; readonly value: unknown }
-  | { readonly kind: "stream"; readonly items: AsyncGenerator<StreamResponse> }
-  | { readonly kind: "fault"; readonly fault: A2aFault }
-  | { readonly kind: "not_sent"; readonly why: string }
-  | {
-      readonly kind: "unknown";
-      readonly reason: "timeout" | "transport_error";
-      readonly why: string;
-    };
+// One A2A request goes out. The adapter owns the bytes; which of the outcomes in ./answer the
+// caller gets is decided there, and everything here is about getting the request written and
+// classifying a transport failure honestly.
 
 export type Sending = {
   readonly transport?: WebTransport;
@@ -50,16 +29,14 @@ export type Sending = {
   readonly timeoutMs: number;
 };
 
-/** A response body over this many bytes is refused: a card or a task is small. */
-const MAX_BYTES = 1 << 20;
-
 export async function call(
   wire: Wire,
   method: Method,
   params: Readonly<Record<string, unknown>>,
   sending: Sending,
 ): Promise<Answer> {
-  const built = outbound(wire, method, params);
+  // One id per request, checked on the way back: an answer proves it answers us before it is read.
+  const built = outbound(wire, method, params, crypto.randomUUID());
   const transport = sending.transport ?? liveTransport;
   let url: URL;
   try {
@@ -90,8 +67,8 @@ export async function call(
     return failed(error, sending.signal.aborted);
   }
   return streams(method) && response.status === 200 && isEventStream(response)
-    ? { kind: "stream", items: stream(response) }
-    : await single(response);
+    ? { kind: "stream", items: stream(response, built.rpcId) }
+    : await single(response, built.rpcId);
 }
 
 export type Fetched =
@@ -212,125 +189,4 @@ function isTimeout(error: unknown): boolean {
     error instanceof Error &&
     (error.name === "TimeoutError" || error.name === "AbortError")
   );
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-/** A non-streaming answer: the operation's own message, or the A2A error the peer named. */
-async function single(response: Response): Promise<Answer> {
-  const read = await text(response);
-  if (typeof read !== "string") return read;
-  const json = parseJson(read);
-  if (!json.ok) return { kind: "fault", fault: json.fault };
-  // Both bindings can answer either way, so a JSON-RPC envelope is unwrapped wherever it appears.
-  if (isEnvelope(json.value)) {
-    const outcome = rpcOutcome(json.value);
-    return "fault" in outcome
-      ? { kind: "fault", fault: outcome.fault }
-      : { kind: "ok", value: outcome.result };
-  }
-  if (response.status >= 400)
-    return { kind: "fault", fault: httpFault(response.status, json.value) };
-  return { kind: "ok", value: json.value };
-}
-
-/**
- * An HTTP+JSON error body. The binding carries the A2A error in the status, and implementations
- * put the code either at the top level or under `error`, so both are read; a body that names no
- * code we know is the status, said plainly.
- */
-function httpFault(status: number, json: unknown): A2aFault {
-  const named = errorByCode(codeIn(json) ?? Number.NaN);
-  return named === undefined
-    ? fault(
-        "InvalidAgentResponseError",
-        `the peer answered HTTP ${status} with no A2A error code`,
-      )
-    : fault(named, messageIn(json) ?? `the peer answered HTTP ${status}`);
-}
-
-function at(json: unknown, key: string): unknown {
-  return typeof json === "object" && json !== null && key in json
-    ? Reflect.get(json, key)
-    : undefined;
-}
-
-function codeIn(json: unknown): number | undefined {
-  const own = at(json, "code") ?? at(at(json, "error"), "code");
-  return typeof own === "number" ? own : undefined;
-}
-
-function messageIn(json: unknown): string | undefined {
-  const own = at(json, "message") ?? at(at(json, "error"), "message");
-  return typeof own === "string" ? own : undefined;
-}
-
-function isEnvelope(json: unknown): boolean {
-  return at(json, "jsonrpc") === "2.0";
-}
-
-async function text(response: Response): Promise<string | Answer> {
-  const bytes = await bodyBytes(response, MAX_BYTES);
-  if (typeof bytes !== "string") return new TextDecoder().decode(bytes);
-  return {
-    kind: "unknown",
-    reason: "transport_error",
-    why: `the response body could not be read: ${bytes}`,
-  };
-}
-
-/** The whole body, or why it could not be read. Over `maxBytes` the read is abandoned. */
-async function bodyBytes(
-  response: Response,
-  maxBytes: number,
-): Promise<Uint8Array | string> {
-  const reader = response.body?.getReader();
-  if (reader === undefined) return new Uint8Array(0);
-  const parts: Uint8Array[] = [];
-  let total = 0;
-  try {
-    for (;;) {
-      const chunk = await reader.read();
-      if (chunk.done === true) break;
-      total += chunk.value.length;
-      if (total > maxBytes) {
-        await reader.cancel();
-        return `more than ${maxBytes} bytes`;
-      }
-      parts.push(chunk.value);
-    }
-  } catch (error) {
-    return message(error);
-  } finally {
-    reader.releaseLock();
-  }
-  const joined = new Uint8Array(total);
-  let offset = 0;
-  for (const part of parts) {
-    joined.set(part, offset);
-    offset += part.length;
-  }
-  return joined;
-}
-
-/** A peer's SSE stream as parsed `StreamResponse` items; an unparsable item ends the stream. */
-async function* stream(response: Response): AsyncGenerator<StreamResponse> {
-  const body = response.body;
-  if (body === null) return;
-  for await (const event of sseEvents(body)) {
-    const json = parseJson(event.data);
-    if (!json.ok) return;
-    const payload = isEnvelope(json.value) ? resultOf(json.value) : json.value;
-    if (payload === undefined) return;
-    const item = StreamItem.safeParse(payload);
-    if (!item.success) return;
-    yield item.data;
-  }
-}
-
-function resultOf(json: unknown): unknown {
-  const outcome = rpcOutcome(json);
-  return "fault" in outcome ? undefined : outcome.result;
 }

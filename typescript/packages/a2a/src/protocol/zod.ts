@@ -13,3 +13,4 @@ export type Arr<T extends z.core.SomeType> = z.ZodArray<T>;
 export type EnumOf<T extends readonly string[]> = z.ZodEnum<{
   [K in T[number]]: K;
 }>;
+export type Union<T extends readonly z.core.SomeType[]> = z.ZodUnion<T>;

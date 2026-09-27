@@ -2,6 +2,7 @@
 // effects — so both the exposed side and the client side parse and format with one implementation.
 // The pinned protocol is spec/schema/a2a/.
 
+export type { Answer, Streamed } from "./answer";
 export {
   type AgentCapabilities,
   AgentCard,
@@ -12,19 +13,21 @@ export {
   SecurityScheme,
   schemeKind,
 } from "./card";
+export { call, type Fetched, fetchBytes, type Sending } from "./client";
 export {
-  type Answer,
-  call,
-  type Fetched,
-  fetchBytes,
-  type Sending,
-} from "./client";
-export {
+  A2A_ERROR_DOMAIN,
   A2A_ERROR_NAMES,
   A2A_ERRORS,
   type A2aErrorName,
   type A2aFault,
+  ERROR_INFO_TYPE,
+  ErrorInfo,
   errorByCode,
+  errorByReason,
+  errorInfo,
+  errorInfoIn,
+  errorReason,
+  type FoundErrorInfo,
   fault,
   httpStatus,
   jsonRpcCode,
@@ -59,7 +62,14 @@ export {
   SendMessageRequest,
   SubscribeToTaskRequest,
 } from "./requests";
-export { type SseEvent, type SseFrame, sseBody, sseEvents } from "./sse";
+export {
+  MAX_FRAME_BYTES,
+  type SseEvent,
+  type SseFrame,
+  type SseRead,
+  sseBody,
+  sseEvents,
+} from "./sse";
 export {
   Artifact,
   isFilePart,

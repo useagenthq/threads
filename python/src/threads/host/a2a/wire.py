@@ -8,7 +8,7 @@ from typing import Final
 
 from pydantic import JsonValue
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.responses import Response, StreamingResponse
 
 from threads.a2a.protocol import (
     A2A_JSON,
@@ -17,6 +17,7 @@ from threads.a2a.protocol import (
     Binding,
     RpcId,
     SseFrame,
+    error_info,
     fault,
     http_status,
     json_rpc_code,
@@ -47,7 +48,17 @@ def answer(envelope: Envelope, value: JsonValue) -> Response:
 
 
 def _http_body(f: A2aFault) -> str:
-    return json.dumps({"code": json_rpc_code(f.name), "message": f"{f.name}: {f.message}"})
+    """The HTTP+JSON error body: a `google.rpc.Status` whose `details` carry the
+    `google.rpc.ErrorInfo` the binding requires. The status names the error and the reason names it
+    again in the form the other binding uses, so a partner reading either one agrees with us; `code`
+    stays the JSON-RPC code, which is the number both of our bindings and the pinned table speak."""
+    return json.dumps(
+        {
+            "code": json_rpc_code(f.name),
+            "message": f"{f.name}: {f.message}",
+            "details": [error_info(f.name)],
+        }
+    )
 
 
 def refuse(envelope: Envelope, f: A2aFault) -> Response:
@@ -102,9 +113,10 @@ def not_found(binding: Binding) -> Response:
     )
 
 
-def json_error(f: A2aFault) -> JSONResponse:
+def json_error(f: A2aFault) -> Response:
     """A refusal on a route with no binding yet, for the rare case of a malformed path."""
-    return JSONResponse(
-        {"code": json_rpc_code(f.name), "message": f"{f.name}: {f.message}"},
+    return Response(
+        _http_body(f),
         status_code=http_status(f.name),
+        media_type="application/json",
     )

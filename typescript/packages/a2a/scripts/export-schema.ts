@@ -14,6 +14,7 @@ import {
   HttpAuthSecurityScheme,
   SecurityScheme,
 } from "../src/protocol/card";
+import { ErrorInfo } from "../src/protocol/errors";
 import {
   CancelTaskRequest,
   GetTaskRequest,
@@ -69,6 +70,7 @@ const MESSAGES: Readonly<Record<string, z.core.$ZodType>> = {
   APIKeySecurityScheme: ApiKeySecurityScheme,
   Artifact,
   CancelTaskRequest,
+  ErrorInfo,
   GetTaskRequest,
   HTTPAuthSecurityScheme: HttpAuthSecurityScheme,
   ListTasksRequest,

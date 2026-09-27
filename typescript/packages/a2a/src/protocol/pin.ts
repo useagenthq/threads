@@ -1,4 +1,4 @@
-import { sha256Hex } from "@threads/core/adapter";
+import { sha256Hex, unfetchable } from "@threads/core/adapter";
 import { AgentCard, schemeKind } from "./card";
 import { fetchBytes, type Sending } from "./client";
 import { speaks1_0 } from "./version";
@@ -93,21 +93,53 @@ export function pinCard(
   };
 }
 
-/** The first interface that speaks 1.0 in a binding we speak, preferring JSON-RPC. */
+/**
+ * Why an interface URL is one we could never call, or undefined. The send-time guard would catch
+ * all of this, but by then the interface is pinned and every call on the remote answers `not_sent`
+ * forever, so a URL we cannot use must lose the selection rather than win it and fail later.
+ *
+ * A DNS name is deliberately not resolved here: a card is pinned once and used for a long time, so
+ * judging a name against one moment's DNS would pin the wrong answer. `vet` decides names at send
+ * time, when their addresses are actually known.
+ */
+function unusable(url: string): string | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return `${url} is not a URL`;
+  }
+  return parsed.protocol !== "https:"
+    ? `a remote is called over https, not ${parsed.protocol}`
+    : unfetchable(parsed);
+}
+
+/**
+ * The first interface that speaks 1.0 in a binding we speak and a URL we could call, preferring
+ * JSON-RPC. Every candidate is vetted inside the loop, so a card that offers an unusable URL first
+ * and a good one second pins the good one.
+ */
 function choose(card: AgentCard): Wire | undefined {
   for (const want of PREFERRED) {
     const found = card.supportedInterfaces.find(
       (i) =>
-        speaks1_0(i.protocolVersion) && bindingOf(i.protocolBinding) === want,
+        speaks1_0(i.protocolVersion) &&
+        bindingOf(i.protocolBinding) === want &&
+        unusable(i.url) === undefined,
     );
     if (found !== undefined) return { url: found.url, binding: want };
   }
   return undefined;
 }
 
+/** Every interface a card offers, with the reason we passed over one where there is one. */
 function offered(card: AgentCard): string {
   return card.supportedInterfaces
-    .map((i) => `${i.protocolBinding} ${i.protocolVersion}`)
+    .map((i) => {
+      const why = unusable(i.url);
+      const suffix = why === undefined ? "" : ` (${why})`;
+      return `${i.protocolBinding} ${i.protocolVersion}${suffix}`;
+    })
     .join(", ");
 }
 

@@ -52,6 +52,17 @@ type Obj = dict[str, JsonValue]
 # `$defs` that are not A2A messages: the shared JSON primitives our schema refs.
 NOT_MESSAGES = frozenset({"JsonValue", "JsonObject"})
 
+# `$defs` that are messages, but of another protocol the A2A bindings borrow, so the vendored proto
+# does not define them. Each needs a reason a reviewer would accept. A name here that is no longer
+# in the schema is an error, the same as an unused deviation: the tool must not carry dead excuses.
+EXTERNAL_MESSAGES: dict[str, str] = {
+    "ErrorInfo": (
+        "google.rpc.ErrorInfo, which the HTTP+JSON binding requires in a google.rpc.Status's "
+        "`details` and the JSON-RPC binding says an error SHOULD carry; a2a.proto imports no "
+        "google/rpc, so the shape is pinned by our schema and this reason rather than by the file"
+    ),
+}
+
 # A proto field marked REQUIRED that our `$def` leaves optional, keyed by (message, proto field),
 # with the reason. Empty: every REQUIRED field of every message we parse is required for us too.
 # A new entry needs a reason a reviewer would accept, not a note that the export changed.
@@ -68,8 +79,13 @@ EXTRA_PROPERTIES: dict[str, str] = {
 # The same field on a skill, kept as loose JSON for the same reason.
 LOOSE = frozenset({"AgentSkill.securityRequirements"})
 
-# Our `TaskState` is the proto's minus its zero value, which is never an answer we can act on.
-UNSPECIFIED_STATE = "TASK_STATE_UNSPECIFIED"
+# The enums of ours that are the proto's minus its zero value, which is never an answer we can act
+# on: a task state that means "unknown or indeterminate", and a role that does not say who sent a
+# message. Both are parse errors for us, and the two must stay consistent with each other.
+UNSPECIFIED: dict[str, str] = {
+    "TaskState": "TASK_STATE_UNSPECIFIED",
+    "Role": "ROLE_UNSPECIFIED",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,10 +185,36 @@ def check_enum(name: str, ours: list[str], theirs: tuple[str, ...], *, drop: str
     return [f"{name}: we accept {ours}, the proto defines {want}{note}"]
 
 
+def shapes(node: Obj) -> list[Obj]:
+    """The object shapes a `$def` allows: itself, or every branch when it is a union.
+
+    A proto `oneof` is untagged in JSON — the set member's own key is the tag — so we model one as a
+    union with a branch per member. The message's fields are then spread across the branches, and
+    this is what lets the checks below read them all: a field exists for us if any branch has it,
+    and counts as required only if every branch requires it."""
+    branches = node.get("anyOf") or node.get("oneOf")
+    if isinstance(branches, list):
+        found = [b for b in branches if isinstance(b, dict)]
+        if found:
+            return found
+    return [node]
+
+
+def properties_of(node: Obj) -> set[str]:
+    """Every property name a `$def` allows, across a union's branches."""
+    return {p for shape in shapes(node) for p in _obj(shape.get("properties"))}
+
+
+def required_of(node: Obj) -> set[str]:
+    """The properties a `$def` always requires: required in every branch, not just in one."""
+    per_shape = [set(_strs(shape.get("required"))) for shape in shapes(node)]
+    return set.intersection(*per_shape) if per_shape else set()
+
+
 def check_message(name: str, node: Obj, message: Message) -> list[str]:
     """One `$def` against its proto message: our properties exist, their REQUIRED are required."""
-    ours = set(_obj(node.get("properties")))
-    ours_required = set(_strs(node.get("required")))
+    ours = properties_of(node)
+    ours_required = required_of(node)
     wire = {json_name(f) for f in message.fields}
     problems = [
         f"{name}.{p}: no field of proto message {name} maps to it"
@@ -200,10 +242,11 @@ def check_schema(schema: Obj, proto: Proto) -> list[str]:
     for name, node in sorted(defs.items()):
         if name in NOT_MESSAGES:
             continue
+        if name in EXTERNAL_MESSAGES:
+            continue
         if name in proto.enums:
-            drop = UNSPECIFIED_STATE if name == "TaskState" else ""
             ours = _strs(_obj(node).get("enum"))
-            problems += check_enum(name, ours, proto.enums[name], drop=drop)
+            problems += check_enum(name, ours, proto.enums[name], drop=UNSPECIFIED.get(name, ""))
         elif name in proto.messages:
             problems += check_message(name, _obj(node), proto.messages[name])
         else:
@@ -218,9 +261,15 @@ def check_deviations(schema: Obj) -> list[str]:
     problems: list[str] = []
     for dotted in sorted(set(EXTRA_PROPERTIES) | LOOSE):
         message, prop = dotted.split(".", 1)
-        if prop not in _obj(_obj(defs.get(message)).get("properties")):
+        if prop not in properties_of(_obj(defs.get(message))):
             problems.append(
                 f"{dotted}: named in check_a2a_pin.py as a deliberate deviation but not in "
+                f"{SCHEMA.name}; drop it from the tool if the Zod schema dropped it"
+            )
+    for name in sorted(EXTERNAL_MESSAGES):
+        if name not in defs:
+            problems.append(
+                f"{name}: named in check_a2a_pin.py as a message of another protocol but not in "
                 f"{SCHEMA.name}; drop it from the tool if the Zod schema dropped it"
             )
     return problems

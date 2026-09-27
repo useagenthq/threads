@@ -3,6 +3,7 @@ publish about an agent, so it is the one place where saying too much is the fail
 instructions, no tool names, no model name, ever. The interface URLs come from the origin the card
 was asked for, so there is no base-URL option to get wrong."""
 
+from collections.abc import Mapping
 from typing import Final
 from urllib.parse import quote
 
@@ -25,6 +26,18 @@ _EXTENSION_DOC: Final = (
     "A SendMessage that repeats a messageId from the same authenticated caller returns the "
     "original task and starts nothing."
 )
+
+
+def _requirements(schemes: Mapping[str, JsonValue]) -> JsonValue:
+    """The requirements the declared schemes imply. Declaring a scheme and no requirement is what
+    a conforming partner reads as "nothing is required": it calls unauthenticated and gets our 401.
+    Our own client infers "auth required" from the scheme set being non-empty, which is exactly why
+    this was invisible from inside.
+
+    One `SecurityRequirement` per declared scheme name, so satisfying any one of them is enough, and
+    the names come from what the operator declared rather than from `bearer` written here - a custom
+    scheme set gets its requirement too. `list` is the scopes, and none of ours has any."""
+    return [{"schemes": {name: {"list": []}}} for name in sorted(schemes)]
 
 
 def _card(exposed: Exposed, name: str, agent: ExposedAgent, origin: str) -> dict[str, JsonValue]:
@@ -65,6 +78,8 @@ def _card(exposed: Exposed, name: str, agent: ExposedAgent, origin: str) -> dict
             }
         ],
     }
+    if exposed.security_schemes:
+        card["securityRequirements"] = _requirements(exposed.security_schemes)
     return card
 
 

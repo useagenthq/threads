@@ -21,6 +21,25 @@ const DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 /** Text and JSON only: a file part is refused where it arrives (ContentTypeNotSupportedError). */
 const MODES: readonly string[] = ["text/plain", "application/json"];
 
+/**
+ * The requirements the declared schemes imply. Declaring a scheme and no requirement is what a
+ * conforming partner reads as "nothing is required": it calls unauthenticated and gets our 401. Our
+ * own client infers "auth required" from the scheme set being non-empty, which is exactly why this
+ * was invisible from inside.
+ *
+ * One `SecurityRequirement` per declared scheme name, so satisfying any one of them is enough, and
+ * the names come from what the operator declared rather than from `bearer` written here — a custom
+ * scheme set gets its requirement too. `list` is the scopes, and none of ours has any.
+ */
+function requirements(
+  schemes: Readonly<Record<string, unknown>>,
+): readonly unknown[] | undefined {
+  const names = Object.keys(schemes).toSorted();
+  return names.length === 0
+    ? undefined
+    : names.map((name) => ({ schemes: { [name]: { list: [] } } }));
+}
+
 function agentCard(
   exposed: Exposed,
   name: string,
@@ -56,6 +75,7 @@ function agentCard(
       ],
     },
     securitySchemes: exposed.securitySchemes,
+    securityRequirements: requirements(exposed.securitySchemes),
     defaultInputModes: MODES,
     defaultOutputModes: MODES,
     skills: [

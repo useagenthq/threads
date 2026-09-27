@@ -76,23 +76,69 @@ function split(
   return { lines, rest };
 }
 
-/** The decoded lines of a response body, in order, with the CRLF ambiguity handled. */
+/**
+ * A frame over this many bytes is refused rather than buffered. One `data:` block is a task or a
+ * status update, so it is small; without a cap a peer can hold a line open forever and we would
+ * accumulate it all and then drop it silently. The check is on the buffered string's length in
+ * UTF-16 units, which is never more than its UTF-8 byte length, so the refusal can only come at or
+ * after this many bytes and never before.
+ */
+export const MAX_FRAME_BYTES: number = 1 << 20;
+
+/**
+ * One read off a peer's stream: an event, or why the stream stopped being readable. A refusal is a
+ * value and the last thing the stream yields, because a caller that cannot tell a clean end from a
+ * corrupt one has no way to report what happened.
+ */
+export type SseRead =
+  | { readonly kind: "event"; readonly event: SseEvent }
+  | { readonly kind: "refused"; readonly why: string };
+
+type LineRead =
+  | { readonly kind: "line"; readonly line: string }
+  | { readonly kind: "refused"; readonly why: string };
+
+/**
+ * The decoded lines of a response body, in order, with the CRLF ambiguity handled. The decoder is
+ * fatal: invalid UTF-8 from a peer is a refusal, never a U+FFFD we pass on as if it were sent. A
+ * replacement character is legal inside a JSON string, so a lenient decode corrupts text quietly
+ * and the frame still parses, which is the one failure we must never hand a caller.
+ */
 async function* lines(
   body: ReadableStream<Uint8Array>,
-): AsyncGenerator<string> {
-  const decoder = new TextDecoder();
+): AsyncGenerator<LineRead> {
+  const decoder = new TextDecoder(undefined, { fatal: true });
   const reader = body.getReader();
   let buffered = "";
   try {
     for (;;) {
-      const chunk = await reader.read();
-      buffered += chunk.done
-        ? decoder.decode()
-        : decoder.decode(chunk.value, { stream: true });
-      const { lines: ready, rest } = split(buffered, chunk.done === true);
+      let text: string;
+      let done: boolean;
+      try {
+        const chunk = await reader.read();
+        done = chunk.done === true;
+        text = chunk.done
+          ? decoder.decode()
+          : decoder.decode(chunk.value, { stream: true });
+      } catch (error) {
+        yield {
+          kind: "refused",
+          why: `the stream is not valid UTF-8: ${error instanceof Error ? error.message : String(error)}`,
+        };
+        return;
+      }
+      buffered += text;
+      const { lines: ready, rest } = split(buffered, done);
       buffered = rest;
-      for (const line of ready) yield line;
-      if (chunk.done === true) return;
+      for (const line of ready) yield { kind: "line", line };
+      if (done) return;
+      if (buffered.length > MAX_FRAME_BYTES) {
+        yield {
+          kind: "refused",
+          why: `a single stream line is over ${MAX_FRAME_BYTES} bytes`,
+        };
+        return;
+      }
     }
   } finally {
     reader.releaseLock();
@@ -101,22 +147,40 @@ async function* lines(
 
 /**
  * A response body as SSE events. A stream that ends mid-event drops the partial one, as the
- * event-stream rules say: an unterminated block was never dispatched.
+ * event-stream rules say: an unterminated block was never dispatched. A block whose data grows past
+ * the budget, and a body that is not UTF-8, are refused instead, and the refusal ends the stream.
  */
 export async function* sseEvents(
   body: ReadableStream<Uint8Array>,
-): AsyncGenerator<SseEvent> {
+): AsyncGenerator<SseRead> {
   let id: string | undefined;
   let data: string[] = [];
-  for await (const line of lines(body)) {
+  let size = 0;
+  for await (const read of lines(body)) {
+    if (read.kind === "refused") {
+      yield read;
+      return;
+    }
+    const { line } = read;
     if (line === "") {
       // A blank line dispatches, and only a block that carried data is an event.
-      if (data.length > 0) yield { id, data: data.join("\n") };
+      if (data.length > 0)
+        yield { kind: "event", event: { id, data: data.join("\n") } };
       data = [];
+      size = 0;
       continue;
     }
     const parsed = fieldOf(line);
-    if (parsed.field === "data") data.push(parsed.value);
-    else if (parsed.field === "id") id = parsed.value;
+    if (parsed.field === "data") {
+      size += parsed.value.length;
+      if (size > MAX_FRAME_BYTES) {
+        yield {
+          kind: "refused",
+          why: `one stream frame carries over ${MAX_FRAME_BYTES} bytes of data`,
+        };
+        return;
+      }
+      data.push(parsed.value);
+    } else if (parsed.field === "id") id = parsed.value;
   }
 }

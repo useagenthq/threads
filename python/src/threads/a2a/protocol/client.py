@@ -18,21 +18,29 @@ whether it received us."""
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, Literal
+from uuid import uuid4
 
 from pydantic import JsonValue, ValidationError
 
 from threads._generated.a2a_v1 import StreamResponse
-from threads.a2a.protocol.errors import A2aFault, error_by_code, fault
+from threads.a2a.protocol.errors import (
+    A2aFault,
+    error_by_code,
+    error_info_in,
+    fault,
+    http_status,
+)
 from threads.a2a.protocol.jsonrpc import is_envelope, rpc_outcome
 from threads.a2a.protocol.sse import sse_events_of
 from threads.a2a.protocol.version import A2A_JSON, A2A_VERSION, EXTENSIONS_HEADER, VERSION_HEADER
 from threads.a2a.protocol.wire import Method, Wire, outbound, parse_json, streams
 from threads.result import Err
 from threads.web.guard import Resolve, system_resolve, vet
-from threads.web.http import Fence, Request, StdlibTransport, Transport
+from threads.web.http import Fence, Request, Response, StdlibTransport, Transport
 
 _OK: Final = 200
 _CLIENT_ERROR: Final = 400
+_UNAUTHORIZED: Final = 401
 
 MAX_BYTES: Final = 1 << 20
 """A response body over this many bytes is refused: a card or a task is small."""
@@ -101,7 +109,8 @@ def _headers(accept: str, has_body: bool, sending: Sending) -> dict[str, str]:
 async def call(
     wire: Wire, method: Method, params: dict[str, JsonValue], sending: Sending
 ) -> Answer:
-    built = outbound(wire, method, params)
+    # One id per request, checked on the way back: an answer proves it answers us before it is read.
+    built = outbound(wire, method, params, str(uuid4()))
     if not built.url.lower().startswith("https:"):
         return NotSent(f"a remote is called over https, not {built.url.split(':', 1)[0]}")
     target = await vet(built.url, sending.resolve or system_resolve)
@@ -116,15 +125,25 @@ async def call(
     sent = await transport.send(target.value, request, sending.fence or _always_fenced, MAX_BYTES)
     if isinstance(sent, Err):
         return _failed(sent.error.code, sent.error.message, sent.error.sent)
-    response = sent.value
+    return _answered(method, sent.value, built.rpc_id)
+
+
+def _answered(method: Method, response: Response, rpc_id: str | None) -> Answer:
+    """A response the transport handed back, as one of the answers a caller sees."""
     if response.truncated:
         return Faulted(
             fault("InvalidAgentResponseError", f"the peer answered more than {MAX_BYTES} bytes")
         )
-    text = response.body.decode(errors="replace")
+    # Strict: bytes that are not UTF-8 are a fault, never a U+FFFD we read on as if the peer had
+    # sent it. The peer did answer, so a body we cannot decode is an answer we cannot read and
+    # nothing is in doubt about whether it received us.
+    try:
+        text = response.body.decode()
+    except UnicodeDecodeError:
+        return Faulted(fault("InvalidAgentResponseError", "the response body is not valid UTF-8"))
     if streams(method) and response.status == _OK and _is_event_stream(response.headers):
-        return _stream(text)
-    return _single(response.status, text)
+        return _stream(text, rpc_id)
+    return _single(response.status, text, rpc_id)
 
 
 def _failed(code: str, message: str, was_sent: bool) -> Answer:
@@ -138,14 +157,14 @@ def _is_event_stream(headers: Mapping[str, str]) -> bool:
     return "text/event-stream" in headers.get("content-type", "")
 
 
-def _single(status: int, text: str) -> Answer:
+def _single(status: int, text: str, sent: str | None) -> Answer:
     """A non-streaming answer: the operation's own message, or the A2A error the peer named."""
     parsed = parse_json(text)
     if isinstance(parsed, Err):
         return Faulted(parsed.error)
     body = parsed.value
     if is_envelope(body):
-        outcome = rpc_outcome(body)
+        outcome = rpc_outcome(body, sent)
         return Faulted(outcome.error) if isinstance(outcome, Err) else Answered(outcome.value)
     if status >= _CLIENT_ERROR:
         return Faulted(_http_fault(status, body))
@@ -153,18 +172,41 @@ def _single(status: int, text: str) -> Answer:
 
 
 def _http_fault(status: int, body: JsonValue) -> A2aFault:
-    """An HTTP+JSON error body. The binding carries the A2A error in the status, and
-    implementations put the code either at the top level or under `error`, so both are read; a body
-    that names no code we know is the status, said plainly."""
-    code = _number_at(body, "code")
-    message = _string_at(body, "message")
-    named = None if code is None else error_by_code(code)
+    """An HTTP+JSON error body. The binding answers a `google.rpc.Status`, whose `details` MUST
+    carry a `google.rpc.ErrorInfo`: the reason is what names the error there, so a body without one
+    we recognise is a response we cannot read rather than an error we can act on. The JSON-RPC code
+    is read too, where an implementation puts one, and the two must agree with each other and with
+    the status the pinned table gives that error."""
+    found = error_info_in(body.get("details") if isinstance(body, dict) else None)
+    if found is None:
+        return fault(
+            "InvalidAgentResponseError",
+            f"the peer answered HTTP {status} with no google.rpc.ErrorInfo",
+        )
+    named = found.named
     if named is None:
         return fault(
             "InvalidAgentResponseError",
-            f"the peer answered HTTP {status} with no A2A error code",
+            f"the peer answered HTTP {status} with ErrorInfo reason {found.info.reason}, "
+            f"which is not an A2A error",
         )
-    return fault(named, message or f"the peer answered HTTP {status}")
+    # A 401 is the one status that overrides the table: it is a challenge a client has to see, so
+    # whatever error the peer names, the status it arrives with is 401 rather than that error's own.
+    if status != _UNAUTHORIZED and http_status(named) != status:
+        return fault(
+            "InvalidAgentResponseError",
+            f"the peer answered HTTP {status} with ErrorInfo reason {found.info.reason}, "
+            f"which is HTTP {http_status(named)}",
+        )
+    code = _number_at(body, "code")
+    by_code = None if code is None else error_by_code(code)
+    if by_code is not None and by_code != named:
+        return fault(
+            "InvalidAgentResponseError",
+            f"the peer answered HTTP {status} with code {code} and ErrorInfo reason "
+            f"{found.info.reason}, which name different errors",
+        )
+    return fault(named, _string_at(body, "message") or f"the peer answered HTTP {status}")
 
 
 def _at(body: JsonValue, key: str) -> JsonValue:
@@ -188,24 +230,31 @@ def _string_at(body: JsonValue, key: str) -> str | None:
     return found if isinstance(found, str) else None
 
 
-def _stream(text: str) -> Answer:
-    """A peer's SSE body as parsed `StreamResponse` items; an unparsable item ends the stream rather
-    than being guessed at."""
+def _stream(text: str, sent: str | None) -> Answer:
+    """A peer's SSE body as parsed `StreamResponse` items.
+
+    A frame we cannot read is a fault, not a short stream. This transport hands us the whole body
+    at once, so there is no prefix already delivered to a caller and nothing to salvage: a frame
+    that is not JSON, an envelope answering someone else, or a payload that is not a
+    `StreamResponse` all mean the peer sent us something we cannot read, and a caller that saw a
+    short tuple could not tell that from a stream that simply ended."""
     items: list[StreamResponse] = []
     for event in sse_events_of(text):
         parsed = parse_json(event.data)
         if isinstance(parsed, Err):
-            break
+            return Faulted(parsed.error)
         body = parsed.value
         if is_envelope(body):
-            outcome = rpc_outcome(body)
+            outcome = rpc_outcome(body, sent)
             if isinstance(outcome, Err):
-                break
+                return Faulted(outcome.error)
             body = outcome.value
         try:
             items.append(StreamResponse.model_validate(body))
         except ValidationError:
-            break
+            return Faulted(
+                fault("InvalidAgentResponseError", "a stream frame is not a StreamResponse")
+            )
     return Streamed(tuple(items))
 
 

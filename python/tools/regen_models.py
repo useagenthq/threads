@@ -206,11 +206,35 @@ def generate_tools(workdir: Path) -> str:
     return ruff(source, "format")
 
 
+PART_MEMBERS = {"text": "TextPart", "raw": "RawPart", "url": "UrlPart", "data": "DataPart"}
+"""The field each member of Part's `oneof content` sets, and the name we give that member."""
+
+
+def name_part_members(source: str) -> str:
+    """Renames the generated members of `Part`'s oneof after the content they carry.
+
+    `Part` is a union of four objects, one per member of the proto's `oneof content`, and
+    datamodel-codegen calls inline union members `Part1`..`Part4` in schema order. Those names say
+    nothing and would move if the order ever did, so each is renamed after the field it sets. Keyed
+    on the field rather than the position, and a member that is missing is an error: the union
+    changed shape and the code that reads it needs to know."""
+    for field, name in PART_MEMBERS.items():
+        found = re.search(
+            rf"^class (Part\d+)\(StrictModel\):\n(?:.+\n)*?    {field}: ",
+            source,
+            flags=re.MULTILINE,
+        )
+        if found is None:
+            raise SystemExit(f"regen: no member of Part sets {field}; the Part union changed shape")
+        source = re.sub(rf"\b{found.group(1)}\b", name, source)
+    return source
+
+
 def generate_a2a(workdir: Path) -> str:
     """The A2A 1.0 subset every inbound and outbound A2A byte is parsed with. The document is
     `$defs` only, with no root shape, so it needs none of the wrapping the others do."""
     raw = codegen(A2A_SCHEMA, workdir / "a2a.py", A2A_HEADER)
-    source = add_exports(annotate_config(raw))
+    source = add_exports(name_part_members(annotate_config(raw)))
     source = ruff(source, "check", "--fix", "--select=I")
     return ruff(source, "format")
 

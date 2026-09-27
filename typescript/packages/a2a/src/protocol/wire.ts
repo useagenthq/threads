@@ -1,6 +1,6 @@
 import { JsonValue } from "@threads/core/adapter";
 import { type A2aFault, fault } from "./errors";
-import { type Method, methodOf } from "./jsonrpc";
+import { type Method, methodOf, type RpcId } from "./jsonrpc";
 import { A2A_VERSION } from "./version";
 
 // Where each operation lives in each binding, and how a request's fields ride there. One table for
@@ -73,12 +73,18 @@ export type Outbound = {
   readonly verb: "GET" | "POST";
   readonly body: string | undefined;
   readonly accept: string;
+  /**
+   * The id this request put in its envelope, which the answer has to carry back. `undefined` on
+   * HTTP+JSON, which has no envelope and so nothing to correlate.
+   */
+  readonly rpcId: RpcId | undefined;
 };
 
 export function outbound(
   wire: Wire,
   method: Method,
   params: Readonly<Record<string, unknown>>,
+  rpcId: RpcId,
 ): Outbound {
   const accept = streams(method)
     ? "text/event-stream"
@@ -87,8 +93,9 @@ export function outbound(
     return {
       url: wire.url,
       verb: "POST",
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      body: JSON.stringify({ jsonrpc: "2.0", id: rpcId, method, params }),
       accept,
+      rpcId,
     };
   const shape = HTTP[method];
   const base = wire.url.replace(/\/+$/, "");
@@ -101,6 +108,7 @@ export function outbound(
       verb: shape.verb,
       body: JSON.stringify(params),
       accept,
+      rpcId: undefined,
     };
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -114,6 +122,7 @@ export function outbound(
     verb: shape.verb,
     body: undefined,
     accept,
+    rpcId: undefined,
   };
 }
 
