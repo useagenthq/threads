@@ -8,7 +8,6 @@ is JSON, and this file reads it as JSON rather than keeping a second typed copy 
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 from pydantic import JsonValue
 
@@ -16,6 +15,7 @@ from threads._generated.a2a_v1 import Task, TaskState
 from threads.host.a2a.keys import artifact_id, status_message_id
 from threads.host.a2a.question import OpenAsk, ask_text
 from threads.log import Event, EventId, ModelRequestEvent
+from threads.log.instant import iso
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +41,7 @@ def task_of(view: Slice) -> Task:
     if text is not None:
         status["message"] = _status_message(view, 0 if last is None else last.seq, text)
     if last is not None:
-        status["timestamp"] = _rfc3339(last.time)
+        status["timestamp"] = iso(last.time)
     built: dict[str, JsonValue] = {
         "id": view.task_id,
         "contextId": view.context_id,
@@ -167,10 +167,3 @@ def _text(value: JsonValue) -> str:
 def _number(value: JsonValue) -> str:
     """A numeric limit as the status message spells it, the same in both languages."""
     return str(value) if isinstance(value, int) and not isinstance(value, bool) else ""
-
-
-def _rfc3339(ms: int) -> str:
-    """RFC 3339 UTC with milliseconds, spelled as JavaScript's toISOString does, so a TypeScript
-    host and a Python host answer the same bytes for the same committed event."""
-    moment = datetime.fromtimestamp(ms / 1000, UTC)
-    return f"{moment.strftime('%Y-%m-%dT%H:%M:%S')}.{moment.microsecond // 1000:03d}Z"

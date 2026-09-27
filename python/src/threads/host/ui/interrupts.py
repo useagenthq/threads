@@ -1,13 +1,13 @@
 """A parked run's open items as AG-UI interrupts (spec/schema/ui/README.md, "Opening and
 closing"). Each answer's schema is host-api.v1.schema.json's own (a test keeps them equal)."""
 
-from datetime import UTC, datetime, timedelta
 from typing import Final
 
 from pydantic import JsonValue
 
 from threads.host.ui.facts import RunFacts
 from threads.log import ParkAddress
+from threads.log.instant import iso
 
 APPROVAL_DECISION_SCHEMA: Final[JsonValue] = {
     "type": "object",
@@ -41,18 +41,10 @@ ANSWER_SCHEMA: Final[JsonValue] = {
     },
 }
 
-_EPOCH: Final = datetime(1970, 1, 1, tzinfo=UTC)
-
 
 def answerable(address: ParkAddress) -> bool:
     """Whether a park waits on a human's answer the UI can give (an approval or a question)."""
     return address.kind in ("approval", "input")
-
-
-def iso(ms: int) -> str:
-    """Epoch milliseconds as ISO 8601 UTC with milliseconds, as JavaScript's toISOString."""
-    at = _EPOCH + timedelta(milliseconds=ms)
-    return f"{at.strftime('%Y-%m-%dT%H:%M:%S')}.{ms % 1000:03d}Z"
 
 
 def interrupts(pending: tuple[ParkAddress, ...], facts: RunFacts) -> list[JsonValue]:

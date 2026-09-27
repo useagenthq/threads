@@ -7,7 +7,6 @@ occurrence order, with the row's conditional update in the same transaction.
 
 import asyncio
 import uuid
-from datetime import UTC, datetime
 from typing import Final
 
 from pydantic import JsonValue
@@ -16,6 +15,7 @@ from threads.agents.start import same_pin
 from threads.agents.store import now_ms, open_store
 from threads.host.schedule_pass import Pass
 from threads.log import BranchId, Principal, ThreadId
+from threads.log.instant import iso
 from threads.reduce.handlers import to_json
 from threads.result import Ok
 from threads.store import Draft, SqliteStore, Writer
@@ -93,7 +93,7 @@ async def log_occurrence(writer: Writer, tenant: str, row: Pending, reason: Reas
     }
     data: dict[str, JsonValue] = {
         "schedule_id": row.schedule_id,
-        "occurrence_id": f"{row.schedule_id}@{_iso(row.occurrence_at)}",
+        "occurrence_id": f"{row.schedule_id}@{iso(row.occurrence_at)}",
         "scheduled_for": row.occurrence_at,
         "timezone": row.timezone,
     }
@@ -120,11 +120,6 @@ def _input(row: Pending, cause: str) -> dict[str, JsonValue]:
 def principal(tenant: str, schedule_id: str) -> Principal:
     """A scheduled run's caller: the schedule itself (spec/api.json Schedule.id)."""
     return Principal(issuer="schedule", tenant=tenant, subject=schedule_id)
-
-
-def _iso(ms: int) -> str:
-    """RFC 3339 UTC with milliseconds, as JS Date.toISOString writes it."""
-    return f"{datetime.fromtimestamp(ms // 1000, UTC):%Y-%m-%dT%H:%M:%S}.{ms % 1000:03d}Z"
 
 
 async def _briefly(sq: SqliteStore, branch: BranchId) -> Writer | None:
