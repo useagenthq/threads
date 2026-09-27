@@ -74,7 +74,9 @@ from threads.a2a.protocol.version import (
 )
 from threads.a2a.protocol.wire import (
     BINDINGS,
+    DEFAULT_PAGE_SIZE,
     HTTP,
+    MAX_PAGE_SIZE,
     METHODS,
     Binding,
     Inbound,
@@ -95,11 +97,13 @@ __all__ = [
     "A2A_JSON",
     "A2A_VERSION",
     "BINDINGS",
+    "DEFAULT_PAGE_SIZE",
     "EXTENSIONS_HEADER",
     "HTTP",
     "IDEMPOTENT_SEND",
     "MAX_BYTES",
     "MAX_CARD_BYTES",
+    "MAX_PAGE_SIZE",
     "METHODS",
     "PROVENANCE",
     "SCHEME_KEYS",

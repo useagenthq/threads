@@ -66,6 +66,12 @@ HTTP: Final[dict[Method, Http]] = {
 }
 
 
+DEFAULT_PAGE_SIZE: Final = 50
+"""The default `ListTasks` page, from the proto's own comment on `page_size`."""
+MAX_PAGE_SIZE: Final = 100
+"""Its ceiling, from the same comment: a larger ask is served this many."""
+
+
 def streams(method: Method) -> bool:
     """The two operations whose answer is an SSE stream."""
     return HTTP[method].streams

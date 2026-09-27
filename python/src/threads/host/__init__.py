@@ -2,6 +2,7 @@
 the CLI's server. Serving over HTTP needs the `host` extra (Starlette); the library methods
 (`start_run`, `subscribe`, the webhook intake) need nothing beyond core."""
 
+from threads.host.a2a.config import A2aExposure, A2aOptions, default_budget
 from threads.host.app import Authenticate, Host, host
 from threads.host.channel import (
     Challenged,
@@ -25,6 +26,8 @@ from threads.host.schedules import Schedule
 from threads.host.stream import Message as SseMessage
 
 __all__ = [
+    "A2aExposure",
+    "A2aOptions",
     "Authenticate",
     "Challenged",
     "ChannelAdapter",
@@ -45,5 +48,6 @@ __all__ = [
     "Sent",
     "SseMessage",
     "VerifiedDelivery",
+    "default_budget",
     "host",
 ]

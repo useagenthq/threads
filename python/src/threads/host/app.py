@@ -23,6 +23,8 @@ from threads.agents.store import Store, open_store
 from threads.agents.team_handle import Team
 from threads.agents.team_handle_types import TeamCursor, TeamItem
 from threads.host import expiry, start, stream, team_stream
+from threads.host.a2a.config import A2aOptions, Exposed
+from threads.host.a2a.setup import expose_a2a
 from threads.host.channel import Challenged, ChannelAdapter, RawRequest, RawResponse
 from threads.host.host_team import HostTeam
 from threads.host.intake import ChannelIntake
@@ -76,12 +78,17 @@ class Host:
         telemetry: Exporter | None = None,
         message_policy: Sequence[MessagePolicyRule] = (),
         members: Mapping[str, HostMemberOptions] = {},
+        a2a: A2aOptions | None = None,
     ) -> None:
         check_members(agents, members, message_policy)
         self._store = store
         self._agents = agents
         self._members = dict(members)
         self._channels = channels
+        self._a2a = a2a
+        self._exposed: Exposed | None = None
+        """The A2A agents this host serves, settled at ready(). None until then, and for a host
+        without the option: nothing is served, because nothing has been checked yet."""
         self.authenticate: Authenticate | None = authenticate
         self._runner: Runner = Runner(store, agents, channels, ceiling, message_policy, members)
         self._intake: ChannelIntake = ChannelIntake(self._runner, channels)
@@ -110,6 +117,11 @@ class Host:
     def runner(self) -> Runner:
         """Internal: the host's run executor, for its own HTTP layer (the UI routes)."""
         return self._runner
+
+    @property
+    def exposed(self) -> "Exposed | None":
+        """Internal: the checked `a2a` option, for the host's own A2A routes."""
+        return self._exposed
 
     @property
     def channels(self) -> tuple[str, ...]:
@@ -146,6 +158,8 @@ class Host:
                 raise ConfigError(
                     "invalid_config", f"channel {name}: the adapter has no render_text"
                 )
+        if self._a2a is not None:
+            self._exposed = expose_a2a(self._a2a, self._agents)
         self._scheduler.check(self._runner.agent)
         self._runner.resolve_secrets()
         await open_store(self._store)
@@ -326,6 +340,7 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
     telemetry: Exporter | None = None,
     message_policy: Sequence[MessagePolicyRule] = (),
     members: Mapping[str, HostMemberOptions] | None = None,
+    a2a: A2aOptions | None = None,
 ) -> Host:
     """spec/api.json `host`. Starts nothing until `ready()`. Without `authenticate` every /v1
     route answers 401; channel webhooks still work. `ceiling` caps every run this host starts
@@ -340,7 +355,13 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
     member per tenant, in a leadless host team every thread of the tenant may address by name,
     as `message_policy` allows. A host member with `team` or `handoffs`, one that turns
     compaction off, or one whose tools can need approval without `approvers`, is refused here
-    (ConfigError, naming `members.<name>`). Default None: none."""
+    (ConfigError, naming `members.<name>`). Default None: none.
+    refused here (ConfigError). `a2a` serves the named host agents as A2A 1.0 agents: their cards at
+    /a2a/{agent}/.well-known/agent-card.json and both bindings under /a2a/{agent}. It is checked at
+    ready(); without it nothing A2A is served. Each exposed agent needs a description (never its
+    instructions) and runs under its own budget, $1.00 and ten minutes by default. An agent with
+    handoffs cannot be exposed, and one whose pinned tools can act must name approvers: the calling
+    partner is never one of them."""
     return Host(
         store,
         agents,
@@ -351,6 +372,7 @@ def host(  # noqa: PLR0913 - spec/api.json host's options
         telemetry=telemetry,
         message_policy=message_policy,
         members=members or {},
+        a2a=a2a,
     )
 
 

@@ -138,6 +138,21 @@ class Recorded:
     intake: Intake | None = None
 
 
+def _from_intake(intake: Intake | None) -> dict[str, JsonValue]:
+    """What a host intake adds to the user_input it records: the event it was delivered by, a web
+    UI's message id, and an exposed A2A task's message and context."""
+    if intake is None:
+        return {}
+    fields: dict[str, JsonValue] = {}
+    if intake.delivery_event_id is not None:
+        fields["delivery_event_id"] = intake.delivery_event_id
+    if intake.client_message_id is not None:
+        fields["client_message_id"] = intake.client_message_id
+    if intake.a2a is not None:
+        fields["a2a"] = dict(intake.a2a)
+    return fields
+
+
 async def record_input(rt: Runtime, recorded: Recorded) -> Halt | None:
     """The input, recorded with the principal that sent it. A host intake's delivery event and
     host rows go in the same append; a refused companion records nothing."""
@@ -158,10 +173,7 @@ async def record_input(rt: Runtime, recorded: Recorded) -> Halt | None:
         data["content"] = [to_json(part) for part in input]
     if budget is not None:
         data["budget"] = to_json(budget)
-    if intake is not None and intake.delivery_event_id is not None:
-        data["delivery_event_id"] = intake.delivery_event_id
-    if intake is not None and intake.client_message_id is not None:
-        data["client_message_id"] = intake.client_message_id
+    data.update(_from_intake(intake))
     actor: dict[str, JsonValue] = {"kind": "user", "principal": to_json(principal)}
     drafts = [
         *(() if intake is None else intake.before),

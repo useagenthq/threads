@@ -8,10 +8,11 @@ idempotency_key_principal_mismatch and never sees the receipt.
 """
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
+from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads._generated.host_api_v1 import RunAccepted, StartRunRequest
@@ -77,6 +78,8 @@ class Launched:
     principal: Principal
     budget: Budget | None = None
     client_message_id: str | None = None
+    a2a: Mapping[str, JsonValue] | None = None
+    """An exposed A2A task's message, context and claims (user_input.a2a)."""
 
 
 async def recorded_run(runner: Runner, key: receipts.Key, run: Launched, since: int) -> Started:
@@ -84,7 +87,13 @@ async def recorded_run(runner: Runner, key: receipts.Key, run: Launched, since: 
     input is durable, or why it recorded none."""
     recorded: asyncio.Future[StoredEvent] = asyncio.get_running_loop().create_future()
     receipt = receipts.insert(key, now_ms())
-    intake = Intake("api", recorded, companion=receipt, client_message_id=run.client_message_id)
+    intake = Intake(
+        "api",
+        recorded,
+        companion=receipt,
+        client_message_id=run.client_message_id,
+        a2a=run.a2a,
+    )
     task = runner.launch(
         run.bound,
         run.input,

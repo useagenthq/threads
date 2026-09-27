@@ -11,7 +11,7 @@ from typing import assert_never
 
 from pydantic import JsonValue
 
-from threads.agents.outcome import ended
+from threads.agents.outcome import ended, output_value
 from threads.agents.results import (
     BudgetExhausted,
     Cancelled,
@@ -106,4 +106,13 @@ def _ended(events: Sequence[Event], end: TurnCompletedEvent, thread: Thread) -> 
             message = FAILED_MESSAGES[end.data.reason]
             return {"status": "failed", **ids, "error": {"code": code, "message": message}}
         case reason:
-            return outcome(ended(events, reason, thread))
+            return _decoded(outcome(ended(events, reason, thread)), events)
+
+
+def _decoded(built: JsonValue, events: Sequence[Event]) -> JsonValue:
+    """A completed run's output as the host API declares it: the accepted structured value, not the
+    canonical text `Agent.run` parses. TypeScript's host does the same through its `decode` seam."""
+    value = output_value(events)
+    if value is None or not isinstance(built, dict) or built.get("status") != "completed":
+        return built
+    return {**built, "output": value}

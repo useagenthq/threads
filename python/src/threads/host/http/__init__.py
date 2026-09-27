@@ -7,10 +7,14 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import Response
 from starlette.routing import Route
 
+from threads.host.a2a import route as a2a
 from threads.host.app import Host
 from threads.host.http import runs, teams, threads, ui_ag_ui, ui_ai_sdk, ui_frames
+from threads.host.http.common import Handler
 
 
 def app(host: Host) -> Starlette:
@@ -23,6 +27,14 @@ def app(host: Host) -> Starlette:
             await host.stop()
 
     routes = [
+        # A2A (spec/schema/a2a/), before the /v1 table: the cards are discovery and the operations
+        # settle the version and the caller from headers before any body is read.
+        Route("/.well-known/agent-card.json", _sole_card(host), methods=["GET"]),
+        Route("/a2a/{agent}/.well-known/agent-card.json", _agent_card(host), methods=["GET"]),
+        Route("/a2a/{agent}", _rpc(host), methods=["POST"]),
+        # DELETE too, so the push-notification config operations we do not serve answer by name
+        # rather than as a verb this path does not take.
+        Route("/a2a/{agent}/{path:path}", _http_json(host), methods=["GET", "POST", "DELETE"]),
         Route("/v1/runs", runs.start_run(host), methods=["POST"]),
         Route(
             "/v1/threads/{thread_id}/runs/{run_id}/events", runs.subscribe(host), methods=["GET"]
@@ -42,3 +54,31 @@ def app(host: Host) -> Starlette:
         ),
     ]
     return Starlette(routes=routes, lifespan=lifespan)
+
+
+def _sole_card(host: Host) -> Handler:
+    async def handle(request: Request) -> Response:
+        return await a2a.sole_card(host, request)
+
+    return handle
+
+
+def _agent_card(host: Host) -> Handler:
+    async def handle(request: Request) -> Response:
+        return await a2a.agent_card(host, request)
+
+    return handle
+
+
+def _rpc(host: Host) -> Handler:
+    async def handle(request: Request) -> Response:
+        return await a2a.operation_route(host, request, "JSONRPC")
+
+    return handle
+
+
+def _http_json(host: Host) -> Handler:
+    async def handle(request: Request) -> Response:
+        return await a2a.operation_route(host, request, "HTTP+JSON")
+
+    return handle

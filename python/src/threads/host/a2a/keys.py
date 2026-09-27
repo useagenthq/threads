@@ -5,6 +5,7 @@ three that two hosts on one store must agree on.
 
 The receipt's operation literal lives with the other operations, in ../a2a/receipts.py."""
 
+from collections.abc import Mapping
 from typing import Final
 
 from pydantic import JsonValue
@@ -80,18 +81,17 @@ def rejected_task_id(principal: Principal, agent: str, message_id: str) -> str:
     return derived_id("threads-a2a-rejected-v1", (principal_key(principal), agent, message_id))
 
 
-def claims(metadata: JsonValue) -> JsonValue:
+def claims(metadata: Mapping[str, JsonValue] | None) -> Mapping[str, JsonValue] | None:
     """The caller's provenance claim, recorded as an untrusted claim and nothing else: it grants no
-    authority, picks no budget and never becomes the run's provenance.principal."""
-    if not isinstance(metadata, dict):
-        return None
-    found = metadata.get(PROVENANCE)
+    authority, picks no budget and never becomes the run's provenance.principal. A claim that is not
+    an object at all is ignored rather than refused: a partner's metadata is not a contract."""
+    found = None if metadata is None else metadata.get(PROVENANCE)
     return found if isinstance(found, dict) else None
 
 
-def claimed_hops(claim: JsonValue) -> int | None:
+def claimed_hops(claim: Mapping[str, JsonValue] | None) -> int | None:
     """A claimed hop count, when the claim carries a usable one."""
-    if not isinstance(claim, dict):
+    if claim is None:
         return None
     hops = claim.get("hops")
     return hops if isinstance(hops, int) and not isinstance(hops, bool) and hops >= 0 else None

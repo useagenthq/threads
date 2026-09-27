@@ -4,6 +4,7 @@ reason its deciding turn ended decides the variant."""
 from collections.abc import Sequence
 from typing import assert_never
 
+from pydantic import JsonValue
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threads.agents.results import (
@@ -109,10 +110,10 @@ def _turn_code(events: Sequence[Event]) -> RunErrorCode | None:
     return code
 
 
-def output_text(events: Sequence[Event]) -> str:
-    """The run's output as text: the turn's accepted final_output value as canonical JSON
-    (what a parent sees of a structured subagent, and what `Agent.run` parses into its output
-    type), else the text of the turn's last response."""
+def output_value(events: Sequence[Event]) -> JsonValue | None:
+    """The structured value the run's turn accepted, when it has one. `output_text` gives its
+    canonical text, which is what `Agent.run` parses into its output type; the host API and A2A
+    answer the value itself."""
     turn = turn_events(events)
     accepted = next(
         (
@@ -122,8 +123,18 @@ def output_text(events: Sequence[Event]) -> str:
         ),
         None,
     )
-    if accepted is not None and accepted.data.value is not MISSING:
-        text = canonicalize(accepted.data.value)
+    if accepted is None or accepted.data.value is MISSING:
+        return None
+    return accepted.data.value
+
+
+def output_text(events: Sequence[Event]) -> str:
+    """The run's output as text: the turn's accepted final_output value as canonical JSON
+    (what a parent sees of a structured subagent, and what `Agent.run` parses into its output
+    type), else the text of the turn's last response."""
+    value = output_value(events)
+    if value is not None:
+        text = canonicalize(value)
         if not isinstance(text, Ok):
             raise AssertionError("a recorded value always canonicalizes")
         return text.value

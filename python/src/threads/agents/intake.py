@@ -6,7 +6,7 @@ host rows are bound to the input's append (an idempotency receipt, an inbox item
 and the caller is told as soon as the input is durable, while the run goes on.
 """
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
@@ -17,6 +17,8 @@ from threads.store.companion import Companion
 
 if TYPE_CHECKING:
     import asyncio
+
+    from pydantic import JsonValue
 
 type After = Callable[[Runtime], Awaitable[Halt | None]]
 """Host work derived from the log, under the run's lease (a channel's outbound replies), once the
@@ -34,6 +36,9 @@ class Intake:
     delivery_event_id: str | None = None
     client_message_id: str | None = None
     """A web UI's id for the message (user_input.client_message_id)."""
+    a2a: "Mapping[str, JsonValue] | None" = None
+    """An exposed A2A task's message, context and claims (user_input.a2a), recorded so a resend of
+    the same messageId finds its run. Only with source api, as the schema requires."""
     companion: Companion | None = None
     servers: tuple[ToolServer, ...] = ()
     """Host tool servers this run connects (a channel's send tool), pinned like MCP tools."""

@@ -35,6 +35,20 @@ class Tables:
         tenant = self.tenant_id
         return await self._worker.call(lambda c: receipts.ui_messages(c, tenant, thread_id))
 
+    async def a2a_tasks(self, principal: str) -> tuple[receipts.TaskReceipt, ...]:
+        """The principal's `a2a_send` receipts, newest first: its tasks and nobody else's."""
+        tenant = self.tenant_id
+        return await self._worker.read(lambda c: receipts.a2a_tasks(c, tenant, principal))
+
+    async def a2a_task(self, principal: str, run_id: str) -> receipts.TaskReceipt | None:
+        """One of the principal's `a2a_send` receipts by run id: how a task is resolved."""
+        tenant = self.tenant_id
+        return await self._worker.read(lambda c: receipts.a2a_task(c, tenant, principal, run_id))
+
+    async def record_receipt(self, key: receipts.Key, run: receipts.TaskReceipt) -> None:
+        """A receipt for work already durable (an A2A continuation's recorded answer)."""
+        await self._worker.call(lambda c: receipts.record(c, key, run))
+
     async def challenge(self, challenge_id: str) -> approvals.Challenge | None:
         return await self._worker.read(lambda c: approvals.find(c, self.tenant_id, challenge_id))
 

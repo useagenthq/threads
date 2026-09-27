@@ -28,7 +28,7 @@ from threads.log.keys import principal_key
 from threads.result import Ok
 from threads.store.companion import Companion
 from threads.store.conn import Conn
-from threads.store.sql import text_of
+from threads.store.sql import int_of, text_of
 from threads.store.verify import StoredEvent
 
 _log = logging.getLogger(__name__)
@@ -195,3 +195,77 @@ def input_text(e: UserInputEvent) -> str:
         return e.data.text
     parts = () if e.data.content is MISSING else e.data.content
     return "".join(p.text for p in parts if isinstance(p, TextPart))
+
+
+A2A_SEND: Final = "a2a_send"
+"""An exposed A2A agent's SendMessage, keyed by principal, agent and messageId
+(threads/host/a2a/keys.py). The same literal in both languages, deliberately: two hosts on one
+store read each other's receipts, and one of them may be the TypeScript implementation."""
+
+
+@dataclass(frozen=True, slots=True)
+class TaskReceipt:
+    """An `a2a_send` receipt as the exposed side reads it: which run the task is, and when."""
+
+    idempotency_key: str
+    thread_id: ThreadId
+    branch_id: BranchId
+    run_id: EventId
+    created_at: int
+
+
+def _task(row: Sequence[object]) -> TaskReceipt:
+    key, thread, branch, run, created = row
+    return TaskReceipt(
+        text_of(key), ThreadId(text_of(thread)), BranchId(text_of(branch)), EventId(text_of(run)),
+        int_of(created),
+    )  # fmt: skip
+
+
+def a2a_tasks(conn: Conn, tenant_id: str, principal: str) -> tuple[TaskReceipt, ...]:
+    """A principal's `a2a_send` receipts, newest first: what ListTasks pages over, and what
+    GetTask, SubscribeToTask and CancelTask resolve a task through. The principal is in the WHERE
+    clause rather than checked afterwards, so another caller's task is indistinguishable from one
+    that never existed. Served by the run_receipts (tenant_id, operation, principal_key,
+    created_at) index."""
+    rows = conn.execute(
+        "SELECT idempotency_key, thread_id, branch_id, run_id, created_at FROM run_receipts"
+        " WHERE tenant_id = ? AND operation = ? AND principal_key = ?"
+        " ORDER BY created_at DESC, run_id DESC",
+        (tenant_id, A2A_SEND, principal),
+    ).fetchall()
+    return tuple(_task(row) for row in rows)
+
+
+def a2a_task(conn: Conn, tenant_id: str, principal: str, run_id: str) -> TaskReceipt | None:
+    """One of the principal's `a2a_send` receipts by run id. Separate from `a2a_tasks` because a
+    stream resolves its task on every poll, and reading a whole history to do that would not
+    scale."""
+    row = conn.execute(
+        "SELECT idempotency_key, thread_id, branch_id, run_id, created_at FROM run_receipts"
+        " WHERE tenant_id = ? AND operation = ? AND principal_key = ? AND run_id = ?",
+        (tenant_id, A2A_SEND, principal, run_id),
+    ).fetchone()
+    return None if row is None else _task(row)
+
+
+def record(conn: Conn, key: Key, run: TaskReceipt) -> None:
+    """A receipt for work that is already durable: an A2A continuation records its answer first and
+    its receipt after, since the answer goes to the log through a control, not an input's append.
+    ON CONFLICT DO NOTHING, so writing it again after an unknown commit is a no-op."""
+    conn.execute(
+        "INSERT INTO run_receipts (tenant_id, operation, idempotency_key, principal_key,"
+        " body_hash, thread_id, branch_id, run_id, created_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+        (
+            key.tenant_id,
+            key.operation,
+            key.idempotency_key,
+            key.principal_key,
+            key.body_hash,
+            run.thread_id,
+            run.branch_id,
+            run.run_id,
+            run.created_at,
+        ),
+    )
