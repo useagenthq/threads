@@ -50,17 +50,15 @@ export function calledIn(
   };
 }
 
-/** The task id this call committed with, from the receipt the partner gave us. */
-export function receiptOf(
-  events: readonly KnownEvent[],
-  callId: string,
-): string | undefined {
-  const found = events.findLast(
-    (e) => e.type === "effect_commit" && e.data.call_id === callId,
-  );
-  return found?.type === "effect_commit"
-    ? found.data.provider_receipt
-    : undefined;
+/**
+ * The tenant this thread belongs to, read from its own log rather than from the running process, so
+ * the bytes a re-dispatch sends are a function of the log alone — and the same in both languages.
+ */
+export function tenantOf(events: readonly KnownEvent[]): string {
+  const first = events.find((e) => e.type === "user_input");
+  return first?.type === "user_input" && first.actor.kind === "user"
+    ? first.actor.principal.tenant
+    : "";
 }
 
 /**

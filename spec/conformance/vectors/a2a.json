@@ -388,5 +388,40 @@
       "body_hash": "d0726fedf416a3ccbcdec5baf3087d5c3442798f75151707f63100e4c14e17e8",
       "thread_id": "89ed56bb-acac-8a45-b9ab-36c52a399319"
     }
+  ],
+  "outbound": [
+    {
+      "name": "a plain call of one remote",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "call_id": "call_1",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "remote": "refunds",
+      "tenant": "acme",
+      "message_id": "d7e7435b-828a-8480-8873-4b503e508881",
+      "context_id": "0f37409a-998a-8f62-ab42-2c07483d034e",
+      "request": "ea539291d3da8cde95565aca378b1019"
+    },
+    {
+      "name": "a model-chosen call id holding the length prefix's own separator",
+      "branch_id": "0192b000-0000-7000-8000-000000000001",
+      "call_id": "4:call",
+      "thread_id": "0192a000-0000-7000-8000-000000000001",
+      "remote": "refunds",
+      "tenant": "acme",
+      "message_id": "b92343de-3f2c-80b9-ac95-4cf751b13069",
+      "context_id": "0f37409a-998a-8f62-ab42-2c07483d034e",
+      "request": "ea539291d3da8cde95565aca378b1019"
+    },
+    {
+      "name": "a remote name and a call id with multi-byte characters, counted in bytes",
+      "branch_id": "0192b000-0000-7000-8000-000000000002",
+      "call_id": "call-é",
+      "thread_id": "0192a000-0000-7000-8000-000000000002",
+      "remote": "réfunds",
+      "tenant": "acme",
+      "message_id": "e40039b3-563a-811e-9f71-2b5afdc7f8dd",
+      "context_id": "acc68d80-ff02-82cd-995b-67cc5a538237",
+      "request": "072dfa7b00fd86819dae7b61a701392a"
+    }
   ]
 }

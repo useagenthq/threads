@@ -20,7 +20,7 @@ import {
   statusOf,
   taskText,
 } from "./exchange";
-import { calledIn, inboundClaim, observed, ownsTask } from "./log";
+import { calledIn, inboundClaim, observed, ownsTask, tenantOf } from "./log";
 import { requestBody } from "./request";
 import { stateDrafts } from "./states";
 
@@ -64,11 +64,7 @@ export async function beginSend(
     metadata:
       remote.provenance === "none"
         ? undefined
-        : claimOf(
-            ctx.principal.tenant,
-            claim.request ?? threadId,
-            claim.hops + 1,
-          ),
+        : claimOf(tenantOf(events), claim.request ?? threadId, claim.hops + 1),
   });
   const requestRef = await ctx.store(body.bytes, "application/json");
   return ok([

@@ -17,6 +17,10 @@ mapping), and the rest is the behaviour the protocol source states —
   body hash a reused messageId is checked against, and the thread a contextId names. Two hosts on
   one store may be a TypeScript one and a Python one, so a byte of difference here would let one
   inbound message start two runs.
+- `outbound`: the client side's derivations — the `messageId` a call sends under, the `contextId`
+  its conversation with one partner has, and the opaque provenance request id. The messageId comes
+  from `(branch_id, call_id)` alone (lane 30 decision H30-1), so a difference of one byte here
+  would let a re-dispatch look like a second message to a peer that deduplicates.
 """
 
 from __future__ import annotations
@@ -244,6 +248,54 @@ def _keys() -> list[JsonValue]:
     ]
 
 
+# The client side's derivations (typescript/packages/a2a/src/outbound/derive.ts and
+# python/src/threads/a2a/outbound/derive.py), recomputed here from their definitions.
+OUTBOUND: tuple[tuple[str, str, str, str, str], ...] = (
+    (
+        "a plain call of one remote",
+        "0192b000-0000-7000-8000-000000000001",
+        "call_1",
+        "0192a000-0000-7000-8000-000000000001",
+        "refunds",
+    ),
+    (
+        "a model-chosen call id holding the length prefix's own separator",
+        "0192b000-0000-7000-8000-000000000001",
+        "4:call",
+        "0192a000-0000-7000-8000-000000000001",
+        "refunds",
+    ),
+    (
+        "a remote name and a call id with multi-byte characters, counted in bytes",
+        "0192b000-0000-7000-8000-000000000002",
+        "call-\u00e9",
+        "0192a000-0000-7000-8000-000000000002",
+        "r\u00e9funds",
+    ),
+)
+
+
+def _derived(domain: str, fields: tuple[str, ...]) -> str:
+    return _uuidv8(hashlib.sha256(b"".join(_lp(f) for f in (domain, *fields))).hexdigest())
+
+
+def _outbound() -> list[JsonValue]:
+    return [
+        {
+            "name": name,
+            "branch_id": branch,
+            "call_id": call,
+            "thread_id": thread,
+            "remote": remote,
+            "tenant": PRINCIPAL[1],
+            "message_id": _derived("threads/a2a-message", (branch, call)),
+            "context_id": _derived("threads/a2a-context", (thread, remote)),
+            "request": _derived("threads/a2a-request", (PRINCIPAL[1], thread)).replace("-", ""),
+        }
+        for name, branch, call, thread, remote in OUTBOUND
+    ]
+
+
 def _tables() -> JsonValue:
     return {
         "errors": _errors(),
@@ -252,6 +304,7 @@ def _tables() -> JsonValue:
         "paths": _paths(),
         "sse": _sse(),
         "keys": _keys(),
+        "outbound": _outbound(),
     }
 
 

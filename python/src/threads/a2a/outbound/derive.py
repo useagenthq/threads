@@ -3,7 +3,6 @@
 Nothing here is random: a crash and a re-dispatch must arrive at the same messageId, or a peer that
 deduplicates would see two messages (30-a2a decision H30-1)."""
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
 
@@ -50,8 +49,3 @@ def claim_of(tenant: str, root: str, hops: int) -> dict[str, JsonValue]:
     tenant."""
     claim: JsonValue = {"request": request_id_of(tenant, root), "hops": hops}
     return {PROVENANCE: claim}
-
-
-def joined(parts: Sequence[str]) -> str:
-    """The fields of a derivation, for a message that names them."""
-    return ", ".join(parts)

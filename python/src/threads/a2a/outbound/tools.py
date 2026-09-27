@@ -6,7 +6,7 @@ into the send tool would carry the send's class and ask for approval to send not
 
 import re
 from dataclasses import dataclass
-from typing import Annotated, Final, Literal
+from typing import Annotated, ClassVar, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError
 
@@ -32,7 +32,7 @@ FINALITY: Final[Literal["final", "nonfinal"]] = "nonfinal"
 class SendInput(BaseModel):
     """One message to the remote agent."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
 
     message: Annotated[StrictStr, Field(min_length=1, max_length=MAX_MESSAGE)]
     task_id: Annotated[
@@ -48,7 +48,7 @@ class SendInput(BaseModel):
 class StatusInput(BaseModel):
     """Read a task this conversation already created. Sends no message."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
 
     task_id: Annotated[
         StrictStr, Field(min_length=1, description="A task this conversation created.")
