@@ -7,7 +7,7 @@ import {
   EXTENSIONS_HEADER,
   VERSION_HEADER,
 } from "./version";
-import { outbound, streams, type Wire } from "./wire";
+import { outbound, sentRpcId, streams, type Wire } from "./wire";
 
 // One A2A request goes out. The adapter owns the bytes; which of the outcomes in ./answer the
 // caller gets is decided there, and everything here is about getting the request written and
@@ -66,9 +66,10 @@ export async function call(
   } catch (error) {
     return failed(error, sending.signal.aborted);
   }
+  const sent = sentRpcId(built, sending.body);
   return streams(method) && response.status === 200 && isEventStream(response)
-    ? { kind: "stream", items: stream(response, built.rpcId) }
-    : await single(response, built.rpcId);
+    ? { kind: "stream", items: stream(response, sent) }
+    : await single(response, sent);
 }
 
 export type Fetched =

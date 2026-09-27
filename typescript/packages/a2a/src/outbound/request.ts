@@ -36,7 +36,9 @@ export function requestBody(b: Building): Built {
     // The first response is the only one whose loss matters, so it is small and fast.
     configuration: { returnImmediately: true },
   };
-  const built = outbound(b.wire, "SendMessage", params);
+  // The envelope id is the derived messageId: unique per call, and derived rather than random so
+  // the bytes this module stores are the same on every build of the same call.
+  const built = outbound(b.wire, "SendMessage", params, b.messageId);
   if (built.body === undefined)
     throw new Error("SendMessage carries its request in the body");
   return { bytes: built.body, messageId: b.messageId, contextId: b.contextId };

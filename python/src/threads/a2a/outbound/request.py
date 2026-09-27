@@ -48,7 +48,9 @@ def request_body(b: Building) -> Built:
         # The first response is the only one whose loss matters, so it is small and fast.
         "configuration": {"returnImmediately": True},
     }
-    built = outbound(b.wire, "SendMessage", params)
+    # The envelope id is the derived messageId: unique per call, and derived rather than random so
+    # the bytes this module stores are the same on every build of the same call.
+    built = outbound(b.wire, "SendMessage", params, b.message_id)
     if built.body is None:
         raise AssertionError("SendMessage carries its request in the body")
     return Built(built.body, b.message_id, b.context_id)

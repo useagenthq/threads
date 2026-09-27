@@ -33,7 +33,7 @@ from threads.a2a.protocol.errors import (
 from threads.a2a.protocol.jsonrpc import is_envelope, rpc_outcome
 from threads.a2a.protocol.sse import sse_events_of
 from threads.a2a.protocol.version import A2A_JSON, A2A_VERSION, EXTENSIONS_HEADER, VERSION_HEADER
-from threads.a2a.protocol.wire import Method, Wire, outbound, parse_json, streams
+from threads.a2a.protocol.wire import Method, Wire, outbound, parse_json, sent_rpc_id, streams
 from threads.result import Err
 from threads.web.guard import Resolve, system_resolve, vet
 from threads.web.http import Fence, Request, Response, StdlibTransport, Transport
@@ -125,7 +125,7 @@ async def call(
     sent = await transport.send(target.value, request, sending.fence or _always_fenced, MAX_BYTES)
     if isinstance(sent, Err):
         return _failed(sent.error.code, sent.error.message, sent.error.sent)
-    return _answered(method, sent.value, built.rpc_id)
+    return _answered(method, sent.value, sent_rpc_id(built, sending.body))
 
 
 def _answered(method: Method, response: Response, rpc_id: str | None) -> Answer:

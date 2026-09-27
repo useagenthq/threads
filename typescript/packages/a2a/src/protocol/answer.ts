@@ -6,7 +6,7 @@ import {
   fault,
   httpStatus,
 } from "./errors";
-import { type RpcId, rpcOutcome } from "./jsonrpc";
+import { rpcOutcome } from "./jsonrpc";
 import { sseEvents } from "./sse";
 import { StreamResponse as StreamItem, type StreamResponse } from "./task";
 import { parseJson } from "./wire";
@@ -50,7 +50,7 @@ export const MAX_BYTES: number = 1 << 20;
 /** A non-streaming answer: the operation's own message, or the A2A error the peer named. */
 export async function single(
   response: Response,
-  sent: RpcId | undefined,
+  sent: string | undefined,
 ): Promise<Answer> {
   const read = await text(response);
   if (typeof read !== "string") return read;
@@ -197,7 +197,7 @@ export async function bodyBytes(
  */
 export async function* stream(
   response: Response,
-  sent: RpcId | undefined,
+  sent: string | undefined,
 ): AsyncGenerator<Streamed> {
   const body = response.body;
   if (body === null) return;
@@ -216,7 +216,7 @@ export async function* stream(
 }
 
 /** One `data:` line as a stream item, or the refusal it earns. */
-function frameOf(data: string, sent: RpcId | undefined): Streamed {
+function frameOf(data: string, sent: string | undefined): Streamed {
   const json = parseJson(data);
   if (!json.ok) return { kind: "refused", fault: json.fault };
   if (isEnvelope(json.value)) {

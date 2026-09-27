@@ -100,21 +100,35 @@ _STREAM_ACCEPT: Final = "text/event-stream"
 _JSON_ACCEPT: Final = "application/a2a+json, application/json"
 
 
+def _compact(value: JsonValue) -> str:
+    """JSON the way `JSON.stringify` writes it: no space after a comma or a colon.
+
+    Python's default separators put a space after both, so the same call produced different bytes in
+    the two languages. Not `log.jcs.canonicalize`: RFC 8785 sorts keys and `JSON.stringify` keeps
+    insertion order, so canonicalizing would move the two further apart rather than together."""
+    return json.dumps(value, separators=(",", ":"))
+
+
 def outbound(wire: Wire, method: Method, params: dict[str, JsonValue], rpc_id: str) -> Outbound:
     """The HTTP request one call becomes. `id` is taken out of the message for the path; every
     other field of a GET operation becomes a query parameter."""
     accept = _STREAM_ACCEPT if streams(method) else _JSON_ACCEPT
     if wire.binding == "JSONRPC":
-        envelope = {"jsonrpc": "2.0", "id": rpc_id, "method": method, "params": params}
-        return Outbound(wire.url, "POST", json.dumps(envelope), accept, rpc_id)
+        envelope: dict[str, JsonValue] = {
+            "jsonrpc": "2.0",
+            "id": rpc_id,
+            "method": method,
+            "params": params,
+        }
+        return Outbound(wire.url, "POST", _compact(envelope), accept, rpc_id)
     shape = HTTP[method]
     base = wire.url.rstrip("/")
     raw_id = params.get("id")
     path = shape.path.replace("{id}", quote(raw_id if isinstance(raw_id, str) else "", safe=""))
     if shape.where == "body":
-        return Outbound(f"{base}{path}", shape.verb, json.dumps(params), accept, None)
+        return Outbound(f"{base}{path}", shape.verb, _compact(params), accept, None)
     query = [
-        (key, value if isinstance(value, str) else json.dumps(value))
+        (key, value if isinstance(value, str) else _compact(value))
         for key, value in params.items()
         if key != "id" and value is not None
     ]
@@ -133,6 +147,30 @@ def parse_json(text: str) -> Ok[JsonValue] | Err[A2aFault]:
         return Ok(_JSON.validate_json(text))
     except ValidationError:
         return Err(fault("JSONParseError", "the payload is not valid JSON"))
+
+
+def sent_rpc_id(built: Outbound, override: str | None) -> str | None:
+    """The id an answer has to carry back: the one in the bytes that actually go out.
+
+    A re-dispatch replays the body its first attempt stored, so the id to correlate against is the
+    stored one rather than one generated for this attempt - otherwise every retry of a stored body
+    would be refused as an answer to someone else's request. None means there is nothing to
+    correlate: the HTTP+JSON binding has no envelope to put an id in."""
+    if override is None or built.rpc_id is None:
+        return built.rpc_id
+    return _rpc_id_in(override)
+
+
+def _rpc_id_in(body: str) -> str | None:
+    """The `id` of a JSON-RPC request body, when it carries a string one."""
+    parsed = parse_json(body)
+    if isinstance(parsed, Err):
+        return None
+    found = parsed.value
+    if not isinstance(found, dict):
+        return None
+    got = found.get("id")
+    return got if isinstance(got, str) else None
 
 
 @dataclass(frozen=True, slots=True)

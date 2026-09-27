@@ -103,7 +103,7 @@ export function rpcFault(id: RpcId | undefined, f: A2aFault): string {
  */
 export function rpcOutcome(
   body: unknown,
-  sent: RpcId | undefined,
+  sent: string | undefined,
 ): { readonly result: unknown } | { readonly fault: A2aFault } {
   const parsed = RpcResponse.safeParse(body);
   if (!parsed.success)
@@ -130,7 +130,7 @@ export function rpcOutcome(
  * correlated: it cannot forge a result, and refusing it would throw away the peer's real error.
  */
 function uncorrelated(
-  sent: RpcId | undefined,
+  sent: string | undefined,
   got: RpcId | undefined,
   isError: boolean,
 ): A2aFault | undefined {

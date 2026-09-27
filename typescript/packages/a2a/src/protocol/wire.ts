@@ -1,6 +1,6 @@
 import { JsonValue } from "@threads/core/adapter";
 import { type A2aFault, fault } from "./errors";
-import { type Method, methodOf, type RpcId } from "./jsonrpc";
+import { type Method, methodOf } from "./jsonrpc";
 import { A2A_VERSION } from "./version";
 
 // Where each operation lives in each binding, and how a request's fields ride there. One table for
@@ -77,14 +77,14 @@ export type Outbound = {
    * The id this request put in its envelope, which the answer has to carry back. `undefined` on
    * HTTP+JSON, which has no envelope and so nothing to correlate.
    */
-  readonly rpcId: RpcId | undefined;
+  readonly rpcId: string | undefined;
 };
 
 export function outbound(
   wire: Wire,
   method: Method,
   params: Readonly<Record<string, unknown>>,
-  rpcId: RpcId,
+  rpcId: string,
 ): Outbound {
   const accept = streams(method)
     ? "text/event-stream"
@@ -129,6 +129,31 @@ export function outbound(
 function idOf(params: Readonly<Record<string, unknown>>): string {
   const id = params["id"];
   return typeof id === "string" ? id : "";
+}
+
+/**
+ * The id an answer has to carry back: the one in the bytes that actually go out.
+ *
+ * A re-dispatch replays the body its first attempt stored, so the id to correlate against is the
+ * stored one rather than one generated for this attempt — otherwise every retry of a stored body
+ * would be refused as an answer to someone else's request. `undefined` means there is nothing to
+ * correlate: the HTTP+JSON binding has no envelope to put an id in.
+ */
+export function sentRpcId(
+  built: Outbound,
+  override: string | undefined,
+): string | undefined {
+  if (override === undefined || built.rpcId === undefined) return built.rpcId;
+  const parsed = parseJson(override);
+  if (!parsed.ok) return undefined;
+  const id = at(parsed.value, "id");
+  return typeof id === "string" ? id : undefined;
+}
+
+function at(json: unknown, key: string): unknown {
+  return typeof json === "object" && json !== null && key in json
+    ? Reflect.get(json, key)
+    : undefined;
 }
 
 /** A body as JSON, or the JSONParseError it earns. Never `unknown | A2aFault`: a legitimate
