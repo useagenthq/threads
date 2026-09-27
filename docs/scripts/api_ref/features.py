@@ -85,7 +85,13 @@ AREAS: tuple[tuple[str, tuple[Row, ...]], ...] = (
         (
             ("E2B", "/docs/sandboxes/e2b", ("factory:e2b",), ""),
             ("Daytona", "/docs/sandboxes/daytona", ("factory:daytona",), ""),
-            ("Modal", "/docs/sandboxes/modal", ("factory:modal",), ""),
+            (
+                "Modal",
+                "/docs/sandboxes/modal",
+                ("factory:modal",),
+                "TypeScript always refuses: Modal's JS SDK runs commands over a transport "
+                "threads can't fence.",
+            ),
             ("Fake sandbox for tests", "/docs/evals/testing", ("fakeSandbox",), ""),
         ),
     ),
@@ -110,7 +116,13 @@ AREAS: tuple[tuple[str, tuple[Row, ...]], ...] = (
             ("Local memory", "/docs/memory/memory", ("localMemory",), ""),
             ("Supermemory", "/docs/memory/memory", ("supermemory",), ""),
             ("Zep", "/docs/memory/memory", ("zep",), ""),
-            ("Mem0", "/docs/memory/memory", ("factory:mem0",), ""),
+            (
+                "Mem0",
+                "/docs/memory/memory",
+                ("factory:mem0",),
+                "Refused in both: the mem0ai SDK sends outside any transport threads can "
+                "fence. Use Supermemory or Zep.",
+            ),
             ("Local knowledge base", "/docs/memory/knowledge", ("localKnowledge",), ""),
         ),
     ),
@@ -148,7 +160,8 @@ AREAS: tuple[tuple[str, tuple[Row, ...]], ...] = (
 INTRO = """What works in each language today. The table is built from the API contract both
 languages are tested against, so it changes when they do.
 
-**✓** works today. **Not yet** is planned for that language. **—** doesn't apply to that language.
+**✓** works today. **Not yet** is planned for that language. **Refused** can't be supported there,
+for the reason in the note. **—** doesn't apply to that language.
 """
 
 
@@ -193,7 +206,7 @@ class Surface:
             if lang == "ts"
             else ROOT / "python" / "src" / "threads" / f"{kebab.replace('-', '_')}.py"
         )
-        return src.exists() and (name, lang) not in REFUSED
+        return src.exists()
 
     def status(self, ref: str, lang: str) -> str:
         """ "yes", "no", or "n/a" when the ref is one language's by design."""
@@ -201,6 +214,8 @@ class Surface:
         if prefix in ("ts", "py"):
             return self.status(rest, lang) if prefix == lang else "skip"
         if prefix == "factory":
+            if (rest, lang) in REFUSED:
+                return "refused"
             return "yes" if self.factory_has(rest, lang) else "no"
         if self.node(ref).get("lang") not in (None, lang):
             return "n/a"
@@ -212,6 +227,8 @@ class Surface:
         found = {self.status(r, lang) for r in refs} - {"skip"}
         if "n/a" in found:
             return "—"
+        if "refused" in found:
+            return "Refused"
         return "✓" if found == {"yes"} else "Not yet"
 
 

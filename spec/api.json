@@ -1308,7 +1308,7 @@
       "py": "litellm",
       "package": "litellm",
       "lang": "py",
-      "doc": "A model behind LiteLLM's openai/ route: any OpenAI-compatible endpoint, named through base_url. Only that route sends through a transport threads can fence, so any other is transport_fence_unsupported when the model is constructed. There is no catalog behind the endpoint, so both limits are required. Pass it as agent(model=litellm(\"openai/my-model\", base_url=\"http://localhost:4000\", max_input_tokens=128000, max_output_tokens=8192)).",
+      "doc": "A model behind LiteLLM's openai/ route: any OpenAI-compatible endpoint, named through base_url. Only that route sends through a transport threads can fence, so any other is transport_fence_unsupported when the model is constructed. There is no catalog behind the endpoint, so both limits are required. Pass it as agent(model=litellm(\"openai/my-model\", base_url=\"http://localhost:4000\", max_input_tokens=128000, max_output_tokens=8192, cache_ttl_ms=\"none\")). threads cannot see the provider behind base_url, so cache_ttl_ms is needed too: the real lifetime in milliseconds when the endpoint caches prompts, \"none\" when it does not. Without it check() and the first run fail with invalid_config.",
       "async": false,
       "params": [
         {"name": "name", "kind": "positional", "type": {"prim": "string"}, "required": true, "doc": "The LiteLLM model name. It must start with \"openai/\"; any other route is transport_fence_unsupported. The part after the prefix is the model id the endpoint expects."},
@@ -7055,7 +7055,7 @@
       "casing": "api",
       "fields": {
         "restart": {"type": {"enum": ["on_failure", "never"]}, "required": false, "default": "on_failure", "doc": "on_failure restarts the member after it ends failed (a failed rebind; a caller's turn failure never ends it). An end by its own budget, a lifetime cap, or a cancel never restarts. Every end gets one supervisor_decided."},
-        "max_restarts": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Int"}, "required": false, "default": 3, "doc": "At most this many restarts within within_ms; one more stops the member until an operator starts it (Host.team)."},
+        "max_restarts": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Int"}, "required": false, "default": 3, "doc": "At most this many restarts inside within_ms; one more stops the member until an operator starts it (Host.team)."},
         "within_ms": {"type": {"$ref": "urn:threads:schema:events:v1#/$defs/Int"}, "required": false, "default": 60000, "doc": "The sliding window of max_restarts, at least 1000 (less is refused at setup, invalid_config)."}
       },
       "doc": "How the host supervises one host member (the members option)."

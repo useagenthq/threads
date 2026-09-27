@@ -9,7 +9,8 @@ icon: "Languages"
 What works in each language today. The table is built from the API contract both
 languages are tested against, so it changes when they do.
 
-**✓** works today. **Not yet** is planned for that language. **—** doesn't apply to that language.
+**✓** works today. **Not yet** is planned for that language. **Refused** can't be supported there,
+for the reason in the note. **—** doesn't apply to that language.
 
 ## Agents and tools
 
@@ -46,12 +47,12 @@ languages are tested against, so it changes when they do.
 
 ## Sandboxes
 
-| Feature | TypeScript | Python |
-|---|:-:|:-:|
-| [E2B](/docs/sandboxes/e2b) | ✓ | ✓ |
-| [Daytona](/docs/sandboxes/daytona) | ✓ | ✓ |
-| [Modal](/docs/sandboxes/modal) | Not yet | ✓ |
-| [Fake sandbox for tests](/docs/evals/testing) | ✓ | ✓ |
+| Feature | TypeScript | Python | Notes |
+|---|:-:|:-:|---|
+| [E2B](/docs/sandboxes/e2b) | ✓ | ✓ |  |
+| [Daytona](/docs/sandboxes/daytona) | ✓ | ✓ |  |
+| [Modal](/docs/sandboxes/modal) | Refused | ✓ | TypeScript always refuses: Modal's JS SDK runs commands over a transport threads can't fence. |
+| [Fake sandbox for tests](/docs/evals/testing) | ✓ | ✓ |  |
 
 ## Channels and host
 
@@ -65,13 +66,13 @@ languages are tested against, so it changes when they do.
 
 ## Memory and knowledge
 
-| Feature | TypeScript | Python |
-|---|:-:|:-:|
-| [Local memory](/docs/memory/memory) | ✓ | ✓ |
-| [Supermemory](/docs/memory/memory) | ✓ | ✓ |
-| [Zep](/docs/memory/memory) | ✓ | ✓ |
-| [Mem0](/docs/memory/memory) | Not yet | Not yet |
-| [Local knowledge base](/docs/memory/knowledge) | ✓ | ✓ |
+| Feature | TypeScript | Python | Notes |
+|---|:-:|:-:|---|
+| [Local memory](/docs/memory/memory) | ✓ | ✓ |  |
+| [Supermemory](/docs/memory/memory) | ✓ | ✓ |  |
+| [Zep](/docs/memory/memory) | ✓ | ✓ |  |
+| [Mem0](/docs/memory/memory) | Refused | Refused | Refused in both: the mem0ai SDK sends outside any transport threads can fence. Use Supermemory or Zep. |
+| [Local knowledge base](/docs/memory/knowledge) | ✓ | ✓ |  |
 
 ## Control
 

@@ -375,4 +375,6 @@ Defer large catalogs, not two or three small tools. Changing which tools are def
 
 ## Setup errors
 
-`tool()` checks its definition and raises `ConfigError` when it can't run: `dedupWindowMs` without `effect: "idempotent"` (or the reverse), `reconcile` without `effect: "reconcilable"` (or the reverse), `concurrent` on a tool that isn't `read_only` or that ends the turn, `defer` together with `endsTurn`, or `runs: "sandbox"`, which isn't supported yet. A tool of your own named `tool_search` is refused while anything is deferred.
+`tool()` checks its definition and raises `ConfigError` when it can't run: `dedupWindowMs` without `effect: "idempotent"` (or the reverse), `reconcile` without `effect: "reconcilable"` (or the reverse), `concurrent` on a tool that isn't `read_only` or that ends the turn, or `defer` together with `endsTurn`. A tool of your own named `tool_search` is refused while anything is deferred.
+
+`runs: "sandbox"` is reserved and not supported in this release: the tool fails setup with `ConfigError` `capability_missing` and never executes. Python refuses at `tool()`, TypeScript at the agent's `check()` or its first run.

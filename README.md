@@ -183,10 +183,10 @@ from threads.openai import openai
 
 model=anthropic("claude-sonnet-5")                  # ANTHROPIC_API_KEY
 model=openai("gpt-5.5", max_tokens=32_000)          # OPENAI_API_KEY; max_tokens is the per-request cap
-model=litellm("openai/my-model", base_url="http://localhost:4000", max_input_tokens=128_000, max_output_tokens=8192)
+model=litellm("openai/my-model", base_url="http://localhost:4000", max_input_tokens=128_000, max_output_tokens=8192, cache_ttl_ms="none")
 ```
 
-Limits for listed model ids come from a catalog verified against each provider (`spec/models/`); another id takes `maxInputTokens` and `maxOutputTokens` (`max_input_tokens`, `max_output_tokens`). The per-request output cap defaults to 8192.
+Limits for listed model ids come from a catalog verified against each provider (`spec/models/`); another id takes `maxInputTokens` and `maxOutputTokens` (`max_input_tokens`, `max_output_tokens`). The per-request output cap defaults to 8192. threads can't see the provider behind `base_url`, so `litellm()` also needs `cache_ttl_ms`: pass the real lifetime in milliseconds when the endpoint does cache prompts, `"none"` when it doesn't.
 
 </details>
 
@@ -196,20 +196,28 @@ Limits for listed model ids come from a catalog verified against each provider (
 ```ts
 import { e2b } from "@threads/e2b";
 import { daytona } from "@threads/daytona";
+import { docker } from "@threads/docker";
+import { devSandbox } from "@threads/core";
 
 sandbox: e2b({ template: "base" }),                          // E2B_API_KEY
 sandbox: daytona(),                                          // DAYTONA_API_KEY
-// Modal: Python only for now (its JS SDK's transport can't be fenced yet)
+sandbox: docker(),                                           // keyless, over the Docker socket
+sandbox: devSandbox(),                                       // a local directory, for development
+// Modal is Python only: its JS SDK runs commands over a transport threads can't fence
 ```
 
 ```python
 from threads.daytona import daytona
+from threads.dev import dev_sandbox
+from threads.docker import docker
 from threads.e2b import e2b
 from threads.modal import modal
 
 sandbox=e2b(template="base")         # E2B_API_KEY
 sandbox=daytona()                    # DAYTONA_API_KEY
 sandbox=modal(image_id="im-...")     # MODAL_TOKEN_ID, MODAL_TOKEN_SECRET
+sandbox=docker()                     # keyless, over the Docker socket
+sandbox=dev_sandbox()                # a local directory, for development
 ```
 
 To open the network, pass `allowInternet: true` (TS) or `allow_internet=True` (Python) to the provider **and** set `egress: "unenforced"` on the agent.
@@ -314,9 +322,9 @@ You need [Bun](https://bun.sh) for TypeScript, and [uv](https://docs.astral.sh/u
 Not built yet, so not claimed above:
 
 - Packages on npm and PyPI
-- Docker and local sandboxes; snapshots (and so forks) on E2B and Modal; Modal in TypeScript
+- Snapshots (and so forks) on E2B and Modal
 - Network allowlists for sandboxes (today it is all blocked or all open)
-- Agents messaging each other across threads, and the A2A protocol
+- The A2A protocol
 
 ## Documentation
 

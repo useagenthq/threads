@@ -5,7 +5,7 @@ icon: Cpu
 ---
 
 <Callout>
-Python only. Modal is not available in TypeScript yet: Modal's JavaScript SDK sends commands over a connection threads can't safely wrap, so `modal()` from `@threads/modal` throws `ConfigError` `transport_fence_unsupported`.
+Python only. Modal's JavaScript SDK sends commands over a connection threads can't safely wrap, so `modal()` from `@threads/modal` always refuses, with `ConfigError` `transport_fence_unsupported`. Use Python for Modal, or another provider in TypeScript.
 </Callout>
 
 [Modal](https://modal.com) runs each sandbox as a container from an image you built. Set `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` and pass the image id.

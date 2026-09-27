@@ -22,7 +22,7 @@ threads is built around one idea: every thread is an append-only log, and everyt
 |---|---|---|---|---|---|---|
 | **Languages** | TypeScript and Python, same behavior, one shared conformance suite | Python and TypeScript (separate SDKs) | Python | Python and TypeScript (deepagents.js) | Python and TypeScript | Python and TypeScript, both run the bundled Claude Code binary |
 | **Model providers** | Anthropic, OpenAI, plus AI SDK bridge (TS) or LiteLLM (Python) | OpenAI; others through LiteLLM or Any-LLM adapters (beta) | Many, built in | Any LangChain chat model | Bedrock, Anthropic, OpenAI, Gemini, LiteLLM, Ollama and more | Claude only |
-| **Sandboxes** | E2B, Daytona; Modal in Python only | Docker, Unix-local and hosted clients incl. E2B, Daytona, Modal, Vercel, Cloudflare (beta) | Modal, via the Harness package | LangSmith, Daytona, E2B, Modal, Runloop, Vercel, AgentCore and more | Docker, SSH, or your own | You run the SDK inside your own container |
+| **Sandboxes** | Docker, a local directory, E2B, Daytona; Modal in Python only | Docker, Unix-local and hosted clients incl. E2B, Daytona, Modal, Vercel, Cloudflare (beta) | Modal, via the Harness package | LangSmith, Daytona, E2B, Modal, Runloop, Vercel, AgentCore and more | Docker, SSH, or your own | You run the SDK inside your own container |
 | **Where the agent runs** | Outside the sandbox, using it through tools; keys never enter it | In your process; the sandbox is its workspace | Outside, through capabilities | Either; outside is recommended | Outside, through sandbox tools | Inside the container, next to its tools |
 | **Crash recovery** | Built in: resume from the log; side effects are confirmed or parked, never silently repeated | Serializable run state; Temporal, Restate, DBOS, Dapr integrations | Integrations: Temporal, DBOS, Prefect, Restate and others | Checkpoints; another worker resumes a crashed run (LangSmith Deployment) | Session checkpoints to resume a conversation | Resume from session transcripts; optional `SessionStore` |
 | **Audit trail** | Append-only, hash-chained log; every model request stored byte for byte | Tracing, on by default, to the OpenAI Traces dashboard | OpenTelemetry, Logfire | LangSmith tracing | Tracing built in | OpenTelemetry export |
@@ -53,7 +53,7 @@ A threads log records every input, model request, tool call, permission decision
 
 In threads the agent loop runs on your host and reaches the sandbox only through tools. Provider keys never enter it, and tools like `git_push` go through a gateway on the host so the token stays outside. Sandboxes start with no internet. Deep Agents recommends the same "sandbox as a tool" pattern and also supports running the agent inside the sandbox. The Claude Agent SDK runs the agent in the container where its tools run, and its hosting guide recommends a proxy to keep credentials out.
 
-threads supports fewer sandbox providers than the OpenAI Agents SDK or Deep Agents: E2B and Daytona in both languages, Modal in Python only. Only Daytona takes the snapshots that forks need today. See [Sandboxes](/docs/sandboxes/overview).
+threads supports fewer sandbox providers than the OpenAI Agents SDK or Deep Agents: Docker, a local confined directory, E2B and Daytona in both languages, Modal in Python only. Only Daytona takes the snapshots that forks need today. See [Sandboxes](/docs/sandboxes/overview).
 
 ### Same behavior in TypeScript and Python
 
@@ -65,7 +65,7 @@ Several of these ship both languages. In threads both implementations follow one
 
 ### Multi-agent is simpler than in some frameworks
 
-threads has [subagents](/docs/multi-agent/subagents), [handoffs](/docs/multi-agent/handoffs) and [teams](/docs/multi-agent/teams), where a lead starts members that run in their own threads, messages them and wakes when each one reports. Messaging between agents outside a team and the A2A protocol are planned, not built. Strands (swarm, graph, A2A) and Pydantic AI (graphs, A2A) offer more patterns today.
+threads has [subagents](/docs/multi-agent/subagents), [handoffs](/docs/multi-agent/handoffs) and [teams](/docs/multi-agent/teams), where a lead starts members that run in their own threads, messages them and wakes when each one reports. Agents also message each other outside a team: a host runs long-lived host members, and `message_policy` says which host agent may start, send to, ask, monitor or cancel which other. The A2A protocol is planned, not built. Strands (swarm, graph, A2A) and Pydantic AI (graphs, A2A) offer more patterns today.
 
 ### A host you run yourself
 
