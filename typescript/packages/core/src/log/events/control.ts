@@ -72,7 +72,7 @@ export const ParkEscalated: EventDef<
   type: "park_escalated",
   critical: false,
   description:
-    "A parked address outlived its TTL. The host notifies an approver; nothing is auto-resolved.",
+    "A park the host is calling a person about, because nothing it can do will settle it: an effect park escalates once its reconciliation has kept finding nothing five minutes past the park. Nothing is auto-resolved, and the park stands until a proof or a person settles it.",
   data: ParkEscalatedData,
 });
 

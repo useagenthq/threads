@@ -5903,7 +5903,7 @@
       "type": "object"
     },
     "ev_park_escalated": {
-      "description": "A parked address outlived its TTL. The host notifies an approver; nothing is auto-resolved.",
+      "description": "A park the host is calling a person about, because nothing it can do will settle it: an effect park escalates once its reconciliation has kept finding nothing five minutes past the park. Nothing is auto-resolved, and the park stands until a proof or a person settles it.",
       "properties": {
         "critical": {
           "const": false
