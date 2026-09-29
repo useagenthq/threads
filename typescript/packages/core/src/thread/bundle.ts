@@ -13,7 +13,7 @@ import { type LogError, logError } from "../verify/error";
 
 /** The manifest's file name. A directory without it is an incomplete bundle, never a bundle. */
 export const MANIFEST = "bundle.json";
-/** The bundle's log, the same bytes `threads export` writes to stdout. */
+/** The bundle's log, the same bytes `threadsai export` writes to stdout. */
 export const LOG_FILE = "log.jsonl";
 /** The bundle's artifact directory; each file is named by its lowercase hex sha256. */
 export const ARTIFACTS_DIR = "artifacts";

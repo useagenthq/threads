@@ -6,7 +6,7 @@ budget caps each turn a caller's ask opens; everything else is denied and record
 message_policy_decided.
 
 Needs: ANTHROPIC_API_KEY, SLACK_SIGNING_SECRET, SLACK_BOT_TOKEN
-Run: threads dev examples/host_members.py (it exports `app`, as README.md does).
+Run: threadsai dev examples/host_members.py (it exports `app`, as README.md does).
 """
 
 from pydantic import BaseModel, Field

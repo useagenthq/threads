@@ -1,4 +1,4 @@
-"""`threads dev` and `threads start` (spec/api.json cli): load the app's module, find its
+"""`threadsai dev` and `threadsai start` (spec/api.json cli): load the app's module, find its
 host(), and serve `Host.asgi` on uvicorn (the `host` extra). The server's lifespan runs
 `ready()` and `stop()`. dev binds localhost and prints each channel's webhook URL to paste into
 the provider's settings."""

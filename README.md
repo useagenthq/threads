@@ -86,7 +86,7 @@ No API key yet? The [quickstart](https://threadsai.dev/docs/quickstart) runs the
 - **Replay any run.** `timeline()` walks through every step: each input, the exact request the model was sent, and every tool call and result. Debug a bad answer from production without adding logging first.
 - **Crash-safe resume.** Run the same thread again and it continues from the log. A side effect that may already have happened is never silently repeated: threads proves what happened, or parks the run and asks you.
 - **Fork from a past step.** `fork()` starts a new branch in a fresh sandbox restored from a snapshot. The original run is untouched.
-- **Evals from real runs.** `saveCase()` turns a real turn into a regression case you commit next to your code, and `threads eval` checks them all in CI for free.
+- **Evals from real runs.** `saveCase()` turns a real turn into a regression case you commit next to your code, and `threadsai eval` checks them all in CI for free.
 - **An audit trail by default.** The log is append-only and hash-chained, so a changed or missing line is detected. Keys you pass with `secret()` never reach the log, a prompt or the sandbox.
 - **One API, one log format, two languages.** TypeScript and Python follow one spec and write the same bytes. A thread written by one can be opened, inspected and forked by the other.
 
@@ -94,7 +94,7 @@ No API key yet? The [quickstart](https://threadsai.dev/docs/quickstart) runs the
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/evals-flow-dark.svg">
-  <img alt="A real run is recorded in the log. saveCase() writes cases/reads-notes/ with case.json, the TypeScript and Python logs, model.json and stubs.json. The turn replays offline with a scripted model built from the recorded replies, with no API keys and no network. threads eval reruns it for free in CI." src=".github/assets/evals-flow-light.svg" width="100%">
+  <img alt="A real run is recorded in the log. saveCase() writes cases/reads-notes/ with case.json, the TypeScript and Python logs, model.json and stubs.json. The turn replays offline with a scripted model built from the recorded replies, with no API keys and no network. threadsai eval reruns it for free in CI." src=".github/assets/evals-flow-light.svg" width="100%">
 </picture>
 
 When an agent gets something right, or you have just fixed something it got wrong, save that turn. Any completed turn works, the first one included, from any sandbox:
@@ -110,8 +110,8 @@ await thread.saveCase("refund-policy", {
 Then check every saved case in CI, for free: no model calls, no API keys, no network.
 
 ```bash
-threads eval --agent ./agents.ts          # exit 1 on a failure; --strict also fails on drift
-threads eval --agent ./agents.ts --live   # after a prompt or model change: a judge grades the rubric
+threadsai eval --agent ./agents.ts          # exit 1 on a failure; --strict also fails on drift
+threadsai eval --agent ./agents.ts --live   # after a prompt or model change: a judge grades the rubric
 ```
 
 The free checks replay the recorded requests and rerun the turn with the code running now, and `--agent` reports which cases your prompt, tool or model changes touch. `--live` runs your current agent and a judge model under a budget you set. `runEvals()` / `run_evals()` is the same thing as a function. See [Running evals](https://threadsai.dev/docs/evals/run-evals).
@@ -150,7 +150,7 @@ Set `sandbox` on an agent and it gets its own Linux machine with `bash`, file an
   </tr>
 </table>
 
-The core is a plain library: no server needed. Channels, schedules and the HTTP API run in the optional host (`threads dev`).
+The core is a plain library: no server needed. Channels, schedules and the HTTP API run in the optional host (`threadsai dev`).
 
 ## Providers
 
@@ -227,7 +227,7 @@ To open the network, pass `allowInternet: true` (TS) or `allow_internet=True` (P
 <details>
 <summary><b>Channels</b></summary>
 
-Channels run in the optional host. Start it with `threads dev`; it prints each channel's webhook URL.
+Channels run in the optional host. Start it with `threadsai dev`; it prints each channel's webhook URL.
 
 ```ts
 import { secret, sqlite } from "threadsai";

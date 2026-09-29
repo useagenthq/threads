@@ -1,4 +1,4 @@
-"""The race rules that keep a shared artifact from being lost to a concurrent `threads gc`
+"""The race rules that keep a shared artifact from being lost to a concurrent `threadsai gc`
 (spec/schema/README.md, "Artifacts"): gc only ever unlinks a trash name, and whoever needs the
 file links it back. Shared by the store (artifacts.py) and gc (retention.py)."""
 

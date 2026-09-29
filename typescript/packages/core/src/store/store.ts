@@ -239,7 +239,7 @@ export class LogStore {
       : ok(root.value);
   }
 
-  /** `threads export`: ancestor segments, the branch's lines, then its head line. */
+  /** `threadsai export`: ancestor segments, the branch's lines, then its head line. */
   exportBranch(branchId: BranchId): Promise<Result<Uint8Array, LogError>> {
     return this.#reading((tx) => this.#export(tx, branchId));
   }
@@ -261,7 +261,7 @@ export class LogStore {
   }
 
   /**
-   * `threads import`: verifies the export, then stores the same bytes, segment by segment. A
+   * `threadsai import`: verifies the export, then stores the same bytes, segment by segment. A
    * torn tail's bytes are kept as an artifact, durable before the rows that name them. Every
    * model request must replay from the log and the artifacts already stored (C7, Render v1).
    * The index rows the log holds (wake rows, its teams) are folded again in the same

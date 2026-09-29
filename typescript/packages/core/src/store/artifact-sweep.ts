@@ -9,7 +9,7 @@ import {
   trashName,
 } from "./artifact-trash";
 
-// The file artifacts' half of `threads gc`: removing what nothing references, by trash names.
+// The file artifacts' half of `threadsai gc`: removing what nothing references, by trash names.
 
 const TRASH = /^\.([0-9a-f]{64})\.trash-/;
 

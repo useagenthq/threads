@@ -63,7 +63,7 @@ async function seeded(dir: string) {
   return result.thread;
 }
 
-describe("threads export, import, repair, timeline", () => {
+describe("threadsai export, import, repair, timeline", () => {
   test("an exported branch imports into another store byte for byte", async () => {
     const a = temp();
     const thread = await seeded(a);
@@ -109,7 +109,7 @@ describe("threads export, import, repair, timeline", () => {
   });
 });
 
-describe("threads delete and gc", () => {
+describe("threadsai delete and gc", () => {
   test("delete removes the thread and leaves a tombstone; another tenant can't", async () => {
     const a = temp();
     const thread = await seeded(a);
@@ -220,7 +220,7 @@ describe("threads delete and gc", () => {
   });
 });
 
-describe("threads dev", () => {
+describe("threadsai dev", () => {
   test("loads the module, readies it, serves fetch and prints each webhook URL", async () => {
     process.env["THREADS_TEST_STORE"] = temp();
     let served: Served | undefined;

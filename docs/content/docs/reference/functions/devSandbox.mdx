@@ -4,7 +4,7 @@ description: "A Sandbox in a local directory on the host, inside an OS confineme
 icon: "Plug"
 ---
 
-Pass it as agent(&#123;sandbox: devSandbox()&#125;). For development: `threads start` refuses a host whose agent uses it. Each sandbox is a directory named by its operation key, so a lost create answer is found by looking for that directory and lookup is final. It has no snapshots, its network is blocked, a command gets exactly the environment of its call and no home, and the host never follows a symlink inside the sandbox's files. Termination is unconfirmed, so an in-doubt call parks.
+Pass it as agent(&#123;sandbox: devSandbox()&#125;). For development: `threadsai start` refuses a host whose agent uses it. Each sandbox is a directory named by its operation key, so a lost create answer is found by looking for that directory and lookup is final. It has no snapshots, its network is blocked, a command gets exactly the environment of its call and no home, and the host never follows a symlink inside the sandbox's files. Termination is unconfirmed, so an in-doubt call parks.
 
 Import from `threadsai` (TypeScript) or `threadsai.dev` (Python).
 

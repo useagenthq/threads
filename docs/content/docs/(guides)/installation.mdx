@@ -78,7 +78,7 @@ uv run --project python ./scripts/generate.sh
     | `@threadsai/mcp` | MCP servers as tools |
     | `@threadsai/supermemory`, `@threadsai/zep` | Hosted memory |
     | `@threadsai/host`, `@threadsai/slack`, `@threadsai/whatsapp`, `@threadsai/github` | The host and its channels |
-    | `@threadsai/cli` | The `threads` command |
+    | `@threadsai/cli` | The `threadsai` command |
   </Tab>
   <Tab value="Python">
     To follow the tutorials from this clone, put `support.py` in `python/` and run it in the
@@ -111,11 +111,11 @@ uv run --project python ./scripts/generate.sh
     | `docker`, `e2b`, `daytona`, `modal` | Sandboxes |
     | `mcp` | MCP servers as tools (`threadsai.mcp`) |
     | `supermemory`, `zep` | Hosted memory |
-    | `host` | The host server and `threads dev` / `threads start` |
+    | `host` | The host server and `threadsai dev` / `threadsai start` |
     | `slack`, `whatsapp`, `github` | Channels |
 
-    The core package needs only `pydantic`. The `threads` command lives in the selected environment:
-    run `uv run threads` from `python/`, or `.venv/bin/threads` from your own project.
+    The core package needs only `pydantic`. The `threadsai` command lives in the selected environment:
+    run `uv run threadsai` from `python/`, or `.venv/bin/threadsai` from your own project.
   </Tab>
 </Tabs>
 

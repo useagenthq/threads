@@ -13,7 +13,6 @@
     "@threadsai/postgres": "workspace:*"
   },
   "bin": {
-    "threads": "./src/main.ts",
     "threadsai": "./src/main.ts"
   }
 }

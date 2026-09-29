@@ -2,7 +2,7 @@ import { dryPinCases } from "@threadsai/adapter-testkit";
 import { aiSdk } from "../src";
 import { fakeModel } from "./fake";
 
-// Lane 22 (test 4d): threads eval --agent pins this adapter without setup, and gets the same
+// Lane 22 (test 4d): threadsai eval --agent pins this adapter without setup, and gets the same
 // line 0 and config_hash a real run pins after setup. The AI SDK model carries its own
 // credentials, so no env variable is read either way.
 

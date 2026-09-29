@@ -29,7 +29,7 @@ cases/<name>/
 
 ### log.jsonl is an export
 
-A case's log is exactly what `threads export` writes (`../schema/README.md`, "One contract for storage and interchange"): a root header, events, and a final `Head` checkpoint line. A child branch's export has each ancestor segment through its fork point, then the child's header and its events. The runner **imports** the file into a fresh temporary SQLite store: this verifies every line, the per-segment chains, the fork links and the head, then stores the same bytes. SQLite storage and JSONL fixtures are the same contract.
+A case's log is exactly what `threadsai export` writes (`../schema/README.md`, "One contract for storage and interchange"): a root header, events, and a final `Head` checkpoint line. A child branch's export has each ancestor segment through its fork point, then the child's header and its events. The runner **imports** the file into a fresh temporary SQLite store: this verifies every line, the per-segment chains, the fork links and the head, then stores the same bytes. SQLite storage and JSONL fixtures are the same contract.
 
 ### case.json
 

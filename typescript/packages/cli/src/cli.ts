@@ -15,7 +15,7 @@ import {
 } from "threadsai/host";
 import { type EvalArgs, evals } from "./eval";
 
-// The `threads` CLI (spec/api.json cli): thin wrappers over library calls, never a feature of its
+// The `threadsai` CLI (spec/api.json cli): thin wrappers over library calls, never a feature of its
 // own. Every command answers an exit code; output goes through `io`.
 
 export type Io = {
@@ -24,7 +24,7 @@ export type Io = {
   readonly err: (text: string) => void;
 };
 
-const USAGE = `usage: threads <command> [options]   (threadsai runs the same CLI)
+const USAGE = `usage: threadsai <command> [options]
   dev [module] [--port N]           run a host module locally; prints each channel's webhook URL
   start [module] [--port N]         the same, for production
   timeline <thread_id> [--branch B] print a branch's steps as JSON lines
@@ -173,9 +173,9 @@ async function loadHost(
 const DEV_PROVIDER = "dev";
 
 const NOT_IN_PRODUCTION =
-  "threads start: devSandbox() is for development only; use a provider sandbox in production, or run threads dev\n";
+  "threadsai start: devSandbox() is for development only; use a provider sandbox in production, or run threadsai dev\n";
 
-/** `threads dev` / `start`: host().ready() and host().fetch on a local server. */
+/** `threadsai dev` / `start`: host().ready() and host().fetch on a local server. */
 async function serve(
   p: Parsed,
   io: Io,
@@ -193,7 +193,7 @@ async function serve(
   await h.ready();
   const server = Bun.serve({ port: p.port, fetch: h.fetch });
   const base = `http://localhost:${server.port}`;
-  io.out(`threads: ${p.command} listening on ${base}\n`);
+  io.out(`threadsai: ${p.command} listening on ${base}\n`);
   for (const name of h.channels)
     io.out(`  ${name}: ${base}/channels/${encodeURIComponent(name)}/events\n`);
   const stop = async (): Promise<void> => {
@@ -340,7 +340,7 @@ async function gc(p: Parsed, io: Io): Promise<number> {
 }
 
 function usage(io: Io, text: string): number {
-  io.err(`usage: threads ${text}\n`);
+  io.err(`usage: threadsai ${text}\n`);
   return 2;
 }
 

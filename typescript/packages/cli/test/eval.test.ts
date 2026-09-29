@@ -7,8 +7,8 @@ import { run } from "../src";
 import { connects, support } from "./fixtures/eval-agents";
 import { support as simulated } from "./fixtures/eval-simulated";
 
-// `threads eval`, in process, so the test preload's model-request guard covers it (spec lane 22,
-// test 10). No test starts a `threads` subprocess.
+// `threadsai eval`, in process, so the test preload's model-request guard covers it (spec lane 22,
+// test 10). No test starts a `threadsai` subprocess.
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -74,7 +74,7 @@ async function cli(argv: readonly string[]) {
   return { code, ...got };
 }
 
-describe("threads eval", () => {
+describe("threadsai eval", () => {
   test("without --agent: framework checks only, exit 0, one line per case then the summary", async () => {
     const dir = await casesWith("a-case", "b-case");
     const out = join(dir, "report.json");
@@ -150,7 +150,7 @@ describe("threads eval", () => {
     const live = await cli(["eval", "--cases", dir, "--live"]);
     expect([live.code, live.err]).toEqual([
       2,
-      "threads eval --live needs --agent <module>\n",
+      "threadsai eval --live needs --agent <module>\n",
     ]);
     const noJudge = await cli([
       "eval",

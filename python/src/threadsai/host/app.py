@@ -129,7 +129,7 @@ class Host:
         return tuple(self._channels)
 
     def sandboxes(self) -> tuple[Sandbox, ...]:
-        """One sandbox adapter per provider the agents use: what `threads gc` releases with."""
+        """One sandbox adapter per provider the agents use: what `threadsai gc` releases with."""
         by_provider = {
             a.definition.sandbox.info.provider: a.definition.sandbox
             for a in self._agents.values()

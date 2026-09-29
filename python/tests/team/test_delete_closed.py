@@ -33,7 +33,7 @@ def test_a_branch_that_does_not_verify_is_busy() -> None:
         assert isinstance(found, Err)
         assert found.error.code == "busy"
         assert f"branch {member} doesn't verify (" in found.error.message
-        assert f"run `threads repair {member}` if its tail is torn" in found.error.message
+        assert f"run `threadsai repair {member}` if its tail is torn" in found.error.message
         assert await count(store, "SELECT COUNT(*) FROM threads") == SETTLE
 
     asyncio.run(main())

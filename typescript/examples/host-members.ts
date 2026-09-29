@@ -6,7 +6,7 @@
  *   A turn of billing that fails ends only that turn: the ask closes failed and the next caller is
  *   answered. `restart` supervises billing's own ends, never a caller's.
  * Needs: ANTHROPIC_API_KEY, SLACK_SIGNING_SECRET, SLACK_BOT_TOKEN
- * Run: threads dev examples/host-members.ts (it exports the host, as README.md does).
+ * Run: threadsai dev examples/host-members.ts (it exports the host, as README.md does).
  */
 import { anthropic } from "@threadsai/anthropic";
 import { type Host, host } from "@threadsai/host";

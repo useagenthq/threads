@@ -50,7 +50,7 @@ A thread that made no model request replays trivially. A fork replays its parent
 
 ## Run it in CI
 
-Keep a corpus of real threads (export them with `threads export`, or point at a copy of a production store) and replay every one on each pull request. A failure names the thread, the check that failed and the seq of the request, so you can open that request in the [timeline](/docs/evals/timeline).
+Keep a corpus of real threads (export them with `threadsai export`, or point at a copy of a production store) and replay every one on each pull request. A failure names the thread, the check that failed and the seq of the request, so you can open that request in the [timeline](/docs/evals/timeline).
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">

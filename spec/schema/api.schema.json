@@ -170,7 +170,7 @@
       "additionalProperties": false,
       "required": ["usage", "via"],
       "properties": {
-        "usage": { "type": "string", "pattern": "^threads [a-z]" },
+        "usage": { "type": "string", "pattern": "^threadsai [a-z]" },
         "via": { "$ref": "#/$defs/Doc" },
         "doc": { "$ref": "#/$defs/Doc" }
       }

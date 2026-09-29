@@ -1,15 +1,15 @@
-"""The `threads` CLI (spec/api.json cli): a thin wrapper over the typed
+"""The `threadsai` CLI (spec/api.json cli): a thin wrapper over the typed
 API. Serving needs the `host` extra.
 
-    threads dev [module] [--port 8787]      serve on localhost, print each channel's webhook URL
-    threads start [module] [--port 8000]    the same for production, on all interfaces
-    threads timeline <thread_id> [--branch <branch_id>]
-    threads export <branch_id>              the branch's JSONL export on stdout
-    threads import <file>                   verify an export and store its bytes
-    threads repair <branch_id>              make a torn import runnable (log_repaired)
-    threads delete <thread_id> | --tenant <tenant_id>   delete a thread, or a tenant's threads
-    threads gc [--grace-days <n>] [module]  release ledger rows, sweep unreferenced artifacts
-    threads eval [--agent <module>] [--cases <dir>] [--case <name>]... [--live] [--store <dir>]
+    threadsai dev [module] [--port 8787]      serve on localhost, print each channel's webhook URL
+    threadsai start [module] [--port 8000]    the same for production, on all interfaces
+    threadsai timeline <thread_id> [--branch <branch_id>]
+    threadsai export <branch_id>              the branch's JSONL export on stdout
+    threadsai import <file>                   verify an export and store its bytes
+    threadsai repair <branch_id>              make a torn import runnable (log_repaired)
+    threadsai delete <thread_id> | --tenant <tenant_id>   delete a thread, or a tenant's threads
+    threadsai gc [--grace-days <n>] [module]  release ledger rows, sweep unreferenced artifacts
+    threadsai eval [--agent <module>] [--cases <dir>] [--case <name>]... [--live] [--store <dir>]
                  [--strict] [--out <file>]  check saved cases (replay, rerun, drift, live judge)
 
 `module` is `module`, `module:attribute` or `file.py[:attribute]`, default `app`. The store is
@@ -29,8 +29,8 @@ from threadsai.store import LOCAL_TENANT
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="threads",
-        description="The threads host and store CLI. Also installed as threadsai.",
+        prog="threadsai",
+        description="The threadsai host and store CLI.",
     )
     parser.add_argument(
         "--store", default=".threads", help="store directory or postgres:// URL (default .threads)"
@@ -119,16 +119,16 @@ def _eval_args(args: argparse.Namespace) -> evals.EvalArgs:
 
 DEV_PROVIDER = "dev"
 """`dev_sandbox()`'s provider name. It runs commands on the host inside an OS confinement, with
-no snapshots and no isolation between the host and a leak of the confinement, so `threads start`
-refuses it: it is for `threads dev` only."""
+no snapshots and no isolation between the host and a leak of the confinement, so `threadsai start`
+refuses it: it is for `threadsai dev` only."""
 
 
 def _serve(command: str, module: str, port: int) -> int:
     served = serve.load(module)
     if command == "start" and any(s.info.provider == DEV_PROVIDER for s in served.sandboxes()):
         print(
-            "threads start: dev_sandbox() is for development only; "
-            "use a provider sandbox in production, or run `threads dev`",
+            "threadsai start: dev_sandbox() is for development only; "
+            "use a provider sandbox in production, or run `threadsai dev`",
             file=sys.stderr,
         )
         return 2

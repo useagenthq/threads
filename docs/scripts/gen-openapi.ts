@@ -31,7 +31,7 @@ Every [host](/docs/host/overview) serves this API under \`/v1\`, plus the channe
 from \`spec/schema/host-api/openapi.json\`. For authentication, streaming and retries, read the
 [HTTP API guide](/docs/host/http-api) first.
 
-The examples use \`http://localhost:8787\`, the address \`threads dev\` serves on.
+The examples use \`http://localhost:8787\`, the address \`threadsai dev\` serves on.
 `;
 
 const META = `${JSON.stringify(

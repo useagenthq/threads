@@ -1,5 +1,5 @@
 """An `--agent` module that reads a required env variable at import time: in keyless CI it
-raises, and `threads eval` reports it (exit 2) naming the module."""
+raises, and `threadsai eval` reports it (exit 2) naming the module."""
 
 import os
 

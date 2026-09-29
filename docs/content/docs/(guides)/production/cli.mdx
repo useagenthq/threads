@@ -4,18 +4,18 @@ description: Serve a host and inspect, move and clean up threads from the comman
 icon: Terminal
 ---
 
-The `threads` CLI is a thin wrapper over library calls. Both languages ship the same commands, and both read the same store format, so a store written by TypeScript can be inspected with the Python CLI and the reverse.
+The `threadsai` CLI is a thin wrapper over library calls. Both languages ship the same commands, and both read the same store format, so a store written by TypeScript can be inspected with the Python CLI and the reverse.
 
 ```text
-threads dev [module] [--port N]           serve a host locally; prints each channel's webhook URL
-threads start [module] [--port N]         serve a host in production
-threads timeline <thread_id> [--branch B] print a branch's steps as JSON lines
-threads export <branch_id>                write a branch's log (JSONL) to stdout
-threads import <file>                     verify and store an export
-threads repair <branch_id>                make an imported branch with a torn tail runnable
-threads delete <thread_id> | --tenant T   delete a thread, or every thread of a tenant
-threads gc [module] [--grace-days N]      release leftover sandboxes, remove unreferenced artifacts
-threads eval [--agent M] [--live] ...     run saved cases: free checks, drift, a judged live run
+threadsai dev [module] [--port N]           serve a host locally; prints each channel's webhook URL
+threadsai start [module] [--port N]         serve a host in production
+threadsai timeline <thread_id> [--branch B] print a branch's steps as JSON lines
+threadsai export <branch_id>                write a branch's log (JSONL) to stdout
+threadsai import <file>                     verify and store an export
+threadsai repair <branch_id>                make an imported branch with a torn tail runnable
+threadsai delete <thread_id> | --tenant T   delete a thread, or every thread of a tenant
+threadsai gc [module] [--grace-days N]      release leftover sandboxes, remove unreferenced artifacts
+threadsai eval [--agent M] [--live] ...     run saved cases: free checks, drift, a judged live run
 
 global options: --store <dir> (default .threads), --tenant <id> (default local)
 ```
@@ -37,13 +37,13 @@ bun /path/to/threads/typescript/packages/cli/src/main.ts dev
 
 ```bash
 # with threads installed from source (the host extra is needed for dev/start)
-uv run threads dev
+uv run threadsai dev
 ```
 
 </Tab>
 </Tabs>
 
-The examples below write `threads` for either.
+The examples below write `threadsai` for either.
 
 ## Serving: `dev` and `start`
 
@@ -58,8 +58,8 @@ Both load your host module, call `ready()`, and serve it.
 | `start` port | `8787` | `$PORT`, else `8000`, on `0.0.0.0` |
 
 ```bash
-threads dev
-# threads: dev listening on http://localhost:8787
+threadsai dev
+# threadsai: dev listening on http://localhost:8787
 #   slack: http://localhost:8787/channels/slack/events
 ```
 
@@ -68,8 +68,8 @@ The store the host uses is the one in your module (`host({ store: sqlite(".threa
 ## Inspecting: `timeline`
 
 ```bash
-threads timeline 01a0ceb2-0776-7e19-9c4c-0a3ed10d8985
-threads timeline <thread_id> --branch <branch_id>
+threadsai timeline 01a0ceb2-0776-7e19-9c4c-0a3ed10d8985
+threadsai timeline <thread_id> --branch <branch_id>
 ```
 
 Prints one JSON object per step of the main branch (or the given one): the logged event plus whether it is a place you can fork from. See [Timeline](/docs/evals/timeline).
@@ -77,8 +77,8 @@ Prints one JSON object per step of the main branch (or the given one): the logge
 ## Moving threads: `export`, `import`, `repair`
 
 ```bash
-threads export <branch_id> > branch.jsonl
-threads --store ./other-store import branch.jsonl   # prints the imported branch id
+threadsai export <branch_id> > branch.jsonl
+threadsai --store ./other-store import branch.jsonl   # prints the imported branch id
 ```
 
 The export is the branch's exact log bytes, so it verifies byte-for-byte on import, in either language.
@@ -87,18 +87,18 @@ The export is the branch's exact log bytes, so it verifies byte-for-byte on impo
   An export holds the log, not the stored artifacts it points to (recorded model requests, large tool outputs). Importing into a different store fails with `artifact_missing` unless that store's `artifacts/` directory already has them, so copy the source store's `artifacts/` directory along.
 </Callout>
 
-A file cut off mid-write (a torn tail) still imports, for inspection only. `threads repair <branch_id>` marks it runnable again.
+A file cut off mid-write (a torn tail) still imports, for inspection only. `threadsai repair <branch_id>` marks it runnable again.
 
 ## Deleting: `delete`
 
 ```bash
-threads delete <thread_id>          # one thread (of --tenant, default local)
-threads delete --tenant acme        # every thread of a tenant
+threadsai delete <thread_id>          # one thread (of --tenant, default local)
+threadsai delete --tenant acme        # every thread of a tenant
 ```
 
 Deletion removes the thread's log and records that it was deleted. Threads its subagents ran are deleted with it; threads it handed off to are not. Sandboxes it still held are marked for release by the next `gc`. Deleting a team's lead deletes the whole team: its members, its team log and everything indexed for it. Everything goes in one step, or nothing does:
 
-- `busy`: something in it is still running, has an effect whose outcome is unknown, or has a log this version can't verify. Cancel it, wait for it to stop, resolve any parked effect (or run `threads repair` on a torn branch), then delete.
+- `busy`: something in it is still running, has an effect whose outcome is unknown, or has a log this version can't verify. Cancel it, wait for it to stop, resolve any parked effect (or run `threadsai repair` on a torn branch), then delete.
   A log that no repair can fix (damaged in the middle, not just a torn tail) keeps its thread, and a whole-tenant delete that includes it, refused. Delete it with the version that wrote it; if that isn't possible, erasing the tenant means recreating the store without it (export the tenants you keep, then import them into a fresh store).
 - `thread_in_team`: the thread is a team member or a team log. Delete its lead instead.
 
@@ -107,8 +107,8 @@ A refusal prints `<code>: <message>` and exits nonzero.
 ## Cleaning up: `gc`
 
 ```bash
-threads gc                  # remove unreferenced artifacts older than 7 days
-threads gc app --grace-days 1
+threadsai gc                  # remove unreferenced artifacts older than 7 days
+threadsai gc app --grace-days 1
 ```
 
 With a host module, `gc` also releases sandboxes that runs left behind, using that module's sandbox providers. It never runs on its own: schedule it (for example with cron) if you want it regular.
@@ -116,7 +116,7 @@ With a host module, `gc` also releases sandboxes that runs left behind, using th
 ## Evals: `eval`
 
 ```text
-threads eval [--agent <module>] [--cases <dir>] [--case <name>]... [--live] [--store <dir>] [--strict] [--out <file>]
+threadsai eval [--agent <module>] [--cases <dir>] [--case <name>]... [--live] [--store <dir>] [--strict] [--out <file>]
 ```
 
 Runs every saved case under `--cases` (default `cases`). Without `--agent` it loads no user code and runs the free checks; `--agent` adds drift against your current agents; `--live` grades with a judge model. `--store` keeps the live and judge threads (by default they are not kept), `--strict` also fails on stale and skipped cases, and `--out` writes the report as JSON. Exit `0` when the run passed, `1` when it failed, `2` for a usage or config error. See [Running evals](/docs/evals/run-evals).

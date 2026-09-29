@@ -33,7 +33,7 @@ export type ArtifactStore = {
   /** Streams one artifact in chunks, so large output is never held whole where it can be. */
   readonly sink: () => ArtifactSink;
   /**
-   * `threads gc`: removes every artifact older than `olderThan` (by its write time) that `keep`
+   * `threadsai gc`: removes every artifact older than `olderThan` (by its write time) that `keep`
    * doesn't name, and returns the removed hashes.
    */
   readonly sweep: (

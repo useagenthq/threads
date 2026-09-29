@@ -1,4 +1,4 @@
-"""`threads delete` (spec/schema/README.md, "Deleting a thread"): the deletion set is a fixed
+"""`threadsai delete` (spec/schema/README.md, "Deleting a thread"): the deletion set is a fixed
 point, deleted in one transaction, only when nothing in it is still running. The resource ledger
 is never deleted with log rows: it owns cleanup."""
 
@@ -194,7 +194,7 @@ def _unsettled(conn: Conn, branch: BranchId, now: int) -> str | None:
     log = verify_export(export(conn, branch), now)
     if isinstance(log, Err):
         return (
-            f"branch {branch} doesn't verify ({log.error.code}): run `threads repair {branch}`"
+            f"branch {branch} doesn't verify ({log.error.code}): run `threadsai repair {branch}`"
             " if its tail is torn, or delete it with the version that wrote it"
         )
     doubt = any(status in ("begun", "unknown") for _, status in log.value.fold.effects.values())

@@ -124,7 +124,7 @@ export type Host = {
 
 const TICK_MS = 1_000;
 
-/** The sandbox providers of a host's agents, for `threads gc` to release their resources. */
+/** The sandbox providers of a host's agents, for `threadsai gc` to release their resources. */
 const SANDBOXES = new WeakMap<Host, readonly Sandbox[]>();
 
 export function hostSandboxes(h: Host): readonly Sandbox[] {

@@ -1,7 +1,7 @@
 import { type Host, host } from "@threadsai/host";
 import { agent, devSandbox, scriptedModel, sqlite } from "threadsai";
 
-// A host module whose agent runs in devSandbox(): what `threads start` refuses and `threads dev`
+// A host module whose agent runs in devSandbox(): what `threadsai start` refuses and `threadsai dev`
 // serves. The dev root comes from the test through THREADS_TEST_DEV_ROOT.
 
 const bot = agent({

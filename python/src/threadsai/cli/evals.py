@@ -1,4 +1,4 @@
-"""`threads eval` (spec/api.json cli): run_evals() over saved cases. Without --agent it loads no
+"""`threadsai eval` (spec/api.json cli): run_evals() over saved cases. Without --agent it loads no
 user code and runs the framework checks; --agent adds drift; --live adds the judged run."""
 
 import sys
@@ -87,7 +87,7 @@ def _live(module: ModuleType, path: str, agents: tuple[EvalAgent, ...]) -> _Load
 
 def _load(args: EvalArgs) -> _Loaded | str:
     if args.agent is None:
-        return "threads eval --live needs --agent <module>" if args.live else _Loaded(())
+        return "threadsai eval --live needs --agent <module>" if args.live else _Loaded(())
     try:
         module = import_target(args.agent)
     except Exception as error:

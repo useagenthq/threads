@@ -9,7 +9,7 @@
   "servers": [
     {
       "url": "http://localhost:8787",
-      "description": "threads dev"
+      "description": "threadsai dev"
     }
   ],
   "security": [

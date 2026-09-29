@@ -15,7 +15,7 @@ import {
 } from "threadsai/host";
 
 // Lane 22's dry-pin cases, shared by every first-party model adapter (spec 22, test 4d): the pin
-// `threads eval --agent` makes without setup, secrets or MCP must be byte-equal, in line 0 and
+// `threadsai eval --agent` makes without setup, secrets or MCP must be byte-equal, in line 0 and
 // config_hash, to the one a real run pins after setup. The real run is stopped by the test
 // model-request guard before any request, after thread_started is durable.
 

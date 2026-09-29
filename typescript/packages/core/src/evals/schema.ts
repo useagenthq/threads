@@ -3,7 +3,7 @@ import { Cost, Int, JsonValue, PosInt } from "../log";
 import type { Arr, EnumOf, Lit, Opt, Strict } from "../log/zod-types";
 
 // The eval runner's wire shapes (spec/schema/eval.v1.schema.json): the judge's verdicts, the
-// judge input it grades, and the report runEvals returns and `threads eval --out` writes. The
+// judge input it grades, and the report runEvals returns and `threadsai eval --out` writes. The
 // report has no timestamps or durations, so an offline report is byte-stable in both languages.
 
 export const Verdict: Strict<{
@@ -353,7 +353,7 @@ export const EvalReport: Strict<{
     ok: z
       .boolean()
       .describe(
-        "The run passed: no case failed, errored or went unrun, and under strict none is stale or skipped. `threads eval` exits 1 when false.",
+        "The run passed: no case failed, errored or went unrun, and under strict none is stale or skipped. `threadsai eval` exits 1 when false.",
       ),
     passed: Int,
     failed: Int,

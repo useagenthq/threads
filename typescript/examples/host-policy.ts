@@ -4,7 +4,7 @@
  *   as message_policy_decided. support has no `team` of its own: the rule that allows `start` is
  *   what makes it a lead, and its model gets exactly the two team tools its rules allow.
  * Needs: ANTHROPIC_API_KEY, SLACK_SIGNING_SECRET, SLACK_BOT_TOKEN
- * Run: threads dev examples/host-policy.ts (it exports the host, as README.md does).
+ * Run: threadsai dev examples/host-policy.ts (it exports the host, as README.md does).
  */
 import { anthropic } from "@threadsai/anthropic";
 import { type Host, host } from "@threadsai/host";

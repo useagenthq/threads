@@ -62,7 +62,7 @@ postgres = [
 # threadsai.host over HTTP. Starlette: spec/api.json types host(authenticate)
 # with starlette.requests.Request and Host.asgi as starlette.types.ASGIApp, and it is the
 # smallest routing/SSE layer that runs on any ASGI server. Uvicorn: the minimal ASGI server
-# `threads dev` and `threads start` run it on. Core stays pydantic-only; the library methods of
+# `threadsai dev` and `threadsai start` run it on. Core stays pydantic-only; the library methods of
 # threadsai.host import neither.
 host = [
     "starlette>=1.6,<2",
@@ -94,7 +94,6 @@ otel = [
 ]
 
 [project.scripts]
-threads = "threadsai.cli:main"
 threadsai = "threadsai.cli:main"
 
 [dependency-groups]

@@ -24,7 +24,7 @@ from threadsai.thread.case_log import artifact_refs
 MANIFEST = "bundle.json"
 """The manifest's file name. A directory without it is an incomplete bundle, never a bundle."""
 LOG_FILE = "log.jsonl"
-"""The bundle's log, the same bytes `threads export` writes to stdout."""
+"""The bundle's log, the same bytes `threadsai export` writes to stdout."""
 ARTIFACTS_DIR = "artifacts"
 """The bundle's artifact directory; each file is named by its lowercase hex sha256."""
 

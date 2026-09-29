@@ -8,7 +8,7 @@ import {
 } from "threadsai";
 import { z } from "zod";
 
-// The `--agent` module of the `threads eval` tests: a support agent, a scripted judge and a
+// The `--agent` module of the `threadsai eval` tests: a support agent, a scripted judge and a
 // budget. Everything is scripted: no test reaches a real model.
 
 const usage = { input_tokens: 10, output_tokens: 2 };

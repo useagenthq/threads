@@ -91,7 +91,7 @@ export function evalSchema(events: Node): Node {
     {
       $schema: "https://json-schema.org/draft/2020-12/schema",
       $id: "urn:threads:schema:eval:v1",
-      title: "threads eval runner shapes",
+      title: "threadsai eval runner shapes",
       description:
         "The judge's verdicts and input, the eval report, the saved-case files the runner reads (sandbox.json v2, extensions.json and the case.json fields they add), and the closed hook-kind and user-event lists.",
       $defs: own,

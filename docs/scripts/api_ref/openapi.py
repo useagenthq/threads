@@ -120,6 +120,6 @@ def bundle_openapi() -> Obj:
     bundled = obj(bundler.rewrite(load(HOST_OPENAPI), HOST_OPENAPI))
     components = obj(bundled.setdefault("components", {}))
     components["schemas"] = dict(sorted(bundler.schemas.items()))
-    bundled["servers"] = [{"url": DEV_SERVER, "description": "threads dev"}]
+    bundled["servers"] = [{"url": DEV_SERVER, "description": "threadsai dev"}]
     bundled["paths"] = built_paths(obj(bundled["paths"]))
     return bundled

@@ -1,5 +1,5 @@
-"""`threads eval`, in process through `main(argv)`, so the suite's model-request guard covers it
-(spec lane 22, test 10). No test starts a `threads` subprocess."""
+"""`threadsai eval`, in process through `main(argv)`, so the suite's model-request guard covers it
+(spec lane 22, test 10). No test starts a `threadsai` subprocess."""
 
 import asyncio
 import json
@@ -95,7 +95,7 @@ def test_a_module_that_raises_at_import_is_exit_2_and_live_needs_agent(
     assert thrown[0] == 2  # noqa: PLR2004 - a usage error
     assert "eval_throws.py: import failed: JIRA_MCP_URL_FOR_THREADS_TESTS is not set" in thrown[2]
     live = cli(["eval", "--cases", folder, "--live"], capsys)
-    assert (live[0], live[2]) == (2, "threads eval --live needs --agent <module>\n")
+    assert (live[0], live[2]) == (2, "threadsai eval --live needs --agent <module>\n")
     no_judge = str(MODULES / "eval_no_judge.py")
     missing = cli(["eval", "--cases", folder, "--live", "--agent", no_judge], capsys)
     assert missing[0] == 2  # noqa: PLR2004 - a usage error

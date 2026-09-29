@@ -3,7 +3,7 @@ import { EVALS } from "./samples";
 import { panel } from "./section";
 
 /*
- * `threads eval` output and the four checks it runs.
+ * `threadsai eval` output and the four checks it runs.
  *
  * Line shapes, status words and reason codes are the ones the runner prints (lane 22 §D and the
  * Running evals guide), down to plain left-aligned status words rather than badges. The counts in
@@ -67,7 +67,7 @@ export function Evals() {
         <div className={`overflow-hidden bg-fd-card ${panel}`}>
           <div className="border-b border-fd-border px-4 py-2.5 font-mono text-xs">
             <span className="text-fd-muted-foreground">$ </span>
-            <span className="text-fd-foreground">threads eval --agent ./agents.ts</span>
+            <span className="text-fd-foreground">threadsai eval --agent ./agents.ts</span>
           </div>
           <ol className="px-4 py-3 font-mono text-[0.76rem] leading-6 sm:text-[0.8rem]">
             {OUTPUT.map((l) => (

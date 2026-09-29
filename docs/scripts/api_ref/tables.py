@@ -102,7 +102,7 @@ SUMMARIES = {
     "channelWebhook": "Channel webhook",
 }
 
-# The address `threads dev` serves on, so the playground can build example requests.
+# The address `threadsai dev` serves on, so the playground can build example requests.
 DEV_SERVER = "http://localhost:8787"
 
 # Extra sentences where today's behavior is narrower than the contract.

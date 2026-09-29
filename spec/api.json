@@ -121,7 +121,7 @@
       "kind": "adapter",
       "ts": "threadsai",
       "py": "threadsai.dev",
-      "doc": "A local sandbox in a confined directory on the host: bubblewrap on Linux, sandbox-exec on macOS. No provider SDK, no snapshots and no new dependency, so it ships inside the core package. For development: `threads start` refuses a host whose agent uses it."
+      "doc": "A local sandbox in a confined directory on the host: bubblewrap on Linux, sandbox-exec on macOS. No provider SDK, no snapshots and no new dependency, so it ships inside the core package. For development: `threadsai start` refuses a host whose agent uses it."
     },
     "postgres": {
       "kind": "adapter",
@@ -181,7 +181,7 @@
     {
       "id": "default-store",
       "open": "Which store run() uses when none is given.",
-      "choice": "sqlite(\".threads\"), the same default threads dev uses. Tests pass sqlite(\":memory:\").",
+      "choice": "sqlite(\".threads\"), the same default threadsai dev uses. Tests pass sqlite(\":memory:\").",
       "why": "The log is the truth (invariant 1): a run without a durable store couldn't resume, fork or save a case."
     },
     {
@@ -317,7 +317,7 @@
       "why": "no adapter maps a response format; an option neither language honors is not offered"
     },
     {"id": "team-tool-results", "open": "The design gives the model tools' results as types (StartResult, AskResult, ...); a model sees text.", "choice": "A team tool's tool_result.preview is its result as RFC 8785 JSON with snake_case keys; Team methods return the same data as the api types.", "why": "One shape per result, which a model and a replay read the same way."},
-    {"id": "team-deletion-results", "open": "Gate 1 (v02 §4.15) makes deleting a team's threads a fixed point that can be busy or refused.", "choice": "Store deletion (TS deleteThread/deleteTenant, Python delete_thread/delete_tenant, and threads delete) returns a result: the number of threads deleted, or not_found, busy (a live lease or an effect in doubt in the deletion set; nothing written) or thread_in_team (a member thread or team log whose lead is not deleted with it). Python's delete_thread moves from a bare int to Ok[int] | Err[DeleteError].", "why": "A delete that would erase a live executor's only recovery log must refuse, and the caller must see why."}
+    {"id": "team-deletion-results", "open": "Gate 1 (v02 §4.15) makes deleting a team's threads a fixed point that can be busy or refused.", "choice": "Store deletion (TS deleteThread/deleteTenant, Python delete_thread/delete_tenant, and threadsai delete) returns a result: the number of threads deleted, or not_found, busy (a live lease or an effect in doubt in the deletion set; nothing written) or thread_in_team (a member thread or team log whose lead is not deleted with it). Python's delete_thread moves from a bare int to Ok[int] | Err[DeleteError].", "why": "A delete that would erase a live executor's only recovery log must refuse, and the caller must see why."}
   ],
   "functions": {
     "otel": {
@@ -1599,7 +1599,7 @@
       "ts": "devSandbox",
       "py": "dev_sandbox",
       "package": "dev",
-      "doc": "A Sandbox in a local directory on the host, inside an OS confinement (bubblewrap on Linux, sandbox-exec on macOS). Pass it as agent({sandbox: devSandbox()}). For development: `threads start` refuses a host whose agent uses it. Each sandbox is a directory named by its operation key, so a lost create answer is found by looking for that directory and lookup is final. It has no snapshots, its network is blocked, a command gets exactly the environment of its call and no home, and the host never follows a symlink inside the sandbox's files. Termination is unconfirmed, so an in-doubt call parks.",
+      "doc": "A Sandbox in a local directory on the host, inside an OS confinement (bubblewrap on Linux, sandbox-exec on macOS). Pass it as agent({sandbox: devSandbox()}). For development: `threadsai start` refuses a host whose agent uses it. Each sandbox is a directory named by its operation key, so a lost create answer is found by looking for that directory and lookup is final. It has no snapshots, its network is blocked, a command gets exactly the environment of its call and no home, and the host never follows a symlink inside the sandbox's files. Termination is unconfirmed, so an in-doubt call parks.",
       "async": false,
       "params": [
         {"name": "root", "kind": "option", "type": {"prim": "string"}, "required": false, "default_doc": "threads-dev in the host's temp directory", "doc": "Where sandbox directories are made. Omitted: threads-dev in the host's temp directory. Each sandbox is <root>/threads-dev-<32 hex of its operation key>, and closing it removes that directory."},
@@ -1732,7 +1732,7 @@
       "ts": "runEvals",
       "py": "run_evals",
       "package": "core",
-      "doc": "Runs every saved case under cases through the checks, cheapest first: replay (the recorded requests re-render byte for byte with the code running now), rerun (the recorded turn reruns offline to the same events, with no model call and every effect stubbed), drift (with agents: the case's recorded config against each agent as it is pinned now, by a dry pin that runs no setup, reads no secret and connects to no MCP server) and, only with live, a judged run of the current agent. A case saved with simulate is graded as a whole conversation instead: live.budget covers that conversation, and an unrecorded side effect in any simulated turn ends the case as error unmatched_external_op. Without agents the free checks prove the threads code, not your agent. Per-case outcomes, and a model-request guard abort, are values in the report; a setup mistake is ConfigError invalid_config naming the option. `threads eval` runs it.",
+      "doc": "Runs every saved case under cases through the checks, cheapest first: replay (the recorded requests re-render byte for byte with the code running now), rerun (the recorded turn reruns offline to the same events, with no model call and every effect stubbed), drift (with agents: the case's recorded config against each agent as it is pinned now, by a dry pin that runs no setup, reads no secret and connects to no MCP server) and, only with live, a judged run of the current agent. A case saved with simulate is graded as a whole conversation instead: live.budget covers that conversation, and an unrecorded side effect in any simulated turn ends the case as error unmatched_external_op. Without agents the free checks prove the threads code, not your agent. Per-case outcomes, and a model-request guard abort, are values in the report; a setup mistake is ConfigError invalid_config naming the option. `threadsai eval` runs it.",
       "async": true,
       "params": [
         {
@@ -3374,7 +3374,7 @@
       "type": {
         "$ref": "urn:threads:schema:eval:v1#/$defs/EvalReport"
       },
-      "doc": "What runEvals returns and `threads eval --out` writes: per-case results, counts, the one-line summary, model calls and cost. No timestamps, so an offline report is byte-stable in both languages."
+      "doc": "What runEvals returns and `threadsai eval --out` writes: per-case results, counts, the one-line summary, model calls and cost. No timestamps, so an offline report is byte-stable in both languages."
     },
     "EvalCaseResult": {
       "kind": "alias",
@@ -5428,7 +5428,7 @@
         "channels": {
           "type": {"array": {"prim": "string"}},
           "required": true,
-          "doc": "The host({channels}) keys; threads dev prints each one's webhook URL, /channels/<key>/events."
+          "doc": "The host({channels}) keys; threadsai dev prints each one's webhook URL, /channels/<key>/events."
         }
       },
       "methods": {
@@ -7287,43 +7287,43 @@
   },
   "cli": [
     {
-      "usage": "threads dev [module]",
+      "usage": "threadsai dev [module]",
       "via": "host().ready() and host().fetch on a local server",
       "doc": "Prints each channel's webhook URL."
     },
     {
-      "usage": "threads start [module]",
+      "usage": "threadsai start [module]",
       "via": "host().ready() and host().fetch",
       "doc": "Production; same as dev without reload."
     },
-    {"usage": "threads timeline <thread_id> [--branch <branch_id>]", "via": "openThread() then Thread.timeline()"},
+    {"usage": "threadsai timeline <thread_id> [--branch <branch_id>]", "via": "openThread() then Thread.timeline()"},
     {
-      "usage": "threads export <branch_id> [--bundle <dir>]",
+      "usage": "threadsai export <branch_id> [--bundle <dir>]",
       "via": "the store's branch export (schema README, JSONL), or Thread.export with --bundle",
       "doc": "Without --bundle, the JSONL export on stdout. With it, a portable bundle directory (log.jsonl, artifacts/, bundle.json) whose path must not exist; prints the path."
     },
     {
-      "usage": "threads import <dir|file>",
+      "usage": "threadsai import <dir|file>",
       "via": "importThread",
       "doc": "A bundle directory or a bare JSONL export. Prints the imported branch id. A torn tail imports inspection-only until repair."
     },
     {
-      "usage": "threads repair <branch_id>",
+      "usage": "threadsai repair <branch_id>",
       "via": "the store's lease acquisition, which records log_repaired for a torn import",
       "doc": "Makes an imported branch with a torn tail runnable again."
     },
     {
-      "usage": "threads delete <thread_id> | --tenant <tenant_id>",
+      "usage": "threadsai delete <thread_id> | --tenant <tenant_id>",
       "via": "the store's thread deletion",
       "doc": "Writes a tombstone, removes log rows and projections, and moves live resources to releasing; subagent threads spawned under it are deleted the same way, recursively, handoff targets are not (spec/schema/README.md, Deleting a thread). A lead takes its whole team set in one transaction; busy or thread_in_team is printed as <code>: <message> with a nonzero exit."
     },
     {
-      "usage": "threads gc [--grace-days <n>]",
+      "usage": "threadsai gc [--grace-days <n>]",
       "via": "the resource ledger's collect and the artifact sweep",
       "doc": "Explicit only, never on startup."
     },
     {
-      "usage": "threads eval [--agent <module>] [--cases <dir>] [--case <name>] [--live] [--store <dir>] [--strict] [--out <file>]",
+      "usage": "threadsai eval [--agent <module>] [--cases <dir>] [--case <name>] [--live] [--store <dir>] [--strict] [--out <file>]",
       "via": "runEvals()",
       "doc": "Without --agent it loads no user code and runs the free framework checks; --agent adds drift (the module's default export in TS, its agents or agent attribute in Python); --live grades with the module's judge and budget exports. Exit 0 when the run passed, 1 when it failed or was aborted, 2 for a usage or config error."
     }

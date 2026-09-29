@@ -6,7 +6,7 @@ import { parseRows } from "./tables";
 
 export { sweepFiles } from "./artifact-sweep";
 
-// Retention: the artifact half of `threads gc` (`threads delete` is deletion.ts). Nothing is
+// Retention: the artifact half of `threadsai gc` (`threadsai delete` is deletion.ts). Nothing is
 // deleted automatically.
 
 const SHA = /"sha256":"([0-9a-f]{64})"/g;
@@ -21,7 +21,7 @@ const Dropped = z.strictObject({ id: z.string() });
 const PAGE = 1000;
 
 /**
- * The artifact sweep of `threads gc`: every artifact some stored line names (events, headers,
+ * The artifact sweep of `threadsai gc`: every artifact some stored line names (events, headers,
  * a torn import's dropped bytes) is kept; any other older than `olderThan` is removed. Returns
  * the removed hashes. An artifact put after the scan is younger than any sane `olderThan`, so
  * the grace window keeps it until its referencing append commits.

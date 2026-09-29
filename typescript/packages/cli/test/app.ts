@@ -1,7 +1,7 @@
 import { type Host, host } from "@threadsai/host";
 import { agent, type ChannelAdapter, scriptedModel, sqlite } from "threadsai";
 
-// A host module as `threads dev` loads it: its default export is host({...}). The store path
+// A host module as `threadsai dev` loads it: its default export is host({...}). The store path
 // comes from the test through THREADS_TEST_STORE.
 
 const bot = agent({

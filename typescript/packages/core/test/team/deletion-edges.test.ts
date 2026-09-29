@@ -75,7 +75,7 @@ async function rowsOnly(t: Team, lead: string, tenant: string): Promise<void> {
 }
 
 describe("every deletion check fails closed", () => {
-  test("a branch whose log doesn't verify is busy, pointing at threads repair", async () => {
+  test("a branch whose log doesn't verify is busy, pointing at threadsai repair", async () => {
     const t = await teamStore(caseLogs(REBIND, ALL));
     await exec(
       t.db,
@@ -89,7 +89,9 @@ describe("every deletion check fails closed", () => {
       T0,
     );
     expect(code(refused)).toBe("busy");
-    expect(refused.ok ? "" : refused.error.message).toContain("threads repair");
+    expect(refused.ok ? "" : refused.error.message).toContain(
+      "threadsai repair",
+    );
     expect(await count(t, "tombstones")).toBe(0);
   });
 

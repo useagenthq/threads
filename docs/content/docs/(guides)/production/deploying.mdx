@@ -4,7 +4,7 @@ description: Run the host in production with a persistent store, secrets from th
 icon: Rocket
 ---
 
-A production host is the same module you ran with `threads dev`, started with `threads start`. There is no separate server to operate: the host is one process, and all of its state is in the store.
+A production host is the same module you ran with `threadsai dev`, started with `threadsai start`. There is no separate server to operate: the host is one process, and all of its state is in the store.
 
 ## Checklist
 
@@ -28,7 +28,7 @@ A production host is the same module you ran with `threads dev`, started with `t
     ### Start the host
 
     ```bash
-    threads start
+    threadsai start
     ```
     See [CLI](/docs/production/cli) for the module each language loads and the port it listens on. Put it behind your usual HTTPS reverse proxy or load balancer and point each channel's webhook at `https://<your-domain>/channels/<name>/events`.
   </Step>
@@ -77,11 +77,11 @@ Either way, each thread is owned by one process at a time: if a second process t
 
 On Postgres:
 
-- It needs Postgres 16 or later. The first host to connect creates the tables in an empty database. A database of another store version is refused, as with SQLite; move threads between stores with `threads export` and `threads import`.
-- Artifacts (spilled tool output, request bodies, snapshots) are stored in the database, so every machine can read them. `threads gc` removes the ones nothing refers to.
+- It needs Postgres 16 or later. The first host to connect creates the tables in an empty database. A database of another store version is refused, as with SQLite; move threads between stores with `threadsai export` and `threadsai import`.
+- Artifacts (spilled tool output, request bodies, snapshots) are stored in the database, so every machine can read them. `threadsai gc` removes the ones nothing refers to.
 - `localMemory()` and `localKnowledge()` need a SQLite store. Use `supermemory()` or `zep()` instead.
 - Keep the machines' clocks synchronized (NTP). Safety never depends on the clock, but a lease is taken over and gc's grace window is measured by it.
-- The CLI's `--store` takes the database URL: `threads gc --store postgres://…`.
+- The CLI's `--store` takes the database URL: `threadsai gc --store postgres://…`.
 
 ## Housekeeping
 
@@ -89,8 +89,8 @@ Two CLI commands keep a long-running store tidy. Neither runs automatically.
 
 | Command | When |
 |---|---|
-| `threads gc [module]` | Periodically, for example from cron. Releases sandboxes that were left running and removes stored artifacts nothing refers to anymore. |
-| `threads delete <thread_id>` / `threads delete --tenant <id>` | For retention or a customer's deletion request. |
+| `threadsai gc [module]` | Periodically, for example from cron. Releases sandboxes that were left running and removes stored artifacts nothing refers to anymore. |
+| `threadsai delete <thread_id>` / `threadsai delete --tenant <id>` | For retention or a customer's deletion request. |
 
 ## Containers and platforms
 

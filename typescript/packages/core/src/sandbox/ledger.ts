@@ -227,7 +227,7 @@ export async function release(
 }
 
 /**
- * `threads gc` for one provider: claims each collectable row of this tenant, releases it under
+ * `threadsai gc` for one provider: claims each collectable row of this tenant, releases it under
  * that claim, and records the outcome. It keeps working after the owning branch is deleted. A
  * claim another run took later fences this one off; a failure stays release_failed.
  */

@@ -4,7 +4,7 @@ message_policy_decided. support has no `team` of its own: the rule that allows `
 it a lead, and its model gets exactly the two team tools its rules allow.
 
 Needs: ANTHROPIC_API_KEY, SLACK_SIGNING_SECRET, SLACK_BOT_TOKEN
-Run: threads dev examples/host_policy.py (it exports `app`, as README.md does).
+Run: threadsai dev examples/host_policy.py (it exports `app`, as README.md does).
 """
 
 from pydantic import BaseModel, Field

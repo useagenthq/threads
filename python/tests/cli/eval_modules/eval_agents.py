@@ -1,5 +1,5 @@
-"""The `--agent` module of the `threads eval` tests: a support agent, a scripted judge and a budget.
-Everything is scripted: no test reaches a real model."""
+"""The `--agent` module of the `threadsai eval` tests: a support agent, a scripted judge
+and a budget. Everything is scripted: no test reaches a real model."""
 
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager

@@ -2,7 +2,7 @@ import { linkSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { sha256Hex } from "../hash";
 
-// The race rules that keep a shared artifact from being lost to a concurrent `threads gc`
+// The race rules that keep a shared artifact from being lost to a concurrent `threadsai gc`
 // (spec/schema/README.md, "Artifacts"): gc only ever unlinks a trash name, and whoever needs
 // the file links it back. These helpers are shared by the store (artifacts.ts) and gc
 // (retention.ts).

@@ -9,8 +9,8 @@ Real runs become tests. [Save a turn](/docs/evals/saved-cases) you liked, then r
 ## The loop
 
 1. **Save** a real turn once: `thread.saveCase(...)`.
-2. **Check it for free** in CI: `threads eval --agent ./agents.ts`. No model calls, no API keys, no network.
-3. **Grade it** after changing the prompt or the model: `threads eval --agent ./agents.ts --live`. Real model calls, under a budget.
+2. **Check it for free** in CI: `threadsai eval --agent ./agents.ts`. No model calls, no API keys, no network.
+3. **Grade it** after changing the prompt or the model: `threadsai eval --agent ./agents.ts --live`. Real model calls, under a budget.
 
 <Tabs items={["TypeScript", "Python"]} groupId="lang" persist>
 <Tab value="TypeScript">
@@ -119,7 +119,7 @@ With `--live`, each case's input runs on a **new thread** of your current agent,
 
 Live runs start a new thread from the case's last input, without the earlier turns, since a changed agent can't continue a thread pinned to the old config. Save cases whose input stands alone — or save the turn with [`simulate`](/docs/evals/simulated-users), which keeps the earlier turns and grades a whole conversation against a user the runner plays.
 
-By default the live and judge threads live in a private in-memory store and are not kept. Pass `--store <dir>` (or `store`) to keep them under tenant `evals`, so `threads timeline` can show them. With `--store`, a run stopped by the test model guard can leave one request without a response; running that thread again abandons it cleanly.
+By default the live and judge threads live in a private in-memory store and are not kept. Pass `--store <dir>` (or `store`) to keep them under tenant `evals`, so `threadsai timeline` can show them. With `--store`, a run stopped by the test model guard can leave one request without a response; running that thread again abandons it cleanly.
 
 ## The agents module
 
@@ -173,8 +173,8 @@ jobs:
       - run: bun install
       # Free: no model calls, no API keys. Fails on a replay or rerun failure;
       # --strict also fails when a change touches a saved case.
-      # `threads` is the CLI: see /docs/production/cli for running it from source.
-      - run: threads eval --agent ./agents.ts --strict --out eval-report.json
+      # `threadsai` is the CLI: see /docs/production/cli for running it from source.
+      - run: threadsai eval --agent ./agents.ts --strict --out eval-report.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -184,10 +184,10 @@ jobs:
 
 Run `--live` by hand, or in a job that has your provider key, when you change a prompt or a model.
 
-## `threads eval`
+## `threadsai eval`
 
 ```text
-threads eval [--agent <module>] [--cases <dir>] [--case <name>]... [--live] [--store <dir>] [--strict] [--out <file>]
+threadsai eval [--agent <module>] [--cases <dir>] [--case <name>]... [--live] [--store <dir>] [--strict] [--out <file>]
 ```
 
 It prints one line per case, then the summary:

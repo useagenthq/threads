@@ -58,7 +58,7 @@ invoke_agent support                       the turn after the approval, same tra
 - A turn that waits for an approval ends there. The approval starts the next turn span, in the same trace and linked to the first, and the tool's work after the approval is a second `execute_tool` span linked to the first.
 - A subagent's turns are children of the tool call that started it, in the parent's trace.
 - A retried model call shows as a failed `chat` span (status error, `error.type`), and the next attempt carries a `retry_scheduled` event naming it.
-- Every span carries `threads.thread_id`, `threads.branch_id` and the log positions it covers (`threads.seq.start`, `threads.seq.end`), so you can open the exact events with `threads timeline`.
+- Every span carries `threads.thread_id`, `threads.branch_id` and the log positions it covers (`threads.seq.start`, `threads.seq.end`), so you can open the exact events with `threadsai timeline`.
 
 Attributes follow the OpenTelemetry GenAI semantic conventions of core release **1.41.1** (`gen_ai.operation.name`, `gen_ai.request.model`, `gen_ai.usage.*`, `gen_ai.tool.name`, ...). `gen_ai.usage.input_tokens` counts cached input too, and cache reads and writes are also sent on their own. The GenAI names are moving to a separate conventions project; threads will follow it at its first release.
 
@@ -173,4 +173,4 @@ asyncio.run(main())
 
 ## Upgrading
 
-Telemetry adds tables to the store. A store created by an earlier version of threads is refused with "create a new store": `threads export` the threads you want to keep, then import them into a new store.
+Telemetry adds tables to the store. A store created by an earlier version of threads is refused with "create a new store": `threadsai export` the threads you want to keep, then import them into a new store.

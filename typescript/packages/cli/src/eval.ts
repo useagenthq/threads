@@ -11,7 +11,7 @@ import {
 import { Budget, canonicalize, caseLine, caseNames } from "threadsai/host";
 import { z } from "zod";
 
-// `threads eval` (spec/api.json cli): runEvals() over saved cases. Without --agent it loads no
+// `threadsai eval` (spec/api.json cli): runEvals() over saved cases. Without --agent it loads no
 // user code and runs the framework checks; --agent adds drift; --live adds the judged run.
 
 export type Io = {
@@ -92,7 +92,7 @@ function fromModule(
 async function load(args: EvalArgs, io: Io): Promise<Loaded | number> {
   if (args.agent === undefined) {
     if (!args.live) return { agents: [] };
-    io.err("threads eval --live needs --agent <module>\n");
+    io.err("threadsai eval --live needs --agent <module>\n");
     return 2;
   }
   const path = resolve(args.agent);

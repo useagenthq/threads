@@ -163,7 +163,7 @@ function TheRecord() {
         title="Every run reads back, step by step"
         aside={
           <>
-            From the command line the same run is <Code>threads timeline &lt;thread_id&gt;</Code>. Pick any
+            From the command line the same run is <Code>threadsai timeline &lt;thread_id&gt;</Code>. Pick any
             entry below to see the stored event.
           </>
         }
@@ -260,7 +260,7 @@ function EvalsSection() {
         }
       >
         <Code>saveCase</Code> keeps a turn you liked as a regression case: the recorded replies, the tool
-        results and the exact request bytes. <Code>threads eval</Code> then checks it on every commit.
+        results and the exact request bytes. <Code>threadsai eval</Code> then checks it on every commit.
       </SectionHeading>
       <Evals />
     </Band>

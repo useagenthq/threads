@@ -22,6 +22,6 @@ icon: ScrollText
 - **Threads the host continues for you** meet the same error: a channel conversation's next message, a schedule's next fire on its thread, and approving or denying a run that was awaiting approval. Settle pending approvals before upgrading.
 - **In-flight team members** of such agents fail to rebind with `pin_mismatch`. It surfaces as a turn error on the member, not as a continue error: finish or cancel the team's work before upgrading.
 
-**Evals.** `runEvals()` / `run_evals()` and `threads eval` run [saved cases](/docs/evals/saved-cases): for free in CI, with drift against your current agents, and with a judge model under `--live`. `saveCase` now saves any completed turn with no sandbox snapshot, and `portable` means the case reruns offline from its directory alone.
+**Evals.** `runEvals()` / `run_evals()` and `threadsai eval` run [saved cases](/docs/evals/saved-cases): for free in CI, with drift against your current agents, and with a judge model under `--live`. `saveCase` now saves any completed turn with no sandbox snapshot, and `portable` means the case reruns offline from its directory alone.
 
 **The test model guard** raises `ModelBlockedError` (an `Error` in TypeScript, a `RuntimeError` in Python), a subclass of the error it raised before, so existing `catch` / `except` blocks behave the same.

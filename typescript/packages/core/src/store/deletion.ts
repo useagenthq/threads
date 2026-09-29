@@ -16,7 +16,7 @@ import { branchLines } from "./lines";
 import { type Opened, openedThreads } from "./started";
 import { atomically, parseRows } from "./tables";
 
-// `threads delete` (spec/schema/README.md, "Deleting a thread"; Gate 1 §4.15): the deletion set
+// `threadsai delete` (spec/schema/README.md, "Deleting a thread"; Gate 1 §4.15): the deletion set
 // is a fixed point, deleted in one transaction, only when nothing in it can still run. Every
 // check fails closed: what can't be read is never taken as safe. The resource ledger is never
 // deleted with log rows: it owns cleanup.
@@ -208,7 +208,7 @@ async function unsettled(
   const lines = await branchLines(tx, branch);
   const log = lines.ok ? verifyLines(lines.value.lines) : lines;
   if (!log.ok)
-    return `branch ${branch} doesn't verify (${log.error.code}): run \`threads repair ${branch}\` if its tail is torn, or delete it with the version that wrote it`;
+    return `branch ${branch} doesn't verify (${log.error.code}): run \`threadsai repair ${branch}\` if its tail is torn, or delete it with the version that wrote it`;
   const doubt = [...log.value.fold.effects.values()].some(
     (effect) => effect.status === "begun" || effect.status === "unknown",
   );

@@ -499,7 +499,7 @@
           "$ref": "urn:threads:schema:events:v1#/$defs/Int"
         },
         "ok": {
-          "description": "The run passed: no case failed, errored or went unrun, and under strict none is stale or skipped. `threads eval` exits 1 when false.",
+          "description": "The run passed: no case failed, errored or went unrun, and under strict none is stale or skipped. `threadsai eval` exits 1 when false.",
           "type": "boolean"
         },
         "passed": {
@@ -1333,5 +1333,5 @@
   "$id": "urn:threads:schema:eval:v1",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "The judge's verdicts and input, the eval report, the saved-case files the runner reads (sandbox.json v2, extensions.json and the case.json fields they add), and the closed hook-kind and user-event lists.",
-  "title": "threads eval runner shapes"
+  "title": "threadsai eval runner shapes"
 }

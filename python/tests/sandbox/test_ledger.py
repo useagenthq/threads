@@ -215,7 +215,7 @@ def test_gc_releases_after_the_owning_branch_is_deleted(tmp_path: Path) -> None:
     async def body(w: World) -> None:
         sandbox = fake_sandbox(script())
         await failed_release(w, sandbox)
-        # `threads delete` removes the branch and its lease; the ledger row outlives them.
+        # `threadsai delete` removes the branch and its lease; the ledger row outlives them.
         with sqlite3.connect(path) as conn:
             for table in ("leases", "events", "branches"):
                 conn.execute(f"DELETE FROM {table} WHERE branch_id = ?", (ROOT,))  # noqa: S608 - fixed tables

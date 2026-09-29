@@ -41,7 +41,7 @@ const NEEDS: readonly Need[] = [
   },
   {
     need: "Turn a real conversation into a test that reruns with no model calls",
-    how: "saveCase() → threads eval",
+    how: "saveCase() → threadsai eval",
     href: "/docs/evals/saved-cases",
   },
   {
