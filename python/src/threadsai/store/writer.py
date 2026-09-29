@@ -49,6 +49,11 @@ await."""
 _REFUSED = ParseError("invalid_request", "the decision refused")
 """Rolls a refused decision back; a Refused never poisons the writer."""
 
+_POISONED = ParseError("writer_poisoned", "this writer lost its lease or head")
+"""What every answer about this writer's authority gives once it is poisoned: an append, a fence and
+a renewal alike. A writer whose last commit is in doubt does not know its own head, so it cannot
+say the branch is still its own."""
+
 type _Outcome = lease.Batch | ParseError | lease.Refused
 
 
@@ -137,7 +142,7 @@ class Writer:
         appended; `Runtime.append_with` reports a batch `admit` changed as `Barred`."""
         async with self._lock:
             if self._poisoned:
-                return Err(ParseError("writer_poisoned", "this writer lost its lease or head"))
+                return Err(_POISONED)
             chosen = tuple(drafts if admit is None else admit(self._fold, drafts))
             if not chosen:
                 return Ok(())
@@ -157,7 +162,7 @@ class Writer:
         `append`. A batch that comes out empty commits nothing and moves nothing."""
         async with self._lock:
             if self._poisoned:
-                return Err(ParseError("writer_poisoned", "this writer lost its lease or head"))
+                return Err(_POISONED)
             outcome, refusal = await self._run(decide, None)
             return refusal if refusal is not None else _result(outcome)
 
@@ -267,27 +272,50 @@ class Writer:
     async def fence(self) -> Ok[None] | Err[ParseError]:
         """Checked immediately before anything is dispatched (a model attempt, a tool body, a
         lookup, a termination): a writer whose lease moved on must not reach the adapter, even
-        though its intent is already durable. A lost lease poisons the writer."""
-        now = self._clock()
-        error = await self._worker.read(lambda c: lease.check(c, self._branch, self._lease, now))
-        if error is not None:
-            self._poisoned = True
-            return Err(error)
-        return Ok(None)
+        though its intent is already durable. A lost lease poisons the writer.
+
+        Under the writer's own lock, so the answer is about a settled writer rather than one with
+        an append still in flight, and refusing a poisoned one exactly as `append` does: a writer
+        whose last commit is in doubt has no authority to lend a dispatch. The clock is read inside
+        the store's callback, immediately before the check, because the store runs one statement at
+        a time: a time sampled before queueing could answer for a moment that has passed."""
+        async with self._lock:
+            if self._poisoned:
+                return Err(_POISONED)
+            error = await self._worker.read(
+                lambda c: lease.check(c, self._branch, self._lease, self._clock())
+            )
+            if error is not None:
+                self._poisoned = True
+                return Err(error)
+            return Ok(None)
 
     async def release(self) -> None:
         """Hands the lease back so the next executor can take the branch at once, only while
-        this holder and epoch still hold it. The writer is done afterwards."""
-        now = self._clock()
+        this holder and epoch still hold it. The writer is done afterwards.
+
+        Cleanup, so it runs on a poisoned writer too and takes no lock: a release that waited on an
+        append that will never settle would strand the branch for a whole TTL."""
         self._poisoned = True
-        await self._worker.call(lambda c: lease.release(c, self._branch, self._lease, now))
+        await self._worker.call(
+            lambda c: lease.release(c, self._branch, self._lease, self._clock())
+        )
 
     async def renew(self) -> Ok[None] | Err[ParseError]:
-        """Extends the lease. Once lost it stays lost: the writer is poisoned."""
-        now = self._clock()
+        """Extends the lease. Once lost it stays lost: the writer is poisoned.
+
+        Locked, poison-checked and clocked inside the store's callback for the same reasons as
+        `fence`, and here the stale clock would do more than answer wrongly: an expired lease read
+        as live is revived, extending the branch from under its next owner."""
+        async with self._lock:
+            if self._poisoned:
+                return Err(_POISONED)
+            return await self._renewed()
+
+    async def _renewed(self) -> Ok[None] | Err[ParseError]:
         try:
             renewed = await self._worker.call(
-                lambda c: lease.renew(c, self._branch, self._lease, now)
+                lambda c: lease.renew(c, self._branch, self._lease, self._clock())
             )
         except CommitUnknownError:
             # The renewal may or may not have landed: the owner reloads from the log.
