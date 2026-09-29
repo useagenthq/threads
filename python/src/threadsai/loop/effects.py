@@ -17,7 +17,7 @@ from threadsai.loop.drafts import ActorKind, draft
 from threadsai.loop.history import CallState, call_state
 from threadsai.loop.model import Found, NotFound, looked_up
 from threadsai.loop.results import As, close_call, result_draft, text_ref
-from threadsai.loop.runtime import Barred, Failed, Halt, Parked, Runtime, fence, lost
+from threadsai.loop.runtime import Barred, Failed, Halt, Parked, Runtime, fence, fenced, lost
 from threadsai.loop.tools import Invocation, NotSent, Output, Refused, Uncertain, prepared
 from threadsai.result import Err
 
@@ -46,6 +46,7 @@ def invocation(rt: Runtime, state: CallState, spec: ToolSpec) -> Invocation:
         lambda: rt.events,
         rt.put_artifact,
         rt.read_artifact,
+        fenced(rt),
     )
 
 

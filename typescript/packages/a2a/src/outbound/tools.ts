@@ -124,10 +124,15 @@ function statusTool(remote: Remote, spec: ToolSpec): ToolImpl {
   };
 }
 
-/** The credential is resolved here, at send time, and rides in the header only (invariant 4). */
+/**
+ * The credential is resolved here, at send time, and rides in the header only (invariant 4). The
+ * invocation's fence rides with it, so this run's authority is re-checked at the real write: a
+ * branch that changed owner while the partner's name resolved sends nothing (invariant 2).
+ */
 function sending(remote: Remote, ctx: ToolContext): Sending {
   return {
     transport: remote.transport ?? liveTransport,
+    fence: async () => (await ctx.fence()).ok,
     ...(remote.auth === undefined
       ? {}
       : { authorization: `Bearer ${remote.auth.reveal()}` }),

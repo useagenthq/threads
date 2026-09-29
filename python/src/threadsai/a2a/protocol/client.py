@@ -88,6 +88,11 @@ class Sending:
     """How one request goes out. The credential is resolved at send time and never stored."""
 
     timeout_ms: int
+    fence: Fence
+    """The invocation's own authority, awaited by the transport once the socket is up and before a
+    byte is written. Required: an earlier check cannot cover a lease lost while the guard resolved
+    the name and the connection opened, and an absent fence is a refusal, never an assumption
+    (invariant 2)."""
     authorization: str | None = None
     extensions: Sequence[str] = ()
     body: str | None = None
@@ -96,11 +101,6 @@ class Sending:
     (30-a2a decision H30-1). Ignored by an operation whose request has no body."""
     transport: Transport | None = None
     resolve: Resolve | None = None
-    fence: Fence | None = None
-
-
-async def _always_fenced() -> bool:
-    return True
 
 
 def _headers(accept: str, has_body: bool, sending: Sending) -> dict[str, str]:
@@ -130,7 +130,7 @@ async def call(
         _headers(built.accept, built.body is not None, sending),
         None if built.body is None else (sending.body or built.body).encode(),
     )
-    sent = await transport.send(target.value, request, sending.fence or _always_fenced, MAX_BYTES)
+    sent = await transport.send(target.value, request, sending.fence, MAX_BYTES)
     if isinstance(sent, Err):
         return _failed(sent.error.code, sent.error.message, sent.error.sent)
     return _answered(method, sent.value, sent_rpc_id(built, sending.body))
@@ -284,7 +284,7 @@ async def fetch_bytes(url: str, max_bytes: int, sending: Sending) -> Fetched:
         return Fetched(None, target.error)
     transport = sending.transport or StdlibTransport(sending.timeout_ms / 1000)
     request = Request("GET", {"Accept": f"{A2A_JSON}, application/json"}, None)
-    sent = await transport.send(target.value, request, sending.fence or _always_fenced, max_bytes)
+    sent = await transport.send(target.value, request, sending.fence, max_bytes)
     if isinstance(sent, Err):
         return Fetched(None, sent.error.message)
     if sent.value.status != _OK:

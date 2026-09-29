@@ -26,6 +26,12 @@ export type Partner = WebTransport & {
   /** Runs once the partner's answer is on the wire: where a drill kills the process. */
   onAnswered: (() => Promise<void>) | undefined;
   /**
+   * Runs while the guard is resolving the partner's name, before the request is written: where a
+   * drill hands the branch to another owner. A run that lost its lease in this window must write
+   * nothing, so a drill that sets this asserts on `requests`.
+   */
+  onResolve: (() => Promise<void>) | undefined;
+  /**
    * While true, `ListTasks` answers an empty page even though the task exists: the peer is still
    * creating it, or has truncated its history. This is the case that must never settle a park.
    */
@@ -55,11 +61,15 @@ export function partner(card: unknown = defaultCard()): Partner {
     tasks,
     hidden: false,
     onAnswered: undefined,
+    onResolve: undefined,
     sends: () => requests.filter((r) => r.method === "SendMessage"),
     send: () => {
       throw new Error("the drill sets partner.send");
     },
-    resolve: async () => ["93.184.216.34"],
+    resolve: async () => {
+      await it.onResolve?.();
+      return ["93.184.216.34"];
+    },
     fetch: async (url, _address, init) => {
       const method = operationOf(url, init);
       requests.push({

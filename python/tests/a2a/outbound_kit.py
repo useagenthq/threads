@@ -7,7 +7,7 @@ how many times we sent proves nothing about invariant 3.
 This mirrors typescript/packages/a2a/test/outbound/ case for case."""
 
 import json
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Final, Literal
 
@@ -123,6 +123,10 @@ class Partner:
     creating it, or has truncated its history. The case that must never settle a park."""
     crash_after_answer: bool = False
     """The process dies once the partner's answer is on the wire, before it can be recorded."""
+    on_connect: Callable[[str], Awaitable[None]] | None = None
+    """Runs with the operation's name once the socket is up and before the fence is awaited: where
+    a drill hands the branch to another owner. `threadsai.web.http.StdlibTransport` checks the
+    fence at exactly this point, so nothing of a refused request is ever written."""
     card_json: dict[str, JsonValue] = field(default_factory=card)
 
     def sends(self) -> list[Recorded]:
@@ -134,10 +138,14 @@ class Partner:
     async def send(
         self, target: Target, request: Request, fence: Fence, max_bytes: int
     ) -> Ok[Response] | Err[WebError]:
-        assert await fence()
         assert max_bytes > 0
         body = None if request.body is None else request.body.decode()
         method = self._method(target.path, request.method, body)
+        if self.on_connect is not None:
+            await self.on_connect(method)
+        if not await fence():
+            # The socket is up and not one byte has been written, which is what `sent=False` says.
+            return Err(WebError("stale_epoch", "this run no longer owns the branch", sent=False))
         self.requests.append(Recorded(method, target.path, body, dict(request.headers)))
         if method == "card":
             return Ok(_json(self.card_json))

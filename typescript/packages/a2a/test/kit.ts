@@ -33,11 +33,21 @@ export type Sending = {
   readonly transport: WebTransport;
   readonly signal: AbortSignal;
   readonly timeoutMs: number;
+  readonly fence: () => Promise<boolean>;
 };
 
-export function sending(transport: WebTransport): Sending {
+/** A run that still owns its branch. */
+export const HELD = async (): Promise<boolean> => true;
+/** A run that does not. */
+export const LOST = async (): Promise<boolean> => false;
+
+export function sending(
+  transport: WebTransport,
+  fence: () => Promise<boolean> = HELD,
+): Sending {
   return {
     transport,
+    fence,
     signal: new AbortController().signal,
     timeoutMs: 5_000,
   };

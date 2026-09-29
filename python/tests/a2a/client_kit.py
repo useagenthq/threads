@@ -34,6 +34,24 @@ async def private_address(_host: str, _port: int) -> Sequence[str]:
     return ("127.0.0.1",)
 
 
+async def refused_fence() -> bool:
+    """A run that no longer owns its branch."""
+    return False
+
+
+async def held_fence() -> bool:
+    """A run that still owns its branch."""
+    return True
+
+
+async def _refusal(fence: Fence) -> Err[WebError] | None:
+    """What a transport does at its send point: `StdlibTransport` awaits the fence once the socket
+    is up, and writes nothing when it refuses, which is what `sent=False` says."""
+    if await fence():
+        return None
+    return Err(WebError("stale_epoch", "this run no longer owns the branch", sent=False))
+
+
 @dataclass(slots=True)
 class Answering:
     """A transport that answers one response and records what it was asked to send."""
@@ -44,8 +62,9 @@ class Answering:
     async def send(
         self, target: Target, request: Request, fence: Fence, max_bytes: int
     ) -> Ok[Response] | Err[WebError]:
-        assert await fence()
         assert max_bytes > 0
+        if (refusal := await _refusal(fence)) is not None:
+            return refusal
         self.sent.append((target, request))
         return Ok(self.response)
 
@@ -62,7 +81,8 @@ class Failing:
         self, target: Target, request: Request, fence: Fence, max_bytes: int
     ) -> Ok[Response] | Err[WebError]:
         assert max_bytes > 0
-        await fence()
+        if (refusal := await _refusal(fence)) is not None:
+            return refusal
         self.sent.append((target, request))
         return Err(WebError(self.code, f"{self.code} at {target.host}", sent=self.was_sent))
 
@@ -96,8 +116,9 @@ class Echoing:
     async def send(
         self, target: Target, request: Request, fence: Fence, max_bytes: int
     ) -> Ok[Response] | Err[WebError]:
-        assert await fence()
         assert max_bytes > 0
+        if (refusal := await _refusal(fence)) is not None:
+            return refusal
         self.sent.append((target, request))
         rpc_id = json.dumps(sent_id(request))
         if self.frames:
@@ -124,9 +145,11 @@ def sending(
     resolve: Resolve = public_address,
     authorization: str | None = None,
     extensions: tuple[str, ...] = (),
+    fence: Fence = held_fence,
 ) -> Sending:
     return Sending(
         timeout_ms=5_000,
+        fence=fence,
         authorization=authorization,
         extensions=extensions,
         transport=transport,

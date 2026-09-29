@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Final
 
 from cards import CARD_URL, RPC, as_bytes, card_of
+from client_kit import held_fence
 from pydantic.experimental.missing_sentinel import MISSING
 
 from threadsai._generated.a2a_v1 import SendMessageResponse, StreamResponse, Task
@@ -76,7 +77,7 @@ def _serving(body: bytes, *, status: int = 200) -> _Serving:
 
 
 def _sending(transport: _Serving, *, resolve: Resolve = _public) -> Sending:
-    return Sending(timeout_ms=5_000, transport=transport, resolve=resolve)
+    return Sending(timeout_ms=5_000, fence=held_fence, transport=transport, resolve=resolve)
 
 
 class TestAGoodCard:

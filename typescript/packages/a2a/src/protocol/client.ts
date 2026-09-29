@@ -13,8 +13,19 @@ import { outbound, sentRpcId, streams, type Wire } from "./wire";
 // caller gets is decided there, and everything here is about getting the request written and
 // classifying a transport failure honestly.
 
+/** Whether the run that made this request still owns its branch. */
+export type Fence = () => Promise<boolean>;
+
+const STALE = "this run no longer owns the branch";
+
 export type Sending = {
   readonly transport?: WebTransport;
+  /**
+   * The invocation's own authority, awaited immediately before the transport writes. Required: the
+   * loop's fence before the dispatch cannot cover a lease lost while the guard resolved the
+   * partner's name, and an absent fence is a refusal, never an assumption (invariant 2).
+   */
+  readonly fence: Fence;
   /** Resolved at send time from a secret, sent only in the header, never stored. */
   readonly authorization?: string;
   /** The extensions this request relies on, sent as `A2A-Extensions`. */
@@ -51,6 +62,9 @@ export async function call(
     };
   const target = await vet(url, transport);
   if ("denied" in target) return { kind: "not_sent", why: target.denied };
+  // Re-checked here, after the name was resolved and before a byte is written: a branch that
+  // changed owner in that window sends nothing.
+  if (!(await sending.fence())) return { kind: "not_sent", why: STALE };
   const signal = AbortSignal.any([
     sending.signal,
     AbortSignal.timeout(sending.timeoutMs),
@@ -100,6 +114,8 @@ export async function fetchBytes(
     };
   const vetted = await vet(target, transport);
   if ("denied" in vetted) return { kind: "failed", why: vetted.denied };
+  // A card read is on the send's own path, so it is fenced the same way.
+  if (!(await sending.fence())) return { kind: "failed", why: STALE };
   let response: Response;
   try {
     response = await transport.fetch(target.href, vetted.address, {

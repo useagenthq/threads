@@ -17,6 +17,7 @@ from threadsai.log import (
 )
 from threadsai.loop.model import LookupResult
 from threadsai.store import Draft
+from threadsai.web.http import Fence
 
 type Termination = Literal["terminated", "already_exited", "unknown"]
 
@@ -33,6 +34,12 @@ async def _nothing_stored(_data: bytes | str, _media_type: str) -> ArtifactRef:
 
 async def _nothing_read(_ref: ArtifactRef) -> bytes | None:
     return None
+
+
+async def _unfenced() -> bool:
+    """No authority was given this invocation, so nothing may be sent under it (invariant 2). A
+    default that answered True would let a dispatch built without a fence send unfenced."""
+    return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +61,9 @@ class Invocation:
     events: Callable[[], Sequence[Event]] = tuple
     put: Put = field(default=_nothing_stored)
     read: Read = field(default=_nothing_read)
+    fence: Fence = field(default=_unfenced)
+    """This dispatch's authority, awaited at the tool's real send point: the loop's fence before
+    the dispatch cannot cover a lease lost while a name resolves and a socket opens."""
 
 
 @dataclass(frozen=True, slots=True)

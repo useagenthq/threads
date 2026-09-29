@@ -41,6 +41,7 @@ from threadsai.result import Err, Ok
 from threadsai.store import Clock, Draft, SqliteStore, StoredEvent, Writer
 from threadsai.store.companion import Companion
 from threadsai.store.writer import Decide, DecideTx, Refusal
+from threadsai.web.http import Fence
 
 type Authorize = Callable[[Fold, ToolCallData, ToolSpec], Decision]
 """The permission fold for one call, against the current policy and mode."""
@@ -359,6 +360,16 @@ async def fence(rt: Runtime) -> Failed | None:
     """Re-checks the lease right before a dispatch; None means this owner may still send."""
     held = await rt.writer.fence()
     return lost(held.error) if isinstance(held, Err) else None
+
+
+def fenced(rt: Runtime) -> Fence:
+    """This run's authority as a transport fence, for a tool or provider that awaits it at its real
+    send point: after the guard's address, once the socket is up, and before any byte is written."""
+
+    async def held() -> bool:
+        return (await fence(rt)) is None
+
+    return held
 
 
 LOST: Final = frozenset({"stale_epoch", "seq_conflict", "writer_poisoned"})

@@ -96,12 +96,15 @@ class RemoteTool:
             }
         )
 
-    def _sending(self) -> Sending:
+    def _sending(self, call: Invocation) -> Sending:
         """The credential is resolved here, at send time, and rides in the header only
-        (invariant 4)."""
+        (invariant 4). The invocation's fence rides with it, so the transport re-checks this run's
+        authority once the socket is up: a branch that changed owner while the name resolved and the
+        connection opened sends nothing (invariant 2)."""
         auth = self.remote.auth
         return Sending(
             self.remote.timeout_ms,
+            call.fence,
             authorization=None if auth is None else f"Bearer {auth.reveal()}",
             transport=self.remote.transport,
             resolve=self.remote.resolve,
@@ -123,22 +126,22 @@ class RemoteTool:
         except ValidationError:
             return Refused(f"invalid arguments for {self.tool_name}")
         return await begin_send(
-            self.remote, SendArgs(args.message, args.task_id), call, self._sending()
+            self.remote, SendArgs(args.message, args.task_id), call, self._sending(call)
         )
 
     async def dispatch(self, call: Invocation) -> Dispatched:
         if self.kind == "send":
-            return await run_send(self.remote, call, self._sending())
+            return await run_send(self.remote, call, self._sending(call))
         try:
             args = StatusInput.model_validate(dict(call.input), strict=True)
         except ValidationError:
             return Output(f"invalid arguments for {self.tool_name}", is_error=True)
-        return await run_status(self.remote, args.task_id, call, self._sending())
+        return await run_status(self.remote, args.task_id, call, self._sending(call))
 
     async def lookup(self, call: Invocation) -> LookupResult[str]:
         if self.kind != "send":
             return LookupUnknown(f"{self.tool_name} begins no effect")
-        answer = await reconcile_send(self.remote, call, self._sending())
+        answer = await reconcile_send(self.remote, call, self._sending(call))
         # Finality is the tool's declared capability, never inferred from an answer, and A2A's is
         # nonfinal: "not found" may be a peer still creating the task, or a truncated history, so
         # it parks instead of freeing a re-send.
